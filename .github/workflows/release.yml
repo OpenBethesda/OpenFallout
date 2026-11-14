@@ -29,13 +29,10 @@ jobs:
       matrix:
         args:
           - image: macos-26
-            runner: blacksmith-6vcpu-macos-26
-          # Blacksmith macOS runners are Apple Silicon only, so the Intel build stays GitHub-hosted.
           - image: macos-26-intel
     uses: ./.github/workflows/macos.yml
     with:
       image: ${{ matrix.args.image }}
-      runner: ${{ matrix.args.runner }}
       build-type: Release
       signing-environment: ${{ matrix.args.image == 'macos-26' && 'macos-release' || '' }}
     secrets:

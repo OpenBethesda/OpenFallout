@@ -10,10 +10,6 @@ on:
         description: MacOS Runner image
         required: true
         type: string
-      runner:
-        description: Runner label, when it differs from the image name
-        default: ""
-        type: string
       signing-environment:
         description: >-
           GitHub environment that holds the release signing secrets (docs/openfallout/mac-release.md). Callers name it
@@ -40,7 +36,7 @@ on:
 jobs:
   MacOS:
     name: ${{ inputs.image }}
-    runs-on: ${{ inputs.runner || inputs.image }}
+    runs-on: ${{ inputs.image }}
     # The environment's own rules (which branches and tags may use it, who must approve) decide whether this job gets
     # the signing secrets; a tag or branch outside those rules cannot read them whatever its copy of the scripts says.
     environment: ${{ inputs.signing-environment }}
