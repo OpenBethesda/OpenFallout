@@ -87,8 +87,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-wizard PRIVATE --coverage)
-    target_link_libraries(openfallout-wizard gcov)
+    openfallout_enable_coverage(openfallout-wizard)
 endif()
 
 if (NOT APPLE)

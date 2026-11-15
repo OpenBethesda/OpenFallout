@@ -31,8 +31,7 @@ if (MINGW)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-iniimporter PRIVATE --coverage)
-    target_link_libraries(openfallout-iniimporter gcov)
+    openfallout_enable_coverage(openfallout-iniimporter)
 endif()
 
 if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)

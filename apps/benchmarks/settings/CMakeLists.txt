@@ -13,8 +13,7 @@ if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout_settings_access_benchmark PRIVATE --coverage)
-    target_link_libraries(openfallout_settings_access_benchmark gcov)
+    openfallout_enable_coverage(openfallout_settings_access_benchmark)
 endif()
 
 if (WIN32)

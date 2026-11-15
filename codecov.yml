@@ -1,7 +1,7 @@
 codecov:
   notify:
-    # Three suite flags plus the unflagged combined report for complete branch data.
-    after_n_builds: 4
+    # Two suite flags plus the unflagged combined report for complete branch data, all from the Mac job.
+    after_n_builds: 3
 
 coverage:
   precision: 1
@@ -38,12 +38,11 @@ ignore:
 
 flag_management:
   default_rules:
-    # All three suites run on each code change; do not hide missing uploads.
+    # Both suites run on each code change; do not hide missing uploads.
     carryforward: false
   individual_flags:
     - name: components
     - name: openfallout
-    - name: editor
 
 component_management:
   default_rules:
@@ -137,4 +136,4 @@ component_management:
 
 comment:
   layout: "diff, flags, components, files"
-  after_n_builds: 4
+  after_n_builds: 3

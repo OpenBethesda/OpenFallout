@@ -74,6 +74,8 @@ jobs:
         BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: python3 CI/changed_paths.py --event "$EVENT" --base "$BASE" --github-output "$GITHUB_OUTPUT"
 
+  # Builds and runs the components, OpenFallout and editor suites. Their coverage and test results are uploaded to
+  # Codecov by the Mac job (macos.yml); the reports made here are kept as artifacts only.
   Ubuntu:
     needs: Changes
     if: ${{ !cancelled() && needs.Changes.outputs.code != 'false' && (github.event_name != 'workflow_dispatch' || !inputs.validate-release) }}
@@ -205,83 +207,6 @@ jobs:
         path: test-results/*.xml
         if-no-files-found: error
 
-    - name: Upload test results to Codecov Test Analytics
-      if: >-
-        !cancelled() && hashFiles('test-results/*.junit.xml') != '' &&
-        (github.event_name != 'pull_request' ||
-        (github.event.pull_request.head.repo.full_name == github.repository &&
-        github.actor != 'dependabot[bot]'))
-      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        report_type: test_results
-        files: test-results/components.junit.xml,test-results/openfallout.junit.xml,test-results/editor.junit.xml
-        disable_search: true
-        plugins: noop
-        fail_ci_if_error: true
-
-    - name: Upload components coverage to Codecov
-      # Fork and Dependabot pull requests cannot access Actions secrets.
-      if: >-
-        !cancelled() && hashFiles('coverage/components.xml') != '' &&
-        (github.event_name != 'pull_request' ||
-        (github.event.pull_request.head.repo.full_name == github.repository &&
-        github.actor != 'dependabot[bot]'))
-      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage/components.xml
-        flags: components
-        disable_search: true
-        plugins: noop
-        fail_ci_if_error: true
-
-    - name: Upload OpenFallout coverage to Codecov
-      if: >-
-        !cancelled() && hashFiles('coverage/openfallout.xml') != '' &&
-        (github.event_name != 'pull_request' ||
-        (github.event.pull_request.head.repo.full_name == github.repository &&
-        github.actor != 'dependabot[bot]'))
-      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage/openfallout.xml
-        flags: openfallout
-        disable_search: true
-        plugins: noop
-        fail_ci_if_error: true
-
-    - name: Upload editor coverage to Codecov
-      if: >-
-        !cancelled() && hashFiles('coverage/editor.xml') != '' &&
-        (github.event_name != 'pull_request' ||
-        (github.event.pull_request.head.repo.full_name == github.repository &&
-        github.actor != 'dependabot[bot]'))
-      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage/editor.xml
-        flags: editor
-        disable_search: true
-        plugins: noop
-        fail_ci_if_error: true
-
-    - name: Upload combined coverage to Codecov
-      # Separate XML reports cannot describe complementary branches across suites.
-      # Keep this report unflagged so it does not inflate the individual flags.
-      if: >-
-        !cancelled() && hashFiles('coverage.xml') != '' &&
-        (github.event_name != 'pull_request' ||
-        (github.event.pull_request.head.repo.full_name == github.repository &&
-        github.actor != 'dependabot[bot]'))
-      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage.xml
-        disable_search: true
-        plugins: noop
-        fail_ci_if_error: true
-
     - name: Limit stored compiler cache
       if: always() && steps.compiler-cache.outcome == 'success'
       run: |
@@ -327,6 +252,7 @@ jobs:
       MACOS_NOTARY_API_KEY: ${{ secrets.MACOS_NOTARY_API_KEY }}
       MACOS_NOTARY_API_KEY_ID: ${{ secrets.MACOS_NOTARY_API_KEY_ID }}
       MACOS_NOTARY_API_ISSUER_ID: ${{ secrets.MACOS_NOTARY_API_ISSUER_ID }}
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   Windows:
     needs: Changes

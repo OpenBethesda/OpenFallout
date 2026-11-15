@@ -4,11 +4,13 @@ VERBOSE=""
 USE_CCACHE=""
 KEEP=""
 USE_WERROR=""
+TEST_TREE=""
+BUILD_DIR="build"
 DEPENDENCIES_ROOT_PATH="/tmp/openmw-deps"
 
 source ./CI/macos/deps_versions.sh
 
-while getopts VCkEd: ARG
+while getopts VCkETd: ARG
 do
     case $ARG in
 	V )
@@ -22,6 +24,10 @@ do
 
 	E )
 	    USE_WERROR=true ;;
+
+	T )
+	    TEST_TREE=true
+	    BUILD_DIR="build-tests" ;;
 
         d )
             DEPENDENCIES_ROOT_PATH="$OPTARG"
@@ -41,6 +47,9 @@ Options:
 		Run verbosely
 	-E
 		Use warnings as errors (-Werror)
+	-T
+		Configure the unit-test tree in build-tests instead: Debug, coverage, the components
+		and OpenFallout test suites, no editor or wizard. It is never packaged.
 EOF
 	    exit 1
 	    ;;
@@ -48,14 +57,14 @@ EOF
 done
 
 if [[ -z $KEEP ]]; then
-    if [[ -n $VERBOSE && -d "build" ]]; then
+    if [[ -n $VERBOSE && -d "$BUILD_DIR" ]]; then
         echo "Deleting existing build directory"
     fi
-    rm -fr build
+    rm -fr "$BUILD_DIR"
 fi
 
-mkdir -p build
-cd build
+mkdir -p "$BUILD_DIR"
+cd "$BUILD_DIR"
 
 declare -a CMAKE_CONF_OPTS=(
 -D CMAKE_C_COMPILER="clang"
@@ -75,6 +84,24 @@ declare -a BUILD_OPTS=(
 -D BUILD_BULLETOBJECTTOOL=TRUE
 -G"Unix Makefiles"
 )
+
+# The unit tests and their coverage (CI/test_reports.py) need an unoptimized, instrumented build, and the packaged app
+# must not be instrumented, so they get their own tree. Only the test suites are built in it. The launcher stays on:
+# it turns on Qt, which the launcher-settings tests in components-tests need. The editor's tests stay off: the editor
+# is not built on the Mac. Debug without -g: coverage needs no debug information, and without it the tree, which the
+# job caches, is about a quarter of the size.
+if [[ -n $TEST_TREE ]]; then
+    CMAKE_BUILD_TYPE=Debug
+    BUILD_OPTS+=(
+        -D CMAKE_C_FLAGS_DEBUG=-O0
+        -D CMAKE_CXX_FLAGS_DEBUG=-O0
+        -D BUILD_WITH_CODE_COVERAGE=ON
+        -D BUILD_COMPONENTS_TESTS=ON
+        -D BUILD_OPENFALLOUT_TESTS=ON
+        -D BUILD_OPENCS=OFF
+        -D BUILD_WIZARD=OFF
+    )
+fi
 
 if [[ "${MACOS_AMD64}" ]]; then
     VCPKG_TARGET_TRIPLET="x64-osx-dynamic"

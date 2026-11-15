@@ -42,8 +42,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-essimporter PRIVATE --coverage)
-    target_link_libraries(openfallout-essimporter gcov)
+    openfallout_enable_coverage(openfallout-essimporter)
 endif()
 
 if (NOT APPLE)

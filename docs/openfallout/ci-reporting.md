@@ -1,52 +1,102 @@
 # Codecov coverage flags and Test Analytics
 
-The Ubuntu Actions job runs the components, OpenFallout, and editor test suites.
-Each suite produces its own coverage report and JUnit test results. The existing
-`CODECOV_TOKEN` Actions secret authenticates both coverage and Test Analytics
-uploads. Windows continues to run its existing tests; these uploads describe
-the Ubuntu runs.
+The Apple Silicon Mac job (`.github/workflows/macos.yml`) runs the components and OpenFallout test suites
+and uploads their coverage and test results. Each suite produces its own coverage report and JUnit test
+results. The existing `CODECOV_TOKEN` Actions secret authenticates both coverage and Test Analytics uploads;
+`push.yml` passes it to the Mac job.
 
 | Flag | Executable | Coverage report | Test results |
 | --- | --- | --- | --- |
 | `components` | `components-tests` | `coverage/components.xml` | `test-results/components.junit.xml` |
 | `openfallout` | `openfallout-tests` | `coverage/openfallout.xml` | `test-results/openfallout.junit.xml` |
-| `editor` | `openfallout-cs-tests` | `coverage/editor.xml` | `test-results/editor.junit.xml` |
 
 The flags measure which production code each test suite exercises. They are
 not source-directory filters: shared production code can appear under several
 flags. Test sources, third-party dependencies, and generated build files are
 excluded from coverage.
 
-`CI/test_reports.py` clears `.gcda` execution counters before and after each
-suite, keeping compiled objects and `.gcno` metadata reusable. This separates
-the three reports even when the build was restored from a cache. gcovr JSON
-traces are merged into `coverage.xml`, which is uploaded without a flag and
-retained as an artifact. This combined upload preserves complete branch data:
-two suites may exercise opposite sides of a branch, while each separate XML
-report only describes partial coverage. The combined upload does not affect
-the individual flags.
+The Ubuntu job still builds and runs the components, OpenFallout and editor
+suites (`openfallout-cs-tests`) until the Mac-only cut removes it. It keeps its
+reports as the `ubuntu-coverage` and `ubuntu-test-results` artifacts and uploads
+nothing to Codecov, so no report is counted twice. The editor is not built on
+the Mac, so the `editor` flag ended when the uploads moved. Windows runs its
+own tests and reports nothing.
 
-gcovr runs with `--exclude-throw-branches`. The compiler adds a hidden exit for exceptions
-to every call that may throw, and gcov reports it as a branch. Almost no test takes these exits,
-and Codecov counts a line with an untaken branch as partial, which is not covered. gcovr drops
-them whether or not a test took them, so the reports no longer count the exception exits of any
-call; the lines of a `catch` block still count as lines. This changes the percentages only, not
-which tests run. gcovr applies the flag while it reads the gcov data, so it belongs on the
-per-suite run; the merge of the saved traces cannot add it later.
+## The Mac job
+
+The packaged app is built RelWithDebInfo and is never instrumented. The tests
+get a second build tree in the same job, `build-tests`, configured by
+`CI/before_script.macos.sh -T`: Debug without debug information (`-O0`, no
+`-g`), `BUILD_WITH_CODE_COVERAGE=ON`, the two test suites, and no editor or
+wizard. Only `components-tests` and
+`openfallout-tests` are built in it. The launcher stays configured because it
+turns on Qt, which the launcher-settings tests in `components-tests` need. The
+tree has its own incremental build cache, `build-macos-coverage-v1-…`, and
+shares the job's ccache (see [CI build cache contract](ci-cache.md)). The test
+steps run whenever the app compiled, so a packaging or notarization failure
+does not hide the test results.
+
+Only the Apple Silicon build of a branch or pull request runs them. The Intel
+build does not. A release tag (`build-type: Release`) does not either: a tag is
+made from a commit whose branch run already tested it, and a second upload for
+the same commit would be counted twice by Codecov.
+
+## How coverage is measured
+
+`BUILD_WITH_CODE_COVERAGE` instruments the targets through
+`openfallout_enable_coverage` in `cmake/OpenFalloutMacros.cmake`, which chooses
+the method by compiler:
+
+- **Clang (the Mac)** uses source-based coverage (`-fprofile-instr-generate
+  -fcoverage-mapping`). Each suite writes raw profiles into
+  `build-tests/profiles/`, `llvm-profdata` merges them into
+  `coverage/<suite>.profdata`, and `llvm-cov export` reads that with the test
+  executable. `CI/test_reports.py` turns the result into a Cobertura report in
+  the same shape gcovr writes. A branch here is a condition in the source, so
+  the reports count no exception exits.
+- **GCC (Ubuntu)** writes gcov counters, which gcovr 8.3 reads into
+  `coverage/<suite>.xml` and a JSON trace, `coverage/<suite>.json`.
+
+Clang's gcov-style counters (`--coverage`) were not used: they count the exit
+that the compiler adds to every call that may throw as a branch, and Apple's
+`llvm-cov gcov` does not mark those exits, so gcovr cannot leave them out.
+Almost no test takes them, and Codecov counts a line with an untaken branch as
+partial, which is not covered.
+
+`CI/test_reports.py` clears the raw counters (`.profraw` or `.gcda`) before and
+after each suite and keeps the compiled objects, which separates the reports
+even when the build was restored from a cache. It finds a test executable in the
+build folder or, on the Mac, in the app bundle inside it. `merge` joins the
+saved per-suite traces into `coverage.xml`, which is uploaded without a flag and
+kept as an artifact. This combined upload preserves complete branch data:
+two suites may exercise opposite sides of a branch, while each separate report
+only describes partial coverage. The combined upload does not affect the
+individual flags.
+
+On GCC, gcovr runs with `--exclude-throw-branches`. GCC adds the same hidden
+exception exit to every call that may throw, and gcov reports it as a branch.
+gcovr drops these branches whether or not a test took them, so the reports no
+longer count the exception exits of any call; the lines of a `catch` block still
+count as lines. gcovr applies the flag while it reads the gcov data, so it
+belongs on the per-suite run; the merge of the saved traces cannot add it later.
+
+The two compilers do not count lines the same way, so the Codecov numbers moved
+when the uploads moved from Ubuntu to the Mac. Compare numbers from the same
+job only.
 
 GoogleTest XML is normalized to JUnit, preserving test names, durations,
 failure details, and skipped/disabled tests. Source paths inside the checkout
 become repository-relative paths. Raw GoogleTest reports are retained alongside
-the JUnit files in the `ubuntu-test-results` artifact. Coverage reports and JSON
-traces are retained in `ubuntu-coverage`.
+the JUnit files in the `macos-test-results` artifact. Coverage reports and the
+per-suite profiles are retained in `macos-coverage`.
 
 A failed test still fails the job. The remaining test suites run, and available
 coverage and test results are uploaded even after a test failure. Cancelled runs
 stop reporting. Fork and Dependabot PRs keep their artifacts without using the
 repository upload secret.
 
-`codecov.yml` lists the three flags, disables carryforward, and waits for all
-four coverage uploads before producing the coverage notification and PR comment.
+`codecov.yml` lists the two flags, disables carryforward, and waits for all
+three coverage uploads before producing the coverage notification and PR comment.
 There are no per-flag coverage thresholds. Every status it defines is informational,
 so Codecov shows the numbers and cannot turn a PR red: the project total, a patch
 status for new code under `components/` (target 80%, which the 5% threshold lets
@@ -94,19 +144,24 @@ them the Lua tests skip. To run them locally:
 python3 -m unittest discover -s scripts/openfallout -p 'test_*.py'
 ```
 
-With an instrumented GCC build in `build/` and gcovr 8.3 on `PATH`, the same
-reporting commands can be run locally:
+On the Mac, with an instrumented test tree in `build-tests/` (as the Mac job
+configures it), the same reporting commands can be run locally. They use
+`xcrun llvm-profdata` and `xcrun llvm-cov` from Xcode and need no gcovr:
 
 ```sh
-python3 CI/test_reports.py run components
-python3 CI/test_reports.py run openfallout
-python3 CI/test_reports.py run editor
-python3 CI/test_reports.py merge
+python3 CI/test_reports.py --build-dir build-tests run components
+python3 CI/test_reports.py --build-dir build-tests run openfallout
+python3 CI/test_reports.py --build-dir build-tests merge components openfallout
 ```
 
+With an instrumented GCC build in `build/` and gcovr 8.3 on `PATH`, `run` and
+`merge` without `--build-dir` work as on the Ubuntu job, including `run editor`.
+`--tool gcov` or `--tool llvm` overrides the choice by platform.
+
 References: [Codecov flags](https://docs.codecov.com/docs/flags),
-[Test Analytics](https://docs.codecov.com/docs/test-analytics), and
-[gcovr trace merging](https://gcovr.com/en/8.3/guide/merging.html).
+[Test Analytics](https://docs.codecov.com/docs/test-analytics),
+[gcovr trace merging](https://gcovr.com/en/8.3/guide/merging.html), and
+[Clang source-based coverage](https://clang.llvm.org/docs/SourceBasedCodeCoverage.html).
 
 ## Dependabot
 

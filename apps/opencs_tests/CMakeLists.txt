@@ -26,8 +26,7 @@ if (UNIX AND NOT APPLE)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-cs-tests PRIVATE --coverage)
-    target_link_libraries(openfallout-cs-tests PRIVATE gcov)
+    openfallout_enable_coverage(openfallout-cs-tests)
 endif()
 
 if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)

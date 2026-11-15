@@ -18,8 +18,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(bsatool PRIVATE --coverage)
-    target_link_libraries(bsatool gcov)
+    openfallout_enable_coverage(bsatool)
 endif()
 
 if (NOT APPLE)

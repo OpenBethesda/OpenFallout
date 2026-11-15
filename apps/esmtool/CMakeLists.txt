@@ -25,8 +25,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(esmtool PRIVATE --coverage)
-    target_link_libraries(esmtool gcov)
+    openfallout_enable_coverage(esmtool)
 endif()
 
 if (NOT APPLE)

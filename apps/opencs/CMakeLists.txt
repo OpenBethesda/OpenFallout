@@ -189,8 +189,7 @@ if(BUILD_OPENCS)
     set_property(TARGET openfallout-cs PROPERTY AUTOUIC ON)
 
     if (BUILD_WITH_CODE_COVERAGE)
-        target_compile_options(openfallout-cs PRIVATE --coverage)
-        target_link_libraries(openfallout-cs gcov)
+        openfallout_enable_coverage(openfallout-cs)
     endif()
 endif()
 
@@ -272,8 +271,7 @@ if(USE_QT)
 endif(USE_QT)
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-cs-lib PRIVATE --coverage)
-    target_link_libraries(openfallout-cs-lib gcov)
+    openfallout_enable_coverage(openfallout-cs-lib)
 endif()
 
 if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
