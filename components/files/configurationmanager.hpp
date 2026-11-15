@@ -59,8 +59,6 @@ namespace Files
         static void addCommonOptions(boost::program_options::options_description& description);
 
     private:
-        typedef Files::FixedPath<> FixedPathType;
-
         std::optional<boost::program_options::variables_map> loadConfig(
             const std::filesystem::path& path, const boost::program_options::options_description& description) const;
 
@@ -69,7 +67,7 @@ namespace Files
 
         std::vector<std::filesystem::path> mActiveConfigPaths;
 
-        FixedPathType mFixedPath;
+        FixedPath mFixedPath;
 
         std::filesystem::path mUserDataPath;
         std::filesystem::path mScreenshotPath;

@@ -23,12 +23,12 @@ namespace Files
     {
         constexpr auto sApplicationName = "openfallout";
 
-        using GetPath = const std::filesystem::path& (Files::FixedPath<>::*)() const;
+        using GetPath = const std::filesystem::path& (Files::FixedPath::*)() const;
         constexpr std::array<std::pair<std::u8string_view, GetPath>, 4> sTokenMappings = {
-            std::make_pair(u8"?local?", &FixedPath<>::getLocalPath),
-            std::make_pair(u8"?userconfig?", &FixedPath<>::getUserConfigPath),
-            std::make_pair(u8"?userdata?", &FixedPath<>::getUserDataPath),
-            std::make_pair(u8"?global?", &FixedPath<>::getGlobalDataPath),
+            std::make_pair(u8"?local?", &FixedPath::getLocalPath),
+            std::make_pair(u8"?userconfig?", &FixedPath::getUserConfigPath),
+            std::make_pair(u8"?userdata?", &FixedPath::getUserDataPath),
+            std::make_pair(u8"?global?", &FixedPath::getGlobalDataPath),
         };
     }
 

@@ -6,10 +6,6 @@
 #include <vector>
 
 #include <components/files/macospath.hpp>
-namespace Files
-{
-    typedef MacOsPath TargetPathType;
-}
 
 /**
  * \namespace Files
@@ -19,15 +15,9 @@ namespace Files
 
     /**
      * \struct Path
-     *
-     * \tparam P - Path strategy class type (depends on target system)
-     *
      */
-    template <class P = TargetPathType>
     struct FixedPath
     {
-        typedef P PathType;
-
         /**
          * \brief Path constructor.
          *
@@ -68,7 +58,7 @@ namespace Files
         const std::filesystem::path& getCachePath() const { return mCachePath; }
 
     private:
-        PathType mPath;
+        MacOsPath mPath;
 
         std::filesystem::path mUserConfigPath; /**< User path  */
         std::filesystem::path mUserDataPath;
