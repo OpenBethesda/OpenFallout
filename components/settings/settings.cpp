@@ -2,19 +2,13 @@
 #include "parser.hpp"
 #include "values.hpp"
 
+#include <cerrno>
 #include <charconv>
 #include <filesystem>
-#include <sstream>
-#include <system_error>
-
-#if !(defined(_MSC_VER) && (_MSC_VER >= 1924)) && !(defined(__GNUC__) && __GNUC__ >= 11) || defined(__clang__)         \
-    || defined(__apple_build_version__)
-
-#include <cerrno>
 #include <ios>
 #include <locale>
-
-#endif
+#include <sstream>
+#include <system_error>
 
 #include <components/debug/debuglog.hpp>
 #include <components/files/configurationmanager.hpp>
@@ -41,8 +35,6 @@ namespace Settings
             return number;
         }
 
-#if !(defined(_MSC_VER) && (_MSC_VER >= 1924)) && !(defined(__GNUC__) && __GNUC__ >= 11) || defined(__clang__)         \
-    || defined(__apple_build_version__)
         template <>
         float parseNumberFromSetting<float>(
             const std::string& value, std::string_view setting, std::string_view category)
@@ -80,7 +72,6 @@ namespace Settings
 
             return doubleValue;
         }
-#endif
         template <class T>
         std::string serialize(const T& value)
         {
