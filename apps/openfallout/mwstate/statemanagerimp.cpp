@@ -847,15 +847,18 @@ void OFState::StateManager::update(float duration)
     if (mLoadRequest)
     {
         OFBase::Environment::get().getWindowManager()->removeGuiMode(OFGui::GM_MainMenu);
-        const Character* character = mLoadRequest->mCharacter;
+        // The request is taken before the load runs: a refused load tells the menu scripts at once, and a handler
+        // that asks for the same save again with another answer must find the slot free for its own request.
+        const LoadRequest request = std::move(*mLoadRequest);
+        mLoadRequest = std::nullopt;
+        const Character* character = request.mCharacter;
         // The character may have been deleted after the request was made
         const bool validCharacter = std::ranges::find_if(mCharacterManager, [=](const Character& c) {
             return &c == character;
         }) != mCharacterManager.end();
         if (!validCharacter)
             character = getCurrentCharacter();
-        loadGame(character, mLoadRequest->mPath, mLoadRequest->mAnswer);
-        mLoadRequest = std::nullopt;
+        loadGame(character, request.mPath, request.mAnswer);
         // (the load that the quick load key asked for says its note now, after the load cleared the notes)
         if (mQuickLoadNote && mState == State_Running && OFBase::Environment::get().getFalloutScripts() != nullptr)
             OFBase::Environment::get().getFalloutScripts()->quickNote(false, false);

@@ -75,6 +75,10 @@ Menu scripts reach these as `require('openfallout.menu')`. The full reference is
 
 A load that the player refuses in the box does not call `onLoadRefused`; it calls `onStateChanged`, with no game.
 
+A refused load ends the game that was running, the same as a "no" in the box: the engine leaves the current game
+before it reads the save, and after a refusal it is at the main menu with no game. A caller that wants to keep the
+running game saves it first.
+
 ## Outcomes: log lines and exit status
 
 The log is `openfallout.log` in the last configuration folder read (with `--config <folder> --replace config`, that folder). Each line starts with a time stamp and a level. These lines
