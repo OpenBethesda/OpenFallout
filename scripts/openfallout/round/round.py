@@ -466,7 +466,13 @@ def prepare_run(profile, config, variant, run_dir, save):
     # directory of the other game would be searched too
     (run_dir / "config" / "openfallout.cfg").write_text("replace=config\n", encoding="utf-8")
     if save is not None:
-        shutil.copy(save, run_dir / "userdata" / "saves" / save.name)
+        saves = run_dir / "userdata" / "saves"
+        if not config.get("load_save", True):
+            # a menu script finds the save in the engine's list, and the engine lists the saves of each character folder only:
+            # one that lies straight in the saves folder is loaded by its path (`--load-savegame`) but never listed
+            saves = saves / "round"
+            saves.mkdir(exist_ok=True)
+        shutil.copy(save, saves / save.name)
     shutil.copy(config["scenario"], run_dir / "data" / "scripts" / "roundscenario.lua")
 
 

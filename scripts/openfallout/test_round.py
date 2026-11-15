@@ -310,7 +310,10 @@ class Commands(unittest.TestCase):
         for flag in ("--headless", "--no-grab"):
             self.assertIn(flag, command)
         round_runner.prepare_run(self.profile, config, config["variants"][0], self.tmp / "run", save)
-        self.assertEqual((self.tmp / "run" / "userdata" / "saves" / "q.fos").read_bytes(), b"x")
+        # the engine lists the saves of each character folder and none that lie straight in the saves folder
+        saves = self.tmp / "run" / "userdata" / "saves"
+        self.assertEqual([path.relative_to(saves).as_posix() for path in saves.rglob("*") if path.is_file()], ["round/q.fos"])
+        self.assertEqual((saves / "round" / "q.fos").read_bytes(), b"x")
 
     def test_a_round_loads_its_save_unless_it_says_otherwise(self):
         config = round_runner.load_round(self.round_file, self.Args())
@@ -640,8 +643,8 @@ class WholeRun(unittest.TestCase):
         (run,) = runs_of(tmp)
         report = json.loads((run / "one" / "report.json").read_text())
         self.assertEqual((report["verdict"], report["expectations_failed"]), ("PASS", []))
-        # the copy is where the engine's own list of saves finds it
-        self.assertEqual((run / "one" / "userdata" / "saves" / "Slot 1.omwsave").read_bytes(), b"x")
+        # the copy is where the engine's own list of saves finds it: in a character folder
+        self.assertEqual((run / "one" / "userdata" / "saves" / "round" / "Slot 1.omwsave").read_bytes(), b"x")
 
     def test_a_save_that_is_read_twice_names_each_missing_file_once(self):
         # a refused load and the load that follows it both warn about the same files

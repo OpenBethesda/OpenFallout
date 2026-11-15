@@ -55,7 +55,7 @@ round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas fol
 | `game` | `nv`, `fo3` or `ttw`: a key of the profile's `games` |
 | `scenario` | the Lua file of the scenario, relative to the round file or to this folder |
 | `save` | a file, or `"latest"`; without it `start` (a cell for `--start`, with `new_game` for `--new-game`) |
-| `load_save` | `false`: the save is copied as always but not loaded; the engine starts at the main menu (no `--skip-menu`, which with no save would start a new game), where a menu script of the round loads it. The scenario runs once a game is loaded; until then the round waits, up to its `limit` |
+| `load_save` | `false`: the save is copied into a character folder of the run (`saves/round/`, where the engine's list of saves finds it) but not loaded; the engine starts at the main menu (no `--skip-menu`, which with no save would start a new game), where a menu script of the round loads it. The scenario runs once a game is loaded; until then the round waits, up to its `limit` |
 | `settings` | `{"Section": {"key": "value"}}` for every variant, for example `{"Terrain": {"game lod": "true"}}` |
 | `resolution`, `framerate` | the size of the window (so of the screenshot) and the frame rate limit (defaults 1280x720 and 20) |
 | `limit` | seconds after which the engine is stopped (300) |
