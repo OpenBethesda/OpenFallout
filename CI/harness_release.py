@@ -16,12 +16,11 @@ import engine_release
 
 REPOSITORY = "OpenBethesda/OpenFallout"
 MARKER = ".harness/openfallout-release.yaml"
-PLATFORM_JOBS = {
-    "Ubuntu",
-    "Windows (2025) / windows-2025",
-    "MacOS (macos-26) / macos-26",
-    "MacOS (macos-26-intel) / macos-26-intel",
-}
+# The one job that builds the engine: push.yml's MacOS job ("macOS") calls macos.yml, whose job is "Build, test and
+# package"; GitHub joins the two names. No other platform has a job.
+MAC_JOB = "macOS / Build, test and package"
+# A release holds one disk image, for Apple Silicon; these are the packages of other platforms.
+OTHER_PLATFORM_SUFFIXES = (".exe", ".msi", ".appimage", ".deb", ".rpm", ".apk", ".flatpak", ".snap")
 
 
 class ReleaseError(RuntimeError):
@@ -115,8 +114,8 @@ def release_plan(api, source_ref, tag):
     else:
         jobs = api.request(f"actions/runs/{latest['id']}/jobs?filter=latest&per_page=100")["jobs"]
         passed = {job["name"] for job in jobs if job["conclusion"] == "success"}
-        if not PLATFORM_JOBS.issubset(passed):
-            problems.append("All four platform jobs must pass; run the full Build and test workflow on this master commit")
+        if MAC_JOB not in passed:
+            problems.append(f"The {MAC_JOB} job must pass; run the full Build and test workflow on this master commit")
     ref = api.request(f"git/ref/tags/{quote(tag, safe='')}", missing_ok=True)
     if ref and (ref["object"]["type"] != "commit" or ref["object"]["sha"] != sha):
         problems.append("Existing tag does not point directly to the selected commit; tags are never overwritten")
@@ -172,7 +171,7 @@ DIGEST = re.compile(r"sha256:([0-9a-f]{64})")
 
 
 def note_lines(body):
-    """The tested-on lines of the release notes that name a macOS version and a chip."""
+    """The checked-on lines of the release notes that name a macOS version and a chip."""
     notes = []
     for line in (body or "").splitlines():
         found = NOTE_LINE.match(line.strip())
@@ -187,23 +186,32 @@ def gpu_renderer(renderer):
     return renderer != "not reported" and "software" not in renderer
 
 
+def other_platform(name):
+    """Whether an asset is a package for another platform than Apple Silicon Macs."""
+    lowered = name.lower()
+    return (lowered.endswith(OTHER_PLATFORM_SUFFIXES) or "x86_64" in lowered
+            or (lowered.endswith(".dmg") and "arm64" not in lowered))
+
+
 def verify_assets(release):
     uploaded = [asset for asset in release["assets"] if asset.get("size", 0) > 0 and asset.get("state") == "uploaded"]
-    assets = [asset["name"] for asset in uploaded]
-    if not any(name.lower().endswith(".exe") for name in assets):
-        raise ReleaseError("Release is missing its Windows installer")
-    for arch in ("arm64", "x86_64"):
-        if not any(name.endswith(".dmg") and arch in name for name in assets):
-            raise ReleaseError(f"Release is missing its macOS {arch} disk image")
-    # Each disk image carries the line CI/check_mac_package.py --notes wrote: the macOS version and chip it was checked on.
+    foreign = [asset["name"] for asset in uploaded if other_platform(asset["name"])]
+    if foreign:
+        raise ReleaseError(f"Release holds {', '.join(foreign)}, which is not for Apple Silicon Macs; a release has one "
+                           f"disk image, for Apple Silicon")
+    images = [asset for asset in uploaded if asset["name"].endswith(".dmg")]
+    if not images:
+        raise ReleaseError("Release is missing its Apple Silicon disk image")
+    if len(images) > 1:
+        raise ReleaseError(f"Release holds {len(images)} disk images ({', '.join(asset['name'] for asset in images)}); "
+                           f"it has one, for Apple Silicon")
+    # The disk image carries the line CI/check_mac_package.py --notes wrote: the macOS version and chip it was checked on.
     notes = note_lines(release.get("body"))
-    for asset in (asset for asset in uploaded if asset["name"].endswith(".dmg")):
+    for asset in images:
         name = asset["name"]
         mine = [note for note in notes if note["name"] == name]
         if not mine:
-            raise ReleaseError(f"Release notes lack the macOS version and chip that {name} was tested on")
-        if "arm64" not in name:
-            continue
+            raise ReleaseError(f"Release notes lack the macOS version and chip that {name} was checked on")
         # The notarized Apple Silicon image must have passed the check in release mode, and the game must have
         # started from it on a Mac with a GPU (a hosted runner has none; the run on such a Mac adds its line). Both
         # count only for the image that was uploaded: its SHA-256 as GitHub reports it.
