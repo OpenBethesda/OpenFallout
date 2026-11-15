@@ -1,0 +1,37 @@
+{
+  "name": "m1-refused-retry",
+  "game": "nv",
+  "save": "latest",
+  "load_save": false,
+  "scenario": "../scenarios/m1_unattended_load.lua",
+  "resolution": [
+    1280,
+    720
+  ],
+  "framerate": 30,
+  "limit": 60,
+  "allow_missing_content": true,
+  "extra_args": [
+    "--content",
+    "roundretry.omwscripts"
+  ],
+  "expect_count": {
+    "Load: \\d+ content file\\(s\\) of the save are not loaded, not loading it \\(missing-content refuse\\)": 1,
+    "ROUND\\tretry\\trefused\\tmissing=[1-9]\\d*\\tsame=true\\tasking=accept": 1,
+    "Load: \\d+ content file\\(s\\) of the save are not loaded, loading it anyway \\(missing-content accept\\)": 1,
+    "Loading saved game '": 1
+  },
+  "expect_log": [
+    "(?s)not loading it \\(missing-content refuse\\).*ROUND\\tretry\\trefused\\t.*loading it anyway \\(missing-content accept\\).*Loading saved game '"
+  ],
+  "forbid_log": [
+    "asking the player",
+    "Headless: \\d+ content file\\(s\\)",
+    "--load-savegame"
+  ],
+  "variants": [
+    {
+      "name": "retry"
+    }
+  ]
+}

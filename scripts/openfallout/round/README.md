@@ -112,6 +112,15 @@ differs from the run's (it wants the plugin of a play session), once with `--mis
 `Load: ... loading it anyway (missing-content accept)` line) and once with `--missing-content=refuse` (not loaded, no box, exit status
 4). A box would log `asking the player` and fail it; an engine that waited would time out and fail it.
 
+`rounds/m1-refused-retry.json` starts at the main menu with the newest New Vegas save copied but not loaded (`"load_save": false`)
+and adds the menu script `scripts/roundretry.lua` with `--content roundretry.omwscripts` (this folder is a data folder of every
+round, so the file is found by name; nothing loads it unless a round names it). The script asks for the save with
+`missingContent = 'refuse'`; the engine refuses it and calls `onLoadRefused`, and the handler asks for the same save once more
+with `'accept'`. It passes when the refusal and the handler's line come once each, then the accept line and the load, with no box,
+and the scenario of `m1-unattended-load` runs to its end in the loaded game. An engine that loses the second request stays at the
+main menu: the round ends at its limit (60 s, so the engine is stopped after 90 s) and fails, its report says the accept and load
+lines were not found and shows the last lines of the log.
+
 `scenarios/smoke.lua` is the smallest scenario; `scenarios/m13_mountains.lua` with `rounds/m13-mountains.json` is the check of the
 distant land of New Vegas in seven variants of `game lod debug`. Its places are in the Mojave and the save can be anywhere:
 the scenario takes the worldspace from the cell of a reference that lives there (`anchor` lines say which one was found and which
