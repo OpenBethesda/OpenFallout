@@ -379,7 +379,7 @@ add_component_dir (falloutscript
 add_component_dir (misc
     barrier budgetmeasurement color compression constants convert coordinateconverter display endianness float16 frameratelimiter
     guarded math mathutil messageformatparser notnullptr objectpool osgpluginchecker osguservalues progressreporter resourcehelpers
-    rng strongtypedef thread timeconvert timer tuplehelpers tuplemeta utf8stream weakcache windows
+    rng strongtypedef thread timeconvert timer tuplehelpers tuplemeta utf8stream weakcache
     )
 
 add_component_dir (misc/strings
@@ -395,7 +395,7 @@ add_component_dir (debug
     )
 
 add_component_dir (files
-    linuxpath androidpath windowspath macospath fixedpath multidircollection collections configurationmanager
+    macospath fixedpath multidircollection collections configurationmanager
     constrainedfilestream memorystream hash configfileparser openfile constrainedfilestreambuf conversion
     istreamptr streamwithbuffer utils gameini falloutinstall
     )
@@ -442,7 +442,6 @@ add_component_dir (fontloader
 add_component_dir (sdlutil
     desktopconventions
     events
-    gl4esinit
     imagetosurface
     sdlcursormanager
     sdlgraphicswindow
