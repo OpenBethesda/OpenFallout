@@ -24,16 +24,9 @@ It is necessary to write the collected metrics to a file which needs to be defin
 Example
 -------
 
-Posix shell
 ```sh
-OPENFALLOUT_OSG_STATS_FILE=/tmp/stats OPENFALLOUT_OSG_STATS_LIST="resource;engine" /usr/local/bin/openfallout
-```
-
-Windows PowerShell
-```powershell
-$env:OPENFALLOUT_OSG_STATS_FILE="c:\stats"
-$env:OPENFALLOUT_OSG_STATS_LIST="resource;engine"
-openfallout
+OPENFALLOUT_OSG_STATS_FILE=/tmp/stats OPENFALLOUT_OSG_STATS_LIST="resource;engine" \
+    /Applications/OpenFallout.app/Contents/MacOS/openfallout
 ```
 
 
