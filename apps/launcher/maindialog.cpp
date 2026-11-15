@@ -47,12 +47,6 @@ Launcher::MainDialog::MainDialog(const Files::ConfigurationManager& configuratio
     setupUi(this);
 
     mGameInvoker = new ProcessInvoker();
-    mWizardInvoker = new ProcessInvoker();
-
-    connect(mWizardInvoker->getProcess(), &QProcess::started, this, &MainDialog::wizardStarted);
-
-    connect(mWizardInvoker->getProcess(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-        &MainDialog::wizardFinished);
 
     buttonBox->button(QDialogButtonBox::Close)->setText(tr("Close"));
     buttonBox->button(QDialogButtonBox::Ok)->setText(tr("Launch OpenFallout"));
@@ -86,7 +80,6 @@ Launcher::MainDialog::MainDialog(const Files::ConfigurationManager& configuratio
 Launcher::MainDialog::~MainDialog()
 {
     delete mGameInvoker;
-    delete mWizardInvoker;
 }
 
 bool Launcher::MainDialog::event(QEvent* event)
@@ -142,7 +135,7 @@ Launcher::FirstRunDialogResult Launcher::MainDialog::showFirstRunDialog()
     if (!setupLauncherSettings())
         return FirstRunDialogResultFailure;
 
-    // Dialog wizard and setup will fail if the config directory does not already exist
+    // Setup will fail if the config directory does not already exist
     const auto& userConfigDir = mCfgMgr.getUserConfigPath();
     if (!exists(userConfigDir))
     {
@@ -162,32 +155,19 @@ Launcher::FirstRunDialogResult Launcher::MainDialog::showFirstRunDialog()
     {
         QMessageBox msgBox;
         msgBox.setWindowTitle(tr("First run"));
-        msgBox.setIcon(QMessageBox::Question);
-        msgBox.setStandardButtons(QMessageBox::NoButton);
+        msgBox.setIcon(QMessageBox::Information);
+        msgBox.setStandardButtons(QMessageBox::Ok);
         msgBox.setText(
             tr("<html><head/><body><p><b>Welcome to OpenFallout!</b></p>"
-               "<p>To play Fallout 3, Fallout: New Vegas or Tale of Two Wastelands, skip the Wizard and add the "
+               "<p>To play Fallout 3, Fallout: New Vegas or Tale of Two Wastelands, add the "
                "Data folder of your copy of the game on the Data Files page, then pick its master file (Fallout3.esm "
-               "or FalloutNV.esm) as the game file.</p>"
-               "<p>The Installation Wizard sets up Morrowind and is not needed for Fallout.</p></body></html>"));
-
-        QAbstractButton* wizardButton
-            = msgBox.addButton(tr("Run &Installation Wizard"), QMessageBox::AcceptRole); // ActionRole doesn't work?!
-        QAbstractButton* skipButton = msgBox.addButton(tr("Skip"), QMessageBox::RejectRole);
+               "or FalloutNV.esm) as the game file.</p></body></html>"));
 
         msgBox.exec();
 
-        if (msgBox.clickedButton() == wizardButton)
-        {
-            if (mWizardInvoker->startProcess(QLatin1String("openfallout-wizard"), false))
-                return FirstRunDialogResultWizard;
-        }
-        else if (msgBox.clickedButton() == skipButton)
-        {
-            // Don't bother setting up absent game data.
-            if (setup())
-                return FirstRunDialogResultContinue;
-        }
+        // Don't bother setting up absent game data.
+        if (setup())
+            return FirstRunDialogResultContinue;
         return FirstRunDialogResultFailure;
     }
 
@@ -412,25 +392,15 @@ bool Launcher::MainDialog::setupGameData()
     if (!foundData)
     {
         QMessageBox msgBox;
-        msgBox.setWindowTitle(tr("Error detecting Morrowind installation"));
+        msgBox.setWindowTitle(tr("Error detecting the game data"));
         msgBox.setIcon(QMessageBox::Warning);
-        msgBox.setStandardButtons(QMessageBox::NoButton);
+        msgBox.setStandardButtons(QMessageBox::Ok);
         msgBox.setText(
             tr("<br><b>Could not find the Data Files location</b><br><br>"
-               "The directory containing the data files was not found."));
-
-        QAbstractButton* wizardButton = msgBox.addButton(tr("Run &Installation Wizard..."), QMessageBox::ActionRole);
-        QAbstractButton* skipButton = msgBox.addButton(tr("Skip"), QMessageBox::RejectRole);
-
-        Q_UNUSED(skipButton); // Suppress compiler unused warning
+               "The directory containing the data files was not found. Add the Data folder of your copy of the "
+               "game on the Data Files page."));
 
         msgBox.exec();
-
-        if (msgBox.clickedButton() == wizardButton)
-        {
-            if (!mWizardInvoker->startProcess(QLatin1String("openfallout-wizard"), false))
-                return false;
-        }
     }
 
     return true;
@@ -556,23 +526,6 @@ void Launcher::MainDialog::closeEvent(QCloseEvent* event)
 {
     writeSettings();
     event->accept();
-}
-
-void Launcher::MainDialog::wizardStarted()
-{
-    hide();
-}
-
-void Launcher::MainDialog::wizardFinished(int exitCode, QProcess::ExitStatus exitStatus)
-{
-    if (exitCode != 0 || exitStatus == QProcess::CrashExit)
-        return qApp->quit();
-
-    // HACK: Ensure the pages are created, else segfault
-    setup();
-
-    if (setupGameData() && reloadSettings())
-        show();
 }
 
 void Launcher::MainDialog::play()

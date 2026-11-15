@@ -30,8 +30,7 @@ namespace Launcher
     enum FirstRunDialogResult
     {
         FirstRunDialogResultFailure,
-        FirstRunDialogResultContinue,
-        FirstRunDialogResultWizard
+        FirstRunDialogResultContinue
     };
 
     class MainDialog : public QMainWindow, private Ui::MainWindow
@@ -57,10 +56,6 @@ namespace Launcher
 
     protected:
         bool event(QEvent* event) override;
-
-    private slots:
-        void wizardStarted();
-        void wizardFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
     private:
         bool setup();
@@ -92,7 +87,6 @@ namespace Launcher
         SettingsPage* mSettingsPage;
 
         Process::ProcessInvoker* mGameInvoker;
-        Process::ProcessInvoker* mWizardInvoker;
 
         const Files::ConfigurationManager& mCfgMgr;
 

@@ -80,7 +80,6 @@ namespace
         Role_LauncherLog,
         Role_OpenMWCfg,
         Role_OpenMWLog,
-        Role_OpenMWCSLog,
         Role_SettingsCfg,
     };
 
@@ -95,7 +94,6 @@ namespace
         FileType{ Role_LauncherLog, "launcher.log", false },
         FileType{ Role_OpenMWCfg, "openfallout.cfg", true },
         FileType{ Role_OpenMWLog, "openfallout.log", false },
-        FileType{ Role_OpenMWCSLog, "openfallout-cs.log", false },
         FileType{ Role_SettingsCfg, "settings.cfg", true },
     };
 }

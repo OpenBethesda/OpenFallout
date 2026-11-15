@@ -49,8 +49,7 @@ int runLauncher(int argc, char* argv[])
         if (result == Launcher::FirstRunDialogResultFailure)
             return 0;
 
-        if (result == Launcher::FirstRunDialogResultContinue)
-            mainWin.show();
+        mainWin.show();
 
         int exitCode = app.exec();
 
