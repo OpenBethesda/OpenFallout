@@ -1,7 +1,5 @@
 #include "application.hpp"
 
-#include <string>
-
 #include <components/debug/debuglog.hpp>
 #include <components/misc/scalableicon.hpp>
 
