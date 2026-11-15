@@ -25,14 +25,6 @@
 
 #include <SDL_hints.h>
 
-#if defined(_WIN32)
-#include <components/misc/windows.hpp>
-// makes __argc and __argv available on windows
-#include <cstdlib>
-
-extern "C" __declspec(dllexport) DWORD AmdPowerXpressRequestHighPerformance = 0x00000001;
-#endif
-
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -456,13 +448,3 @@ int main(int argc, char** argv)
 {
     return Debug::wrapApplication(&runApplication, argc, argv, "OpenFallout");
 }
-
-// Platform specific for Windows when there is no console built into the executable.
-// Windows will call the WinMain function instead of main in this case, the normal
-// main function is then called with the __argc and __argv parameters.
-#if defined(_WIN32) && !defined(_CONSOLE)
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
-{
-    return main(__argc, __argv);
-}
-#endif

@@ -11,54 +11,8 @@
 
 namespace bpo = boost::program_options;
 
-#ifndef _WIN32
 int main(int argc, char* argv[])
 {
-#else
-
-// Include on Windows only
-#include <codecvt>
-#include <locale>
-
-class utf8argv
-{
-public:
-    utf8argv(int argc, wchar_t* wargv[])
-    {
-        args.reserve(argc);
-        argv = new const char*[argc];
-
-        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-
-        for (int i = 0; i < argc; ++i)
-        {
-            args.push_back(converter.to_bytes(wargv[i]));
-            argv[i] = args.back().c_str();
-        }
-    }
-
-    ~utf8argv() { delete[] argv; }
-    char** get() const { return const_cast<char**>(argv); }
-
-private:
-    utf8argv(const utf8argv&);
-    utf8argv& operator=(const utf8argv&);
-
-    const char** argv;
-    std::vector<std::string> args;
-};
-
-/*  The only way to pass Unicode on Winodws with CLI is to use wide
-    characters interface which presents UTF-16 encoding. The rest of
-    OpenMW application stack assumes UTF-8 encoding, therefore this
-    conversion.
-*/
-int wmain(int argc, wchar_t* wargv[])
-{
-    utf8argv converter(argc, wargv);
-    char** argv = converter.get();
-#endif
-
     try
     {
         bpo::options_description desc("Syntax: openfallout-iniimporter <options> inifile configfile\nAllowed options");

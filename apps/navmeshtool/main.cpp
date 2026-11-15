@@ -46,11 +46,6 @@
 #include <utility>
 #include <vector>
 
-#ifdef WIN32
-#include <fcntl.h>
-#include <io.h>
-#endif
-
 namespace NavMeshTool
 {
     namespace
@@ -190,11 +185,6 @@ namespace NavMeshTool
             const bool collectStats = variables["collect-stats"].as<bool>();
 
             const std::regex worldspaceFilter(variables["worldspace-filter"].as<std::string>());
-
-#ifdef WIN32
-            if (writeBinaryLog)
-                _setmode(_fileno(stderr), _O_BINARY);
-#endif
 
             Fallback::Map::init(variables["fallback"].as<Fallback::FallbackMap>().mMap);
 

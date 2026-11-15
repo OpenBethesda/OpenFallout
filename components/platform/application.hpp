@@ -10,13 +10,6 @@ namespace Platform
     public:
         Application(int& argc, char* argv[]);
 
-#if defined(WIN32) && QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-        void init();
-
-    private slots:
-        void updateStyle(bool isDark);
-#endif
-
     signals:
         void darkModeChanged(bool);
 

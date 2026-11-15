@@ -10,12 +10,6 @@
 #include <fstream>
 #include <system_error>
 
-#if defined(_WIN32) || defined(__WINDOWS__)
-#include <components/misc/windows.hpp>
-
-#include <winreg.h>
-#endif
-
 namespace Files
 {
     namespace
@@ -197,22 +191,6 @@ namespace Files
             }
             return libraries;
         }
-
-#if defined(_WIN32) || defined(__WINDOWS__)
-        std::filesystem::path readRegistryString(HKEY root, const wchar_t* subKey, const wchar_t* valueName)
-        {
-            DWORD size = 0;
-            if (RegGetValueW(root, subKey, valueName, RRF_RT_REG_SZ, nullptr, nullptr, &size) != ERROR_SUCCESS
-                || size < sizeof(wchar_t))
-                return {};
-            std::wstring buffer(size / sizeof(wchar_t), L'\0');
-            if (RegGetValueW(root, subKey, valueName, RRF_RT_REG_SZ, nullptr, buffer.data(), &size) != ERROR_SUCCESS)
-                return {};
-            while (!buffer.empty() && buffer.back() == L'\0')
-                buffer.pop_back();
-            return std::filesystem::path(buffer);
-        }
-#endif
     }
 
     std::vector<std::filesystem::path> parseSteamLibraries(std::string_view libraryFolders)
@@ -286,43 +264,16 @@ namespace Files
     void defaultSearchPlaces(const std::filesystem::path& home, std::vector<std::filesystem::path>& steamRoots,
         std::vector<std::filesystem::path>& parents)
     {
-#if defined(_WIN32) || defined(__WINDOWS__)
-        (void)home;
-        for (const std::filesystem::path& steam :
-            { readRegistryString(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", L"SteamPath"),
-                readRegistryString(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WOW6432Node\\Valve\\Steam", L"InstallPath") })
-            if (!steam.empty())
-                addIfFolder(steamRoots, steam);
-        const DWORD drives = GetLogicalDrives();
-        for (int i = 0; i < 26; ++i)
-        {
-            if (!(drives & (1u << i)))
-                continue;
-            const std::wstring root = { static_cast<wchar_t>(L'A' + i), L':', L'\\' };
-            if (GetDriveTypeW(root.c_str()) != DRIVE_FIXED)
-                continue;
-            const std::filesystem::path drive(root);
-            addIfFolder(steamRoots, drive / "Program Files (x86)" / "Steam");
-            addIfFolder(steamRoots, drive / "Steam");
-            for (const char* parent : { "GOG Games", "Games", "Program Files (x86)", "Program Files",
-                     "Program Files (x86)/Bethesda Softworks", "Program Files/Bethesda Softworks",
-                     "Program Files (x86)/GOG Galaxy/Games", "Program Files/Epic Games" })
-                addIfFolder(parents, drive / parent);
-        }
-#else
         if (home.empty())
             return;
-        // The Steam client of Linux (the games run through Proton, but their files are in the library) and of macOS
-        for (const char* steam :
-            { ".steam/steam", ".local/share/Steam", ".var/app/com.valvesoftware.Steam/.local/share/Steam",
-                "snap/steam/common/.local/share/Steam", "Library/Application Support/Steam" })
-            addIfFolder(steamRoots, home / steam);
+        // The Steam client of macOS
+        addIfFolder(steamRoots, home / "Library/Application Support/Steam");
 
         // The Windows drives of Wine and the programs built on it, which hold Steam, GOG and Bethesda's installers
         std::vector<std::filesystem::path> drives;
         addIfFolder(drives, home / ".wine/drive_c");
-        for (const char* bottles : { "Library/Application Support/CrossOver/Bottles", ".local/share/bottles/bottles",
-                 ".var/app/com.usebottles.bottles/data/bottles/bottles", "Games", "Games/Heroic/Prefixes/default" })
+        for (const char* bottles :
+            { "Library/Application Support/CrossOver/Bottles", "Games", "Games/Heroic/Prefixes/default" })
             for (const std::filesystem::path& bottle : childFolders(home / bottles))
                 addIfFolder(drives, bottle / "drive_c");
         for (const std::filesystem::path& drive : drives)
@@ -339,16 +290,13 @@ namespace Files
         // a program looks into those)
         for (const char* parent : { "Games", "Games/Heroic", "Applications" })
             addIfFolder(parents, home / parent);
-#endif
     }
 
     std::vector<FalloutInstall> findFalloutInstalls()
     {
         std::filesystem::path home;
-#if !(defined(_WIN32) || defined(__WINDOWS__))
         if (const char* variable = std::getenv("HOME"))
             home = pathFromUnicodeString(variable);
-#endif
         std::vector<std::filesystem::path> steamRoots;
         std::vector<std::filesystem::path> parents;
         defaultSearchPlaces(home, steamRoots, parents);

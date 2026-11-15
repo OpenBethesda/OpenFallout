@@ -34,11 +34,7 @@ namespace Platform::File
 
     Handle open(const std::filesystem::path& filename)
     {
-#ifdef O_BINARY
-        static const int openFlags = O_RDONLY | O_BINARY;
-#else
         static const int openFlags = O_RDONLY;
-#endif
 
         auto handle = ::open(filename.c_str(), openFlags, 0);
         if (handle == -1)
