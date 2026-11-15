@@ -7,6 +7,7 @@
 #include <components/compiler/extensions.hpp>
 #include <components/debug/debuglog.hpp>
 #include <components/esm/refid.hpp>
+#include <components/esm3/missingcontent.hpp>
 #include <components/files/collections.hpp>
 #include <components/files/gameini.hpp>
 #include <components/settings/settings.hpp>
@@ -179,6 +180,10 @@ namespace OF
         // Grab mouse?
         bool mGrab;
         bool mHeadless;
+        // The answer, given in advance, to the box that asks the player whether to load a save whose content files are
+        // not all loaded (--missing-content), and the exit status of the process
+        ESM::MissingContentAnswer mMissingContentAnswer = ESM::MissingContentAnswer::Ask;
+        int mExitStatus = 0;
 
         bool mExportFonts;
         unsigned int mRandomSeed;
@@ -248,6 +253,12 @@ namespace OF
         void setGrabMouse(bool grab) { mGrab = grab; }
         // The window is created hidden and stays so; the engine runs as if it were shown (see main.cpp)
         void setHeadless(bool headless) { mHeadless = headless; }
+        void setMissingContentAnswer(ESM::MissingContentAnswer answer) { mMissingContentAnswer = answer; }
+
+        /// What the process ends with: 0, or refusedLoadExitStatus when the save given with --load-savegame was not
+        /// loaded because the caller refused it (--missing-content=refuse)
+        int getExitStatus() const { return mExitStatus; }
+        static constexpr int refusedLoadExitStatus = 4;
 
         /// Initialise and enter main loop.
         void go();

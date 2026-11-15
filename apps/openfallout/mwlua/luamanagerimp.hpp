@@ -83,6 +83,8 @@ namespace OFLua
         void gameLoaded() override;
         void gameEnded() override;
         void noGame() override;
+        void loadRefused(std::string_view directory, std::string_view slotName,
+            const std::vector<std::string_view>& missingContent) override;
         void objectAddedToScene(const OFWorld::Ptr& ptr) override;
         void objectRemovedFromScene(const OFWorld::Ptr& ptr) override;
         void inputEvent(const InputEvent& event) override;

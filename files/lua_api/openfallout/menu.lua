@@ -1,5 +1,8 @@
 ---
 -- Provides interfaces to interact with menu elements.
+-- `getState`, `STATE`, `newGame`, `loadGame`, `saveGame`, `deleteGame`, `getSaves`, `getAllSaves`, `getCurrentSaveDir`
+-- and `quit` are an interface that other programs rely on (see docs/openfallout/shell-interface.md in the repository):
+-- they are not changed without notice in the release notes.
 -- @context menu
 -- @module menu
 -- @usage local menu = require('openfallout.menu')
@@ -30,10 +33,21 @@
 -- @param #NewGameOptions options An optional table with additional optional arguments
 
 ---
--- Load the game from a save slot
+-- A table of parameters for @{#menu.loadGame}
+-- @type LoadGameOptions
+-- @field #string missingContent What to do when the save was made with content files that are not loaded now, the
+-- question the engine otherwise asks the player in a box: `'ask'` (ask the player; a run with `--headless` never asks and
+-- loads the save), `'accept'` (load it, no box) or `'refuse'` (do not load it, no box; the menu scripts' handler
+-- `onLoadRefused` is called). Default: the answer of the whole run, the command-line option `--missing-content` (`'ask'`
+-- when it is not given). Another word is an error.
+
+---
+-- Load the game from a save slot. The load happens at the start of the next frame: `onStateChanged` tells when it is done,
+-- and `onLoadRefused` when the answer refused it.
 -- @function [parent=#menu] loadGame
 -- @param #string directory name of the save directory (e. g. character)
 -- @param #string slotName name of the save slot
+-- @param #LoadGameOptions options An optional table with additional optional arguments
 
 ---
 -- Delete a saved game

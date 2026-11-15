@@ -4,6 +4,9 @@
 #include <components/files/configurationmanager.hpp>
 #include <components/misc/rng.hpp>
 
+#include <stdexcept>
+#include <string>
+
 namespace
 {
     namespace bpo = boost::program_options;
@@ -90,6 +93,15 @@ namespace OpenMW
             "load a save game file on game startup (specify an absolute filename or a filename relative to the current "
             "working directory)");
 
+        addOption("missing-content", bpo::value<std::string>()->default_value("ask"),
+            "what to do with a save whose content files are not all loaded, the box that asks the player answered in "
+            "advance:\n"
+            "\task - ask the player (the default; a headless run never asks and loads it)\n"
+            "\taccept - load it without asking\n"
+            "\trefuse - do not load it, without asking (a save given with load-savegame then ends the engine with "
+            "exit status 4)\n"
+            "It applies to every load of the run; a Lua script can answer one load itself (menu.loadGame)");
+
         addOption("skip-menu", bpo::value<bool>()->implicit_value(true)->default_value(false),
             "skip main menu on game startup");
 
@@ -122,5 +134,16 @@ namespace OpenMW
             "seed value for random number generator");
 
         return desc;
+    }
+
+    ESM::MissingContentAnswer readMissingContentAnswer(const bpo::variables_map& variables)
+    {
+        const auto found = variables.find("missing-content");
+        if (found == variables.end())
+            return ESM::MissingContentAnswer::Ask;
+        const std::string& text = found->second.as<std::string>();
+        if (const std::optional<ESM::MissingContentAnswer> answer = ESM::parseMissingContentAnswer(text))
+            return *answer;
+        throw std::runtime_error("missing-content must be ask, accept or refuse, not " + text);
     }
 }

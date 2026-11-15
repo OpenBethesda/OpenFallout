@@ -26,11 +26,22 @@ namespace OFState
         // (read by the scripts of Lua, which run on a thread of their own)
         std::atomic<bool> mPlayerDied{ false };
         std::optional<NewGameRequest> mNewGameRequest;
-        std::optional<std::pair<const Character*, std::filesystem::path>> mLoadRequest;
+        struct LoadRequest
+        {
+            const Character* mCharacter;
+            std::filesystem::path mPath;
+            std::optional<ESM::MissingContentAnswer> mAnswer;
+        };
+        std::optional<LoadRequest> mLoadRequest;
         // The load that was asked for by the quick load key says its note when it is done (a load clears the notes)
         bool mQuickLoadNote = false;
         // A headless run has nobody to answer a question: a save that wants content files that are not loaded is loaded
+        // unless the caller refused it
         bool mHeadless = false;
+        // The answer to that question given for the whole run (--missing-content); a load can be given its own
+        ESM::MissingContentAnswer mMissingContentAnswer = ESM::MissingContentAnswer::Ask;
+        // The last load did not happen because the caller's answer refused it
+        bool mLastLoadRefused = false;
         State mState;
         CharacterManager mCharacterManager;
         double mTimePlayed;
@@ -40,7 +51,8 @@ namespace OFState
 
         void printSavegameFormatError(const std::string& exceptionText, const std::string& messageBoxText);
 
-        bool confirmLoading(const std::vector<std::string_view>& missingFiles) const;
+        // Whether the save that wants these content files is loaded; the caller's answer decides, or the player
+        bool confirmLoading(const std::vector<std::string_view>& missingFiles, ESM::MissingContentAnswer answer);
 
         void writeScreenshot(std::vector<char>& imageData) const;
 
@@ -50,6 +62,9 @@ namespace OFState
         StateManager(const std::filesystem::path& saves, const std::vector<std::string>& contentFiles);
 
         void setHeadless(bool headless) { mHeadless = headless; }
+        void setMissingContentAnswer(ESM::MissingContentAnswer answer) { mMissingContentAnswer = answer; }
+        /// The last load did not happen because the answer given in advance refused the save (no box was shown)
+        bool lastLoadRefused() const { return mLastLoadRefused; }
 
         void requestQuit() override;
 
@@ -63,9 +78,10 @@ namespace OFState
 
         void requestNewGame(bool bypass) override { mNewGameRequest = NewGameRequest{ .mBypass = bypass }; }
 
-        void requestLoad(const Character* character, const std::filesystem::path& filepath) override
+        void requestLoad(const Character* character, const std::filesystem::path& filepath,
+            std::optional<ESM::MissingContentAnswer> answer = std::nullopt) override
         {
-            mLoadRequest.emplace(character, filepath);
+            mLoadRequest = LoadRequest{ character, filepath, answer };
         }
 
         State getState() const override;
@@ -102,7 +118,8 @@ namespace OFState
         /// for a Character containing this save file, and set this Character current if one was found.
         /// Otherwise, a new Character will be created.
 
-        void loadGame(const Character* character, const std::filesystem::path& filepath) override;
+        void loadGame(const Character* character, const std::filesystem::path& filepath,
+            std::optional<ESM::MissingContentAnswer> answer = std::nullopt) override;
         ///< Load a saved game file belonging to the given character.
 
         Character* getCurrentCharacter() override;
