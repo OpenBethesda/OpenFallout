@@ -1,9 +1,0 @@
-#ifndef OPENFALLOUT_COMPONENTS_MISC_OSGPLUGINCHECKER_HPP
-#define OPENFALLOUT_COMPONENTS_MISC_OSGPLUGINCHECKER_HPP
-
-namespace Misc
-{
-    bool checkRequiredOSGPluginsArePresent();
-}
-
-#endif

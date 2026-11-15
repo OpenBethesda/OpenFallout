@@ -7,10 +7,8 @@
 #include <components/files/falloutinstall.hpp>
 #include <components/files/gameini.hpp>
 #include <components/files/openfile.hpp>
-#include <components/misc/osgpluginchecker.hpp>
 #include <components/misc/rng.hpp>
 #include <components/misc/strings/algorithm.hpp>
-#include <components/platform/platform.hpp>
 #include <components/version/version.hpp>
 #include <components/vfs/archiveinvalidation.hpp>
 #include <components/vfs/archiveorder.hpp>
@@ -388,8 +386,6 @@ namespace
 
 int runApplication(int argc, char* argv[])
 {
-    Platform::init();
-
     // The engine starts SDL when it is made, before the options are read, so a headless run is recognised here: on
     // macOS the application is told not to become an application of the foreground (SDL does that when it starts the
     // video system) for as long as the window is hidden
@@ -415,9 +411,6 @@ int runApplication(int argc, char* argv[])
 
     if (parseOptions(argc, argv, *engine, cfgMgr))
     {
-        if (!Misc::checkRequiredOSGPluginsArePresent())
-            return 1;
-
         if (headlessArgument)
             setMacActivationPolicy();
 
