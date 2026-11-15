@@ -48,10 +48,6 @@ endif(WIN32)
 
 QT_ADD_RESOURCES(RCC_SRCS ${LAUNCHER_RES})
 
-if(NOT WIN32)
-    include_directories(${LIBUNSHIELD_INCLUDE_DIR})
-endif(NOT WIN32)
-
 # Main executable
 openfallout_add_executable(openfallout-launcher
     ${GUI_TYPE}

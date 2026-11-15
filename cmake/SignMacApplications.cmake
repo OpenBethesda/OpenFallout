@@ -1,4 +1,4 @@
-# This script re-signs OpenFallout.app and OpenFallout-CS.app after CPack packages them. This is necessary because CPack modifies
+# This script re-signs OpenFallout.app after CPack packages it. This is necessary because CPack modifies
 # the library references used by OpenFallout to App relative paths, invalidating the code signature.
 #
 # Signing identity comes only from the environment:

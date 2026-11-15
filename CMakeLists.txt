@@ -48,9 +48,7 @@ option(DEPLOY_QT_TRANSLATIONS "Deploy standard Qt translations to resources fold
 # Apps and tools
 option(BUILD_OPENFALLOUT             "Build OpenFallout" ON)
 option(BUILD_LAUNCHER           "Build Launcher" ON)
-option(BUILD_WIZARD             "Build Installation Wizard" ON)
 option(BUILD_MWINIIMPORTER      "Build MWiniImporter" ON)
-option(BUILD_OPENCS             "Build OpenFallout Construction Set" ON)
 option(BUILD_ESSIMPORTER        "Build ESS (Morrowind save game) importer" ON)
 option(BUILD_BSATOOL            "Build BSA extractor" ON)
 option(BUILD_ESMTOOL            "Build ESM inspector" ON)
@@ -61,13 +59,12 @@ option(BUILD_COMPONENTS_TESTS   "Build components library tests" OFF)
 option(BUILD_BENCHMARKS         "Build benchmarks with Google Benchmark" OFF)
 option(BUILD_NAVMESHTOOL        "Build navmesh tool" ON)
 option(BUILD_BULLETOBJECTTOOL   "Build Bullet object tool" ON)
-option(BUILD_OPENCS_TESTS       "Build OpenFallout Construction Set tests" OFF)
 option(BUILD_OPENFALLOUT_TESTS       "Build OpenFallout tests" OFF)
 option(PRECOMPILE_HEADERS_WITH_MSVC "Precompile most common used headers with MSVC (alternative to ccache)" ON)
 
 set(OpenGL_GL_PREFERENCE LEGACY)  # Use LEGACY as we use GL2; GLNVD is for GL3 and up.
 
-if (BUILD_LAUNCHER OR BUILD_OPENCS OR BUILD_WIZARD OR BUILD_OPENCS_TESTS)
+if (BUILD_LAUNCHER)
     set(USE_QT TRUE)
 else()
     set(USE_QT FALSE)
@@ -303,7 +300,7 @@ find_package(LZ4 REQUIRED)
 
 if (USE_QT)
     find_package(QT REQUIRED COMPONENTS Core NAMES Qt6)
-    find_package(Qt6 COMPONENTS Core Widgets Network OpenGL OpenGLWidgets LinguistTools Svg REQUIRED)
+    find_package(Qt6 COMPONENTS Core Widgets LinguistTools Svg REQUIRED)
     message(STATUS "Using Qt${QT_VERSION}")
 endif()
 
@@ -346,7 +343,7 @@ if (OPENFALLOUT_USE_SYSTEM_YAML_CPP)
     find_package(yaml-cpp REQUIRED)
 endif()
 
-if ((BUILD_COMPONENTS_TESTS OR BUILD_OPENCS_TESTS OR BUILD_OPENFALLOUT_TESTS) AND OPENFALLOUT_USE_SYSTEM_GOOGLETEST)
+if ((BUILD_COMPONENTS_TESTS OR BUILD_OPENFALLOUT_TESTS) AND OPENFALLOUT_USE_SYSTEM_GOOGLETEST)
     find_package(GTest 1.10 REQUIRED)
     find_package(GMock 1.10 REQUIRED)
 endif()
@@ -456,11 +453,6 @@ if(OPENFALLOUT_USE_SYSTEM_BULLET)
     else()
         message(FATAL_ERROR "Bullet does not uses double precision")
     endif()
-endif()
-
-if (NOT WIN32 AND BUILD_WIZARD) # windows users can just run the morrowind installer
-    find_package(LIBUNSHIELD REQUIRED) # required only for non win32 when building openfallout-wizard
-    set(OPENFALLOUT_USE_UNSHIELD TRUE)
 endif()
 
 # Fix for not visible pthreads functions for linker with glibc 2.15
@@ -616,13 +608,6 @@ else ()
         "${OpenFallout_BINARY_DIR}" "openfallout.cfg")
 endif ()
 
-pack_resource_file(${OpenFallout_SOURCE_DIR}/files/openfallout-cs.cfg
-    "${OpenFallout_BINARY_DIR}" "defaults-cs.bin")
-
-# Needs the copy version because the configure version assumes the end of the file has been reached when a null character is reached and there are no CMake expressions to evaluate.
-copy_resource_file(${OpenFallout_SOURCE_DIR}/files/opencs/defaultfilters
-    "${OpenFallout_BINARY_DIR}" "resources/defaultfilters")
-
 configure_resource_file(${OpenFallout_SOURCE_DIR}/files/gamecontrollerdb.txt
     "${OpenFallout_BINARY_DIR}" "gamecontrollerdb.txt")
 
@@ -631,8 +616,6 @@ if (NOT WIN32 AND NOT APPLE)
         "${OpenFallout_BINARY_DIR}/org.openfallout.launcher.desktop")
     configure_file(${OpenFallout_SOURCE_DIR}/files/openfallout.appdata.xml
         "${OpenFallout_BINARY_DIR}/openfallout.appdata.xml")
-    configure_file(${OpenFallout_SOURCE_DIR}/files/org.openfallout.cs.desktop
-        "${OpenFallout_BINARY_DIR}/org.openfallout.cs.desktop")
 endif()
 
 if(OPENFALLOUT_LTO_BUILD)
@@ -667,9 +650,6 @@ endif()
 add_subdirectory (extern/osg-ffmpeg-videoplayer)
 add_subdirectory (extern/oics)
 add_subdirectory (extern/Base64)
-if (BUILD_OPENCS OR BUILD_OPENCS_TESTS)
-    add_subdirectory (extern/osgQt)
-endif()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     add_compile_options("/W4")
@@ -745,14 +725,6 @@ if (BUILD_ESSIMPORTER)
     add_subdirectory (apps/essimporter )
 endif()
 
-if (BUILD_OPENCS OR BUILD_OPENCS_TESTS)
-    add_subdirectory (apps/opencs)
-endif()
-
-if (BUILD_WIZARD)
-    add_subdirectory(apps/wizard)
-endif()
-
 if (BUILD_NIFTEST)
     add_subdirectory(apps/niftest)
 endif()
@@ -771,10 +743,6 @@ endif()
 
 if (BUILD_BULLETOBJECTTOOL)
     add_subdirectory(apps/bulletobjecttool)
-endif()
-
-if (BUILD_OPENCS_TESTS)
-    add_subdirectory(apps/opencs_tests)
 endif()
 
 if (BUILD_OPENFALLOUT_TESTS)
@@ -848,12 +816,6 @@ if (APPLE AND BUILD_LAUNCHER AND BUILD_OPENFALLOUT)
     list(APPEND CPACK_OPENFALLOUT_APPLICATIONS "${APP_BUNDLE_NAME}")
     list(APPEND CPACK_OPENFALLOUT_ENTITLEMENTS "${OpenFallout_SOURCE_DIR}/files/mac/openfallout.entitlements")
     install(DIRECTORY "${APP_BUNDLE_DIR}" USE_SOURCE_PERMISSIONS DESTINATION "." COMPONENT Runtime)
-    if (BUILD_OPENCS)
-        get_property(OPENCS_BUNDLE_NAME_TMP TARGET openfallout-cs PROPERTY OUTPUT_NAME)
-        set(OPENCS_BUNDLE_NAME "${OPENCS_BUNDLE_NAME_TMP}.app")
-        list(APPEND CPACK_OPENFALLOUT_APPLICATIONS "${OPENCS_BUNDLE_NAME}")
-        list(APPEND CPACK_OPENFALLOUT_ENTITLEMENTS "${OpenFallout_SOURCE_DIR}/files/mac/openfallout-cs.entitlements")
-    endif()
 
     set(QT_BUNDLE_PLUGINS "")
     if (USE_QT)
@@ -1001,12 +963,6 @@ elseif(NOT APPLE)
         IF(BUILD_LAUNCHER)
             SET(CPACK_PACKAGE_EXECUTABLES "${CPACK_PACKAGE_EXECUTABLES};openfallout-launcher;OpenFallout Launcher")
         ENDIF(BUILD_LAUNCHER)
-        IF(BUILD_OPENCS)
-            SET(CPACK_PACKAGE_EXECUTABLES "${CPACK_PACKAGE_EXECUTABLES};openfallout-cs;OpenFallout Construction Set")
-        ENDIF(BUILD_OPENCS)
-        IF(BUILD_WIZARD)
-            SET(CPACK_PACKAGE_EXECUTABLES "${CPACK_PACKAGE_EXECUTABLES};openfallout-wizard;OpenFallout Wizard")
-        ENDIF(BUILD_WIZARD)
         SET(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '\$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Readme.lnk' '\$INSTDIR\\\\README.txt'")
         SET(CPACK_NSIS_DELETE_ICONS_EXTRA "
             !insertmacro MUI_STARTMENU_GETFOLDER Application $MUI_TEMP
@@ -1046,10 +1002,6 @@ elseif(NOT APPLE)
         INSTALL(FILES "${OpenFallout_BINARY_DIR}/org.openfallout.launcher.desktop" DESTINATION "${DATAROOTDIR}/applications" COMPONENT "openfallout")
         INSTALL(FILES "${OpenFallout_SOURCE_DIR}/files/launcher/images/openmw.png" DESTINATION "${ICONDIR}" COMPONENT "openfallout")
         INSTALL(FILES "${OpenFallout_BINARY_DIR}/openfallout.appdata.xml" DESTINATION "${DATAROOTDIR}/metainfo" COMPONENT "openfallout")
-        IF(BUILD_OPENCS)
-            INSTALL(FILES "${OpenFallout_BINARY_DIR}/org.openfallout.cs.desktop" DESTINATION "${DATAROOTDIR}/applications" COMPONENT "opencs")
-            INSTALL(FILES "${OpenFallout_SOURCE_DIR}/files/opencs/openmw-cs.png" DESTINATION "${ICONDIR}" COMPONENT "opencs")
-        ENDIF(BUILD_OPENCS)
 
     endif(WIN32)
 
@@ -1098,7 +1050,6 @@ endif ()
 # Qt localization
 if (USE_QT)
     file(GLOB LAUNCHER_TS_FILES ${CMAKE_SOURCE_DIR}/files/lang/launcher_*.ts)
-    file(GLOB WIZARD_TS_FILES ${CMAKE_SOURCE_DIR}/files/lang/wizard_*.ts)
     file(GLOB COMPONENTS_TS_FILES ${CMAKE_SOURCE_DIR}/files/lang/components_*.ts)
     get_target_property(QT_LUPDATE_EXECUTABLE Qt::lupdate IMPORTED_LOCATION)
     add_custom_target(translations
@@ -1107,12 +1058,6 @@ if (USE_QT)
         VERBATIM
         COMMAND_EXPAND_LISTS
         BYPRODUCTS ${COMPONENTS_TS_FILES}
-
-        COMMAND ${QT_LUPDATE_EXECUTABLE} -locations none ${CMAKE_SOURCE_DIR}/apps/wizard -ts ${WIZARD_TS_FILES}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/wizard
-        VERBATIM
-        COMMAND_EXPAND_LISTS
-        BYPRODUCTS ${WIZARD_TS_FILES}
 
         COMMAND ${QT_LUPDATE_EXECUTABLE} -locations none ${CMAKE_SOURCE_DIR}/apps/launcher -ts ${LAUNCHER_TS_FILES}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/launcher
@@ -1127,18 +1072,13 @@ if (USE_QT)
         VERBATIM
         COMMAND_EXPAND_LISTS
 
-        COMMAND ${QT_LUPDATE_EXECUTABLE} -locations none -no-obsolete ${CMAKE_SOURCE_DIR}/apps/wizard -ts ${WIZARD_TS_FILES}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/wizard
-        VERBATIM
-        COMMAND_EXPAND_LISTS
-
         COMMAND ${QT_LUPDATE_EXECUTABLE} -locations none -no-obsolete ${CMAKE_SOURCE_DIR}/apps/launcher -ts ${LAUNCHER_TS_FILES}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/apps/launcher
         VERBATIM
         COMMAND_EXPAND_LISTS
     )
 
-    if (BUILD_LAUNCHER OR BUILD_WIZARD)
+    if (BUILD_LAUNCHER)
         if (APPLE)
             set(QT_OPENFALLOUT_TRANSLATIONS_PATH "${APP_BUNDLE_DIR}/Contents/Resources/resources/translations")
         else ()
@@ -1154,10 +1094,6 @@ if (USE_QT)
 
         if (BUILD_LAUNCHER)
             set(TS_FILES ${TS_FILES} ${LAUNCHER_TS_FILES})
-        endif ()
-
-        if (BUILD_WIZARD)
-            set(TS_FILES ${TS_FILES} ${WIZARD_TS_FILES})
         endif ()
 
         qt_add_translation(QM_FILES ${TS_FILES} OPTIONS -silent)

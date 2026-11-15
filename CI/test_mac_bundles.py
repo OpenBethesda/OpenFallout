@@ -17,13 +17,12 @@ TEAM = "EXAMPLE123"
 ENGINE_APP = "OpenFallout.app/Contents/Helpers/OpenFallout Engine.app"
 ENTITLEMENTS = {
     "OpenFallout.app": "openfallout.entitlements",
-    "OpenFallout-CS.app": "openfallout-cs.entitlements",
 }
 LOCAL_TEST_ENTITLEMENTS = ROOT / "files/mac/local-hardened-test.entitlements"
 
 
 class MacBundleTests(unittest.TestCase):
-    def configure(self, game, launcher, editor=False):
+    def configure(self, game, launcher, *extra):
         temporary = tempfile.TemporaryDirectory(prefix="mac bundles ")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -58,10 +57,6 @@ set(OPENFALLOUT_VERSION "0.1.0")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0")
 set(OPENSCENEGRAPH_VERSION "3.6.5")
 set(USED_OSG_PLUGINS dummy)
-if(BUILD_OPENCS)
-    add_executable(openfallout-cs IMPORTED)
-    set_property(TARGET openfallout-cs PROPERTY OUTPUT_NAME "OpenFallout-CS")
-endif()
 if(USE_QT)
     set(QT_VERSION_MAJOR 6)
     foreach(plugin QCocoaIntegrationPlugin QMacStylePlugin QSvgPlugin QSvgIconPlugin)
@@ -76,9 +71,9 @@ endif()
             "cmake", "-S", str(source), "-B", str(build),
             f"-DBUILD_OPENFALLOUT={'ON' if game else 'OFF'}",
             f"-DBUILD_LAUNCHER={'ON' if launcher else 'OFF'}",
-            f"-DBUILD_OPENCS={'ON' if editor else 'OFF'}",
-            # as in the top-level CMakeLists.txt: the launcher (and the editor) use Qt
-            f"-DUSE_QT={'ON' if launcher or editor else 'OFF'}",
+            # as in the top-level CMakeLists.txt: the launcher uses Qt
+            f"-DUSE_QT={'ON' if launcher else 'OFF'}",
+            *extra,
         ], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return root, build
@@ -91,22 +86,19 @@ endif()
         self.assertEqual(list((build / "OpenFallout.app").rglob("plugin.dylib")), [])
         return build
 
-    def check_bundles(self, editor):
-        # A package is made only when the engine and the launcher are both built.
-        root, build = self.configure(game=True, launcher=True, editor=editor)
-        expected = ["OpenFallout.app"] + (["OpenFallout-CS.app"] if editor else [])
+    def check_bundles(self, *extra):
+        # A package is made only when the engine and the launcher are both built, and holds OpenFallout.app only.
+        root, build = self.configure(True, True, *extra)
+        expected = ["OpenFallout.app"]
         install = (build / "cmake_install.cmake").read_text()
         config = (build / "CPackConfig.cmake").read_text()
         self.assertIn(f'set(CPACK_OPENFALLOUT_APPLICATIONS "{";".join(expected)}")', config)
         entitlements = [f"{root}/source/files/mac/{ENTITLEMENTS[bundle]}" for bundle in expected]
         self.assertIn(f'set(CPACK_OPENFALLOUT_ENTITLEMENTS "{";".join(entitlements)}")', config)
-        for bundle in ("OpenFallout.app", "OpenFallout-CS.app"):
-            if bundle in expected:
-                self.assertIn(f'fixup_bundle("${{CMAKE_INSTALL_PREFIX}}/{bundle}"', install)
-            else:
-                self.assertNotIn(bundle, install)
-            plugins = list((build / bundle).rglob("plugin.dylib"))
-            self.assertEqual(len(plugins), 4 if bundle in expected else 0)
+        self.assertIn('fixup_bundle("${CMAKE_INSTALL_PREFIX}/OpenFallout.app"', install)
+        self.assertEqual(install.count("fixup_bundle("), 1)
+        self.assertNotIn("OpenFallout-CS", install + config)
+        self.assertEqual(len(list((build / "OpenFallout.app").rglob("plugin.dylib"))), 4)
 
         # CPack must sign only the selected bundles.
         signed = self.sign(root, expected)
@@ -184,7 +176,7 @@ endif()
                          OPENFALLOUT_CODESIGN_IDENTITY=IDENTITY, **environment)
 
     def test_identity_signs_each_nested_binary_before_its_bundle(self):
-        bundles = ["OpenFallout.app", "OpenFallout-CS.app"]
+        bundles = ["OpenFallout.app"]
         calls = [call for call in self.sign_with_identity(bundles) if "--sign" in call]
         targets = [call[-1] for call in calls]
         for bundle in bundles:
@@ -209,7 +201,7 @@ endif()
                 sorted(t for t in targets if t.startswith(app + "/")), sorted(nested))
 
     def test_identity_uses_hardened_runtime_timestamp_and_entitlements(self):
-        bundles = ["OpenFallout.app", "OpenFallout-CS.app"]
+        bundles = ["OpenFallout.app"]
         calls = [call for call in self.sign_with_identity(bundles) if "--sign" in call]
         self.assertTrue(calls)
         for call in calls:
@@ -274,17 +266,6 @@ endif()
                 self.assertNotIn("--entitlements", call)
         self.assertIn("LOCAL TEST", self.output)
 
-    def test_local_test_overlay_also_merges_into_the_editors_empty_entitlements(self):
-        temporary = tempfile.TemporaryDirectory(prefix="mac signing ")
-        self.addCleanup(temporary.cleanup)
-        calls = self.sign(Path(temporary.name), ["OpenFallout.app", "OpenFallout-CS.app"],
-                          OPENFALLOUT_CODESIGN_IDENTITY="-", OPENFALLOUT_CODESIGN_LOCAL_TEST="1")
-        editor = str(self.app_root / "OpenFallout-CS.app")
-        used = [call[call.index("--entitlements") + 1] for call in calls if "--sign" in call and call[-1] == editor]
-        self.assertEqual(len(used), 1, self.output)
-        with open(used[0], "rb") as entitlements:
-            self.assertEqual(plistlib.load(entitlements), {"com.apple.security.cs.disable-library-validation": True})
-
     def test_local_test_is_refused_with_a_real_identity(self):
         temporary = tempfile.TemporaryDirectory(prefix="mac signing ")
         self.addCleanup(temporary.cleanup)
@@ -295,7 +276,7 @@ endif()
         self.assertNotIn(IDENTITY, self.output)
 
     def test_identity_never_uses_deep_or_prints_secrets(self):
-        calls = self.sign_with_identity(["OpenFallout.app", "OpenFallout-CS.app"],
+        calls = self.sign_with_identity(["OpenFallout.app"],
                                         OPENFALLOUT_CODESIGN_TEAM_ID=TEAM)
         for call in calls:
             if "--sign" in call or "-s" in call:
@@ -357,10 +338,11 @@ endif()
         self.assertFalse((build / ENGINE_APP).exists())
 
     def test_game_with_launcher(self):
-        self.check_bundles(editor=False)
+        self.check_bundles()
 
-    def test_game_launcher_and_editor(self):
-        self.check_bundles(editor=True)
+    def test_old_editor_and_wizard_options_add_nothing(self):
+        # CI passed BUILD_OPENCS=TRUE before the editor left; the option no longer exists
+        self.check_bundles("-DBUILD_OPENCS=ON", "-DBUILD_WIZARD=ON")
 
 
 class MacInfoPlistTests(unittest.TestCase):
@@ -390,11 +372,6 @@ class MacInfoPlistTests(unittest.TestCase):
         # the shell reads LSMinimumSystemVersion of the nested engine app; both apps refuse older systems
         for template in ("openfallout-Info.plist.in", "openfallout-engine-Info.plist.in"):
             self.assertEqual(self.render(template).get("LSMinimumSystemVersion"), "26.1", template)
-
-    def test_editor_plist_has_no_carbon_key(self):
-        plist = self.render("openfallout-cs-Info.plist.in")
-        self.assertNotIn("LSRequiresCarbon", plist)
-        self.assertIs(plist.get("NSHighResolutionCapable"), True)
 
 
 class MacFloorTests(unittest.TestCase):
