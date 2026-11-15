@@ -38,6 +38,11 @@ local questText = require('scripts.omw.falloutmenuquests')
 
 local module = {}
 
+-- The arguments as a list that knows its length, holes included (the engine's Lua is 5.1 and has no table.pack)
+local function pack(...)
+    return { n = select('#', ...), ... }
+end
+
 local FILE = 'main/hud_main_menu.xml'
 local FADE_SECONDS = 0.35
 -- How long the limbs and the face stay after the health changed, the enemy bar after its target changed (the default of
@@ -792,7 +797,7 @@ function Hud:update(state, dt)
         if subtitle ~= nil then self:put(t.subtitleText, 'string', subtitle) end
         self:put(t.messages, 'visible', off and 0 or 1)
         -- (the row of the needs may not be in the file, and a hole in the list would end an ipairs loop at it)
-        local tiles = table.pack(t.hitPoints, t.actionPoints, t.needs, t.rads, t.reticle, t.sneak, t.xp, t.limbs, t.enemy,
+        local tiles = pack(t.hitPoints, t.actionPoints, t.needs, t.rads, t.reticle, t.sneak, t.xp, t.limbs, t.enemy,
             t.info)
         for i = 1, tiles.n do
             if not full then self:put(tiles[i], 'visible', 0) end
