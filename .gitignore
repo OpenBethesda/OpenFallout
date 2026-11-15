@@ -10,7 +10,6 @@ prebuilt
 
 ## build process
 /deps
-/MSVC*
 /.harness-release-state.json
 
 ## doxygen
@@ -28,7 +27,6 @@ Doxygen
 .directory
 .idea
 cmake-build-*
-files/windows/*.aps
 .cache/clangd
 ## qt-creator
 CMakeLists.txt.user*
