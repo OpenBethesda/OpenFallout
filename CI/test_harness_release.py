@@ -30,18 +30,26 @@ def note(name, result, mode, smoke, renderer, digest, chip):
 
 
 RELEASE = {"id": 7, "tag_name": TAG, "draft": True, "prerelease": True,
-           "body": note("OpenFallout-arm64.dmg", "PASS", "release", "SKIP", "not reported", ARM, "Apple M2 (Virtual)")
-                   + "\n" + note("OpenFallout-arm64.dmg", "PASS", "release", "PASS", "Apple M4", ARM, "Apple M4")
+           "body": note("OpenFallout-0.1.0-macOS-arm64.dmg", "PASS", "release", "SKIP", "not reported", ARM, "Apple M2 (Virtual)")
+                   + "\n" + note("OpenFallout-0.1.0-macOS-arm64.dmg", "PASS", "release", "PASS", "Apple M4", ARM, "Apple M4")
                    + "\n" + note("OpenFallout-x86_64.dmg", "PASS", "local", "SKIP", "not reported", INTEL,
                                   "Intel(R) Core(TM) i7-8700B CPU @ 3.20GHz") + "\n",
            "html_url": "https://example.invalid/release", "assets": [
                {"name": "OpenFallout.exe", "size": 12, "state": "uploaded", "digest": "sha256:" + "4" * 64},
-               {"name": "OpenFallout-arm64.dmg", "size": 12, "state": "uploaded", "digest": "sha256:" + ARM},
+               {"name": "OpenFallout-0.1.0-macOS-arm64.dmg", "size": 12, "state": "uploaded", "digest": "sha256:" + ARM},
                {"name": "OpenFallout-x86_64.dmg", "size": 12, "state": "uploaded", "digest": "sha256:" + INTEL}]}
 
 # The engine release's statement (CI/engine_release.py) and the two notes lines the gate asks for. The image is the
 # Apple Silicon one above; the commit is the one the tag points to.
-STATEMENT = engine_release.build_statement("0.1.0", TAG, SHA, "OpenFallout-arm64.dmg", ARM, "26.0", "arm64")
+STATEMENT = engine_release.build_statement("0.1.0", TAG, SHA, "OpenFallout-0.1.0-macOS-arm64.dmg", ARM, "26.0", "arm64")
+
+
+def rename_image(release, name):
+    """The Apple Silicon image and the notes lines about it under another file name."""
+    for asset in release["assets"]:
+        if asset["name"] == "OpenFallout-0.1.0-macOS-arm64.dmg":
+            asset["name"] = name
+    release["body"] = release["body"].replace("OpenFallout-0.1.0-macOS-arm64.dmg", name)
 
 
 def with_engine_release(release):
@@ -173,7 +181,7 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ReleaseError, "macOS version and chip that OpenFallout-x86_64.dmg"):
             verify_assets(release)
         release["body"] = None
-        with self.assertRaisesRegex(ReleaseError, "OpenFallout-arm64.dmg"):
+        with self.assertRaisesRegex(ReleaseError, "OpenFallout-0.1.0-macOS-arm64.dmg"):
             verify_assets(release)
 
     def test_a_tested_on_line_needs_both_the_macos_version_and_the_chip(self):
@@ -195,11 +203,11 @@ class ReleaseTests(unittest.TestCase):
         runner, gpu, intel = lines
         # only the runner's line: the game was never started on a Mac with a GPU
         release["body"] = "\n".join([runner, intel])
-        with self.assertRaisesRegex(ReleaseError, "smoke PASS.*OpenFallout-arm64.dmg"):
+        with self.assertRaisesRegex(ReleaseError, "smoke PASS.*OpenFallout-0.1.0-macOS-arm64.dmg"):
             verify_assets(release)
         # only a smoke run in local mode: the notarized image was never checked in release mode
         release["body"] = "\n".join([gpu.replace("release mode", "local mode"), intel])
-        with self.assertRaisesRegex(ReleaseError, "release mode.*OpenFallout-arm64.dmg"):
+        with self.assertRaisesRegex(ReleaseError, "release mode.*OpenFallout-0.1.0-macOS-arm64.dmg"):
             verify_assets(release)
         # a failed check does not count, whatever its smoke result
         release["body"] = "\n".join([runner, gpu.replace("check PASS", "check FAIL"), intel])
@@ -215,16 +223,16 @@ class ReleaseTests(unittest.TestCase):
         release = copy.deepcopy(RELEASE)
         # the smoke run was of another image with the same name (an ad hoc local package)
         release["body"] = "\n".join([runner, gpu.replace(ARM, OTHER), intel])
-        with self.assertRaisesRegex(ReleaseError, "smoke PASS.*OpenFallout-arm64.dmg"):
+        with self.assertRaisesRegex(ReleaseError, "smoke PASS.*OpenFallout-0.1.0-macOS-arm64.dmg"):
             verify_assets(release)
         # the release-mode check was of another image
         release["body"] = "\n".join([runner.replace(ARM, OTHER), gpu.replace("release mode", "local mode"), intel])
-        with self.assertRaisesRegex(ReleaseError, "release mode.*OpenFallout-arm64.dmg"):
+        with self.assertRaisesRegex(ReleaseError, "release mode.*OpenFallout-0.1.0-macOS-arm64.dmg"):
             verify_assets(release)
         # GitHub gave no digest for the image: nothing can be bound to it
         release = copy.deepcopy(RELEASE)
         del release["assets"][1]["digest"]
-        with self.assertRaisesRegex(ReleaseError, "digest.*OpenFallout-arm64.dmg"):
+        with self.assertRaisesRegex(ReleaseError, "digest.*OpenFallout-0.1.0-macOS-arm64.dmg"):
             verify_assets(release)
 
     def test_a_smoke_pass_on_the_software_renderer_does_not_count(self):
@@ -232,7 +240,7 @@ class ReleaseTests(unittest.TestCase):
         release = copy.deepcopy(RELEASE)
         for renderer in ("Apple Software Renderer", "not reported"):
             release["body"] = "\n".join([runner, gpu.replace("renderer Apple M4", f"renderer {renderer}"), intel])
-            with self.subTest(renderer=renderer), self.assertRaisesRegex(ReleaseError, "GPU.*OpenFallout-arm64.dmg"):
+            with self.subTest(renderer=renderer), self.assertRaisesRegex(ReleaseError, "GPU.*OpenFallout-0.1.0-macOS-arm64.dmg"):
                 verify_assets(release)
 
     def test_failed_packaging_blocks_publishing(self):
@@ -319,7 +327,7 @@ class EngineReleaseGateTests(unittest.TestCase):
     def test_a_statement_with_another_digest_than_the_uploaded_image_is_refused(self):
         api = FakeGitHub()
         api.statement["sha256"] = OTHER
-        self.refused(api, f"sha256 {OTHER}.*OpenFallout-arm64.dmg.*{ARM}")
+        self.refused(api, f"sha256 {OTHER}.*OpenFallout-0.1.0-macOS-arm64.dmg.*{ARM}")
 
     def test_an_image_uploaded_again_after_the_statement_was_made_is_refused(self):
         api = FakeGitHub()
@@ -346,8 +354,14 @@ class EngineReleaseGateTests(unittest.TestCase):
 
     def test_a_statement_that_names_an_image_the_release_does_not_hold_is_refused(self):
         api = FakeGitHub()
-        api.statement["disk_image"] = "OpenFallout-0.1.0-macOS-arm64.dmg"
+        rename_image(api.release, "OpenFallout-arm64.dmg")
         self.refused(api, "OpenFallout-0.1.0-macOS-arm64.dmg.*does not hold")
+
+    def test_an_image_that_is_not_at_the_stable_address_of_its_version_is_refused(self):
+        api = FakeGitHub()
+        rename_image(api.release, "OpenFallout-arm64.dmg")
+        api.statement["disk_image"] = "OpenFallout-arm64.dmg"
+        self.refused(api, "OpenFallout-arm64.dmg.*is named OpenFallout-0.1.0-macOS-arm64.dmg")
 
     def test_notes_without_the_supported_line_are_refused(self):
         api = FakeGitHub()

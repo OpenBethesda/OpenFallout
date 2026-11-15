@@ -353,6 +353,10 @@ def verify_release(release, commit, fetch):
     problems = statement_problems(statement)
     if problems:
         raise Refusal(f"{STATEMENT_NAME} is not a statement of an engine release: " + "; ".join(problems))
+    wanted = disk_image_name(statement["version"], statement["architecture"])
+    if statement["disk_image"] != wanted:
+        raise Refusal(f"{STATEMENT_NAME} names {statement['disk_image']}, but the disk image of version "
+                      f"{statement['version']} is named {wanted}: that name is its stable address")
     image = assets.get(statement["disk_image"])
     if image is None:
         raise Refusal(f"{STATEMENT_NAME} names {statement['disk_image']}, which the release does not hold")
