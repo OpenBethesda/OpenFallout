@@ -26,13 +26,15 @@ own tests and reports nothing.
 
 The packaged app is built RelWithDebInfo and is never instrumented. The tests
 get a second build tree in the same job, `build-tests`, configured by
-`CI/before_script.macos.sh -T`: Debug, `BUILD_WITH_CODE_COVERAGE=ON`, the two
-test suites, and no editor or wizard. Only `components-tests` and
+`CI/before_script.macos.sh -T`: Debug without debug information (`-O0`, no
+`-g`), `BUILD_WITH_CODE_COVERAGE=ON`, the two test suites, and no editor or
+wizard. Only `components-tests` and
 `openfallout-tests` are built in it. The launcher stays configured because it
-turns on Qt, which the launcher-settings tests in `components-tests` need. The tree has its own incremental build
-cache, `build-macos-coverage-v1-…`, and shares the job's ccache (see
-[CI build cache contract](ci-cache.md)). The test steps run whenever the app
-compiled, so a packaging or notarization failure does not hide the test results.
+turns on Qt, which the launcher-settings tests in `components-tests` need. The
+tree has its own incremental build cache, `build-macos-coverage-v1-…`, and
+shares the job's ccache (see [CI build cache contract](ci-cache.md)). The test
+steps run whenever the app compiled, so a packaging or notarization failure
+does not hide the test results.
 
 Only the Apple Silicon build of a branch or pull request runs them. The Intel
 build does not. A release tag (`build-type: Release`) does not either: a tag is

@@ -88,10 +88,13 @@ declare -a BUILD_OPTS=(
 # The unit tests and their coverage (CI/test_reports.py) need an unoptimized, instrumented build, and the packaged app
 # must not be instrumented, so they get their own tree. Only the test suites are built in it. The launcher stays on:
 # it turns on Qt, which the launcher-settings tests in components-tests need. The editor's tests stay off: the editor
-# is not built on the Mac.
+# is not built on the Mac. Debug without -g: coverage needs no debug information, and without it the tree, which the
+# job caches, is about a quarter of the size.
 if [[ -n $TEST_TREE ]]; then
     CMAKE_BUILD_TYPE=Debug
     BUILD_OPTS+=(
+        -D CMAKE_C_FLAGS_DEBUG=-O0
+        -D CMAKE_CXX_FLAGS_DEBUG=-O0
         -D BUILD_WITH_CODE_COVERAGE=ON
         -D BUILD_COMPONENTS_TESTS=ON
         -D BUILD_OPENFALLOUT_TESTS=ON

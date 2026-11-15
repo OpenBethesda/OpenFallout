@@ -10,8 +10,9 @@ test-report behavior is described in [CI reporting](ci-reporting.md).
 
 The macOS job keeps two build trees. `build` is the packaged app; its cache key
 starts with `build-macos-v1-` and its fingerprint mode is the image and build
-type. `build-tests` is the instrumented unit-test tree (Debug, coverage, only
-the two test suites); its key starts with `build-macos-coverage-v1-`, its mode
+type. `build-tests` is the instrumented unit-test tree (Debug without `-g`,
+coverage, only the two test suites; about 1.8 GB before compression, against
+about 8 GB with debug information); its key starts with `build-macos-coverage-v1-`, its mode
 is the image followed by `-coverage`, and the job passes `--build-dir
 build-tests` to `restore` and `snapshot`. The two never share a cache entry, so
 ordinary objects are never restored into an instrumented build. Both trees use
