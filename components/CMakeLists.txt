@@ -368,7 +368,7 @@ add_component_dir (falloutscript
 add_component_dir (misc
     barrier budgetmeasurement color compression constants convert coordinateconverter display endianness float16 frameratelimiter
     guarded math mathutil messageformatparser notnullptr objectpool osguservalues progressreporter resourcehelpers
-    rng strongtypedef thread timeconvert timer tuplehelpers tuplemeta utf8stream weakcache
+    rng strongtypedef thread timeconvert timer tuplehelpers tuplemeta utf8stream
     )
 
 add_component_dir (misc/strings
@@ -394,7 +394,7 @@ set_source_files_properties(files/configfileparser.cpp PROPERTIES COMPILE_FLAGS 
 add_component_dir (compiler
     context controlparser errorhandler exception exprparser extensions fileparser generator
     lineparser literals locals output parser scanner scriptparser skipparser streamerrorhandler
-    stringparser tokenloc nullerrorhandler opcodes extensions0 declarationparser
+    stringparser tokenloc opcodes extensions0 declarationparser
     quickfileparser discardparser junkparser
     )
 
