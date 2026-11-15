@@ -77,7 +77,8 @@ A load that the player refuses in the box does not call `onLoadRefused`; it call
 
 A refused load ends the game that was running, the same as a "no" in the box: the engine leaves the current game
 before it reads the save, and after a refusal it is at the main menu with no game. A caller that wants to keep the
-running game saves it first.
+running game saves it first. An `onLoadRefused` handler may ask for the same save again with `loadGame` and another
+answer, such as `{ missingContent = 'accept' }`; that load happens on the next frame.
 
 ## Outcomes: log lines and exit status
 
