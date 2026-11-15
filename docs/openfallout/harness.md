@@ -92,6 +92,12 @@ Failed packaging must be repaired and rerun in GitHub Actions before promotion.
 Draft creation and publishing were unit-tested, but no real version was published
 during setup. Use the same immutable `source_ref` SHA when resuming a release.
 
+Before a release is promoted, the gate also reads the engine release's statement
+(`openfallout-engine-release.json`, made by CI from the disk image) and refuses a release whose statement is missing,
+disagrees with the uploaded image's digest or the tag's commit, or whose notes lack the *supported* and *played on*
+lines; see [engine-release.md](engine-release.md). It downloads that one small asset through the GitHub API; the
+token that lists the draft releases also reads their assets.
+
 The release pipeline checks out an immutable commit containing
 `CI/harness_release.py`. Its application source is selected separately, preventing
 a runtime source ref from replacing the privileged release script. When changing
