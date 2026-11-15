@@ -204,6 +204,24 @@ jobs:
         python3 CI/check_mac_package.py "$1" --mode "$CHECK_MODE" --smoke auto --work "$RUNNER_TEMP/package-check" \
           --notes "$RUNNER_TEMP/release-notes.md"
 
+    # The engine release (docs/openfallout/engine-release.md), on an `openfallout-*` tag build of the Apple Silicon
+    # image only (an `openmw-*` tag has no engine release). The statement the shell reads is written from the checked
+    # disk image; the job fails when the statement, the property lists, the CMake version, the tag and the binaries
+    # disagree. The "Supported" line joins the release notes. The "Played on" line is the owner's, added to the draft
+    # before publishing; the release gate asks for it.
+    - name: Test the engine-release tooling
+      if: ${{ inputs.build-type == 'Release' && runner.arch == 'ARM64' && startsWith(github.ref_name, 'openfallout-') }}
+      run: python3 -m unittest discover -s CI -p test_engine_release.py -v
+
+    - name: Write the engine-release statement
+      if: ${{ inputs.build-type == 'Release' && runner.arch == 'ARM64' && startsWith(github.ref_name, 'openfallout-') }}
+      run: |
+        set -- build/OpenFallout-*.dmg
+        python3 CI/engine_release.py write "$1" --tag "$GITHUB_REF_NAME" --commit "$GITHUB_SHA" \
+          --out "$RUNNER_TEMP/openfallout-engine-release.json"
+        python3 CI/engine_release.py notes "$RUNNER_TEMP/openfallout-engine-release.json" \
+          --append "$RUNNER_TEMP/release-notes.md"
+
     - name: Store the packaged-app check logs
       if: ${{ always() }}
       uses: actions/upload-artifact@v7
@@ -379,7 +397,9 @@ jobs:
       if: ${{ inputs.build-type == 'Release' }}
       uses: softprops/action-gh-release@v3
       with:
-        files: ${{ github.workspace }}/build/OpenFallout-*.dmg
+        files: |
+          ${{ github.workspace }}/build/OpenFallout-*.dmg
+          ${{ runner.temp }}/openfallout-engine-release.json
         # one line per disk image: its SHA-256 and the macOS version and chip it was checked on (check_mac_package.py --notes)
         body_path: ${{ runner.temp }}/release-notes.md
         append_body: true
