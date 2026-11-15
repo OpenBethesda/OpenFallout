@@ -55,6 +55,7 @@ set(OPENFALLOUT_ENGINE_APP_DIR "${APP_BUNDLE_DIR}/Contents/Helpers/OpenFallout E
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 set(CPACK_PACKAGE_VERSION "0.1.0")
 set(OPENFALLOUT_VERSION "0.1.0")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0")
 set(OPENSCENEGRAPH_VERSION "3.6.5")
 set(USED_OSG_PLUGINS dummy)
 if(BUILD_OPENCS)
@@ -332,7 +333,10 @@ endif()
         self.assertEqual(plist.get("LSApplicationCategoryType"), "public.app-category.role-playing-games")
         self.assertIs(plist.get("NSHighResolutionCapable"), True)
         self.assertNotIn("LSRequiresCarbon", plist)
+        self.assertEqual(plist.get("LSMinimumSystemVersion"), "26.0")
         self.assertTrue((engine / "Contents/Resources" / plist["CFBundleIconFile"]).is_file())
+        with (build / "OpenFallout.app/Contents/Info.plist").open("rb") as file:
+            self.assertEqual(plistlib.load(file).get("LSMinimumSystemVersion"), "26.0")
 
     def test_game_bundle_holds_the_engine_app(self):
         _, build = self.configure(game=True, launcher=True)
@@ -367,7 +371,7 @@ class MacInfoPlistTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         output = Path(temporary.name) / "Info.plist"
         script = Path(temporary.name) / "render.cmake"
-        script.write_text(f'set(OPENFALLOUT_VERSION "0.1.0")\n'
+        script.write_text(f'set(OPENFALLOUT_VERSION "0.1.0")\nset(CMAKE_OSX_DEPLOYMENT_TARGET "26.1")\n'
                           f'configure_file("{ROOT / "files/mac" / template}" "{output}")\n')
         result = subprocess.run(["cmake", "-P", str(script)], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -382,10 +386,67 @@ class MacInfoPlistTests(unittest.TestCase):
         self.assertEqual(plist.get("CFBundleShortVersionString"), "0.1.0")
         self.assertNotIn("LSRequiresCarbon", plist)
 
+    def test_both_plists_take_the_minimum_macos_from_the_deployment_target(self):
+        # the shell reads LSMinimumSystemVersion of the nested engine app; both apps refuse older systems
+        for template in ("openfallout-Info.plist.in", "openfallout-engine-Info.plist.in"):
+            self.assertEqual(self.render(template).get("LSMinimumSystemVersion"), "26.1", template)
+
     def test_editor_plist_has_no_carbon_key(self):
         plist = self.render("openfallout-cs-Info.plist.in")
         self.assertNotIn("LSRequiresCarbon", plist)
         self.assertIs(plist.get("NSHighResolutionCapable"), True)
+
+
+class MacFloorTests(unittest.TestCase):
+    """Configure the head of the top-level CMakeLists.txt (up to the supported-Macs checks) without a compiler."""
+
+    def configure(self, *arguments):
+        temporary = tempfile.TemporaryDirectory(prefix="mac floor ")
+        self.addCleanup(temporary.cleanup)
+        source, build = Path(temporary.name) / "source", Path(temporary.name) / "build"
+        source.mkdir()
+        head = (ROOT / "CMakeLists.txt").read_text().split("# End of supported Macs\n", 1)[0]
+        self.assertIn("project(OpenFallout)\n", head)
+        (source / "CMakeLists.txt").write_text(head.replace("project(OpenFallout)\n", "project(OpenFallout NONE)\n"))
+        result = subprocess.run(["cmake", "-S", str(source), "-B", str(build), *arguments],
+                                text=True, capture_output=True)
+        return result, build
+
+    def cached(self, build, name):
+        for line in (build / "CMakeCache.txt").read_text().splitlines():
+            if line.startswith(name + ":"):
+                return line.split("=", 1)[1]
+        return None
+
+    @unittest.skipUnless(sys.platform == "darwin", "the default applies on macOS")
+    def test_default_deployment_target_is_26(self):
+        result, build = self.configure()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.cached(build, "CMAKE_OSX_DEPLOYMENT_TARGET"), "26.0")
+
+    @unittest.skipUnless(sys.platform == "darwin", "the default applies on macOS")
+    def test_an_empty_deployment_target_takes_the_default(self):
+        # a build folder configured before the floor existed has the value cached as an empty string
+        result, build = self.configure("-DCMAKE_OSX_DEPLOYMENT_TARGET=")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.cached(build, "CMAKE_OSX_DEPLOYMENT_TARGET"), "26.0")
+
+    @unittest.skipUnless(sys.platform == "darwin", "the default applies on macOS")
+    def test_a_higher_deployment_target_is_kept(self):
+        result, build = self.configure("-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.cached(build, "CMAKE_OSX_DEPLOYMENT_TARGET"), "27.0")
+
+    def test_a_lower_deployment_target_is_refused(self):
+        result, _ = self.configure("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.8")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("macOS 26.0 or later", result.stderr)
+
+    def test_intel_is_refused(self):
+        for architectures in ("x86_64", "arm64;x86_64"):
+            result, _ = self.configure(f"-DCMAKE_OSX_ARCHITECTURES={architectures}")
+            self.assertNotEqual(result.returncode, 0, architectures)
+            self.assertIn("Apple Silicon only", result.stderr)
 
 
 @unittest.skipUnless(sys.platform == "darwin" and shutil.which("c++"), "needs macOS and a C++ compiler")

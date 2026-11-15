@@ -6,7 +6,27 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 
+# Supported Macs: macOS 26.0 or later on Apple Silicon. The default must be set before project(). A caller may pass a
+# higher deployment target; the property lists of both apps take their minimum system version from it. An empty value
+# (as cached by a build folder configured before this default existed) takes the default.
+set(OPENFALLOUT_MINIMUM_MACOS "26.0")
+if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${OPENFALLOUT_MINIMUM_MACOS}" CACHE STRING
+        "Minimum macOS version (${OPENFALLOUT_MINIMUM_MACOS} or later)" FORCE)
+endif()
+
 project(OpenFallout)
+
+if (CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS OPENFALLOUT_MINIMUM_MACOS)
+    message(FATAL_ERROR "OpenFallout supports macOS ${OPENFALLOUT_MINIMUM_MACOS} or later: "
+        "CMAKE_OSX_DEPLOYMENT_TARGET is '${CMAKE_OSX_DEPLOYMENT_TARGET}'. Pass ${OPENFALLOUT_MINIMUM_MACOS} or higher.")
+endif()
+if ((CMAKE_OSX_ARCHITECTURES AND NOT CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+    OR (NOT CMAKE_OSX_ARCHITECTURES AND NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64"))
+    message(FATAL_ERROR "OpenFallout builds for Apple Silicon only (arm64): CMAKE_OSX_ARCHITECTURES is "
+        "'${CMAKE_OSX_ARCHITECTURES}', the target processor is '${CMAKE_SYSTEM_PROCESSOR}'.")
+endif()
+# End of supported Macs
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -808,8 +828,6 @@ endif()
 
 if(WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64")
     set(CUSTOM_CPACK_ARCHITECTURE "x64")
-elseif(APPLE AND CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
-    set(CUSTOM_CPACK_ARCHITECTURE "x86_64")
 else()
     set(CUSTOM_CPACK_ARCHITECTURE "${CMAKE_SYSTEM_PROCESSOR}")
 endif()
@@ -822,9 +840,6 @@ set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CU
 if (APPLE AND BUILD_LAUNCHER AND BUILD_OPENFALLOUT)
     if(CMAKE_VERSION VERSION_LESS 3.19)
         message(FATAL_ERROR "macOS packaging requires CMake 3.19 or higher to sign macOS app bundles.")
-    endif()
-    if(CMAKE_OSX_ARCHITECTURES AND NOT (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_OSX_ARCHITECTURES STREQUAL "arm64"))
-        message(FATAL_ERROR "Only x86_64 OR arm64 is accepted for CMAKE_OSX_ARCHITECTURES")
     endif()
 
     # Each application is paired with the entitlements file its executables are signed with under the hardened runtime.
