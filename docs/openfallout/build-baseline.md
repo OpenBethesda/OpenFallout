@@ -18,7 +18,7 @@ The disk image is checked with `CI/check_mac_package.py` (see [playing.md](playi
 
 ### The developer route: the engine only, against Homebrew libraries
 
-For work on the engine itself, build only the engine and the test programs against the libraries Homebrew provides, with the launcher off (`-DBUILD_LAUNCHER=OFF`). The steps, and the four things that need handling (MyGUI and Recast have no formula, Bullet needs double precision, the "Apple bundling" block in the root `CMakeLists.txt`, and the Lua headers), are in [Building `esmtool` on macOS](#building-esmtool-on-macos) below; they are the same for the engine. The tests are on:
+For work on the engine itself, build only the engine and the test programs against the libraries Homebrew provides, with the launcher off (`-DBUILD_LAUNCHER=OFF`). The steps, and the three things that need handling (MyGUI and Recast have no formula, Bullet needs double precision, and the Lua headers), are in [Building `esmtool` on macOS](#building-esmtool-on-macos) below; they are the same for the engine. The packaging block of the root `CMakeLists.txt` no longer runs in a build without the launcher, so no local edit is needed. The tests are on:
 
 ```
 cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_LAUNCHER=OFF \
@@ -145,7 +145,7 @@ Homebrew already had Boost, Bullet, OpenSceneGraph 3.6.5, LZ4, yaml-cpp, ICU, FF
 
 1. **MyGUI and Recast have no Homebrew formulae.** Configure with `-DOPENFALLOUT_USE_SYSTEM_MYGUI=OFF` and CMake fetches MyGUI 3.4.3 and Recast with their pinned hashes.
 2. **Homebrew's Bullet 3.25 is single precision and the build needs double.** Configure with `-DOPENFALLOUT_USE_SYSTEM_BULLET=OFF`, which fetches Bullet 3.17, and add `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`, because that Bullet's CMake files predate the minimum version CMake now accepts.
-3. **The "Apple bundling" block in the root `CMakeLists.txt` runs even when only `esmtool` is built.** It asks for Qt plugin targets and OSG plugins that Homebrew's OSG does not have. The Mac run changed that block's `if (APPLE)` to `if (APPLE AND BUILD_OPENMW)` in a scratch clone (`BUILD_OPENFALLOUT` now). That change is not in this repository: the block also bundles the construction set, and macOS bundling cannot be tested from the cloud container. It is an open item.
+3. **The "Apple bundling" block in the root `CMakeLists.txt` runs even when only `esmtool` is built.** It asks for Qt plugin targets and OSG plugins that Homebrew's OSG does not have. The Mac run changed that block's `if (APPLE)` to `if (APPLE AND BUILD_OPENMW)` in a scratch clone (`BUILD_OPENFALLOUT` now). History: this is fixed. The packaging block now runs only when the launcher and the engine are both built, so a build of the tools or of the engine alone needs no edit.
 4. **If Homebrew's regular `lua` formula (5.5) is installed, its headers shadow LuaJIT.** The bundled sol3 prefers `<lua/lua.hpp>`, and `/opt/homebrew/include/lua` wins, so `components/lua` fails to compile. The fix used was a small directory holding `lua/lua.h`, `lauxlib.h`, `lualib.h`, `luaconf.h` and `lua.hpp`, each one including the matching LuaJIT header, passed with `-DCMAKE_CXX_FLAGS=-I<shimdir>`. It has to be `-I`: `-isystem` lost to `/opt/homebrew/include`.
 
 The rest of the configuration: `-G Ninja -DCMAKE_BUILD_TYPE=Release`, every `BUILD_*` option off except `BUILD_ESMTOOL=ON`, `CMAKE_PREFIX_PATH` set to the Homebrew prefix plus `icu4c` and `luajit`, then `cmake --build build --target esmtool`.

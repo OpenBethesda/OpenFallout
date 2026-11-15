@@ -37,4 +37,3 @@ What the check does not see: names built by the preprocessor, raw string literal
 ## Adding an edge
 
 The edge list is the table `EDGES` at the top of `CI/check_core_edges.py`. Each entry is a path prefix and the reason the code touches the machine. Adding an edge is a one-line change, and the reviewer decides whether the reason is true. Prefer a new native bridge in an existing edge folder to widening the list. Do not add a core folder.
-

@@ -2,7 +2,7 @@
 Custom Models
 #############
 
-Custom models can be imported into OpenMW using a variety of formats. Models for the majority of in-game objects are assigned through openMW-CS :doc:`/manuals/openmw-cs/index`.
+Custom models can be imported into OpenMW using a variety of formats. Models for the majority of in-game objects are assigned in the content files.
 
 Some models, however, are essential for OpenMW to even run. These include player and NPC animations, and meshes for the sky. They are assigned in the ``settings.cfg`` file, with more information available in :doc:`/reference/modding/settings/models` .
 

@@ -45,6 +45,25 @@ class CoreEdgesTest(unittest.TestCase):
                 self.write("components/esm/a.cpp", f"#include <{header}>\n")
                 self.assertEqual(len(self.violations()), 1)
 
+    def test_headers_of_other_apple_frameworks_fail(self):
+        for header in ("CoreGraphics/CoreGraphics.h", "CoreText/CoreText.h", "CoreServices/CoreServices.h",
+                       "ApplicationServices/ApplicationServices.h", "Carbon/Carbon.h", "CoreVideo/CVDisplayLink.h",
+                       "AVFoundation/AVFoundation.h", "IOSurface/IOSurface.h", "MetalFX/MetalFX.h",
+                       "Accelerate/Accelerate.h", "SystemConfiguration/SystemConfiguration.h", "xpc/xpc.h",
+                       "GameKit/GameKit.h", "UniformTypeIdentifiers/UniformTypeIdentifiers.h"):
+            with self.subTest(header=header):
+                self.write("components/esm/a.cpp", f"#include <{header}>\n")
+                self.assertEqual(len(self.violations()), 1)
+
+    def test_an_umbrella_header_of_an_unlisted_framework_fails(self):
+        # <Name/Name.h> is how every Apple framework is included; the list cannot name them all
+        self.write("components/esm/a.cpp", "#include <SomeNewKit/SomeNewKit.h>\n")
+        self.assertEqual(len(self.violations()), 1)
+
+    def test_a_lower_case_library_header_of_the_same_shape_passes(self):
+        self.write("components/esm/a.cpp", "#include <gtest/gtest.h>\n#include <lua/lua.h>\n")
+        self.assertEqual(self.violations(), [])
+
     def test_import_and_quoted_include_fail(self):
         self.write("components/esm/a.hpp", '#  import "Foundation/Foundation.h"\n')
         self.assertEqual(len(self.violations()), 1)
@@ -123,6 +142,17 @@ class CoreEdgesTest(unittest.TestCase):
                    "#ifdef __APPLE__\n#endif\n")
         found = self.violations()
         self.assertEqual([v[1] for v in found], [6])
+
+    def test_a_condition_that_only_starts_with_0_is_read(self):
+        for condition in ("0 || 1", "0 + 1", "0x1", "0 == 0", "!0"):
+            with self.subTest(condition=condition):
+                self.write("components/esm/a.cpp", f"#if {condition}\n#include <mach-o/dyld.h>\n#endif\n")
+                self.assertEqual([v[1] for v in self.violations()], [2])
+
+    def test_if_0_with_a_comment_is_still_dead(self):
+        self.write("components/esm/a.cpp", "#if 0 // off\n#include <mach-o/dyld.h>\n#endif\n#if 0 /* off */\n"
+                                           "#include <mach-o/dyld.h>\n#endif\n")
+        self.assertEqual(self.violations(), [])
 
     def test_if_0_with_else_reads_the_else_branch(self):
         self.write("components/esm/a.cpp", "#if 0\nint a;\n#else\n#ifdef __APPLE__\n#endif\n#endif\n")

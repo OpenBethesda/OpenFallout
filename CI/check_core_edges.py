@@ -16,9 +16,10 @@ extern/ is skipped. One line per violation is printed as `path:line: what`, then
 when there is any violation. See docs/openfallout/core-and-edges.md.
 
 What the check does not see: names built by the preprocessor or by string joins, raw string literals (a `//` inside
-one is read as a comment), line continuations inside comments, `#if 0` written in any other way (`#if (0)`,
-`#ifdef NEVER`), files with other extensions (CMake files, shaders, scripts), and anything under extern/.
+one is read as a comment), line continuations inside comments, dead code written in any other way than a bare `#if 0` (`#if (0)`,
+`#ifdef NEVER`; a condition such as `#if 0 || 1` is read as live code), files with other extensions (CMake files, shaders, scripts), and anything under extern/.
 A name in a comment is not a violation. A name inside `#if 0 ... #endif` is not a violation.
+A header is an Apple header when it is on the lists below or has the shape `<Name/Name.h>` with a capital first letter.
 """
 
 import argparse
@@ -59,7 +60,18 @@ APPLE_HEADER_PREFIXES = (
     "CoreFoundation/", "Foundation/", "AppKit/", "Cocoa/", "mach/", "mach-o/", "dispatch/", "os/", "objc/",
     "IOKit/", "Metal/", "MetalKit/", "CoreMotion/", "CoreAudio/", "AudioToolbox/", "CoreHaptics/",
     "GameController/", "Security/", "QuartzCore/", "OpenGL/", "OpenAL/", "libkern/", "malloc/", "simd/",
+    "CoreGraphics/", "CoreText/", "CoreServices/", "CoreVideo/", "CoreMedia/", "CoreImage/", "CoreData/",
+    "CoreLocation/", "CoreBluetooth/", "CoreMIDI/", "CoreML/", "CoreSpotlight/", "CoreTelephony/", "CoreWLAN/",
+    "ApplicationServices/", "Carbon/", "CFNetwork/", "AVFoundation/", "AVFAudio/", "AVKit/", "AudioUnit/",
+    "Accelerate/", "vecLib/", "IOSurface/", "ImageIO/", "MetalFX/", "MetalPerformanceShaders/", "ModelIO/",
+    "GameKit/", "GameplayKit/", "SceneKit/", "SpriteKit/", "StoreKit/", "SystemConfiguration/", "DiskArbitration/",
+    "ForceFeedback/", "UserNotifications/", "UniformTypeIdentifiers/", "VideoToolbox/", "WebKit/", "Network/",
+    "ServiceManagement/", "LocalAuthentication/", "CryptoKit/", "CommonCrypto/", "xpc/", "launch/", "notify/",
+    "os_log/", "sandbox/", "EndpointSecurity/", "Spatial/", "PHASE/", "ScreenCaptureKit/", "Vision/",
 )
+# Every Apple framework is included as <Name/Name.h> with a capital first letter; the libraries the engine uses that
+# have this shape are lower case (gtest/gtest.h). This catches a framework the list above does not name.
+UMBRELLA_HEADER = re.compile(r"^([A-Z]\w+)/\1\.h$")
 APPLE_HEADER_NAMES = (
     "pthread/qos.h", "libproc.h", "sys/sysctl.h", "copyfile.h", "TargetConditionals.h", "Availability.h",
     "AvailabilityMacros.h",
@@ -69,7 +81,8 @@ APPLE_MACROS = re.compile(
     r"\b(__APPLE__|__MACH__|TARGET_OS_\w+|__OBJC__|Q_OS_MAC(?:OS)?|Q_OS_DARWIN|MAC_OS_X_VERSION_\w+"
     r"|__apple_build_version__)\b")
 RUNTIME_NAMES = re.compile(r"\b(libobjc|objc_msgSend|objc_getClass|sel_registerName|NSApplication)")
-IF_ZERO = re.compile(r"^\s*#\s*if\s+0\b")
+# only a condition that is exactly 0; "#if 0 || 1" is live code (comments are blanked before this is matched)
+IF_ZERO = re.compile(r"^\s*#\s*if\s+0\s*$")
 IF_ANY = re.compile(r"^\s*#\s*if(?:def|ndef)?\b")
 ELSE_OR_ELIF = re.compile(r"^\s*#\s*(?:else|elif)\b")
 ENDIF = re.compile(r"^\s*#\s*endif\b")
@@ -149,7 +162,8 @@ def what_is_wrong(line: str) -> str | None:
     header = HEADER.match(line)
     if header:
         name = header.group(1).strip()
-        if (name.startswith(APPLE_HEADER_PREFIXES) or name in APPLE_HEADER_NAMES or name.startswith("mach_")):
+        if (name.startswith(APPLE_HEADER_PREFIXES) or name in APPLE_HEADER_NAMES or name.startswith("mach_")
+                or UMBRELLA_HEADER.match(name)):
             return f"Apple header {name}"
     macro = APPLE_MACROS.search(line)
     if macro:
