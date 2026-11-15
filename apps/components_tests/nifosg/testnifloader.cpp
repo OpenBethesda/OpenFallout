@@ -35,6 +35,26 @@ namespace
 
     constexpr VFS::Path::NormalizedView testNif("test.nif");
 
+    // The scene as osgt text, compared line by line without the indentation; the braces still give the nesting. OSG
+    // indents only when the stream manipulator it gets is its own copy of std::endl. Built as separate libc++
+    // libraries (stock OSG 3.6.5 on macOS), every library has a private copy, so that check fails and nothing is
+    // indented; OpenMW's OSG build writes line ends explicitly and indents.
+    std::string withoutIndentation(std::string_view text)
+    {
+        std::istringstream stream{ std::string(text) };
+        std::string result;
+        for (std::string line; std::getline(stream, line);)
+        {
+            if (line.starts_with('#'))
+                continue;
+            line.erase(line.find_last_not_of(" \t\n\r\f\v") + 1);
+            line.erase(0, line.find_first_not_of(" \t"));
+            result += line;
+            result += '\n';
+        }
+        return result;
+    }
+
     struct BaseNifOsgLoaderTest
     {
         VFS::Manager mVfs;
@@ -58,16 +78,7 @@ namespace
         {
             std::stringstream stream;
             mReaderWriter->writeNode(node, stream, mOptions);
-            std::string result;
-            for (std::string line; std::getline(stream, line);)
-            {
-                if (line.starts_with('#'))
-                    continue;
-                line.erase(line.find_last_not_of(" \t\n\r\f\v") + 1);
-                result += line;
-                result += '\n';
-            }
-            return result;
+            return withoutIndentation(stream.str());
         }
     };
 
@@ -82,7 +93,7 @@ namespace
         Nif::NIFFile file(testNif);
         file.mRoots.push_back(&node);
         auto result = Loader::load(file, &mImageManager, &mMaterialManager);
-        EXPECT_EQ(serialize(*result), R"(
+        EXPECT_EQ(serialize(*result), withoutIndentation(R"(
 osg::Group {
   UniqueID 1
   DataVariance STATIC
@@ -116,7 +127,7 @@ osg::Group {
     }
   }
 }
-)");
+)"));
     }
 
     // The hair, eyes and hats of the characters of the games are not skinned: the file names the bone they are put on
@@ -552,7 +563,8 @@ osg::Group {
         Nif::NIFFile file(testNif);
         file.mRoots.push_back(&node);
         auto result = Loader::load(file, &mImageManager, &mMaterialManager);
-        EXPECT_EQ(serialize(*result), formatOsgNodeForBSShaderProperty(GetParam().mExpectedShaderPrefix));
+        EXPECT_EQ(
+            serialize(*result), withoutIndentation(formatOsgNodeForBSShaderProperty(GetParam().mExpectedShaderPrefix)));
     }
 
     INSTANTIATE_TEST_SUITE_P(Params, NifOsgLoaderBSShaderPrefixTest, ValuesIn(NifOsgLoaderBSShaderPrefixTest::sParams));
@@ -582,7 +594,8 @@ osg::Group {
         Nif::NIFFile file(testNif);
         file.mRoots.push_back(&node);
         auto result = Loader::load(file, &mImageManager, &mMaterialManager);
-        EXPECT_EQ(serialize(*result), formatOsgNodeForBSLightingShaderProperty(GetParam().mExpectedShaderPrefix));
+        EXPECT_EQ(serialize(*result),
+            withoutIndentation(formatOsgNodeForBSLightingShaderProperty(GetParam().mExpectedShaderPrefix)));
     }
 
     INSTANTIATE_TEST_SUITE_P(

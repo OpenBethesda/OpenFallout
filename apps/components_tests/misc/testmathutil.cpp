@@ -5,13 +5,21 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <iomanip>
 #include <limits>
 
+// A component also matches when it is the float next to the expected one. The C library may round a result at the end
+// of its range either way: on macOS, atan2f(0, -1) and asinf(1) return the float just below pi and pi / 2, where glibc
+// returns the nearest float (osg::PIf, osg::PI_2f). Near pi one float step is twice the float epsilon.
 MATCHER_P2(Vec3fEq, other, precision, "")
 {
-    return std::abs(arg.x() - other.x()) < precision && std::abs(arg.y() - other.y()) < precision
-        && std::abs(arg.z() - other.z()) < precision;
+    const auto near = [&](float value, float expected) {
+        return std::abs(value - expected) < precision
+            || value == std::nextafter(expected, std::numeric_limits<float>::infinity())
+            || value == std::nextafter(expected, -std::numeric_limits<float>::infinity());
+    };
+    return near(arg.x(), other.x()) && near(arg.y(), other.y()) && near(arg.z(), other.z());
 }
 
 namespace testing
