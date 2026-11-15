@@ -22,6 +22,7 @@ GAME_KEYS = {
     "LSApplicationCategoryType": "public.app-category.role-playing-games",
     "LSSupportsGameMode": True,
     "NSHighResolutionCapable": True,
+    "LSMinimumSystemVersion": "26.0",
 }
 
 
@@ -149,6 +150,17 @@ class PackageCheckTests(unittest.TestCase):
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL info.plist: Contents/Helpers/OpenFallout Engine.app: LSSupportsGameMode is None, "
                       "expected true", output)
+
+    def test_a_property_list_without_the_minimum_or_with_another_fails(self):
+        # macOS refuses to start the app on an older system only when both property lists say the minimum, and it
+        # must be the one the programs are built for (the platform step)
+        engine_keys = dict(GAME_KEYS)
+        del engine_keys["LSMinimumSystemVersion"]
+        app = StandIn(self.root, game_keys=dict(GAME_KEYS, LSMinimumSystemVersion="14.8"), engine_keys=engine_keys).app
+        status, output = run_check(app, "--smoke", "skip")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL info.plist: OpenFallout.app: LSMinimumSystemVersion is '14.8', expected '26.0'", output)
+        self.assertIn("Contents/Helpers/OpenFallout Engine.app: LSMinimumSystemVersion is None, expected '26.0'", output)
 
     def test_carbon_key_and_wrong_category_fail(self):
         app = StandIn(self.root, game_keys=dict(GAME_KEYS, LSRequiresCarbon=True,
