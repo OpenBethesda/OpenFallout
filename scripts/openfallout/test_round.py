@@ -491,6 +491,16 @@ class WholeRun(unittest.TestCase):
         self.assertIn("after the scenario had finished", report["exit_note"])
         self.assertIn("after the scenario had finished", (run / "one" / "report.md").read_text())
 
+    def test_an_engine_that_ends_a_moment_after_its_scenario_keeps_its_own_exit_status(self):
+        # the runner sees the end of the scenario in the log while the engine is still on its way out: it is not stopped at
+        # once (the status would then be the runner's signal, and which of the two came first would decide the report)
+        tmp, code = self.run_round(3, linger=1)
+        self.assertEqual(code, 0)
+        (run,) = runs_of(tmp)
+        report = json.loads((run / "one" / "report.json").read_text())
+        self.assertEqual((report["verdict"], report["exit_status"]), ("PASS", 3))
+        self.assertIn("after the scenario had finished", report["exit_note"])
+
     def test_a_screenshot_that_was_asked_for_and_never_written_fails_the_round(self):
         tmp, code = self.run_round(0, written=1)
         self.assertEqual(code, 1)
@@ -756,9 +766,14 @@ class GuardedRun(unittest.TestCase):
         release = threading.Event()
         calls = {"n": 0}
 
+        def engine_has_logged():
+            return any("accessory set" in log.read_text() for log in (tmp / "out").rglob("openfallout.log"))
+
         def ping():
             calls["n"] += 1
-            if calls["n"] <= 2:                       # the test call and the first heartbeat answer, then it hangs
+            # the test call and the first heartbeat answer, and every one until the engine has written its log (a busy computer
+            # starts the engine late, and the report reads the log); then it hangs
+            if calls["n"] <= 2 or not engine_has_logged():
                 return True
             release.wait(60)
             return True

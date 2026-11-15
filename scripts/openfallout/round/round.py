@@ -561,6 +561,10 @@ def engine_environment(extra, is_mac):
     return dict(os.environ, **env)
 
 
+# Seconds an engine whose scenario has ended is given to end on its own before the runner stops it
+ENDING_GRACE = 2.0
+
+
 def run_engine(command, run_dir, limit, env_extra=None, priority="low", guard=None):
     """Starts the engine at low priority and waits for it; gives (exit status, seconds, focus sampler, timed out, ended early,
     guard reason). The run ends when the engine does, when the scenario ended and its pictures are written (`ended early`: the runner
@@ -592,6 +596,13 @@ def run_engine(command, run_dir, limit, env_extra=None, priority="low", guard=No
             gone = kill_engine(process)
             break
         if pictures.poll():
+            # An engine that is already ending on its own (or crashing on its way out) is given a moment: its own exit status is
+            # the report's. Without it the status depends on which comes first, the end of the engine or this look at the log
+            try:
+                process.wait(timeout=ENDING_GRACE)
+                break
+            except subprocess.TimeoutExpired:
+                pass
             ended_early = True
             gone, tripped = stop_engine(process, guard)
             break
