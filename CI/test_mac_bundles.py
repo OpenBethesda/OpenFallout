@@ -23,14 +23,14 @@ LOCAL_TEST_ENTITLEMENTS = ROOT / "files/mac/local-hardened-test.entitlements"
 
 
 class MacBundleTests(unittest.TestCase):
-    def configure(self, game, editor, qt):
+    def configure(self, game, launcher, editor=False):
         temporary = tempfile.TemporaryDirectory(prefix="mac bundles ")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         source, build = root / "source", root / "build"
         (source / "files/mac").mkdir(parents=True)
         (source / "files/mac/qt.conf").write_text("[Paths]\nPlugins=../PlugIns\n")
-        for name in ("openfallout-engine-Info.plist.in", "openmw.icns"):
+        for name in ("openfallout-Info.plist.in", "openfallout-engine-Info.plist.in", "openmw.icns"):
             shutil.copy(ROOT / "files/mac" / name, source / "files/mac")
         for name in ("README.md", "CHANGELOG.md", "LICENSE", "AUTHORS.md"):
             (source / name).touch()
@@ -39,9 +39,10 @@ class MacBundleTests(unittest.TestCase):
         (source / "cmake/FindOSGPlugins.cmake").write_text(
             'set(DUMMY_LIBRARY_RELEASE "${CMAKE_CURRENT_LIST_DIR}/osg.dylib")\n')
         shutil.copy(ROOT / "cmake/SignMacApplications.cmake", source / "cmake")
-        # Execute the production block; no game dependencies or compiler are needed.
-        packaging = (ROOT / "CMakeLists.txt").read_text().split("# Apple bundling\n", 1)[1]
-        packaging = packaging.split("elseif(NOT APPLE)", 1)[0] + "endif()\n"
+        # Execute the production blocks; no game dependencies or compiler are needed.
+        top = (ROOT / "CMakeLists.txt").read_text()
+        plists = top.split("# Mac app property lists\n", 1)[1].split("# End of Mac app property lists", 1)[0]
+        packaging = top.split("# Apple bundling\n", 1)[1].split("# End of Apple bundling", 1)[0] + "endif()\n"
         (source / "CMakeLists.txt").write_text('''
 cmake_minimum_required(VERSION 3.19)
 project(BundleFixture NONE)
@@ -69,24 +70,31 @@ if(USE_QT)
             "${CMAKE_BINARY_DIR}/qt/${plugin}/plugin.dylib")
     endforeach()
 endif()
-''' + packaging)
+''' + plists + packaging)
         result = subprocess.run([
             "cmake", "-S", str(source), "-B", str(build),
             f"-DBUILD_OPENFALLOUT={'ON' if game else 'OFF'}",
+            f"-DBUILD_LAUNCHER={'ON' if launcher else 'OFF'}",
             f"-DBUILD_OPENCS={'ON' if editor else 'OFF'}",
-            f"-DUSE_QT={'ON' if qt else 'OFF'}",
+            # as in the top-level CMakeLists.txt: the launcher (and the editor) use Qt
+            f"-DUSE_QT={'ON' if launcher or editor else 'OFF'}",
         ], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return root, build
 
-    def check_bundles(self, game, editor, qt):
-        root, build = self.configure(game, editor, qt)
-        expected = (["OpenFallout.app"] if game else []) + (["OpenFallout-CS.app"] if editor else [])
+    def check_no_package(self, game, launcher):
+        _, build = self.configure(game, launcher)
         install = (build / "cmake_install.cmake").read_text()
-        if not expected:
-            self.assertFalse((build / "CPackConfig.cmake").exists())
-            self.assertNotIn("fixup_bundle(", install)
-            return
+        self.assertFalse((build / "CPackConfig.cmake").exists())
+        self.assertNotIn("fixup_bundle(", install)
+        self.assertEqual(list((build / "OpenFallout.app").rglob("plugin.dylib")), [])
+        return build
+
+    def check_bundles(self, editor):
+        # A package is made only when the engine and the launcher are both built.
+        root, build = self.configure(game=True, launcher=True, editor=editor)
+        expected = ["OpenFallout.app"] + (["OpenFallout-CS.app"] if editor else [])
+        install = (build / "cmake_install.cmake").read_text()
         config = (build / "CPackConfig.cmake").read_text()
         self.assertIn(f'set(CPACK_OPENFALLOUT_APPLICATIONS "{";".join(expected)}")', config)
         entitlements = [f"{root}/source/files/mac/{ENTITLEMENTS[bundle]}" for bundle in expected]
@@ -97,9 +105,9 @@ endif()
             else:
                 self.assertNotIn(bundle, install)
             plugins = list((build / bundle).rglob("plugin.dylib"))
-            self.assertEqual(len(plugins), 4 if qt and bundle in expected else 0)
+            self.assertEqual(len(plugins), 4 if bundle in expected else 0)
 
-        # CPack must sign only the selected bundles, even when one app is disabled.
+        # CPack must sign only the selected bundles.
         signed = self.sign(root, expected)
         self.assertEqual(len(signed), len(expected))
         for call, bundle in zip(signed, expected):
@@ -312,8 +320,7 @@ endif()
         calls = self.sign_with_identity(["OpenFallout.app"])
         self.assertEqual(calls[-1], ["--verify", "--deep", "--strict", str(self.app_root / "OpenFallout.app")])
 
-    def test_game_bundle_holds_the_engine_app(self):
-        _, build = self.configure(game=True, editor=False, qt=False)
+    def check_engine_app(self, build):
         engine = build / ENGINE_APP
         with (engine / "Contents/Info.plist").open("rb") as file:
             plist = plistlib.load(file)
@@ -327,24 +334,29 @@ endif()
         self.assertNotIn("LSRequiresCarbon", plist)
         self.assertTrue((engine / "Contents/Resources" / plist["CFBundleIconFile"]).is_file())
 
-    def test_editor_only_has_no_engine_app(self):
-        _, build = self.configure(game=False, editor=True, qt=True)
+    def test_game_bundle_holds_the_engine_app(self):
+        _, build = self.configure(game=True, launcher=True)
+        self.check_engine_app(build)
+
+    def test_engine_only_build_has_the_engine_app_but_no_package(self):
+        # the developer build: engine without the launcher still gets the nested app's property list and icon
+        build = self.check_no_package(game=True, launcher=False)
+        self.check_engine_app(build)
+        self.assertTrue((build / "OpenFallout.app/Contents/Info.plist").is_file())
+
+    def test_tools_only_has_no_package_and_no_engine_app(self):
+        build = self.check_no_package(game=False, launcher=False)
         self.assertFalse((build / ENGINE_APP).exists())
 
-    def test_tools_only_without_qt(self):
-        self.check_bundles(game=False, editor=False, qt=False)
+    def test_launcher_without_game_has_no_package_and_no_engine_app(self):
+        build = self.check_no_package(game=False, launcher=True)
+        self.assertFalse((build / ENGINE_APP).exists())
 
-    def test_game_without_qt(self):
-        self.check_bundles(game=True, editor=False, qt=False)
+    def test_game_with_launcher(self):
+        self.check_bundles(editor=False)
 
-    def test_game_with_qt(self):
-        self.check_bundles(game=True, editor=False, qt=True)
-
-    def test_editor_only(self):
-        self.check_bundles(game=False, editor=True, qt=True)
-
-    def test_game_and_editor(self):
-        self.check_bundles(game=True, editor=True, qt=True)
+    def test_game_launcher_and_editor(self):
+        self.check_bundles(editor=True)
 
 
 class MacInfoPlistTests(unittest.TestCase):

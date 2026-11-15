@@ -532,13 +532,26 @@ if(MYGUI_STATIC)
     add_compile_definitions(MYGUI_STATIC)
 endif (MYGUI_STATIC)
 
+# Mac app property lists
 if (APPLE)
     configure_file(${OpenFallout_SOURCE_DIR}/files/mac/openfallout-Info.plist.in
         "${APP_BUNDLE_DIR}/Contents/Info.plist")
 
     configure_file(${OpenFallout_SOURCE_DIR}/files/mac/openmw.icns
         "${APP_BUNDLE_DIR}/Contents/Resources/OpenFallout.icns" COPYONLY)
+
+    if (BUILD_OPENFALLOUT)
+        # The game is started through this nested app (Contents/Helpers) so that the Qt launcher stays the main
+        # executable of OpenFallout.app while `open` can still start the engine with Game Mode. Its executable is a
+        # small shim (apps/openfallout/macos) that replaces itself with Contents/MacOS/openfallout of the outer app.
+        # Written in every build with the engine, also without the launcher, so that the nested app is complete.
+        configure_file("${OpenFallout_SOURCE_DIR}/files/mac/openfallout-engine-Info.plist.in"
+            "${OPENFALLOUT_ENGINE_APP_DIR}/Contents/Info.plist")
+        configure_file("${OpenFallout_SOURCE_DIR}/files/mac/openmw.icns"
+            "${OPENFALLOUT_ENGINE_APP_DIR}/Contents/Resources/OpenFallout.icns" COPYONLY)
+    endif()
 endif (APPLE)
+# End of Mac app property lists
 
 if (NOT APPLE)  # this is modified for macOS use later in "apps/open[mw|cs]/CMakeLists.txt"
     set(OPENFALLOUT_RESOURCES_ROOT ${OpenFallout_BINARY_DIR})
@@ -804,7 +817,9 @@ endif()
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CUSTOM_CPACK_OS_NAME}-${CUSTOM_CPACK_ARCHITECTURE}")
 
 # Apple bundling
-if (APPLE AND (BUILD_OPENFALLOUT OR BUILD_OPENCS))
+# A package needs the launcher: it is the main executable of OpenFallout.app. An engine-only developer build
+# (BUILD_LAUNCHER=OFF) runs from the build folder and makes no package.
+if (APPLE AND BUILD_LAUNCHER AND BUILD_OPENFALLOUT)
     if(CMAKE_VERSION VERSION_LESS 3.19)
         message(FATAL_ERROR "macOS packaging requires CMake 3.19 or higher to sign macOS app bundles.")
     endif()
@@ -815,18 +830,9 @@ if (APPLE AND (BUILD_OPENFALLOUT OR BUILD_OPENCS))
     # Each application is paired with the entitlements file its executables are signed with under the hardened runtime.
     set(CPACK_OPENFALLOUT_APPLICATIONS "")
     set(CPACK_OPENFALLOUT_ENTITLEMENTS "")
-    if (BUILD_OPENFALLOUT)
-        list(APPEND CPACK_OPENFALLOUT_APPLICATIONS "${APP_BUNDLE_NAME}")
-        list(APPEND CPACK_OPENFALLOUT_ENTITLEMENTS "${OpenFallout_SOURCE_DIR}/files/mac/openfallout.entitlements")
-        # The game is started through this nested app (Contents/Helpers) so that the Qt launcher stays the main
-        # executable of OpenFallout.app while `open` can still start the engine with Game Mode. Its executable is a
-        # small shim (apps/openfallout/macos) that replaces itself with Contents/MacOS/openfallout of the outer app.
-        configure_file("${OpenFallout_SOURCE_DIR}/files/mac/openfallout-engine-Info.plist.in"
-            "${OPENFALLOUT_ENGINE_APP_DIR}/Contents/Info.plist")
-        configure_file("${OpenFallout_SOURCE_DIR}/files/mac/openmw.icns"
-            "${OPENFALLOUT_ENGINE_APP_DIR}/Contents/Resources/OpenFallout.icns" COPYONLY)
-        install(DIRECTORY "${APP_BUNDLE_DIR}" USE_SOURCE_PERMISSIONS DESTINATION "." COMPONENT Runtime)
-    endif()
+    list(APPEND CPACK_OPENFALLOUT_APPLICATIONS "${APP_BUNDLE_NAME}")
+    list(APPEND CPACK_OPENFALLOUT_ENTITLEMENTS "${OpenFallout_SOURCE_DIR}/files/mac/openfallout.entitlements")
+    install(DIRECTORY "${APP_BUNDLE_DIR}" USE_SOURCE_PERMISSIONS DESTINATION "." COMPONENT Runtime)
     if (BUILD_OPENCS)
         get_property(OPENCS_BUNDLE_NAME_TMP TARGET openfallout-cs PROPERTY OUTPUT_NAME)
         set(OPENCS_BUNDLE_NAME "${OPENCS_BUNDLE_NAME_TMP}.app")
@@ -929,6 +935,7 @@ if (APPLE AND (BUILD_OPENFALLOUT OR BUILD_OPENCS))
     set(CPACK_PRE_BUILD_SCRIPTS ${CMAKE_SOURCE_DIR}/cmake/SignMacApplications.cmake)
 
     include(CPack)
+    # End of Apple bundling
 elseif(NOT APPLE)
     if(WIN32)
         INSTALL(DIRECTORY "${RUNTIME_OUTPUT_DIRECTORY}/" DESTINATION "." FILES_MATCHING PATTERN "*.dll"
