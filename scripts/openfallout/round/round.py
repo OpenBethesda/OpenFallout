@@ -402,10 +402,13 @@ def engine_command(profile, config, run_dir, save, extra=()):
     for content in game.get("content", []):
         command += ["--content", content]
     command += ["--content", "round.omwscripts"]
-    command += ["--skip-menu", "--headless", "--no-grab"]
-    if save is not None:
+    # `"load_save": false`: the save is copied into the run's user data but not named, and the engine stays at the main menu,
+    # where a menu script of the round loads it (`--skip-menu` with no save to load would start a new game)
+    at_menu = not config.get("load_save", True)
+    command += ["--headless", "--no-grab"] if at_menu else ["--skip-menu", "--headless", "--no-grab"]
+    if save is not None and not at_menu:
         command += ["--load-savegame", str(run_dir / "userdata" / "saves" / save.name)]
-    elif config.get("start"):
+    elif config.get("start") and not at_menu:
         command += ["--start", config["start"]]
         if config.get("new_game"):
             command += ["--new-game"]
@@ -623,14 +626,15 @@ def run_engine(command, run_dir, limit, env_extra=None, priority="low", guard=No
 
 def missing_content(text):
     """The content files that the save wanted and the run did not load (the engine warns once for each)."""
-    # a file name can hold spaces ("My Terrain Mod.esp"): take everything up to the " is missing" of the engine's message
-    return re.findall(r"Saved game dependency (.+?) is missing\.?[ \t]*$", text, re.MULTILINE)
+    # a file name can hold spaces ("My Terrain Mod.esp"): take everything up to the " is missing" of the engine's message. A save
+    # that is read twice (a refused load, then the load) names its files twice: each counts once
+    return list(dict.fromkeys(re.findall(r"Saved game dependency (.+?) is missing\.?[ \t]*$", text, re.MULTILINE)))
 
 
 def expectations(text, status, timed_out, expect):
     """What a round file (or a variant) said about the outcome and did not happen: `expect_exit` (the engine ends by itself with
     this status, and the scenario need not run), `expect_log` (each pattern matches a line of the log), `forbid_log` (none
-    matches). Each failure is one sentence."""
+    matches), `expect_count` ({pattern: n}: exactly n lines of the log match). Each failure is one sentence."""
     failed = []
     if expect.get("expect_exit") is not None:
         wanted = int(expect["expect_exit"])
@@ -644,12 +648,16 @@ def expectations(text, status, timed_out, expect):
     for pattern in expect.get("forbid_log", []):
         if re.search(pattern, text, re.MULTILINE):
             failed.append(f"a log line matches the forbidden `{pattern}`")
+    for pattern, wanted in (expect.get("expect_count") or {}).items():
+        found = sum(1 for line in text.splitlines() if re.search(pattern, line))
+        if found != int(wanted):
+            failed.append(f"`{pattern}` matches {found} log line(s), expected {wanted}")
     return failed
 
 
 def outcome_expectations(config, variant):
     """The expectations of the round file with the variant's over them."""
-    return {key: variant.get(key, config.get(key)) for key in ("expect_exit", "expect_log", "forbid_log")
+    return {key: variant.get(key, config.get(key)) for key in ("expect_exit", "expect_log", "forbid_log", "expect_count")
             if variant.get(key, config.get(key)) is not None}
 
 

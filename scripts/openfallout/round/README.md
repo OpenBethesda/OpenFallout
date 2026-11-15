@@ -25,7 +25,8 @@ scripts/openfallout/round/round.py preflight                                what
    view, terrain and the rest) under the run's itself.
 2. Starts the engine at low priority (`taskpolicy -b` on macOS, `nice -n 10` elsewhere) with `OPENFALLOUT_HEADLESS=1`, the
    game's data folders and plugins of the profile, `--skip-menu --headless --no-grab`, `--load-savegame <the copy>` (or
-   `--start <cell>`), and the content file `round.omwscripts` (the scenario player).
+   `--start <cell>`), and the content file `round.omwscripts` (the scenario player). With `"load_save": false` it gives neither
+   `--skip-menu` nor `--load-savegame`: the engine stays at the main menu with the copy in its list of saves, for a menu script.
 3. On macOS it asks `lsappinfo` every 5 s which application is frontmost: a run in which the engine ever was fails, because
    that is what takes the keyboard of the person at the computer.
 4. Stops the engine when `limit` seconds are over, then writes `report.md` and `report.json` (the verdict, exit status, the `ROUND`
@@ -54,13 +55,15 @@ round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas fol
 | `game` | `nv`, `fo3` or `ttw`: a key of the profile's `games` |
 | `scenario` | the Lua file of the scenario, relative to the round file or to this folder |
 | `save` | a file, or `"latest"`; without it `start` (a cell for `--start`, with `new_game` for `--new-game`) |
+| `load_save` | `false`: the save is copied as always but not loaded; the engine starts at the main menu (no `--skip-menu`, which with no save would start a new game), where a menu script of the round loads it. The scenario runs once a game is loaded; until then the round waits, up to its `limit` |
 | `settings` | `{"Section": {"key": "value"}}` for every variant, for example `{"Terrain": {"game lod": "true"}}` |
 | `resolution`, `framerate` | the size of the window (so of the screenshot) and the frame rate limit (defaults 1280x720 and 20) |
 | `limit` | seconds after which the engine is stopped (300) |
 | `variants` | a list of `{"name", "settings"}`: one engine start each, one after the other (never two engines at a time; `--parallel` above 1 is ignored), `--variant name` only that one; a variant can also have its own `env`, `extra_args` and expectations (below) |
 | `extra_args` | more arguments for the engine (a variant's come after the round's) |
 | `expect_exit` | the engine ends by itself with this exit status; the scenario then need not run (a refused start save: `--missing-content=refuse` ends with 4) |
-| `expect_log`, `forbid_log` | regular expressions: each of `expect_log` must match a line of the log, none of `forbid_log` may; otherwise the round fails |
+| `expect_log`, `forbid_log` | regular expressions: each of `expect_log` must match a line of the log, none of `forbid_log` may; otherwise the round fails (`(?s)` lets one pattern span lines, to say what comes after what) |
+| `expect_count` | `{"<regular expression>": n}`: exactly `n` lines of the log match, otherwise the round fails |
 | `allow_missing_content` | accept a save that wants a game plugin (`.esm`, `.esp`) the run does not load; without it such a round fails (a missing `.omwscripts`, such as the plugin of a play session, is a note) |
 
 ## The scenario (Lua)
