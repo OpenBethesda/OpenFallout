@@ -16,7 +16,10 @@ cd ..
 This step needs to be repeated only if any dependencies were changed.
 
 The image and Read the Docs configuration use Python 3.12. The Documentation
-workflow builds this image and the HTML when documentation dependencies change.
+workflow does not use Docker: it builds the HTML on a Mac runner, with the packages of
+`docs/requirements.txt` in a virtual environment and LuaDocumentor installed by
+`OPENFALLOUT_LUADOC_INSTALL=1 bash docs/source/install_luadocumentor_in_docker.sh`
+(Lua 5.1, LuaRocks and LuaDocumentor in the home folder).
 
 ### Generating HTML
 

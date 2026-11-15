@@ -131,6 +131,11 @@ jobs:
           !build/_CPack_Packages
         key: ${{ steps.build-cache.outputs.cache-primary-key }}
 
+    # The core (records, scripts, world, rules) stays plain C++: no Apple header, macro or AppKit name outside the
+    # edge list (docs/openfallout/core-and-edges.md).
+    - name: Check that the core has no Apple code
+      run: python3 CI/check_core_edges.py
+
     # Tags and the default branch with the signing secrets: import the Developer ID identity into a temporary keychain
     # and hand it to the packaging step (OPENFALLOUT_CODESIGN_IDENTITY / _TEAM_ID through GITHUB_ENV). Anything else:
     # "ad hoc build, notarization skipped".

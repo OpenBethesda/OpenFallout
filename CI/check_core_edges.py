@@ -53,9 +53,6 @@ EDGES = (
     ("components/files/macospath", "Mac paths: bundle, Application Support and Library folders"),
     ("components/misc/thread.cpp", "thread priority: quality-of-service classes"),
     ("apps/components_tests/misc/testthread.cpp", "test of the thread priority edge"),
-    # deleted by the cut: remove these two entries when the wizard and the editor are gone
-    ("apps/wizard/", "deleted by the cut (wizard)"),
-    ("apps/opencs/", "deleted by the cut (editor)"),
 )
 
 APPLE_HEADER_PREFIXES = (

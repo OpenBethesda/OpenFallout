@@ -3,9 +3,7 @@ Modding
 
 The following document is the complete reference guide to modifying, or
 modding, your OpenMW setup. It does not cover content creation itself,
-only how to alter or add to your OpenMW gameplay experience. To learn more
-about creating new content for OpenMW, please refer to
-:doc:`/manuals/openmw-cs/index`.
+only how to alter or add to your OpenMW gameplay experience.
 
 .. warning::
 	OpenMW is still software in development. This manual does not cover any

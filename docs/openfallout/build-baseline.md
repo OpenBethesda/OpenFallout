@@ -32,6 +32,8 @@ Add the Homebrew prefix to `CMAKE_PREFIX_PATH`, as in the `esmtool` section. Run
 
 ### Ubuntu (history)
 
+The set-up script named here was deleted in the Mac-only cut (see the tag `last-portable`).
+
 `scripts/openfallout/setup_ubuntu_build.sh` installs the packages (Qt 6 and libunshield included) and builds the two libraries Ubuntu does not provide in a usable version, then prints the CMake command. The steps it takes:
 
 1. Install the distribution packages (Boost, FFmpeg, SDL2, OpenAL, Bullet, LuaJIT, OpenSceneGraph 3.6.5, yaml-cpp, ICU, SQLite, GoogleTest, Qt 6, libunshield and others).
@@ -94,6 +96,8 @@ Measured on 2026-10-04 on the same container, from an empty build directory, wit
 The first build of stage B failed. The rename script skipped `extern/`, so the macros `OPENMW_FFMPEG_5_OR_GREATER` and `OPENMW_FFMPEG_CONST_WRITEPACKET` in `extern/osg-ffmpeg-videoplayer` kept their name while the code in `apps/` that uses them was renamed. An undefined macro counts as 0 in `#if`, so on a system with older FFmpeg the code would have compiled the old way without a word; on Ubuntu 24.04, which ships FFmpeg 6, it stopped the build. Every `OPENFALLOUT_*` macro used in an `#if` is now defined somewhere, which a script over the whole tree confirms, and `extern/oics` keeps its upstream `OPENMW CODE STARTS HERE` comments.
 
 ### The startup smoke test
+
+History: this script and the Fallout start smoke test below drove the game under a Linux virtual display. Both were deleted in the Mac-only cut (see the tag `last-portable`); the hidden rounds under `scripts/openfallout/round` are what runs on a Mac.
 
 The unit tests never load the Lua scripts and l10n files under `files/data`, so a module id or l10n context renamed on one side only would pass them and fail when the engine starts. `startup_smoke_test.py` closes that gap. It writes a small synthetic game file (skills, the six date globals, the game settings the engine reads, one race, one class and the player), starts `openfallout` on it under a virtual display with Mesa software rendering, lets the main menu run for 15 seconds, stops it with SIGTERM and reads the log. It fails on a `Can't start`, `Lua error` or `Fatal error` line, and when no scripts or l10n files were loaded. The game file holds no Bethesda data.
 
