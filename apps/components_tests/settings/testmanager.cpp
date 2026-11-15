@@ -394,16 +394,6 @@ namespace Settings
             EXPECT_THAT(slurp(path), HasSubstr("documentation at:"));
         }
 
-        TEST_F(SettingsSaveTest, theEditorSettingsFilePointsToTheSource)
-        {
-            setUser("Video", "mode", "2");
-            const auto path = pathFor("openfallout-cs.cfg");
-
-            Manager::saveUser(path);
-
-            EXPECT_THAT(slurp(path), HasSubstr("apps/opencs/model/prefs/values.hpp"));
-        }
-
         TEST_F(SettingsSaveTest, anExistingFileKeepsItsCommentsAndGetsNewValues)
         {
             const auto path = pathFor("settings.cfg");

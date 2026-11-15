@@ -111,27 +111,15 @@ namespace Settings
         mChangedSettings.clear();
     }
 
-    std::filesystem::path Manager::load(const Files::ConfigurationManager& cfgMgr, bool loadEditorSettings)
+    std::filesystem::path Manager::load(const Files::ConfigurationManager& cfgMgr)
     {
         SettingsFileParser parser;
         const std::vector<std::filesystem::path>& paths = cfgMgr.getActiveConfigPaths();
         if (paths.empty())
             throw std::runtime_error("No config dirs! ConfigurationManager::readConfiguration must be called first.");
 
-        // Create file name strings for either the engine or the editor.
-        std::string defaultSettingsFile;
-        std::string userSettingsFile;
-
-        if (!loadEditorSettings)
-        {
-            defaultSettingsFile = "defaults.bin";
-            userSettingsFile = "settings.cfg";
-        }
-        else
-        {
-            defaultSettingsFile = "defaults-cs.bin";
-            userSettingsFile = "openfallout-cs.cfg";
-        }
+        const std::string defaultSettingsFile = "defaults.bin";
+        const std::string userSettingsFile = "settings.cfg";
 
         // Create the settings manager and load default settings file.
         const auto defaultsBin = paths.front() / defaultSettingsFile;
@@ -142,8 +130,7 @@ namespace Settings
 
         const CategorySettingValueMap originalDefaultSettings = mDefaultSettings;
 
-        // Load "settings.cfg" or "openfallout-cs.cfg" from every config dir except the last one as additional default
-        // settings.
+        // Load "settings.cfg" from every config dir except the last one as additional default settings.
         for (int i = 0; i < static_cast<int>(paths.size()) - 1; ++i)
         {
             const auto additionalDefaults = paths[i] / userSettingsFile;
@@ -151,17 +138,15 @@ namespace Settings
                 parser.loadSettingsFile(additionalDefaults, mDefaultSettings, false, true);
         }
 
-        if (!loadEditorSettings)
-            Settings::StaticValues::initDefaults();
+        Settings::StaticValues::initDefaults();
 
-        // Load "settings.cfg" or "openfallout-cs.cfg" from the last config dir as user settings. This path will be used
-        // to save modified settings.
+        // Load "settings.cfg" from the last config dir as user settings. This path will be used to save modified
+        // settings.
         auto settingspath = paths.back() / userSettingsFile;
         if (std::filesystem::exists(settingspath))
             parser.loadSettingsFile(settingspath, mUserSettings, false, false);
 
-        if (!loadEditorSettings)
-            Settings::StaticValues::init();
+        Settings::StaticValues::init();
 
         for (const auto& [key, value] : originalDefaultSettings)
             if (!sInitialized.contains(key))

@@ -298,11 +298,6 @@ void Settings::SettingsFileParser::saveSettingsFile(
             ostream << "#" << std::endl;
             ostream << "#   https://openmw.readthedocs.io/en/master/reference/modding/settings/index.html" << std::endl;
         }
-        else if (filename == "openfallout-cs.cfg")
-        {
-            ostream << "# For available settings, see the file 'apps/opencs/model/prefs/values.hpp' in our source repo."
-                    << std::endl;
-        }
     }
 
     // We still have one more thing to do before we're completely done writing the file.
