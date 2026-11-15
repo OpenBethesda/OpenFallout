@@ -42,36 +42,20 @@ resources
 ## binaries
 /esmtool
 /openfallout
-/opencs
 /niftest
 /bsatool
-/openfallout-cs
 /openfallout-essimporter
 /openfallout-iniimporter
 /openfallout-launcher
-/openfallout-wizard
 /openfallout-navmeshtool
 /openfallout-bulletobjecttool
 /openfallout-tests
-/openfallout-cs-tests
 /openfallout_*_benchmark
 
 ## generated objects
 apps/openfallout/config.hpp
 apps/launcher/ui_contentselector.h
 apps/launcher/ui_settingspage.h
-apps/opencs/ui_contentselector.h
-apps/opencs/ui_filedialog.h
-apps/wizard/qrc_wizard.cxx
-apps/wizard/ui_componentselectionpage.h
-apps/wizard/ui_conclusionpage.h
-apps/wizard/ui_existinginstallationpage.h
-apps/wizard/ui_importpage.h
-apps/wizard/ui_installationpage.h
-apps/wizard/ui_installationtargetpage.h
-apps/wizard/ui_intropage.h
-apps/wizard/ui_languageselectionpage.h
-apps/wizard/ui_methodselectionpage.h
 components/ui_contentselector.h
 docs/mainpage.hpp
 docs/Doxyfile

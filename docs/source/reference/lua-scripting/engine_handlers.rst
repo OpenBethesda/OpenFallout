@@ -24,8 +24,9 @@ Engine handler is a function defined by a script, that can be called by the engi
   :widths: 20 80
 
   * - onInit(initData)
-    - | Called once when the script is created (not loaded). `InitData can be`
-      | `assigned to a script in openfallout-cs (not yet implemented).`
+    - | Called once when the script is created (not loaded). ``initData`` is the
+      | initialization data given to ``addScript``, or the Lua initialization data
+      | of the content files if there is any.
       | ``onInterfaceOverride`` can be called before ``onInit``.
   * - onUpdate(dt)
     - | Called every frame in the Lua thread (even if the game is paused). `dt` is

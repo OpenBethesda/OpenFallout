@@ -61,7 +61,7 @@ namespace ESM4
         std::string mIconMale; // texture
         std::string mIconFemale; // texture
 
-        ESM::Path mModel; // FIXME: for OpenCS
+        ESM::Path mModel;
 
         float mBoundRadius;
 

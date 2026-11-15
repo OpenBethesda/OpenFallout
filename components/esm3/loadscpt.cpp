@@ -18,7 +18,7 @@ namespace ESM
         struct SCHD
         {
             /// Data from script-precompling in the editor.
-            /// \warning Do not use them. OpenCS currently does not precompile scripts.
+            /// \warning Do not use them. Nothing in this project precompiles scripts.
             std::uint32_t mNumShorts = 0;
             std::uint32_t mNumLongs = 0;
             std::uint32_t mNumFloats = 0;
