@@ -111,10 +111,10 @@ class TestReportsTests(unittest.TestCase):
     def test_malformed_junit_keeps_raw_xml_and_still_collects_coverage(self):
         with patch.object(reports.subprocess, "run", side_effect=lambda command, cwd:
                           self.fake_run(command, cwd, xml="broken")):
-            self.assertEqual(reports.collect_suite(self.root, "editor"), 1)
-        self.assertTrue((self.root / "test-results/editor.gtest.xml").is_file())
-        self.assertFalse((self.root / "test-results/editor.junit.xml").exists())
-        self.assertTrue((self.root / "coverage/editor.xml").is_file())
+            self.assertEqual(reports.collect_suite(self.root, "openfallout"), 1)
+        self.assertTrue((self.root / "test-results/openfallout.gtest.xml").is_file())
+        self.assertFalse((self.root / "test-results/openfallout.junit.xml").exists())
+        self.assertTrue((self.root / "coverage/openfallout.xml").is_file())
 
     def test_coverage_failure_discards_partial_reports_but_keeps_junit(self):
         with patch.object(reports.subprocess, "run", side_effect=lambda command, cwd:
@@ -144,17 +144,16 @@ class TestReportsTests(unittest.TestCase):
         with patch.object(reports.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
             self.assertEqual(reports.merge_coverage(self.root), 0)
         command = run.call_args.args[0]
-        self.assertEqual(command.count("--add-tracefile"), 3)
+        self.assertEqual(command.count("--add-tracefile"), 2)
         self.assertNotIn("build", command, "merge must use saved traces, not cleared live counters")
 
 
     def test_merge_of_named_suites_needs_only_their_traces(self):
         (self.root / "coverage").mkdir()
-        for suite in ("components", "openfallout"):
-            (self.root / "coverage" / f"{suite}.json").write_text("trace")
+        (self.root / "coverage" / "components.json").write_text("trace")
         with patch.object(reports.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
-            self.assertEqual(reports.merge_coverage(self.root, suites=("components", "openfallout")), 0)
-        self.assertEqual(run.call_args.args[0].count("--add-tracefile"), 2)
+            self.assertEqual(reports.merge_coverage(self.root, suites=("components",)), 0)
+        self.assertEqual(run.call_args.args[0].count("--add-tracefile"), 1)
         with self.assertRaises(FileNotFoundError):
             reports.merge_coverage(self.root)
 
@@ -201,7 +200,7 @@ class TestReportsTests(unittest.TestCase):
         def record(name):
             return lambda root, *args, **kwargs: calls.append((name, args, kwargs)) or 0
         for argv in (["merge"], ["--build-dir", "build-tests", "--tool", "llvm", "merge", "components", "openfallout"],
-                     ["--tool", "gcov", "run", "editor"]):
+                     ["--tool", "gcov", "run", "openfallout"]):
             with patch.object(reports.sys, "argv", ["test_reports.py", *argv]), \
                     patch.object(reports, "merge_coverage", side_effect=record("merge")), \
                     patch.object(reports, "collect_suite", side_effect=record("run")):
@@ -210,10 +209,15 @@ class TestReportsTests(unittest.TestCase):
                                                   "tool": reports.default_coverage_tool()}))
         self.assertEqual(calls[1], ("merge", (), {"suites": ("components", "openfallout"),
                                                   "build_dir": "build-tests", "tool": "llvm"}))
-        self.assertEqual(calls[2], ("run", ("editor",), {"build_dir": "build", "tool": "gcov"}))
-        with patch.object(reports.sys, "argv", ["test_reports.py", "merge", "bogus"]), \
-                patch.object(reports.sys, "stderr"), self.assertRaises(SystemExit):
-            reports.main()
+        self.assertEqual(calls[2], ("run", ("openfallout",), {"build_dir": "build", "tool": "gcov"}))
+        for argv in (["merge", "bogus"], ["run", "editor"], ["merge", "components", "editor"]):
+            with self.subTest(argv=argv), patch.object(reports.sys, "argv", ["test_reports.py", *argv]), \
+                    patch.object(reports.sys, "stderr"), self.assertRaises(SystemExit):
+                reports.main()
+
+    def test_the_suites_are_the_two_the_mac_job_builds(self):
+        # the editor is not built, so it has no suite and no coverage flag (codecov.yml)
+        self.assertEqual(reports.SUITES, {"components": "components-tests", "openfallout": "openfallout-tests"})
 
 LCOV = """SF:{root}/components/esm4/reader.cpp
 FN:3,_ZN4ESM46Reader4readEv

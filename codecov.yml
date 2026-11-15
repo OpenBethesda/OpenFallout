@@ -10,7 +10,7 @@ coverage:
     project:
       default:
         # The headline number is shown, never a gate: most of the counted lines are engine,
-        # rendering, GUI and editor code that unit tests cannot reach.
+        # rendering and GUI code that unit tests cannot reach.
         informational: true
     patch:
       # New code under components/ is the code that unit tests can reach. Informational for now. This one 80% target
@@ -116,15 +116,10 @@ component_management:
       name: OpenFallout engine
       paths:
         - apps/openfallout/**
-    - component_id: editor
-      name: Construction Set editor
-      paths:
-        - apps/opencs/**
     - component_id: desktop_ui
-      name: Launcher and installation wizard
+      name: Launcher
       paths:
         - apps/launcher/**
-        - apps/wizard/**
     - component_id: tools
       name: Data and navigation tools
       paths:

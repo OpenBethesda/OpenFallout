@@ -17,10 +17,10 @@
 
 DEPS_ROOT="${1:-/tmp/openmw-deps}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-# 11.0 is the least the flag needs (MAP_JIT); the app's own minimum is set in CI/before_script.macos.sh
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.8}"
+# 11.0 is the least the flag needs (MAP_JIT); the default is the app's own minimum (CI/before_script.macos.sh)
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 
-if [[ "$(uname -m)" == "x86_64" ]]; then TRIPLET="x64-osx-dynamic"; else TRIPLET="arm64-osx-dynamic"; fi
+TRIPLET="arm64-osx-dynamic"
 INSTALLED="$DEPS_ROOT/installed/$TRIPLET"
 SBOM="$INSTALLED/share/luajit/vcpkg.spdx.json"
 COMMIT=$(grep -o 'git+https://github.com/LuaJIT/LuaJIT@[0-9a-f]\{40\}' "$SBOM" | head -n 1 | cut -d@ -f2)
