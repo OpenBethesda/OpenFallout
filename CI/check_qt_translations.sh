@@ -4,7 +4,6 @@ set -o pipefail
 
 LUPDATE="${LUPDATE:-lupdate}"
 
-${LUPDATE:?} -locations none apps/wizard -ts files/lang/wizard_*.ts
 ${LUPDATE:?} -locations none apps/launcher -ts files/lang/launcher_*.ts
 ${LUPDATE:?} -locations none components/contentselector components/process -ts files/lang/components_*.ts
 
