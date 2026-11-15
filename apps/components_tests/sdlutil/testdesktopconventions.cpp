@@ -477,11 +477,7 @@ namespace
 
     TEST(SDLUtilDesktopPlatformTest, theBridgeNamesThisPlatform)
     {
-#ifdef __APPLE__
         EXPECT_EQ(thisDesktopPlatform(), mac);
-#else
-        EXPECT_EQ(thisDesktopPlatform(), other);
-#endif
         EXPECT_EQ(followsMacDesktopConventions(), thisDesktopPlatform() == mac);
     }
 }

@@ -93,12 +93,6 @@ namespace OFInput
                 || key == SDL_SCANCODE_F10)
                 return;
 
-#ifndef __APPLE__
-            // Disallow binding Windows/Meta keys
-            if (key == SDL_SCANCODE_LGUI || key == SDL_SCANCODE_RGUI)
-                return;
-#endif
-
             if (!mDetectingKeyboard)
                 return;
 

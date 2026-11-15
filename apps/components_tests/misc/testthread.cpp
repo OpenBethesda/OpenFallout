@@ -4,9 +4,7 @@
 
 #include <thread>
 
-#ifdef __APPLE__
 #include <pthread/qos.h>
-#endif
 
 namespace
 {
@@ -30,7 +28,6 @@ namespace
         });
     }
 
-#ifdef __APPLE__
     TEST(MiscThreadTest, frameCriticalPriorityIsUserInteractiveQosOnMac)
     {
         qos_class_t before = QOS_CLASS_UNSPECIFIED;
@@ -55,5 +52,4 @@ namespace
         });
         EXPECT_EQ(child, QOS_CLASS_DEFAULT);
     }
-#endif
 }

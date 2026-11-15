@@ -32,13 +32,8 @@
 #include <iterator>
 #include <string_view>
 
-#if (defined(__APPLE__) || defined(__linux) || defined(__unix) || defined(__posix))
-#include <unistd.h>
-#endif
-
-#ifdef __APPLE__
 #include <dlfcn.h>
-#endif
+#include <unistd.h>
 
 namespace
 {
@@ -49,7 +44,6 @@ namespace
         return value != nullptr && std::string_view(value) == "1";
     }
 
-#ifdef __APPLE__
     // OPENFALLOUT_HEADLESS_POLICY=accessory or =prohibited sets the activation policy of the application
     // (NSApplication), for a headless run on macOS: an application that is neither of the foreground nor able to be
     // activated is never made the frontmost application, whatever SDL does with its window. It is done through the
@@ -84,7 +78,6 @@ namespace
             = reinterpret_cast<SendPolicy>(message)(application, getSelector("setActivationPolicy:"), policy) != 0;
         Log(Debug::Info) << "Headless: activation policy " << name << (done ? " set" : " refused");
     }
-#endif
 }
 
 /**
@@ -412,9 +405,7 @@ int runApplication(int argc, char* argv[])
         SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
     }
 
-#ifdef __APPLE__
     setenv("OSG_GL_TEXTURE_STORAGE", "OFF", 0);
-#endif
 
     osg::setNotifyHandler(new OSGLogHandler());
     Files::ConfigurationManager cfgMgr;
@@ -427,10 +418,8 @@ int runApplication(int argc, char* argv[])
         if (!Misc::checkRequiredOSGPluginsArePresent())
             return 1;
 
-#ifdef __APPLE__
         if (headlessArgument)
             setMacActivationPolicy();
-#endif
 
         engine->go();
         // (not 0 when the save given with --load-savegame was refused: see docs/openfallout/shell-interface.md)
@@ -440,11 +429,7 @@ int runApplication(int argc, char* argv[])
     return 0;
 }
 
-#ifdef ANDROID
-extern "C" int SDL_main(int argc, char** argv)
-#else
 int main(int argc, char** argv)
-#endif
 {
     return Debug::wrapApplication(&runApplication, argc, argv, "OpenFallout");
 }

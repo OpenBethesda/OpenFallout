@@ -31,11 +31,7 @@ Launcher::TextInputDialog::TextInputDialog(const QString& title, const QString& 
     dialogLayout->addWidget(mButtonBox);
 
     // Messageboxes on mac have no title
-#ifndef Q_OS_MAC
-    setWindowTitle(title);
-#else
     Q_UNUSED(title);
-#endif
 
     setModal(true);
 

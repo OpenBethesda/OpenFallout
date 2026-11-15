@@ -2,10 +2,6 @@
 
 #include <SDL_video.h>
 
-#ifdef OPENFALLOUT_GL4ES_MANUAL_INIT
-#include "gl4esinit.h"
-#endif
-
 namespace SDLUtil
 {
 
@@ -103,51 +99,12 @@ namespace SDLUtil
         SDL_Window* oldWin = SDL_GL_GetCurrentWindow();
         SDL_GLContext oldCtx = SDL_GL_GetCurrentContext();
 
-#if defined(ANDROID) || defined(OPENFALLOUT_GL4ES_MANUAL_INIT)
-        int major = 2;
-        int minor = 0;
-
-        if (const char* const version_env = getenv("OPENFALLOUT_GLES_VERSION"))
-        {
-            const std::string_view version(version_env);
-
-            if (version == "2" || version == "20")
-            {
-                major = 2;
-                minor = 0;
-            }
-            else if (version == "30")
-            {
-                major = 3;
-                minor = 0;
-            }
-            else if (version == "31")
-            {
-                major = 3;
-                minor = 1;
-            }
-            else if (version == "3" || version == "32")
-            {
-                major = 3;
-                minor = 2;
-            }
-        }
-
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, major);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
-#endif
-
         mContext = SDL_GL_CreateContext(mWindow);
         if (!mContext)
         {
             OSG_FATAL << "Error: Unable to create OpenGL graphics context: " << SDL_GetError() << std::endl;
             return;
         }
-
-#ifdef OPENFALLOUT_GL4ES_MANUAL_INIT
-        openmw_gl4es_init(mWindow);
-#endif
 
         setSwapInterval(mVSyncMode);
 
