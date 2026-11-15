@@ -25,8 +25,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-navmeshtool PRIVATE --coverage)
-    target_link_libraries(openfallout-navmeshtool gcov)
+    openfallout_enable_coverage(openfallout-navmeshtool)
 endif()
 
 if (NOT APPLE)

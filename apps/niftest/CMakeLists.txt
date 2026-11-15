@@ -17,8 +17,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(niftest PRIVATE --coverage)
-    target_link_libraries(niftest gcov)
+    openfallout_enable_coverage(niftest)
 endif()
 
 if (NOT APPLE)

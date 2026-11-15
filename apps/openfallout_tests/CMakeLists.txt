@@ -83,8 +83,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-tests PRIVATE --coverage)
-    target_link_libraries(openfallout-tests gcov)
+    openfallout_enable_coverage(openfallout-tests)
 endif()
 
 target_compile_definitions(openfallout-tests

@@ -15,8 +15,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-bulletobjecttool PRIVATE --coverage)
-    target_link_libraries(openfallout-bulletobjecttool gcov)
+    openfallout_enable_coverage(openfallout-bulletobjecttool)
 endif()
 
 if (NOT APPLE)

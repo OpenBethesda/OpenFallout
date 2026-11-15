@@ -731,8 +731,7 @@ if (USE_QT)
     endif()
 
     if (BUILD_WITH_CODE_COVERAGE)
-        target_compile_options(components_qt PRIVATE --coverage)
-        target_link_libraries(components_qt gcov)
+        openfallout_enable_coverage(components_qt)
     endif()
 endif()
 
@@ -755,8 +754,7 @@ if (UNIX AND NOT APPLE)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(components PRIVATE --coverage)
-    target_link_libraries(components gcov)
+    openfallout_enable_coverage(components)
 endif()
 
 

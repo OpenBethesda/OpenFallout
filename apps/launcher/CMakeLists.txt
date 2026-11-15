@@ -79,8 +79,7 @@ if (WIN32)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(openfallout-launcher PRIVATE --coverage)
-    target_link_libraries(openfallout-launcher gcov)
+    openfallout_enable_coverage(openfallout-launcher)
 endif()
 
 if(USE_QT)

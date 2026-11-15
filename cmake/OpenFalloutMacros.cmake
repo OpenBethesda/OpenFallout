@@ -185,3 +185,17 @@ macro (copy_all_resource_files source_dir destination_dir_base destination_dir_r
         copy_resource_file("${source_dir}/${f}" "${destination_dir_base}" "${destination_dir_relative}/${f}")
     endforeach (f)
 endmacro (copy_all_resource_files)
+
+# Instruments a target for the unit-test coverage reports (BUILD_WITH_CODE_COVERAGE, CI/test_reports.py). GCC writes
+# gcov counters for gcovr. Clang uses its source-based coverage instead: its gcov counters count the exception exit of
+# every call that may throw as a branch, and llvm-cov gcov does not mark those exits, so gcovr could not leave them out.
+# The link option is PUBLIC so that every executable linking an instrumented library gets the coverage runtime.
+function(openfallout_enable_coverage target)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+        target_link_options(${target} PUBLIC -fprofile-instr-generate)
+    else()
+        target_compile_options(${target} PRIVATE --coverage)
+        target_link_options(${target} PUBLIC --coverage)
+    endif()
+endfunction()

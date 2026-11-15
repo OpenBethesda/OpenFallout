@@ -382,8 +382,7 @@ if (UNIX AND NOT APPLE)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
-    target_compile_options(components-tests PRIVATE --coverage)
-    target_link_libraries(components-tests gcov)
+    openfallout_enable_coverage(components-tests)
 endif()
 
 file(DOWNLOAD
