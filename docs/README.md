@@ -52,28 +52,15 @@ together before enabling Sphinx 9 or Docutils 0.22 and later.
 
 ### Installation of openmwluadocumentor:
 
-**Debian/Ubuntu**
+**macOS**
 
 ```bash
-sudo apt install luarocks
+brew install luarocks
 git clone https://gitlab.com/ptmikheev/openmw-luadocumentor.git
 cd openmw-luadocumentor/luarocks
 luarocks --local pack openmwluadocumentor-0.2.0-1.rockspec
 luarocks --local install openmwluadocumentor-0.2.0-1.src.rock
 ```
-
-**Windows**
-
-Use Docker as described above, or install
-[WSL with Ubuntu](https://learn.microsoft.com/en-us/windows/wsl/install)
-for a build without Docker. In the Ubuntu Bash shell, follow the Python 3.12
-environment setup above and the Debian/Ubuntu LuaRocks instructions. Run
-`sphinx-build` from that same environment, with `bash`, the Linux LuaRocks and
-LuaDocumentor commands, and Sphinx available on `PATH`.
-
-The native standalone Windows LuaRocks package emits CMD-style `SET` commands
-from `luarocks path`; the Bash helper expects Unix shell assignments. Installing
-Bash alongside that native package is insufficient for this build route.
 
 ### Generating HTML
 

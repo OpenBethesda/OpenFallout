@@ -95,7 +95,7 @@ A search for `ESM4` in `apps/openfallout/mwmechanics`, `mwdialogue`, `mwscript`,
 
 - `apps/components_tests/esm4/includes.cpp` only checks that the headers compile. No parser has a behavioural test and no fixture data exists.
 - BSA and NIF physics have unit tests (`apps/components_tests/bsa`, `.../nif`).
-- `.github/workflows/push.yml` builds on Ubuntu and runs `components-tests`, `openfallout-tests` and `openfallout-cs-tests` (named `openmw-tests` and `openmw-cs-tests` before rename stage A). `.gitlab-ci.yml` and `CI/` are upstream leftovers.
+- `.github/workflows/push.yml` builds on a Mac and runs `components-tests` and `openfallout-tests` (named `openmw-tests` before rename stage A). Until the Mac-only cut it built on Ubuntu and Windows too; the tag `last-portable` is the last commit that did. `CI/` is partly upstream leftovers.
 
 ## Recommended milestones
 

@@ -38,7 +38,7 @@ imports `mprotect` and not `pthread_jit_write_protect_np`: it is not an HRT buil
 
 This repository therefore rebuilds it: `CI/macos/build_luajit_hrt.sh`, called by `CI/before_install.macos.sh` after
 the archive is unpacked, downloads the same LuaJIT commit (read from the SBOM, so a dependency update moves it along),
-builds it with `XCFLAGS=-DLUAJIT_ENABLE_OSX_HRT` for macOS 14.8 (the flag needs 11.0 or later), refuses a result that
+builds it with `XCFLAGS=-DLUAJIT_ENABLE_OSX_HRT` for macOS 26.0 (the flag needs 11.0 or later), refuses a result that
 does not import `pthread_jit_write_protect_np`, and puts it in place of the prebuilt library under the same name and
 install name. The dependency cache key includes the script and its patch.
 
@@ -155,7 +155,6 @@ start the package only when the static steps pass.
 
 ## Not verified
 
-- Intel Macs: the script builds the x86-64 library the same way, but nothing was run there.
 - A Developer ID signature with library validation on, and notarization (no certificate on the test Mac).
 - A full CI run of the script on a hosted runner; it was run locally on an unpacked copy of the dependency set.
 - Longer play: the smoke run compiles one hot loop. LuaJIT switches write protection per thread; the engine's Lua

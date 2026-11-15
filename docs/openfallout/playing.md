@@ -1,6 +1,6 @@
 # Running OpenFallout on your own copy of the games
 
-OpenFallout plays Fallout 3, Fallout: New Vegas and Tale of Two Wastelands from the files of a copy of the games that you own. It includes none of their content. This page says how to point it at your files on macOS, Windows and Linux, how to start a new game, and which settings matter for the frame rate and the picture. What works and what does not yet is in the [roadmap](gap-audit-and-roadmap.md).
+OpenFallout plays Fallout 3, Fallout: New Vegas and Tale of Two Wastelands from the files of a copy of the games that you own. It includes none of their content. OpenFallout runs on Apple Silicon Macs with macOS 26.0 or later and on nothing else. This page says how to point it at your files, how to start a new game, and which settings matter for the frame rate and the picture. What works and what does not yet is in the [roadmap](gap-audit-and-roadmap.md).
 
 ## What it needs
 
@@ -11,8 +11,8 @@ OpenFallout plays Fallout 3, Fallout: New Vegas and Tale of Two Wastelands from 
 
 With nothing set, OpenFallout looks for the games where they are usually installed, and says so in its log (`Found Fallout: New Vegas in ...`):
 
-- Steam on every system: the library folders that Steam lists, and the folders of `steamapps/common` with "Fallout" in their name. On Windows, Steam's folder comes from the registry; on Linux and macOS, from the usual places (`~/.steam/steam`, `~/.local/share/Steam`, the Flatpak and Snap ones, `~/Library/Application Support/Steam`).
-- GOG, Bethesda's installer, Epic and hand copies: the folders with "Fallout" in their name under `GOG Games`, `Program Files (x86)`, `Program Files`, `Games` and a few others on each hard drive on Windows; under `~/Games` (also `~/Games/Heroic`) and `~/Applications` on macOS and Linux; and inside the Windows drives of Wine, CrossOver, Bottles, Lutris and Heroic (the `drive_c` folders of their prefixes).
+- Steam: the library folders that Steam lists, and the folders of `steamapps/common` with "Fallout" in their name, found from `~/Library/Application Support/Steam`.
+- GOG, Bethesda's installer, Epic and hand copies: the folders with "Fallout" in their name under `~/Games` and `~/Applications`, and inside the Windows drives of Wine, CrossOver and the like (the `drive_c` folders of their prefixes). Games installed that way are read as files; nothing runs through Wine.
 - If both games are found, New Vegas is used. The search only runs when you have named no plugin and no data directory of yours has `Fallout3.esm` or `FalloutNV.esm`.
 
 To use a folder of your own, or when the search finds nothing (the log then says so), name it. Either on the command line:
@@ -23,11 +23,11 @@ or once and for all in `openfallout.cfg` in your configuration folder, one line 
 
     data="/path/to/Fallout New Vegas/Data"
 
-The configuration folder is `~/.config/openfallout` on Linux (`$XDG_CONFIG_HOME/openfallout` if you have set that variable), `~/Library/Preferences/openfallout` on macOS and `Documents\My Games\OpenFallout` on Windows. The settings file `settings.cfg` and the log `openfallout.log` are in the same folder. Saves and screenshots go to the data folder instead: `~/.local/share/openfallout` on Linux (`$XDG_DATA_HOME/openfallout`), `~/Library/Application Support/openfallout` on macOS, the same folder as the configuration on Windows.
+The configuration folder is `~/Library/Preferences/openfallout`. The settings file `settings.cfg` and the log `openfallout.log` are in the same folder. Saves and screenshots go to the data folder instead: `~/Library/Application Support/openfallout`.
 
 Which plugins load: if you name none, the ones the games make active (the base master named in `Fallout_default.ini`, the plugins with a `.NAM` file next to them, and the ones in a `Plugins.txt` given with `--plugins-file`), with their masters. Name plugins with `--content` (or `content=` in `openfallout.cfg`) to choose them yourself. Tale of Two Wastelands: `data="<Data folder of New Vegas>"`, then `data="<output folder of the installer>"`. The rules, one by one, are in [mods and load order](mods-and-load-order.md).
 
-The launcher (`openfallout-launcher`) has a Data Files page that writes these lines for you (add the Data folder, then pick `Fallout3.esm` or `FalloutNV.esm` as the game file; adding the folder alone leaves no game file chosen). It comes from OpenMW and was made for Morrowind; the project has not tried it on the Fallout games, so the command line and `openfallout.cfg` are the way that is known to work.
+The launcher (`openfallout-launcher`) has a Data Files page that writes these lines for you (add the Data folder, then pick `Fallout3.esm` or `FalloutNV.esm` as the game file; adding the folder alone leaves no game file chosen). It comes from OpenMW and was made for Morrowind; the project has not tried it on the Fallout games, so the command line and `openfallout.cfg` are the way that is known to work. It is the front screen of the packaged app.
 
 ## Starting a game
 
@@ -37,7 +37,11 @@ starts a new game of the game you pointed it at: its opening scene, the making o
 
 ### Which Macs
 
-The disk image for Apple Silicon (`OpenFallout-<version>-macOS-arm64.dmg`) is signed with the project's Developer ID and notarized by Apple, so it opens without a Gatekeeper warning. The Intel image (`...-macOS-x86_64.dmg`) is only ad hoc signed and not notarized: macOS refuses to open it at first, and you allow it under System Settings, Privacy & Security, Open Anyway. Both need macOS 14.8 or later (the deployment target the release is built for). Game Mode, which the engine app declares, needs macOS 26 or later; on older versions the game runs without it. The release notes say the same for each image, together with the Mac it was checked on.
+*Supported*: any Apple Silicon Mac with macOS 26.0 or later. The project checks that itself, by an automated build and package check, and bug reports from these Macs are accepted. The packaged app refuses to start on an older macOS. There is no Intel build.
+
+*Played on*: a MacBook Pro with an M3 Pro chip and macOS 27. That is a narrower claim: it is the Mac on which the real games have been run.
+
+The disk image (`OpenFallout-<version>-macOS-arm64.dmg`) is signed with the project's Developer ID and notarized by Apple, so it opens without a Gatekeeper warning. Game Mode, which the engine app declares, is on from macOS 26. The release notes say the same, together with the Mac the image was checked on.
 
 ### On a Mac: start it through `open`
 

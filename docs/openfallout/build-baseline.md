@@ -1,8 +1,36 @@
 # Build baseline and plugin census
 
-Measured on 2026-10-04 on the cloud container this project works in: Ubuntu 24.04, 4 cores, 15 GB of memory, GCC with the `mold` linker, Release build.
+OpenFallout is Mac only: Apple Silicon, macOS 26.0 or later. This page says how to build it on a Mac. Everything measured below, up to the section on building `esmtool` on macOS, was measured before the Mac-only cut, on Ubuntu 24.04 (4 cores, 15 GB of memory, GCC with the `mold` linker, Release build, measured on 2026-10-04), and the Windows and Intel Mac notes belong to that time. It is kept as history of the rename and the first census. No Mac numbers have been measured for it yet. The last commit that built on every platform is the tag `last-portable`; the Ubuntu recipe below works from that tag.
 
 ## Building
+
+There are two routes.
+
+### The CI route: the packaged app
+
+This is what the Mac job of the continuous integration does, in `CI/before_install.macos.sh`, `CI/before_script.macos.sh` and `CI/macos/build.sh`:
+
+1. `CI/before_install.macos.sh` installs Qt with `aqtinstall`, downloads the prebuilt dependency set named in `CI/macos/deps_versions.sh` (checking its hash), and builds LuaJIT for the hardened runtime with `CI/macos/build_luajit_hrt.sh` (see [mac-luajit.md](mac-luajit.md)).
+2. `CI/before_script.macos.sh` configures with CMake in `build/` (`-C` uses ccache, `-d <dir>` names the dependency folder). It builds the engine, the launcher and the tools, for Apple Silicon, with the deployment target macOS 26.0.
+3. `CI/macos/build.sh` builds the target `package` by default, which makes the disk image. `CI/macos/build.sh <target>` builds another target.
+
+The disk image is checked with `CI/check_mac_package.py` (see [playing.md](playing.md#checking-a-package) and [mac-release.md](mac-release.md)).
+
+### The developer route: the engine only, against Homebrew libraries
+
+For work on the engine itself, build only the engine and the test programs against the libraries Homebrew provides, with the launcher off (`-DBUILD_LAUNCHER=OFF`). The steps, and the four things that need handling (MyGUI and Recast have no formula, Bullet needs double precision, the "Apple bundling" block in the root `CMakeLists.txt`, and the Lua headers), are in [Building `esmtool` on macOS](#building-esmtool-on-macos) below; they are the same for the engine. The tests are on:
+
+```
+cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_LAUNCHER=OFF \
+    -DBUILD_COMPONENTS_TESTS=ON -DBUILD_OPENFALLOUT_TESTS=ON \
+    -DOPENFALLOUT_USE_SYSTEM_MYGUI=OFF -DOPENFALLOUT_USE_SYSTEM_BULLET=OFF \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+cmake --build build --target openfallout components-tests openfallout-tests
+```
+
+Add the Homebrew prefix to `CMAKE_PREFIX_PATH`, as in the `esmtool` section. Run the tests from `build/OpenFallout.app/Contents/MacOS/`. This route has not been written out and run as one command here; the options are the ones documented elsewhere on this page and in the CI scripts.
+
+### Ubuntu (history)
 
 `scripts/openfallout/setup_ubuntu_build.sh` installs the packages (Qt 6 and libunshield included) and builds the two libraries Ubuntu does not provide in a usable version, then prints the CMake command. The steps it takes:
 

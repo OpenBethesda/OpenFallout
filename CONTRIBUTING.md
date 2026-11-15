@@ -5,6 +5,7 @@ OpenFallout is at an early stage. Start with the [roadmap](docs/openfallout/gap-
 
 * Keep each pull request to one change, and say in its description what you ran to check it. The build and test baseline is in [docs/openfallout/build-baseline.md](docs/openfallout/build-baseline.md).
 * Format C++ with the repository's `.clang-format`.
+* OpenFallout is Mac only (Apple Silicon, macOS 26.0 or later). Do not add code for another platform. Mac-only code is allowed at the edges only; the core stays plain C++, and `python3 CI/check_core_edges.py` checks it. See [core and edges](docs/openfallout/core-and-edges.md).
 * Keep the GPLv3 license and the copyright notices on everything inherited from OpenMW. New files are GPLv3 too.
 
 ### Documentation and evidence
