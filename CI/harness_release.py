@@ -8,9 +8,11 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from urllib.error import HTTPError
-from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode, urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+
+import engine_release
 
 REPOSITORY = "OpenBethesda/OpenFallout"
 MARKER = ".harness/openfallout-release.yaml"
@@ -51,6 +53,38 @@ class GitHub:
             if missing_ok and error.code == 404:
                 return None
             raise ReleaseError(f"GitHub {method} {path.split('?')[0]} returned HTTP {error.code}") from None
+
+    def download_asset(self, asset):
+        """The bytes of an uploaded release asset (the statement of an engine release: a small file)."""
+        request = Request(asset["url"], headers={
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/octet-stream",
+            "X-GitHub-Api-Version": "2022-11-28",
+        })
+        try:
+            with build_opener(SameHostRedirects).open(request, timeout=30) as response:
+                content = response.read(MAX_STATEMENT_BYTES + 1)
+        except HTTPError as error:
+            raise ReleaseError(f"GitHub asset download of {asset['name']} returned HTTP {error.code}") from None
+        except URLError as error:
+            raise ReleaseError(f"GitHub asset download of {asset['name']} failed: {error.reason}") from None
+        if len(content) > MAX_STATEMENT_BYTES:
+            raise ReleaseError(f"{asset['name']} is larger than {MAX_STATEMENT_BYTES} bytes, which no statement is")
+        return content
+
+
+class SameHostRedirects(HTTPRedirectHandler):
+    """GitHub answers an asset download with a redirect to a signed address on another host. The token goes to GitHub
+    only: the new request to the other host carries none (that host refuses a request that has both)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and urlparse(newurl).netloc != urlparse(req.full_url).netloc:
+            redirected.remove_header("Authorization")
+        return redirected
+
+
+MAX_STATEMENT_BYTES = 64 * 1024
 
 
 def validate_tag(tag):
@@ -185,6 +219,15 @@ def verify_assets(release):
                                f"{name} (sha256 {digest.group(1)})")
 
 
+def verify_engine_release(api, release, plan):
+    """The engine release: its statement is uploaded, agrees with the uploaded image and the tag's commit, and the
+    notes say what is supported and what the release was played on (CI/engine_release.py)."""
+    try:
+        engine_release.verify_release(release, plan["sha"], api.download_asset)
+    except engine_release.Refusal as error:
+        raise ReleaseError(str(error)) from None
+
+
 def find_release(api, tag):
     # The tag endpoint only promises published releases. Authenticated listings
     # include drafts, including older drafts beyond the first page.
@@ -210,6 +253,7 @@ def finish_release(api, plan, publish=False):
     if release["tag_name"] != plan["tag"] or not release["prerelease"]:
         raise ReleaseError("Expected the selected tag's prerelease")
     verify_assets(release)
+    verify_engine_release(api, release, plan)
     if publish and release["draft"]:
         release = api.request(f"releases/{release['id']}", "PATCH", {"draft": False, "prerelease": True})
     print(json.dumps({"url": release["html_url"], "draft": release["draft"], "prerelease": release["prerelease"]}))

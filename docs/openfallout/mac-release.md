@@ -103,6 +103,13 @@ To check the credentials locally before the first tag: `xcrun notarytool history
 file must carry. See [playing.md](playing.md) for the steps of the check and [mac-luajit.md](mac-luajit.md) for the
 JIT entitlement.
 
+## Engine releases
+
+What a release needs beyond signing and notarization (a machine-readable statement with the version, tag, source commit,
+digest and minimum macOS, the address of the assets, the "Supported" and "Played on" lines of the release notes, the
+steps to cut one) is in [engine-release.md](engine-release.md). `CI/harness_release.py` also refuses to publish a release
+that lacks any of them.
+
 ## Homebrew cask: not part of this work
 
 A Homebrew cask (spec #166, stories 17 and 32) is deferred. It waits for the first notarized tagged release, because a
