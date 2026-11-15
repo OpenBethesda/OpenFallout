@@ -37,8 +37,8 @@ libfind_pkg_detect(MyGUI MyGUI${MYGUI_STATIC_SUFFIX} MYGUI${MYGUI_STATIC_SUFFIX}
         HINTS $ENV{MYGUI_HOME}/lib
         PATH_SUFFIXES "" release relwithdebinfo minsizerel
 )
-if (MYGUI_STATIC AND (APPLE OR ANDROID))
-    # we need explicit Freetype libs only on OS X and ANDROID for static build
+if (MYGUI_STATIC)
+    # a static MyGUI needs explicit Freetype libs on macOS
     libfind_package(MyGUI Freetype)
 endif()
 

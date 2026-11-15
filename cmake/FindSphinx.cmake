@@ -39,7 +39,7 @@ option( SPHINX_QTHELP_OUTPUT "Build HTML pages with additional information for b
 option( SPHINX_DEVHELP_OUTPUT "Build HTML pages with additional information for building a documentation collection in devhelp." OFF )
 option( SPHINX_EPUB_OUTPUT "Build HTML pages with additional information for building a documentation collection in epub." OFF )
 option( SPHINX_LATEX_OUTPUT "Build LaTeX sources that can be compiled to a PDF document using pdflatex." OFF )
-option( SPHINX_MAN_OUTPUT "Build manual pages in groff format for UNIX systems." OFF )
+option( SPHINX_MAN_OUTPUT "Build manual pages in groff format." OFF )
 option( SPHINX_TEXT_OUTPUT "Build plain text files." OFF )
 
 function(Sphinx_add_target target_name builder conf source destination)

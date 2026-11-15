@@ -373,15 +373,6 @@ if (USE_QT)
     target_link_libraries(components-tests components_qt)
 endif()
 
-if (WIN32)
-    target_sources(components-tests PRIVATE ${CMAKE_SOURCE_DIR}/files/windows/other-apps.manifest)
-endif()
-
-# Fix for not visible pthreads functions for linker with glibc 2.15
-if (UNIX AND NOT APPLE)
-    target_link_libraries(components-tests ${CMAKE_THREAD_LIBS_INIT})
-endif()
-
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(components-tests)
 endif()
@@ -395,21 +386,3 @@ file(DOWNLOAD
 target_compile_definitions(components-tests
     PRIVATE OPENFALLOUT_DATA_DIR=u8"${CMAKE_CURRENT_BINARY_DIR}/data"
             OPENFALLOUT_PROJECT_SOURCE_DIR=u8"${PROJECT_SOURCE_DIR}")
-
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    target_precompile_headers(components-tests PRIVATE
-        <boost/program_options/options_description.hpp>
-
-        <gtest/gtest.h>
-
-        <sol/sol.hpp>
-
-        <algorithm>
-        <filesystem>
-        <fstream>
-        <functional>
-        <memory>
-        <string>
-        <vector>
-    )
-endif()

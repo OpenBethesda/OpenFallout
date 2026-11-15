@@ -87,14 +87,10 @@ endmacro (add_component_qt_dir)
 include(CMakeParseArguments)
 
 macro (openfallout_add_executable target)
-    set(OF_ADD_EXE_OPTIONS WIN32 MACOSX_BUNDLE EXCLUDE_FROM_ALL)
+    set(OF_ADD_EXE_OPTIONS MACOSX_BUNDLE EXCLUDE_FROM_ALL)
     set(OF_ADD_EXE_VALUES)
     set(OF_ADD_EXE_MULTI_VALUES)
     cmake_parse_arguments(OF_ADD_EXE "${OF_ADD_EXE_OPTIONS}" "${OF_ADD_EXE_VALUES}" "${OF_ADD_EXE_MULTI_VALUES}" ${ARGN})
-
-    if (OF_ADD_EXE_WIN32)
-        set(OF_ADD_EXE_WIN32_VALUE WIN32)
-    endif (OF_ADD_EXE_WIN32)
 
     if (OF_ADD_EXE_MACOSX_BUNDLE)
         set(OF_ADD_EXE_MACOSX_BUNDLE_VALUE MACOSX_BUNDLE)
@@ -104,11 +100,7 @@ macro (openfallout_add_executable target)
         set(OF_ADD_EXE_EXCLUDE_FROM_ALL_VALUE EXCLUDE_FROM_ALL)
     endif (OF_ADD_EXE_EXCLUDE_FROM_ALL)
 
-    add_executable(${target} ${OF_ADD_EXE_WIN32_VALUE} ${OF_ADD_EXE_MACOSX_BUNDLE_VALUE} ${OF_ADD_EXE_EXCLUDE_FROM_ALL_VALUE} ${OF_ADD_EXE_UNPARSED_ARGUMENTS})
-
-    if (MSVC)
-        set_target_properties(${target} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${target}>")
-    endif (MSVC)
+    add_executable(${target} ${OF_ADD_EXE_MACOSX_BUNDLE_VALUE} ${OF_ADD_EXE_EXCLUDE_FROM_ALL_VALUE} ${OF_ADD_EXE_UNPARSED_ARGUMENTS})
 endmacro (openfallout_add_executable)
 
 macro (get_generator_is_multi_config VALUE)

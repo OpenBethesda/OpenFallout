@@ -10,18 +10,6 @@ target_link_libraries(openfallout-bulletobjecttool
     components
 )
 
-if (WIN32)
-    target_sources(openfallout-bulletobjecttool PRIVATE ${CMAKE_SOURCE_DIR}/files/windows/other-apps.manifest)
-endif()
-
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(openfallout-bulletobjecttool)
-endif()
-
-if (NOT APPLE)
-    install(TARGETS openfallout-bulletobjecttool)
-endif()
-
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    target_precompile_headers(openfallout-bulletobjecttool REUSE_FROM components)
 endif()

@@ -1,9 +1,7 @@
 project (Components)
 
-if(APPLE)
-    set(BUNDLE_RESOURCES_DIR "${APP_BUNDLE_DIR}/Contents/Resources")
-    set(OPENFALLOUT_RESOURCES_ROOT ${BUNDLE_RESOURCES_DIR})
-endif(APPLE)
+set(BUNDLE_RESOURCES_DIR "${APP_BUNDLE_DIR}/Contents/Resources")
+set(OPENFALLOUT_RESOURCES_ROOT ${BUNDLE_RESOURCES_DIR})
 
 # Version file
 set (VERSION_RESOURCE_FILE_IN "${OpenFallout_SOURCE_DIR}/files/version.in")
@@ -396,19 +394,13 @@ add_component_dir (debug
     debugging debuglog gldebug debugdraw writeflags
     )
 
-IF(NOT WIN32 AND NOT APPLE)
-    add_compile_definitions(GLOBAL_DATA_PATH="${GLOBAL_DATA_PATH}")
-    add_compile_definitions(GLOBAL_CONFIG_PATH="${GLOBAL_CONFIG_PATH}")
-ENDIF()
 add_component_dir (files
     linuxpath androidpath windowspath macospath fixedpath multidircollection collections configurationmanager
     constrainedfilestream memorystream hash configfileparser openfile constrainedfilestreambuf conversion
     istreamptr streamwithbuffer utils gameini falloutinstall
     )
 
-if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-    set_source_files_properties(files/configfileparser.cpp PROPERTIES COMPILE_FLAGS -Wno-shadow)
-endif()
+set_source_files_properties(files/configfileparser.cpp PROPERTIES COMPILE_FLAGS -Wno-shadow)
 
 add_component_dir (compiler
     context controlparser errorhandler exception exprparser extensions fileparser generator
@@ -476,18 +468,9 @@ add_component_dir (lua_ui
 copy_resource_file("lua_ui/content.lua" "${OPENFALLOUT_RESOURCES_ROOT}" "resources/lua_libs/content.lua")
 
 
-if(WIN32)
-    add_component_dir (crashcatcher
-        windowscrashcatcher
-        windowscrashdumppathhelpers
-        windowscrashmonitor
-        windowscrashshm
-    )
-elseif(NOT ANDROID)
-    add_component_dir (crashcatcher
-        crashcatcher
-    )
-endif()
+add_component_dir (crashcatcher
+    crashcatcher
+)
 
 add_component_dir(detournavigator
     agentbounds
@@ -587,19 +570,9 @@ add_component_dir(platform
     file
     )
 
-if (WIN32)
-    add_component_dir(platform
-        filewin32
-        )
-elseif (UNIX)
-    add_component_dir(platform
-        fileposix
-        )
-else ()
-    add_component_dir(platform
-        filestdio
-        )
-endif()
+add_component_dir(platform
+    fileposix
+    )
 
 add_component_dir(testing
     expecterror
@@ -646,19 +619,6 @@ if (USE_QT)
 
 endif()
 
-if (MSVC)
-    # these TUs take a lot of memory for codegen
-    # in CI, they often go over the 8GB memory limit if another cl.exe is running at the same time
-    # this option (make sure you're not looking at the docs for the identically-named linker option) stops four codegen threads being spun off
-    # it hurts build time ~33% to enable this unnecessarily, though, so target it to the hungriest boys
-    set_source_files_properties(
-        detournavigator/tilecachedrecastmeshmanager.cpp
-        lua/utilpackage.cpp
-        PROPERTIES
-        COMPILE_OPTIONS /cgthreads1
-    )
-endif()
-
 include_directories(${BULLET_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 
 if (OPENFALLOUT_USE_SYSTEM_SQLITE3)
@@ -670,13 +630,7 @@ endif()
 
 add_library(components STATIC ${COMPONENT_FILES})
 
-if (ANDROID)
-    set_property(TARGET components PROPERTY POSITION_INDEPENDENT_CODE ON)
-endif()
-
-if (APPLE)
-    target_compile_definitions(components PUBLIC GL_SILENCE_DEPRECATION=1)
-endif()
+target_compile_definitions(components PUBLIC GL_SILENCE_DEPRECATION=1)
 
 target_link_libraries(components
     # CMake's built-in OSG finder does not use pkgconfig, so we have to
@@ -735,24 +689,6 @@ if (USE_QT)
     endif()
 endif()
 
-if (OSG_STATIC AND CMAKE_SYSTEM_NAME MATCHES "Linux")
-    find_package(X11 REQUIRED COMPONENTS Xinerama Xrandr)
-    target_link_libraries(components ${CMAKE_DL_LIBS} X11::X11 X11::Xinerama X11::Xrandr)
-    find_package(Fontconfig MODULE)
-    if(Fontconfig_FOUND)
-        target_link_libraries(components Fontconfig::Fontconfig)
-    endif()
-endif()
-
-if (WIN32)
-    target_link_libraries(components shlwapi)
-endif()
-
-# Fix for not visible pthreads functions for linker with glibc 2.15
-if (UNIX AND NOT APPLE)
-    target_link_libraries(components ${CMAKE_THREAD_LIBS_INIT})
-endif()
-
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(components)
 endif()
@@ -799,32 +735,3 @@ if(USE_QT)
     set_property(TARGET components_qt PROPERTY AUTOUIC ON)
     set_property(TARGET components_qt PROPERTY AUTOUIC_SEARCH_PATHS contentselector)
 endif(USE_QT)
-
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    target_precompile_headers(components PUBLIC
-        <sol/sol.hpp>
-
-        <osg/State>
-        <osg/StateSet>
-        <osg/Node>
-        <osg/Drawable>
-        <osg/Camera>
-
-        <MyGUI_Widget.h>
-
-        <algorithm>
-        <filesystem>
-        <fstream>
-        <functional>
-        <memory>
-        <ostream>
-        <string>
-        <vector>
-    )
-
-    target_precompile_headers(components PRIVATE
-        <osgViewer/Viewer>
-
-        <boost/program_options/options_description.hpp>
-    )
-endif()

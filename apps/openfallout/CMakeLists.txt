@@ -3,11 +3,6 @@ set(OPENFALLOUT_SOURCES
     options.cpp
 )
 
-set(OPENFALLOUT_RESOURCES
-    ${CMAKE_SOURCE_DIR}/files/windows/openfallout.rc
-    ${CMAKE_SOURCE_DIR}/files/windows/openfallout.exe.manifest
-)
-
 set(OPENFALLOUT_HEADERS
     doc.hpp
     engine.hpp
@@ -66,9 +61,8 @@ add_openfallout_dir (mwscript
     falloutneeds
     )
 
-# The Lua bindings are a library of their own. The Windows CI keeps the debug information in every object file, and one
-# static library of all the objects is past the 4 GB that MSVC's lib.exe can write (LNK1248). The two libraries use each
-# other, which CMake allows between static libraries.
+# The Lua bindings are a library of their own (split off when one static library of all the objects grew too big for a
+# Windows linker). The two libraries use each other, which CMake allows between static libraries.
 set(OPENFALLOUT_FILES_BEFORE_LUA ${OPENFALLOUT_FILES})
 
 add_openfallout_dir (mwlua
@@ -148,43 +142,12 @@ add_library(openfallout-lua-lib STATIC
 target_link_libraries(openfallout-lua-lib openfallout-lib)
 target_link_libraries(openfallout-lib openfallout-lua-lib)
 
-if (MSVC)
-    # these TUs take a lot of memory for codegen
-    # in CI, they often go over the 8GB memory limit if another cl.exe is running at the same time
-    # this option (make sure you're not looking at the docs for the identically-named linker option) stops four codegen threads being spun off
-    # it hurts build time ~33% to enable this unnecessarily, though, so target it to the hungriest boys
-    set_source_files_properties(
-        mwlua/dialoguebindings.cpp
-        mwlua/magicbindings.cpp
-        mwlua/objectbindings
-        mwlua/stats.cpp
-        mwworld/esmstore.cpp
-        PROPERTIES
-        COMPILE_OPTIONS /cgthreads1
-    )
-endif()
-
 if(BUILD_OPENFALLOUT)
-    if (ANDROID)
-        add_library(openfallout SHARED
-            main.cpp
-            androidmain.cpp
-        )
-    else()
-        openfallout_add_executable(openfallout
-            ${APPLE_BUNDLE_RESOURCES}
-            ${OPENFALLOUT_RESOURCES}
-            main.cpp
-        )
-    endif()
+    openfallout_add_executable(openfallout
+        main.cpp
+    )
 
     target_link_libraries(openfallout openfallout-lib)
-
-    # Workaround necessary to ensure osgAnimation::MatrixLinearSampler dynamic casts work under Clang
-    # NOTE: it's unclear whether the broken behavior is spec-compliant
-    if (CMAKE_CXX_COMPILER_ID STREQUAL Clang)
-        set_target_properties(openfallout PROPERTIES ENABLE_EXPORTS ON)
-    endif()
 endif()
 
 # Sound stuff - here so CMake doesn't stupidly recompile EVERYTHING
@@ -216,52 +179,7 @@ target_link_libraries(openfallout-lib
     components
 )
 
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    foreach (openfallout_target openfallout-lib openfallout-lua-lib)
-    target_precompile_headers(${openfallout_target} PRIVATE
-        <boost/program_options/options_description.hpp>
-
-        <sol/sol.hpp>
-
-        <osg/StateSet>
-        <osg/Node>
-        <osg/Drawable>
-        <osg/Camera>
-
-        <osgViewer/Viewer>
-
-        <MyGUI_Widget.h>
-
-        <algorithm>
-        <filesystem>
-        <fstream>
-        <functional>
-        <memory>
-        <string>
-        <string_view>
-        <vector>
-    )
-    endforeach()
-endif()
-
-if (ANDROID)
-    target_link_libraries(openfallout-lib EGL android log z)
-endif (ANDROID)
-
-if (USE_SYSTEM_TINYXML)
-    target_link_libraries(openfallout-lib ${TinyXML_LIBRARIES})
-endif()
-
-if (NOT UNIX)
-    target_link_libraries(openfallout-lib ${SDL2MAIN_LIBRARY})
-endif()
-
-# Fix for not visible pthreads functions for linker with glibc 2.15
-if (UNIX AND NOT APPLE)
-    target_link_libraries(openfallout-lib ${CMAKE_THREAD_LIBS_INIT})
-endif()
-
-if(APPLE AND BUILD_OPENFALLOUT)
+if(BUILD_OPENFALLOUT)
     set(BUNDLE_RESOURCES_DIR "${APP_BUNDLE_DIR}/Contents/Resources")
 
     set(OPENFALLOUT_RESOURCES_ROOT ${BUNDLE_RESOURCES_DIR})
@@ -304,8 +222,4 @@ if (BUILD_WITH_CODE_COVERAGE)
     if (NOT ANDROID AND BUILD_OPENFALLOUT)
         openfallout_enable_coverage(openfallout)
     endif()
-endif()
-
-if (NOT APPLE AND BUILD_OPENFALLOUT)
-    INSTALL(TARGETS openfallout)
 endif()
