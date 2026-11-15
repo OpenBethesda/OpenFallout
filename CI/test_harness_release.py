@@ -1,8 +1,15 @@
 import copy
+import json
+import os
+import threading
 import unittest
+import unittest.mock
 import tempfile
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+import engine_release
+import harness_release
 from harness_release import PLATFORM_JOBS, ReleaseError, create_tag, find_release, finish_release, plan_phase, release_plan, validate_tag, verify_assets
 
 
@@ -32,19 +39,40 @@ RELEASE = {"id": 7, "tag_name": TAG, "draft": True, "prerelease": True,
                {"name": "OpenFallout-arm64.dmg", "size": 12, "state": "uploaded", "digest": "sha256:" + ARM},
                {"name": "OpenFallout-x86_64.dmg", "size": 12, "state": "uploaded", "digest": "sha256:" + INTEL}]}
 
+# The engine release's statement (CI/engine_release.py) and the two notes lines the gate asks for. The image is the
+# Apple Silicon one above; the commit is the one the tag points to.
+STATEMENT = engine_release.build_statement("0.1.0", TAG, SHA, "OpenFallout-arm64.dmg", ARM, "26.0", "arm64")
+
+
+def with_engine_release(release):
+    """The release as the gate wants an engine release: the statement uploaded, the two notes lines present."""
+    release["body"] += (engine_release.supported_line("26.0") + "\n"
+                        + engine_release.played_on_line("MacBook Pro, Apple M3 Pro", "27.2") + "\n")
+    release["assets"].append({"id": 99, "name": engine_release.STATEMENT_NAME, "size": 300, "state": "uploaded",
+                              "digest": "sha256:" + "5" * 64})
+    return release
+
 
 class FakeGitHub:
     def __init__(self):
+        self.statement = copy.deepcopy(STATEMENT)
+        self.downloads = []
         self.writes = []
         self.comparison = "identical"
         self.marker = {}
         self.builds = [copy.deepcopy(RUN)]
         self.ref = None
         self.packaging = dict(RUN, head_branch=TAG)
-        self.release = copy.deepcopy(RELEASE)
+        self.release = with_engine_release(copy.deepcopy(RELEASE))
         self.release_pages = None
         self.master_sha = SHA
         self.jobs = [{"name": name, "conclusion": "success"} for name in PLATFORM_JOBS]
+
+    def download_asset(self, asset):
+        self.downloads.append(asset["name"])
+        if asset["name"] != engine_release.STATEMENT_NAME:
+            raise AssertionError(asset["name"])
+        return self.statement if isinstance(self.statement, bytes) else json.dumps(self.statement).encode()
 
     def request(self, path, method="GET", data=None, missing_ok=False):
         if method != "GET":
@@ -252,6 +280,153 @@ class ReleaseTests(unittest.TestCase):
             plan_phase(api, "preview", "master", TAG, state_file)
             with self.assertRaises(ReleaseError):
                 plan_phase(api, "publish", "master", "openfallout-other", state_file)
+
+
+class EngineReleaseGateTests(unittest.TestCase):
+    """The gate refuses to publish an engine release that lacks its statement, whose statement disagrees with the
+    uploaded image or the tag, or whose notes lack the supported or the played-on line."""
+
+    def refused(self, api, pattern):
+        plan = release_plan(api, "master", TAG)
+        for publish in (False, True):
+            with self.subTest(publish=publish), self.assertRaisesRegex(ReleaseError, pattern):
+                finish_release(api, plan, publish=publish)
+        self.assertEqual(api.writes, [])
+
+    def test_a_release_with_its_statement_and_its_notes_publishes(self):
+        api = FakeGitHub()
+        finish_release(api, release_plan(api, "master", TAG), publish=True)
+        self.assertEqual(api.writes, [("releases/7", "PATCH", {"draft": False, "prerelease": True})])
+        self.assertEqual(api.downloads, [engine_release.STATEMENT_NAME] * 1)
+
+    def test_a_release_without_the_statement_is_refused(self):
+        api = FakeGitHub()
+        api.release["assets"] = [asset for asset in api.release["assets"] if asset["name"] != engine_release.STATEMENT_NAME]
+        self.refused(api, engine_release.STATEMENT_NAME)
+
+    def test_a_statement_that_was_not_uploaded_completely_is_refused(self):
+        api = FakeGitHub()
+        api.release["assets"][-1]["size"] = 0
+        self.refused(api, engine_release.STATEMENT_NAME)
+
+    def test_a_statement_that_is_not_json_or_not_a_statement_is_refused(self):
+        for content in (b"{broken", b'["a"]', json.dumps({"schema": 1}).encode()):
+            api = FakeGitHub()
+            api.statement = content
+            with self.subTest(content=content):
+                self.refused(api, engine_release.STATEMENT_NAME)
+
+    def test_a_statement_with_another_digest_than_the_uploaded_image_is_refused(self):
+        api = FakeGitHub()
+        api.statement["sha256"] = OTHER
+        self.refused(api, f"sha256 {OTHER}.*OpenFallout-arm64.dmg.*{ARM}")
+
+    def test_an_image_uploaded_again_after_the_statement_was_made_is_refused(self):
+        api = FakeGitHub()
+        api.release["assets"][1]["digest"] = "sha256:" + OTHER
+        # the notes' check lines were bound to the first image, so that refusal comes first: the statement must be
+        # refused for the same reason once they are bound to the new one
+        api.release["body"] = api.release["body"].replace(ARM, OTHER)
+        self.refused(api, f"sha256 {ARM}.*{OTHER}")
+
+    def test_a_statement_without_a_digest_for_its_image_on_github_is_refused(self):
+        api = FakeGitHub()
+        del api.release["assets"][1]["digest"]
+        self.refused(api, "digest")
+
+    def test_a_statement_of_another_source_commit_than_the_tags_is_refused(self):
+        api = FakeGitHub()
+        api.statement["source_commit"] = "b" * 40
+        self.refused(api, f"built from {'b' * 40}.*{SHA}")
+
+    def test_a_statement_of_another_tag_than_the_releases_is_refused(self):
+        api = FakeGitHub()
+        api.statement["tag"] = "openfallout-0.1.0-other"
+        self.refused(api, "tag openfallout-0.1.0-other.*" + TAG)
+
+    def test_a_statement_that_names_an_image_the_release_does_not_hold_is_refused(self):
+        api = FakeGitHub()
+        api.statement["disk_image"] = "OpenFallout-0.1.0-macOS-arm64.dmg"
+        self.refused(api, "OpenFallout-0.1.0-macOS-arm64.dmg.*does not hold")
+
+    def test_notes_without_the_supported_line_are_refused(self):
+        api = FakeGitHub()
+        api.release["body"] = "\n".join(line for line in api.release["body"].splitlines() if "Supported" not in line)
+        self.refused(api, "Supported")
+
+    def test_notes_with_another_minimum_than_the_statements_are_refused(self):
+        api = FakeGitHub()
+        api.release["body"] = api.release["body"].replace("macOS 26.0 or later", "macOS 14.8 or later")
+        self.refused(api, "Supported.*26.0")
+
+    def test_notes_without_the_played_on_line_are_refused(self):
+        api = FakeGitHub()
+        api.release["body"] = "\n".join(line for line in api.release["body"].splitlines() if "Played on" not in line)
+        self.refused(api, "Played on")
+
+    def test_a_played_on_line_that_names_no_macos_version_is_refused(self):
+        api = FakeGitHub()
+        api.release["body"] = api.release["body"].replace("MacBook Pro, Apple M3 Pro, macOS 27.2", "a Mac")
+        self.refused(api, "Played on")
+
+
+class AssetDownloadTests(unittest.TestCase):
+    """GitHub's asset download answers with a redirect to a signed address on another host: the token goes to GitHub
+    only and never to that host."""
+
+    def test_the_token_is_sent_to_the_api_and_not_to_the_host_it_redirects_to(self):
+        seen = {}
+
+        class Blob(BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen["blob"] = self.headers.get("Authorization")
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"schema": 1}')
+
+            def log_message(self, *args):
+                pass
+
+        blob = HTTPServer(("127.0.0.1", 0), Blob)
+
+        class Api(BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen["api"] = (self.headers.get("Authorization"), self.headers.get("Accept"))
+                self.send_response(302)
+                self.send_header("Location", f"http://127.0.0.1:{blob.server_port}/signed")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        api = HTTPServer(("127.0.0.1", 0), Api)
+        for server in (blob, api):
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            self.addCleanup(server.shutdown)
+        with unittest.mock.patch.dict(os.environ, {"GH_TOKEN": "secret-token"}):
+            content = harness_release.GitHub().download_asset({"name": "x", "url": f"http://127.0.0.1:{api.server_port}/asset"})
+        self.assertEqual(content, b'{"schema": 1}')
+        self.assertEqual(seen["api"], ("Bearer secret-token", "application/octet-stream"))
+        self.assertIsNone(seen["blob"])
+
+    def test_a_huge_or_failing_download_is_refused(self):
+        class Huge(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200 if self.path == "/huge" else 404)
+                self.end_headers()
+                if self.path == "/huge":
+                    self.wfile.write(b"x" * (harness_release.MAX_STATEMENT_BYTES + 10))
+
+            def log_message(self, *args):
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Huge)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        with unittest.mock.patch.dict(os.environ, {"GH_TOKEN": "secret-token"}):
+            for path in ("huge", "missing"):
+                with self.subTest(path=path), self.assertRaises(ReleaseError):
+                    harness_release.GitHub().download_asset({"name": "x", "url": f"http://127.0.0.1:{server.server_port}/{path}"})
 
 
 if __name__ == "__main__":
