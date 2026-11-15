@@ -22,6 +22,7 @@ Project guides
 * `Running OpenFallout <https://github.com/OpenBethesda/OpenFallout/blob/master/docs/openfallout/playing.md>`_
 * `CI build cache operation and recovery <https://github.com/OpenBethesda/OpenFallout/blob/master/docs/openfallout/ci-cache.md>`_
 * `Test and in-game harness <https://github.com/OpenBethesda/OpenFallout/blob/master/docs/openfallout/harness.md>`_
+* `The interface the shell relies on <https://github.com/OpenBethesda/OpenFallout/blob/master/docs/openfallout/shell-interface.md>`_
 
 The Sphinx documentation also contains the
 :doc:`Lua scripting reference <reference/lua-scripting/overview>` and
