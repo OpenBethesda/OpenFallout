@@ -44,7 +44,7 @@ typed by hand. One JSON object:
 | Field | Meaning | Where it comes from |
 | --- | --- | --- |
 | `schema` | `1`; changes only if a field changes meaning | the tool |
-| `version` | the engine's version, e.g. `0.52.0` | `OPENFALLOUT_VERSION_*` in the top `CMakeLists.txt` |
+| `version` | the engine's version, e.g. `0.1.0` | `OPENFALLOUT_VERSION_*` in the top `CMakeLists.txt` |
 | `tag` | the release tag | the tag CI builds |
 | `source_commit` | the 40-character commit the image was built from | the commit CI builds |
 | `disk_image` | the file name of the disk image, `OpenFallout-<version>-macOS-arm64.dmg` | the image itself |
@@ -65,6 +65,8 @@ refuses to start on an older macOS because of that property list.
 fails, naming every difference, when any of these disagree. `write` then writes nothing.
 
 - The tag is `openfallout-<version>` with an optional `-<suffix>`, and `<version>` is the version in `CMakeLists.txt`.
+- Versions are numbered `0.<milestone>.<n>`: 0.1.x for the Mac-only milestone, 0.2.x for the Metal renderer, 0.3.x for the
+  window and front door. The last number counts the releases cut inside a milestone. 1.0.0 is the owner's call.
 - The disk image is named `OpenFallout-<version>-macOS-arm64.dmg`.
 - The outer app and the nested `Contents/Helpers/OpenFallout Engine.app` both state the same `LSMinimumSystemVersion`,
   and it is the statement's `minimum_macos`.
