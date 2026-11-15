@@ -8,8 +8,10 @@ from pathlib import Path
 try:
     from lupa.luajit21 import LuaRuntime
 except ImportError:  # pragma: no cover
+    # lupa's wheels for Apple Silicon have no LuaJIT runtime. Lua 5.2 accepts what LuaJIT accepts here (5.1 with
+    # load() of a string); the newest Lua refuses an assignment to the variable of a for loop.
     try:
-        from lupa import LuaRuntime
+        from lupa.lua52 import LuaRuntime
     except ImportError:
         LuaRuntime = None
 
