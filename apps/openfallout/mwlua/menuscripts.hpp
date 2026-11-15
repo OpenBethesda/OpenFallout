@@ -3,6 +3,10 @@
 
 #include <SDL_events.h>
 
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include <components/lua/luastate.hpp>
 #include <components/lua/scriptscontainer.hpp>
 #include <components/sdlutil/events.hpp>
@@ -25,7 +29,7 @@ namespace OFLua
             , mInputProcessor(this)
         {
             registerEngineHandlers({ &mOnFrameHandlers, &mStateChanged, &mConsoleCommandHandlers,
-                &mViewportResizedHandlers, &mUiModeChanged });
+                &mViewportResizedHandlers, &mUiModeChanged, &mLoadRefused });
         }
 
         void processInputEvent(const OFBase::LuaManager::InputEvent& event)
@@ -36,6 +40,20 @@ namespace OFLua
         void onFrame(float dt) { callEngineHandlers(mOnFrameHandlers, dt); }
 
         void stateChanged() { callEngineHandlers(mStateChanged); }
+
+        // onLoadRefused({ directory, slotName, missingContent }): the answer given in advance refused the save
+        void loadRefused(
+            std::string_view directory, std::string_view slotName, const std::vector<std::string_view>& missingContent)
+        {
+            sol::table info(mLua.unsafeState(), sol::create);
+            info["directory"] = std::string(directory);
+            info["slotName"] = std::string(slotName);
+            sol::table files(mLua.unsafeState(), sol::create);
+            for (const std::string_view file : missingContent)
+                files.add(std::string(file));
+            info["missingContent"] = files;
+            callEngineHandlers(mLoadRefused, info);
+        }
 
         bool consoleCommand(const std::string& consoleMode, const std::string& command)
         {
@@ -55,6 +73,7 @@ namespace OFLua
         EngineHandlerList mConsoleCommandHandlers{ "onConsoleCommand" };
         EngineHandlerList mViewportResizedHandlers{ "onViewportResized" };
         EngineHandlerList mUiModeChanged{ "_onUiModeChanged" };
+        EngineHandlerList mLoadRefused{ "onLoadRefused" };
     };
 }
 

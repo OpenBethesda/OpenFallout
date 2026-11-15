@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -72,6 +73,11 @@ namespace OFBase
         virtual void gameLoaded() = 0;
         virtual void gameEnded() = 0;
         virtual void noGame() = 0;
+        // A load did not happen because the answer given in advance refused a save whose content files are not all
+        // loaded (menu scripts: onLoadRefused)
+        virtual void loadRefused(
+            std::string_view directory, std::string_view slotName, const std::vector<std::string_view>& missingContent)
+            = 0;
         virtual void objectAddedToScene(const OFWorld::Ptr& ptr) = 0;
         virtual void objectRemovedFromScene(const OFWorld::Ptr& ptr) = 0;
         virtual void objectTeleported(const OFWorld::Ptr& ptr) = 0;

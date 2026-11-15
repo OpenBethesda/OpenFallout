@@ -187,6 +187,13 @@ Engine handler is a function defined by a script, that can be called by the engi
   * - onStateChanged()
     - | Called whenever the current game changes
       | (i. e. the result of `getState <openfallout_menu.html##(menu).getState>`_ changes)
+  * - onLoadRefused(info)
+    - | A load did not happen because the answer given in advance
+      | (``missingContent`` of `loadGame <openfallout_menu.html##(menu).loadGame>`_,
+      | or the command-line option ``--missing-content``) was ``refuse`` and the
+      | save was made with content files that are not loaded. No box was shown.
+      | ``info.directory`` and ``info.slotName`` name the save,
+      | ``info.missingContent`` lists the content files that are not loaded.
 
 **Only for load scripts**
 

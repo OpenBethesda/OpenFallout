@@ -494,8 +494,10 @@ struct SaveVersionTooNewError : SaveFormatVersionError
     }
 };
 
-void OFState::StateManager::loadGame(const Character* character, const std::filesystem::path& filepath)
+void OFState::StateManager::loadGame(
+    const Character* character, const std::filesystem::path& filepath, std::optional<ESM::MissingContentAnswer> answer)
 {
+    mLastLoadRefused = false;
     try
     {
         cleanup();
@@ -546,10 +548,14 @@ void OFState::StateManager::loadGame(const Character* character, const std::file
                     profile.load(reader);
                     const auto& selectedContentFiles = OFBase::Environment::get().getWorld()->getContentFiles();
                     auto missingFiles = profile.getMissingContentFiles(selectedContentFiles);
-                    if (!missingFiles.empty() && !confirmLoading(missingFiles))
+                    if (!missingFiles.empty() && !confirmLoading(missingFiles, answer.value_or(mMissingContentAnswer)))
                     {
                         cleanup(true);
                         OFBase::Environment::get().getWindowManager()->pushGuiMode(OFGui::GM_MainMenu);
+                        // A load that the caller's answer refused is told to the menu scripts, which asked for it
+                        if (mLastLoadRefused)
+                            OFBase::Environment::get().getLuaManager()->loadRefused(
+                                filepath.parent_path().filename().string(), filepath.filename().string(), missingFiles);
                         return;
                     }
                     mTimePlayed = profile.mTimePlayed;
@@ -841,15 +847,18 @@ void OFState::StateManager::update(float duration)
     if (mLoadRequest)
     {
         OFBase::Environment::get().getWindowManager()->removeGuiMode(OFGui::GM_MainMenu);
-        const Character* character = mLoadRequest->first;
+        // The request is taken before the load runs: a refused load tells the menu scripts at once, and a handler
+        // that asks for the same save again with another answer must find the slot free for its own request.
+        const LoadRequest request = std::move(*mLoadRequest);
+        mLoadRequest = std::nullopt;
+        const Character* character = request.mCharacter;
         // The character may have been deleted after the request was made
         const bool validCharacter = std::ranges::find_if(mCharacterManager, [=](const Character& c) {
             return &c == character;
         }) != mCharacterManager.end();
         if (!validCharacter)
             character = getCurrentCharacter();
-        loadGame(character, mLoadRequest->second);
-        mLoadRequest = std::nullopt;
+        loadGame(character, request.mPath, request.mAnswer);
         // (the load that the quick load key asked for says its note now, after the load cleared the notes)
         if (mQuickLoadNote && mState == State_Running && OFBase::Environment::get().getFalloutScripts() != nullptr)
             OFBase::Environment::get().getFalloutScripts()->quickNote(false, false);
@@ -857,7 +866,8 @@ void OFState::StateManager::update(float duration)
     }
 }
 
-bool OFState::StateManager::confirmLoading(const std::vector<std::string_view>& missingFiles) const
+bool OFState::StateManager::confirmLoading(
+    const std::vector<std::string_view>& missingFiles, ESM::MissingContentAnswer answer)
 {
     std::ostringstream stream;
     for (auto& contentFile : missingFiles)
@@ -870,13 +880,32 @@ bool OFState::StateManager::confirmLoading(const std::vector<std::string_view>& 
     if (!fullList.empty())
         fullList.pop_back();
 
-    if (mHeadless)
+    // The lines below are read by callers that run the engine unattended (docs/openfallout/shell-interface.md)
+    switch (ESM::decideMissingContent(answer, mHeadless, true))
     {
-        // The question is a message box that waits for a click: in a headless run nobody clicks and the load would
-        // wait for ever
-        Log(Debug::Info) << "Headless: " << missingFiles.size()
-                         << " content file(s) of the save are not loaded, loading it anyway";
-        return true;
+        case ESM::MissingContentAction::Load:
+            if (answer == ESM::MissingContentAnswer::Ask)
+            {
+                // The question is a message box that waits for a click: in a headless run nobody clicks and the load
+                // would wait for ever
+                Log(Debug::Info) << "Headless: " << missingFiles.size()
+                                 << " content file(s) of the save are not loaded, loading it anyway";
+            }
+            else
+                Log(Debug::Info) << "Load: " << missingFiles.size()
+                                 << " content file(s) of the save are not loaded, loading it anyway (missing-content "
+                                 << ESM::missingContentAnswerName(answer) << ")";
+            return true;
+        case ESM::MissingContentAction::Refuse:
+            Log(Debug::Info) << "Load: " << missingFiles.size()
+                             << " content file(s) of the save are not loaded, not loading it (missing-content "
+                             << ESM::missingContentAnswerName(answer) << ")";
+            mLastLoadRefused = true;
+            return false;
+        case ESM::MissingContentAction::AskPlayer:
+            Log(Debug::Info) << "Load: " << missingFiles.size()
+                             << " content file(s) of the save are not loaded, asking the player";
+            break;
     }
 
     constexpr size_t missingPluginsDisplayLimit = 12;

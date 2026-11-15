@@ -309,6 +309,7 @@ file(GLOB UNITTEST_SRC_FILES
     esm3/testesmwriter.cpp
     esm3/testinfoorder.cpp
     esm3/testcstringids.cpp
+    esm3/testmissingcontent.cpp
 
     myguiplatform/testmyguitexture.cpp
 

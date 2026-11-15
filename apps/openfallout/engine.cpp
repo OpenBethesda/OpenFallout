@@ -783,6 +783,7 @@ void OF::Engine::prepareEngine()
     mStateManager = std::make_unique<OFState::StateManager>(mCfgMgr.getUserDataPath() / "saves", mContentFiles);
     mEnvironment.setStateManager(*mStateManager);
     mStateManager->setHeadless(mHeadless);
+    mStateManager->setMissingContentAnswer(mMissingContentAnswer);
 
     const bool stereoEnabled = Settings::stereo().mStereoEnabled || osg::DisplaySettings::instance().get()->getStereo();
     mStereoManager = std::make_unique<Stereo::Manager>(
@@ -1082,6 +1083,15 @@ void OF::Engine::go()
     if (!mSaveGameFile.empty())
     {
         mStateManager->loadGame(mSaveGameFile);
+        // The caller refused the save (--missing-content=refuse): an unattended caller is told by the exit status, and
+        // nobody is left at a main menu that waits for a person
+        if (mStateManager->lastLoadRefused())
+        {
+            Log(Debug::Info) << "Load: the save given with --load-savegame was refused, quitting with exit status "
+                             << refusedLoadExitStatus;
+            mExitStatus = refusedLoadExitStatus;
+            mStateManager->requestQuit();
+        }
     }
     else if (!mSkipMenu)
     {

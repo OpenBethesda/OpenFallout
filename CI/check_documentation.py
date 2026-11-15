@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_ENTRYPOINTS = (
     Path("CONTRIBUTING.md"),
     Path("docs/openfallout/architecture.md"),
+    Path("docs/openfallout/shell-interface.md"),
 )
 RST_ENTRYPOINTS = (
     Path("docs/source/openfallout.rst"),
@@ -21,6 +22,19 @@ MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 REPO_BLOB_LINK = re.compile(r"<((?:https://github\.com/[^/>\s]+/OpenFallout/blob/)[^>]+)>_?")
 DOC_ROLE = re.compile(r":doc:`(?:[^`<>]*<)?([^`<>]+)>?`")
 TOCTREE = re.compile(r"^(?P<indent>\s*)\.\. toctree::\s*$")
+
+# The interface another program (the shell) relies on: the page lists it, the engine test asks the real option parser and
+# Lua menu package for each name, and the menu scripts' engine handlers are declared in the header below. The page and the
+# test must name the same options and functions, so that "not changed without notice" is held by a machine.
+SHELL_INTERFACE_PAGE = Path("docs/openfallout/shell-interface.md")
+SHELL_INTERFACE_TEST = Path("apps/openfallout_tests/shellinterface.cpp")
+SHELL_INTERFACE_HANDLERS = Path("apps/openfallout/mwlua/menuscripts.hpp")
+SHELL_SECTIONS = {
+    "## Command-line options": "options",
+    "## Lua: the menu package": "functions",
+    "## Lua: engine handlers of menu scripts": "handlers",
+}
+TABLE_FIRST_CELL = re.compile(r"^\|\s*`([^`]+)`")
 
 
 def local_target(source: Path, target: str, root: Path) -> Path | None:
@@ -94,6 +108,55 @@ def check_sphinx_targets(text: str, source: Path, root: Path) -> list[str]:
     return errors
 
 
+def shell_interface_names(page: str) -> dict[str, list[str]]:
+    """The names in the first column of the tables of the page's three sections: options without their dashes and
+    value, functions and handlers without their arguments."""
+    names: dict[str, list[str]] = {kind: [] for kind in SHELL_SECTIONS.values()}
+    kind = None
+    for line in page.splitlines():
+        if line.startswith("## "):
+            kind = SHELL_SECTIONS.get(line.strip())
+            continue
+        match = TABLE_FIRST_CELL.match(line)
+        if kind is None or match is None:
+            continue
+        cell = match.group(1)
+        name = cell.split()[0].removeprefix("--") if kind == "options" else cell.split("(", 1)[0]
+        names[kind].append(name.strip())
+    return names
+
+
+def quoted_list(source: str, array: str) -> list[str]:
+    """The string literals of `array[] = { ... };` in a C++ source."""
+    match = re.search(re.escape(array) + r"\[\]\s*=\s*\{(.*?)\};", source, re.DOTALL)
+    return re.findall(r'"([^"]+)"', match.group(1)) if match else []
+
+
+def check_shell_interface(page: str, test: str, handlers: str) -> list[str]:
+    errors = []
+    names = shell_interface_names(page)
+    source = str(SHELL_INTERFACE_PAGE)
+    checked = {"options": quoted_list(test, "keptOptions"), "functions": quoted_list(test, "keptMenuFunctions")}
+    if not names["options"] or not checked["options"]:
+        errors.append(f"{source}: no command-line options found on the page or in {SHELL_INTERFACE_TEST}")
+    for name in names["options"]:
+        if name not in checked["options"]:
+            errors.append(f"{source}: option --{name} is listed but {SHELL_INTERFACE_TEST} does not check it")
+    for name in checked["options"]:
+        if name not in names["options"]:
+            errors.append(f"{SHELL_INTERFACE_TEST}: option --{name} is checked but {source} does not list it")
+    for name in names["functions"]:
+        if name not in checked["functions"] and f'"{name}"' not in test:
+            errors.append(f"{source}: menu.{name} is listed but {SHELL_INTERFACE_TEST} does not check it")
+    for name in checked["functions"]:
+        if name not in names["functions"]:
+            errors.append(f"{SHELL_INTERFACE_TEST}: menu.{name} is checked but {source} does not list it")
+    for name in names["handlers"]:
+        if f'{{ "{name}" }}' not in handlers:
+            errors.append(f"{source}: handler {name} is listed but is not an engine handler in {SHELL_INTERFACE_HANDLERS}")
+    return errors
+
+
 def validate(root: Path = ROOT) -> list[str]:
     errors = []
     for source in MARKDOWN_ENTRYPOINTS:
@@ -111,6 +174,13 @@ def validate(root: Path = ROOT) -> list[str]:
         text = path.read_text(encoding="utf-8")
         errors.extend(check_repo_blob_links(text, source, root))
         errors.extend(check_sphinx_targets(text, source, root))
+
+    shell_files = (SHELL_INTERFACE_PAGE, SHELL_INTERFACE_TEST, SHELL_INTERFACE_HANDLERS)
+    missing = [str(path) for path in shell_files if not (root / path).is_file()]
+    if missing:
+        errors.extend(f"{path}: missing file of the shell interface" for path in missing)
+    else:
+        errors.extend(check_shell_interface(*((root / path).read_text(encoding="utf-8") for path in shell_files)))
     return errors
 
 
@@ -119,7 +189,7 @@ def main() -> int:
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print("Documentation entrypoint links are valid.")
+    print("Documentation entrypoint links and the shell interface list are valid.")
     return 0
 
 

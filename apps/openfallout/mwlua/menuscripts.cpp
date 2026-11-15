@@ -4,11 +4,13 @@
 #include <SDL_joystick.h>
 
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
 #include <components/esm/records.hpp>
+#include <components/esm3/missingcontent.hpp>
 #include <components/falloutscript/loadscreens.hpp>
 #include <components/lua/util.hpp>
 #include <components/misc/rng.hpp>
@@ -119,6 +121,23 @@ namespace OFLua
 
             return false;
         }
+
+        // The answer of one load (`missingContent` of the options of menu.loadGame): none when it is not given, so that
+        // the answer of the whole run (--missing-content) is used. Read before anything else, so a wrong word is the
+        // caller's error
+        std::optional<ESM::MissingContentAnswer> loadAnswer(const sol::optional<sol::table>& options)
+        {
+            if (!options.has_value())
+                return std::nullopt;
+            const sol::object value = (*options)["missingContent"];
+            if (value == sol::nil)
+                return std::nullopt;
+            const std::string text = value.is<std::string>() ? value.as<std::string>() : std::string("a non-string");
+            const std::optional<ESM::MissingContentAnswer> answer = ESM::parseMissingContentAnswer(text);
+            if (!answer.has_value() || value.get_type() != sol::type::string)
+                throw std::runtime_error("missingContent must be 'ask', 'accept' or 'refuse', not '" + text + "'");
+            return answer;
+        }
     }
 
     sol::table initMenuPackage(const Context& context)
@@ -140,12 +159,14 @@ namespace OFLua
             OFBase::Environment::get().getStateManager()->requestNewGame(shouldBypass(options));
         };
 
-        api["loadGame"] = [](std::string_view dir, std::string_view slotName) {
+        api["loadGame"] = [](std::string_view dir, std::string_view slotName,
+                              const sol::optional<sol::table>& options) {
+            const std::optional<ESM::MissingContentAnswer> answer = loadAnswer(options);
             const OFState::Character* character = findCharacter(dir);
             const OFState::Slot* slot = findSlot(character, slotName);
             if (!slot)
                 throw std::runtime_error("Save game slot not found: " + std::string(dir) + "/" + std::string(slotName));
-            OFBase::Environment::get().getStateManager()->requestLoad(character, slot->mPath);
+            OFBase::Environment::get().getStateManager()->requestLoad(character, slot->mPath, answer);
         };
 
         api["deleteGame"] = [](std::string_view dir, std::string_view slotName) {

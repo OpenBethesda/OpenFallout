@@ -25,7 +25,8 @@ scripts/openfallout/round/round.py preflight                                what
    view, terrain and the rest) under the run's itself.
 2. Starts the engine at low priority (`taskpolicy -b` on macOS, `nice -n 10` elsewhere) with `OPENFALLOUT_HEADLESS=1`, the
    game's data folders and plugins of the profile, `--skip-menu --headless --no-grab`, `--load-savegame <the copy>` (or
-   `--start <cell>`), and the content file `round.omwscripts` (the scenario player).
+   `--start <cell>`), and the content file `round.omwscripts` (the scenario player). With `"load_save": false` it gives neither
+   `--skip-menu` nor `--load-savegame`: the engine stays at the main menu with the copy in its list of saves, for a menu script.
 3. On macOS it asks `lsappinfo` every 5 s which application is frontmost: a run in which the engine ever was fails, because
    that is what takes the keyboard of the person at the computer.
 4. Stops the engine when `limit` seconds are over, then writes `report.md` and `report.json` (the verdict, exit status, the `ROUND`
@@ -54,11 +55,15 @@ round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas fol
 | `game` | `nv`, `fo3` or `ttw`: a key of the profile's `games` |
 | `scenario` | the Lua file of the scenario, relative to the round file or to this folder |
 | `save` | a file, or `"latest"`; without it `start` (a cell for `--start`, with `new_game` for `--new-game`) |
+| `load_save` | `false`: the save is copied into a character folder of the run (`saves/round/`, where the engine's list of saves finds it) but not loaded; the engine starts at the main menu (no `--skip-menu`, which with no save would start a new game), where a menu script of the round loads it. The scenario runs once a game is loaded; until then the round waits, up to its `limit` |
 | `settings` | `{"Section": {"key": "value"}}` for every variant, for example `{"Terrain": {"game lod": "true"}}` |
 | `resolution`, `framerate` | the size of the window (so of the screenshot) and the frame rate limit (defaults 1280x720 and 20) |
 | `limit` | seconds after which the engine is stopped (300) |
-| `variants` | a list of `{"name", "settings"}`: one engine start each, one after the other (never two engines at a time; `--parallel` above 1 is ignored), `--variant name` only that one |
-| `extra_args` | more arguments for the engine |
+| `variants` | a list of `{"name", "settings"}`: one engine start each, one after the other (never two engines at a time; `--parallel` above 1 is ignored), `--variant name` only that one; a variant can also have its own `env`, `extra_args` and expectations (below) |
+| `extra_args` | more arguments for the engine (a variant's come after the round's) |
+| `expect_exit` | the engine ends by itself with this exit status; the scenario then need not run (a refused start save: `--missing-content=refuse` ends with 4) |
+| `expect_log`, `forbid_log` | regular expressions: each of `expect_log` must match a line of the log, none of `forbid_log` may; otherwise the round fails (`(?s)` lets one pattern span lines, to say what comes after what) |
+| `expect_count` | `{"<regular expression>": n}`: exactly `n` lines of the log match, otherwise the round fails |
 | `allow_missing_content` | accept a save that wants a game plugin (`.esm`, `.esp`) the run does not load; without it such a round fails (a missing `.omwscripts`, such as the plugin of a play session, is a note) |
 
 ## The scenario (Lua)
@@ -101,6 +106,20 @@ two crippled legs slow it and make it limp, a character put up in the air falls 
 turning. `scenarios/m14p_reactions_fo3.lua` (`rounds/m14p-reactions-fo3.json`) does the same with two placed raiders of Fallout 3 (the blows
 are made with the form of a pistol, as the player's round has no way to give itself items), and `scenarios/m14p_swim.lua`
 (`rounds/m14p-swim.json`) lets the player's body fall into the lake of the east and swim.
+
+`rounds/m1-unattended-load.json` (scenario `scenarios/m1_unattended_load.lua`) loads the newest New Vegas save, whose content list
+differs from the run's (it wants the plugin of a play session), once with `--missing-content=accept` (loaded, no box, the
+`Load: ... loading it anyway (missing-content accept)` line) and once with `--missing-content=refuse` (not loaded, no box, exit status
+4). A box would log `asking the player` and fail it; an engine that waited would time out and fail it.
+
+`rounds/m1-refused-retry.json` starts at the main menu with the newest New Vegas save copied but not loaded (`"load_save": false`)
+and adds the menu script `scripts/roundretry.lua` with `--content roundretry.omwscripts` (this folder is a data folder of every
+round, so the file is found by name; nothing loads it unless a round names it). The script asks for the save with
+`missingContent = 'refuse'`; the engine refuses it and calls `onLoadRefused`, and the handler asks for the same save once more
+with `'accept'`. It passes when the refusal and the handler's line come once each, then the accept line and the load, with no box,
+and the scenario of `m1-unattended-load` runs to its end in the loaded game. An engine that loses the second request stays at the
+main menu: the round ends at its limit (60 s, so the engine is stopped after 90 s) and fails, its report says the accept and load
+lines were not found and shows the last lines of the log.
 
 `scenarios/smoke.lua` is the smallest scenario; `scenarios/m13_mountains.lua` with `rounds/m13-mountains.json` is the check of the
 distant land of New Vegas in seven variants of `game lod debug`. Its places are in the Mojave and the save can be anywhere:

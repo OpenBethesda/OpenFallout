@@ -1,0 +1,46 @@
+{
+  "name": "m1-unattended-load",
+  "game": "nv",
+  "save": "latest",
+  "scenario": "../scenarios/m1_unattended_load.lua",
+  "resolution": [
+    1280,
+    720
+  ],
+  "framerate": 30,
+  "limit": 240,
+  "allow_missing_content": true,
+  "variants": [
+    {
+      "name": "accept",
+      "extra_args": [
+        "--missing-content=accept"
+      ],
+      "expect_log": [
+        "Load: \\d+ content file\\(s\\) of the save are not loaded, loading it anyway \\(missing-content accept\\)",
+        "Loading saved game '"
+      ],
+      "forbid_log": [
+        "asking the player",
+        "Headless: \\d+ content file\\(s\\)",
+        "not loading it"
+      ]
+    },
+    {
+      "name": "refuse",
+      "extra_args": [
+        "--missing-content=refuse"
+      ],
+      "expect_exit": 4,
+      "expect_log": [
+        "Load: \\d+ content file\\(s\\) of the save are not loaded, not loading it \\(missing-content refuse\\)",
+        "Load: the save given with --load-savegame was refused, quitting with exit status 4"
+      ],
+      "forbid_log": [
+        "asking the player",
+        "Loading saved game '",
+        "ROUND\\t"
+      ]
+    }
+  ]
+}

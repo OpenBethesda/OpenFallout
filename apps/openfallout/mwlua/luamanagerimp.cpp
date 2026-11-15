@@ -531,6 +531,12 @@ namespace OFLua
         mMenuScripts.stateChanged();
     }
 
+    void LuaManager::loadRefused(
+        std::string_view directory, std::string_view slotName, const std::vector<std::string_view>& missingContent)
+    {
+        mMenuScripts.loadRefused(directory, slotName, missingContent);
+    }
+
     void LuaManager::uiModeChanged(const OFWorld::Ptr& arg)
     {
         if (mPlayer.isEmpty())

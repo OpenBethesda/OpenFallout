@@ -338,6 +338,7 @@ bool parseOptions(int argc, char** argv, OF::Engine& engine, Files::Configuratio
     engine.setStartupScript(variables["script-run"].as<std::string>());
     engine.setWarningsMode(variables["script-warn"].as<int>());
     engine.setSaveGameFile(variables["load-savegame"].as<Files::MaybeQuotedPath>().u8string());
+    engine.setMissingContentAnswer(OpenMW::readMissingContentAnswer(variables));
 
     // other settings
     Fallback::Map::init(variables["fallback"].as<Fallback::FallbackMap>().mMap);
@@ -440,6 +441,8 @@ int runApplication(int argc, char* argv[])
 #endif
 
         engine->go();
+        // (not 0 when the save given with --load-savegame was refused: see docs/openfallout/shell-interface.md)
+        return engine->getExitStatus();
     }
 
     return 0;

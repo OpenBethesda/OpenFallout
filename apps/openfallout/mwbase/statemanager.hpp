@@ -3,8 +3,11 @@
 
 #include <filesystem>
 #include <list>
+#include <optional>
 #include <string>
 #include <string_view>
+
+#include <components/esm3/missingcontent.hpp>
 
 namespace OFState
 {
@@ -58,7 +61,10 @@ namespace OFBase
         virtual bool playerDied() const = 0;
 
         virtual void requestNewGame(bool bypass) = 0;
-        virtual void requestLoad(const OFState::Character* character, const std::filesystem::path& filepath) = 0;
+        /// \param answer What to do if the save's content files are not all loaded (the process-wide answer when none)
+        virtual void requestLoad(const OFState::Character* character, const std::filesystem::path& filepath,
+            std::optional<ESM::MissingContentAnswer> answer = std::nullopt)
+            = 0;
 
         virtual State getState() const = 0;
 
@@ -81,8 +87,11 @@ namespace OFBase
         /// for a Character containing this save file, and set this Character current if one was found.
         /// Otherwise, a new Character will be created.
 
-        virtual void loadGame(const OFState::Character* character, const std::filesystem::path& filepath) = 0;
-        ///< Load a saved game file belonging to the given character.
+        virtual void loadGame(const OFState::Character* character, const std::filesystem::path& filepath,
+            std::optional<ESM::MissingContentAnswer> answer = std::nullopt)
+            = 0;
+        ///< Load a saved game file belonging to the given character. \a answer: what to do if the save's content files
+        /// are not all loaded (the process-wide answer, --missing-content, when none).
 
         /// Simple saver, writes over the file if already existing
         /** Used for quick save and autosave **/
