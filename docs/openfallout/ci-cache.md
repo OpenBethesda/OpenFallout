@@ -8,6 +8,18 @@ the [Linux](../../.github/workflows/push.yml),
 [Windows](../../.github/workflows/windows.yml) workflows do that. The related
 test-report behavior is described in [CI reporting](ci-reporting.md).
 
+The macOS job keeps two build trees. `build` is the packaged app; its cache key
+starts with `build-macos-v1-` and its fingerprint mode is the image and build
+type. `build-tests` is the instrumented unit-test tree (Debug, coverage, only
+the two test suites); its key starts with `build-macos-coverage-v1-`, its mode
+is the image followed by `-coverage`, and the job passes `--build-dir
+build-tests` to `restore` and `snapshot`. The two never share a cache entry, so
+ordinary objects are never restored into an instrumented build. Both trees use
+the job's one ccache, which is limited to 768 MB when it is stored after a run
+that built the test tree and to 384 MB otherwise. Only `master` runs save
+either tree, and a release-tag run, which does not build the test tree, saves
+only `build`.
+
 ## Working directory and cache identity
 
 Run the script from the checkout root. The command uses `Path.cwd()` as the

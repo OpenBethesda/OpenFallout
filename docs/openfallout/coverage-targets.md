@@ -2,11 +2,13 @@
 
 Where the Codecov numbers stand, what to aim for in each part of the code, and which gaps to test first. Measured on master at 665183a (2026-11-08) from Codecov's public API and from the gcovr traces in the CI artifact `ubuntu-coverage` of the same commit. How the reports are produced is in [CI reporting](ci-reporting.md).
 
+The reports now come from the Mac job, which measures with Clang's source-based coverage instead of GCC's gcov counters. Clang counts lines differently, so its numbers do not match the Ubuntu figures on this page line for line. Re-measure from the first master run of the Mac job before setting a gate from this table.
+
 ## Short answer
 
 Aim for 90% on the Fallout rules and 80% on the file loaders the games depend on, measured per component, and gate only new code under `components/`. One overall number cannot work: Codecov showed 13.72% for master, and it would still read about 24% if both tiers hit their targets, because 74% of the counted lines are engine, rendering, GUI and editor code that unit tests do not reach.
 
-Codecov counts a line with an untaken branch as partial, which is not covered. gcovr reports the exception exit that the compiler adds to every call that may throw as such a branch, and almost no test takes it. `CI/test_reports.py` therefore passes `--exclude-throw-branches`, which drops these branches whether or not a test took them (the lines of a `catch` block still count) and should lift the total from 13.7% to about 19% and the rules from 63% to 87% with no new tests (calculated from the traces; the first master run after the change shows the real figures). gcovr applies the flag while it reads the gcov data, so it has to be on the per-suite run; adding it to the merge of saved traces changes nothing.
+Codecov counts a line with an untaken branch as partial, which is not covered. gcovr reports the exception exit that the compiler adds to every call that may throw as such a branch, and almost no test takes it. On the Ubuntu job, `CI/test_reports.py` therefore passed `--exclude-throw-branches`, which drops these branches whether or not a test took them (the lines of a `catch` block still count) and should lift the total from 13.7% to about 19% and the rules from 63% to 87% with no new tests (calculated from the traces; the first master run after the change shows the real figures). gcovr applies the flag while it reads the gcov data, so it has to be on the per-suite run; adding it to the merge of saved traces changes nothing. The Mac job's source-based coverage counts only the conditions in the source, so it has no exception branches to drop.
 
 ## Where coverage stood
 

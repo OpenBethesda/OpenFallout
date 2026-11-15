@@ -32,6 +32,9 @@ on:
         required: false
       MACOS_NOTARY_API_ISSUER_ID:
         required: false
+      # Coverage and test-result uploads (docs/openfallout/ci-reporting.md).
+      CODECOV_TOKEN:
+        required: false
 
 jobs:
   MacOS:
@@ -51,6 +54,12 @@ jobs:
       if: ${{ inputs.image == 'macos-26-intel' }}
     - run: echo "DMG_IDENTIFIER=arm64" >> "$GITHUB_ENV"
       if: ${{ inputs.image != 'macos-26-intel' }}
+
+    # The unit tests and their coverage run on the Apple Silicon build of branches and pull requests. A release tag
+    # skips them: it is made from a commit whose branch run already tested it, and a second report for the same commit
+    # would be counted twice by Codecov.
+    - run: echo "UNIT_TESTS=true" >> "$GITHUB_ENV"
+      if: ${{ inputs.build-type != 'Release' && inputs.image != 'macos-26-intel' }}
 
     # The manifest comes from the main branch of openmw-deps, so its digest has to be part of the cache key.
     - name: Fetch dependency manifest
@@ -117,6 +126,7 @@ jobs:
     - name: Configure
       run: CI/before_script.macos.sh -C -k
     - name: Build
+      id: build
       run: CI/macos/build.sh all
 
     - name: Record source timestamps
@@ -131,12 +141,6 @@ jobs:
           !build/*.dmg
           !build/_CPack_Packages
         key: ${{ steps.build-cache.outputs.cache-primary-key }}
-
-    - name: Limit stored compiler cache
-      if: always() && steps.compiler-cache.outcome == 'success'
-      run: |
-        ccache --max-size=384M
-        ccache --cleanup
 
     # Tags and the default branch with the signing secrets: import the Developer ID identity into a temporary keychain
     # and hand it to the packaging step (OPENFALLOUT_CODESIGN_IDENTITY / _TEAM_ID through GITHUB_ENV). Anything else:
@@ -217,6 +221,159 @@ jobs:
         name: openfallout-macos-dmg-${{ env.DMG_IDENTIFIER }}-${{ github.sha }}
         path: |
           ${{ github.workspace }}/build/OpenFallout-*.dmg
+
+    # The unit tests: a second build tree, unoptimized and instrumented for coverage, with only the two test suites
+    # (CI/before_script.macos.sh -T). The packaged app above is never instrumented. They run whenever the app compiled,
+    # so a packaging failure does not hide the test results.
+    - name: Test coverage and JUnit report collection
+      if: ${{ !cancelled() && env.UNIT_TESTS == 'true' && steps.build.outcome == 'success' }}
+      run: python3 -m unittest discover -s CI -p test_test_reports.py -v
+
+    - name: Fingerprint unit-test build environment
+      id: test-build-env
+      if: ${{ !cancelled() && env.UNIT_TESTS == 'true' && steps.build.outcome == 'success' }}
+      run: |
+        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode '${{ inputs.image }}-coverage' --dependency-file "$RUNNER_TEMP/openmw-manifest.txt")" >> "$GITHUB_OUTPUT"
+
+    - name: Restore incremental unit-test build
+      id: test-build-cache
+      if: ${{ !cancelled() && steps.test-build-env.outcome == 'success' }}
+      uses: actions/cache/restore@v6
+      with:
+        path: build-tests
+        # Never restore ordinary build objects into an instrumented build.
+        key: build-macos-coverage-v1-${{ steps.test-build-env.outputs.key }}-${{ github.sha }}
+        restore-keys: build-macos-coverage-v1-${{ steps.test-build-env.outputs.key }}-
+
+    - name: Restore unchanged source timestamps of the unit-test build
+      if: ${{ !cancelled() && steps.test-build-env.outcome == 'success' }}
+      run: python3 CI/build_cache.py restore --build-dir build-tests
+
+    - name: Configure unit tests
+      if: ${{ !cancelled() && steps.test-build-env.outcome == 'success' }}
+      run: CI/before_script.macos.sh -C -k -T
+
+    - name: Build unit tests
+      id: test-build
+      if: ${{ !cancelled() && steps.test-build-env.outcome == 'success' }}
+      env:
+        BUILD_DIR: build-tests
+      run: CI/macos/build.sh components-tests openfallout-tests
+
+    - name: Run components tests
+      if: ${{ !cancelled() && steps.test-build.outcome == 'success' }}
+      run: python3 CI/test_reports.py --build-dir build-tests run components
+
+    - name: Run OpenFallout tests
+      if: ${{ !cancelled() && steps.test-build.outcome == 'success' }}
+      run: python3 CI/test_reports.py --build-dir build-tests run openfallout
+
+    - name: Merge suite coverage reports
+      if: >-
+        !cancelled() && hashFiles('coverage/components.profdata') != '' &&
+        hashFiles('coverage/openfallout.profdata') != ''
+      run: python3 CI/test_reports.py --build-dir build-tests merge components openfallout
+
+    - name: Record source timestamps of the unit-test build
+      if: ${{ !cancelled() && steps.test-build.outcome == 'success' }}
+      run: python3 CI/build_cache.py snapshot --build-dir build-tests
+
+    - name: Save incremental unit-test build
+      if: >-
+        !cancelled() && steps.test-build.outcome == 'success' &&
+        steps.test-build-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/master'
+      uses: actions/cache/save@v6
+      with:
+        path: build-tests
+        key: ${{ steps.test-build-cache.outputs.cache-primary-key }}
+
+    - name: Keep coverage reports
+      if: ${{ !cancelled() && hashFiles('coverage/*.xml') != '' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: macos-coverage
+        path: |
+          coverage.xml
+          coverage/*.xml
+          coverage/*.profdata
+        if-no-files-found: error
+
+    - name: Keep test results
+      if: ${{ !cancelled() && hashFiles('test-results/*.xml') != '' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: macos-test-results
+        path: test-results/*.xml
+        if-no-files-found: error
+
+    - name: Upload test results to Codecov Test Analytics
+      if: >-
+        !cancelled() && hashFiles('test-results/*.junit.xml') != '' &&
+        (github.event_name != 'pull_request' ||
+        (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]'))
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        report_type: test_results
+        files: test-results/components.junit.xml,test-results/openfallout.junit.xml
+        disable_search: true
+        plugins: noop
+        fail_ci_if_error: true
+
+    - name: Upload components coverage to Codecov
+      # Fork and Dependabot pull requests cannot access Actions secrets.
+      if: >-
+        !cancelled() && hashFiles('coverage/components.xml') != '' &&
+        (github.event_name != 'pull_request' ||
+        (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]'))
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage/components.xml
+        flags: components
+        disable_search: true
+        plugins: noop
+        fail_ci_if_error: true
+
+    - name: Upload OpenFallout coverage to Codecov
+      if: >-
+        !cancelled() && hashFiles('coverage/openfallout.xml') != '' &&
+        (github.event_name != 'pull_request' ||
+        (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]'))
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage/openfallout.xml
+        flags: openfallout
+        disable_search: true
+        plugins: noop
+        fail_ci_if_error: true
+
+    - name: Upload combined coverage to Codecov
+      # Separate XML reports cannot describe complementary branches across suites.
+      # Keep this report unflagged so it does not inflate the individual flags.
+      if: >-
+        !cancelled() && hashFiles('coverage.xml') != '' &&
+        (github.event_name != 'pull_request' ||
+        (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]'))
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage.xml
+        disable_search: true
+        plugins: noop
+        fail_ci_if_error: true
+
+    # After both build trees: the stored cache holds objects of the package build and, where it ran, the unit-test build.
+    - name: Limit stored compiler cache
+      if: always() && steps.compiler-cache.outcome == 'success'
+      run: |
+        ccache --max-size=${{ env.UNIT_TESTS == 'true' && '768M' || '384M' }}
+        ccache --cleanup
 
     - name: Create prerelease
       if: ${{ inputs.build-type == 'Release' }}
