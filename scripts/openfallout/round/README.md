@@ -41,8 +41,8 @@ The report holds numbers, record ids and the names the scenario gave, never a te
 `round.py profile --engine <path of the openfallout program>` looks for the games under `~/Games` (`Fallout New Vegas`,
 `Fallout 3`, with or without `/Data`), and writes the machine's profile: `engine`, `resources` (for a macOS bundle:
 `Contents/Resources/resources`), `games` (`data` folders and `content` plugins of each of `nv`, `fo3`, `ttw`; `content` is empty by default, which loads the plugins the selected game makes active, the same as the game does, so a save finds the plugins it was made with; the player's own `openfallout.cfg` is never read by a round (the run's `openfallout.cfg` says `replace=config`), because its `data=` and `content=` lines may name the other game; a save that needs a plugin which the game does not make active (a mod that only the player's own configuration named) needs it in the profile's `content` list, otherwise the round fails for the missing plugin; a non-empty `content` list replaces the automatic choice, so it must name every plugin the save needs, the game's own and its add-ons included, in load order), `saves` (the
-folder that `"save": "latest"` takes the newest file from: the engine's own user-data folder (on Windows `Documents/My Games/OpenFallout` under the home folder: where Documents has been moved, `--saves` must name
-the folder) unless `profile --saves <folder>` says
+folder that `"save": "latest"` takes the newest file from: the engine's own user-data folder,
+`~/Library/Application Support/openfallout`, unless `profile --saves <folder>` says
 where the game is played, and `profile` warns when the folder holds no save), `out` and, if wanted, `settings` (a settings file laid over the player's own `settings.cfg` and under the
 round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas folder, then the output of its installer).
 `round.py check <round file>` prints what a run would use without starting anything.
@@ -129,15 +129,15 @@ reference is found and the save is in an interior.
 
 ## What it cannot do
 
-- `round.py run` works on macOS and Linux only (the engine is given a pseudo-terminal and stopped by process group); on Windows it
-  stops with a message. `profile` and `check` do not need that.
+- `round.py run` works on macOS only, as the engine does; elsewhere it stops with a message. `profile` and `check` do not
+  need a Mac.
 - A screenshot is matched to its `shot` line by file order (the engine writes `screenshotNNN` one after the other and `r.shot` waits
   for its file); with `preload num threads` above 1 and two shots asked for back to back (`r.shot(name, false)`) two writes could swap.
 - It sees what the engine draws, not what the player's eye would: for a look at a screen that a pointer or a key opens (the
   Pip-Boy, a conversation) the scenario must open it through the game's own scripts or events, the way `autoplay` does.
 - Sound is off unless `OPENFALLOUT_HEADLESS_SOUND=1`; nobody can hear a round, so sound is checked by its log lines.
-- Software and hardware drawing differ: on a computer without a GPU (a Linux box under Xvfb and Mesa) the frame times mean
-  nothing, and a driver-specific fault (a texture format) may not show.
+- Software and hardware drawing differ: on a Mac without a GPU (a hosted CI runner, which gives Apple's software renderer)
+  the frame times mean nothing, and a driver-specific fault (a texture format) may not show.
 - The first time on a Mac, whether a hidden window really stays off the desktop and never takes the focus is what the focus
   count of the report says; a report with `frontmost in 0 of N samples` is the proof, anything else is a failed round.
 

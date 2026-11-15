@@ -139,14 +139,15 @@ need macOS (`codesign`, `hdiutil`, `vtool`) run instead of being skipped.
 
 The helper-script tests read the Lua scripts and the coverage tracker, so they
 check that those still agree. The job installs a `luajit` executable with
-Homebrew and `lupa` in a virtual environment (pinned in the workflow, so
-Dependabot does not update it); without them the Lua tests skip. lupa's wheels
+Homebrew, and `lupa` and Pillow in a virtual environment (pinned in the workflow,
+so Dependabot does not update them); without them the Lua tests and one picture
+test of the round runner skip. lupa's wheels
 for Apple Silicon have no LuaJIT runtime, so the tests use its Lua 5.2 runtime,
 which accepts what LuaJIT accepts in these scripts. To run them locally:
 
 ```sh
 python3 -m unittest discover -s CI -p 'test_*.py'
-python3 -m venv .venv-tests && .venv-tests/bin/pip install lupa==2.8
+python3 -m venv .venv-tests && .venv-tests/bin/pip install lupa==2.8 pillow==12.0.0
 .venv-tests/bin/python -m unittest discover -s scripts/openfallout -p 'test_*.py'
 python3 -m unittest discover -s docs -p test_luadoc.py
 ```
