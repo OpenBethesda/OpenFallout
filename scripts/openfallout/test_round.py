@@ -423,6 +423,7 @@ class WholeRun(unittest.TestCase):
             path.write_bytes(b"\\x89PNG\\r\\n\\x1a\\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0))
                              + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
         lines = ["[10:00:00.000 I] start", "[10:00:01.000 W] Cannot read 0x1234"]
+        lines.append("[10:00:00.500 I] arguments: " + " ".join(args))
         lines += ["[10:00:01.500 W] Warning: Saved game dependency %s is missing." % name for name in @MISSING@]
         for n, name in enumerate(("first", "second"), 1):
             lines.append("[10:00:02.000 I] ROUND\\tshot\\t%s\\tn=%d" % (name, n))
@@ -439,7 +440,8 @@ class WholeRun(unittest.TestCase):
         sys.exit(@STATUS@)
     """
 
-    def run_round(self, status, done=True, written=2, extra=(), missing=(), allow=False, linger=0):
+    def run_round(self, status, done=True, written=2, extra=(), missing=(), allow=False, linger=0, round_extra=None,
+                  variants=None):
         tmp = Path(tempfile.mkdtemp(prefix="round-run-"))
         engine = self.make_engine(tmp, self.ENGINE.replace("@STATUS@", str(status)).replace("@DONE@", str(done))
                                   .replace("@WRITTEN@", str(written)).replace("@MISSING@", repr(list(missing)))
@@ -448,8 +450,9 @@ class WholeRun(unittest.TestCase):
         profile = {"engine": str(engine), "resources": str(tmp),
                    "games": {"nv": {"data": [str(tmp)], "content": ["FalloutNV.esm"]}}, "out": str(tmp / "out")}
         (tmp / "profile.json").write_text(json.dumps(profile))
-        (tmp / "r.json").write_text(json.dumps({"name": "fake", "scenario": "s.lua", "variants": [{"name": "one"}, {"name": "two"}],
-                                                **({"allow_missing_content": True} if allow else {})}))
+        (tmp / "r.json").write_text(json.dumps({"name": "fake", "scenario": "s.lua",
+                                                "variants": variants or [{"name": "one"}, {"name": "two"}],
+                                                **({"allow_missing_content": True} if allow else {}), **(round_extra or {})}))
         code = round_runner.main(["--profile", str(tmp / "profile.json"), "run", str(tmp / "r.json"), "--parallel", "1", *extra])
         return tmp, code
 
@@ -542,6 +545,46 @@ class WholeRun(unittest.TestCase):
         self.assertEqual(code, 0)
         (run,) = runs_of(tmp)
         self.assertIn("allowed by the round file", (run / "one" / "report.md").read_text())
+
+    def test_a_variant_that_expects_the_engine_to_end_with_a_status_passes_without_a_scenario(self):
+        # a refused start save ends the engine with exit status 4 before any scenario runs: that is the expected outcome
+        variants = [{"name": "one", "extra_args": ["--missing-content=refuse"], "expect_exit": 4,
+                     "expect_log": [r"arguments: .*--missing-content=refuse"], "forbid_log": [r"ROUND\tdone"]}]
+        tmp, code = self.run_round(4, done=False, variants=variants)
+        self.assertEqual(code, 0)
+        (run,) = runs_of(tmp)
+        report = json.loads((run / "one" / "report.json").read_text())
+        self.assertEqual((report["verdict"], report["exit_status"], report["expectations_failed"]), ("PASS", 4, []))
+        self.assertIn("--missing-content=refuse", report["command"])
+        self.assertIn("ended with the expected status 4", (run / "one" / "report.md").read_text())
+
+    def test_another_status_than_the_expected_one_fails(self):
+        tmp, code = self.run_round(0, done=True, round_extra={"expect_exit": 4}, variants=[{"name": "one"}])
+        self.assertEqual(code, 1)
+        (run,) = runs_of(tmp)
+        report = json.loads((run / "one" / "report.json").read_text())
+        self.assertEqual(report["verdict"], "FAIL")
+        self.assertEqual(report["expectations_failed"], ["exit status 0, expected 4"])
+
+    def test_a_log_line_that_was_expected_or_forbidden_decides_the_round(self):
+        tmp, code = self.run_round(0, variants=[{"name": "one"}],
+                                   round_extra={"expect_log": ["never written"], "forbid_log": [r"Cannot read 0x\d+"]})
+        self.assertEqual(code, 1)
+        (run,) = runs_of(tmp)
+        report = json.loads((run / "one" / "report.json").read_text())
+        self.assertEqual(report["verdict"], "FAIL")
+        self.assertEqual(report["expectations_failed"], ["no log line matches `never written`",
+                                                         "a log line matches the forbidden `Cannot read 0x\\d+`"])
+        self.assertIn("no log line matches `never written`", (run / "one" / "report.md").read_text())
+
+    def test_expectations(self):
+        text = "[1 I] Load: 2 content file(s), loading it anyway\n[2 I] other\n"
+        self.assertEqual(round_runner.expectations(text, 0, False, {}), [])
+        self.assertEqual(round_runner.expectations(text, 0, False, {"expect_log": ["Load: \\d+ content"],
+                                                                     "forbid_log": ["asking the player"]}), [])
+        self.assertEqual(round_runner.expectations(text, 4, False, {"expect_exit": 4}), [])
+        self.assertEqual(round_runner.expectations(text, 4, True, {"expect_exit": 4}),
+                         ["timed out, expected the engine to end with status 4"])
 
     def test_missing_content_is_read_from_the_log(self):
         self.assertEqual(round_runner.missing_content("a\nWarning: Saved game dependency X.esm is missing.\n"

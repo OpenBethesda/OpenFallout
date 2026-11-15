@@ -57,8 +57,10 @@ round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas fol
 | `settings` | `{"Section": {"key": "value"}}` for every variant, for example `{"Terrain": {"game lod": "true"}}` |
 | `resolution`, `framerate` | the size of the window (so of the screenshot) and the frame rate limit (defaults 1280x720 and 20) |
 | `limit` | seconds after which the engine is stopped (300) |
-| `variants` | a list of `{"name", "settings"}`: one engine start each, one after the other (never two engines at a time; `--parallel` above 1 is ignored), `--variant name` only that one |
-| `extra_args` | more arguments for the engine |
+| `variants` | a list of `{"name", "settings"}`: one engine start each, one after the other (never two engines at a time; `--parallel` above 1 is ignored), `--variant name` only that one; a variant can also have its own `env`, `extra_args` and expectations (below) |
+| `extra_args` | more arguments for the engine (a variant's come after the round's) |
+| `expect_exit` | the engine ends by itself with this exit status; the scenario then need not run (a refused start save: `--missing-content=refuse` ends with 4) |
+| `expect_log`, `forbid_log` | regular expressions: each of `expect_log` must match a line of the log, none of `forbid_log` may; otherwise the round fails |
 | `allow_missing_content` | accept a save that wants a game plugin (`.esm`, `.esp`) the run does not load; without it such a round fails (a missing `.omwscripts`, such as the plugin of a play session, is a note) |
 
 ## The scenario (Lua)
@@ -101,6 +103,11 @@ two crippled legs slow it and make it limp, a character put up in the air falls 
 turning. `scenarios/m14p_reactions_fo3.lua` (`rounds/m14p-reactions-fo3.json`) does the same with two placed raiders of Fallout 3 (the blows
 are made with the form of a pistol, as the player's round has no way to give itself items), and `scenarios/m14p_swim.lua`
 (`rounds/m14p-swim.json`) lets the player's body fall into the lake of the east and swim.
+
+`rounds/m1-unattended-load.json` (scenario `scenarios/m1_unattended_load.lua`) loads the newest New Vegas save, whose content list
+differs from the run's (it wants the plugin of a play session), once with `--missing-content=accept` (loaded, no box, the
+`Load: ... loading it anyway (missing-content accept)` line) and once with `--missing-content=refuse` (not loaded, no box, exit status
+4). A box would log `asking the player` and fail it; an engine that waited would time out and fail it.
 
 `scenarios/smoke.lua` is the smallest scenario; `scenarios/m13_mountains.lua` with `rounds/m13-mountains.json` is the check of the
 distant land of New Vegas in seven variants of `game lod debug`. Its places are in the Mojave and the save can be anywhere:

@@ -627,6 +627,32 @@ def missing_content(text):
     return re.findall(r"Saved game dependency (.+?) is missing\.?[ \t]*$", text, re.MULTILINE)
 
 
+def expectations(text, status, timed_out, expect):
+    """What a round file (or a variant) said about the outcome and did not happen: `expect_exit` (the engine ends by itself with
+    this status, and the scenario need not run), `expect_log` (each pattern matches a line of the log), `forbid_log` (none
+    matches). Each failure is one sentence."""
+    failed = []
+    if expect.get("expect_exit") is not None:
+        wanted = int(expect["expect_exit"])
+        if timed_out:
+            failed.append(f"timed out, expected the engine to end with status {wanted}")
+        elif status != wanted:
+            failed.append(f"exit status {status}, expected {wanted}")
+    for pattern in expect.get("expect_log", []):
+        if not re.search(pattern, text, re.MULTILINE):
+            failed.append(f"no log line matches `{pattern}`")
+    for pattern in expect.get("forbid_log", []):
+        if re.search(pattern, text, re.MULTILINE):
+            failed.append(f"a log line matches the forbidden `{pattern}`")
+    return failed
+
+
+def outcome_expectations(config, variant):
+    """The expectations of the round file with the variant's over them."""
+    return {key: variant.get(key, config.get(key)) for key in ("expect_exit", "expect_log", "forbid_log")
+            if variant.get(key, config.get(key)) is not None}
+
+
 def log_tail(text, count=8):
     """The last lines of the engine's log, each without its time stamp and cut at 200 characters."""
     return [line.split("]", 1)[-1].strip()[:200] for line in text.splitlines() if line.strip()][-count:]
@@ -643,8 +669,12 @@ def window_server_text(window_server):
 
 def write_report(run_dir, config, variant, status, seconds, sampler, timed_out, lines, problems, levels, shots, extra_shots,
                  command, tail=(), content_missing=(), ended_early=False, guard_reason=None, window_server=None, policy=None,
-                 evidence=()):
+                 evidence=(), log_text=""):
     name = variant.get("name", "run")
+    expect = outcome_expectations(config, variant)
+    failed = expectations(log_text, status, timed_out, expect)
+    # A round that expects the engine to end by itself with a status (a refused start save) runs no scenario: the end is the answer
+    ends_by_itself = expect.get("expect_exit") is not None
     errors = [line for line in lines if line.startswith("error")]
     # The scenario ended (`done end`): what the round asked is answered, so a crash while the engine quits (a known fault of
     # the Linux builds: the Lua state is closed with references left in it) is a note, not a failed round
@@ -658,8 +688,10 @@ def write_report(run_dir, config, variant, status, seconds, sampler, timed_out, 
     not_loaded = list(content_missing)
     serious = [file for file in not_loaded if not file.lower().endswith(".omwscripts")]
     content_fails = bool(serious) and not config.get("allow_missing_content")
-    verdict = "PASS" if finished and not timed_out and not errors and not missing and not content_fails else "FAIL"
-    exit_note = ("" if status == 0 else
+    verdict = ("PASS" if (finished or ends_by_itself) and not timed_out and not errors and not missing and not content_fails
+               and not failed else "FAIL")
+    exit_note = ("" if status == 0 and not ends_by_itself else
+                 f"; the engine ended with the expected status {status}" if ends_by_itself and status == int(expect["expect_exit"]) else
                  f"; the engine ended with status {status} after the scenario had finished (a crash while quitting)" if finished
                  else f"; the engine ended with status {status} before the scenario finished")
     if ended_early and finished:
@@ -679,7 +711,7 @@ def write_report(run_dir, config, variant, status, seconds, sampler, timed_out, 
               "seconds": round(seconds, 1),
               "timed_out": timed_out, "stopped_by_runner": ended_early, "focus_samples": sampler.samples, "focus_front": sampler.front,
               "warnings": levels["W"], "errors": levels["E"], "scenario_errors": errors, "missing_shots": missing,
-              "content_not_loaded": not_loaded, "content_not_loaded_serious": serious,
+              "content_not_loaded": not_loaded, "content_not_loaded_serious": serious, "expectations_failed": failed,
               "guard_tripped": guard_reason, "window_server": window_server, "headless_policy": policy, "evidence": list(evidence),
               "shots": [{"n": n, "name": shot, "file": str(path) if path else None} for n, shot, path in shots],
               "round_lines": lines, "command": command}
@@ -693,6 +725,8 @@ def write_report(run_dir, config, variant, status, seconds, sampler, timed_out, 
            *([f"- activation policy: {policy}"] if policy else []),
            *([f"- evidence copied to diagnostics/: {', '.join(evidence)}"] if evidence else []),
            f"- log: {levels['W']} warnings, {levels['E']} errors; scenario errors: {len(errors)}" + exit_note,
+           *([f"- expected outcome NOT met, so the round fails: {'; '.join(failed)}"] if failed else
+             [f"- expected outcome met ({', '.join(sorted(expect))})"] if expect else []),
            f"- screenshots: {sum(1 for s in shots if s[2])} of {len(shots)}" + (f" ({extra_shots} more than the scenario took)" if extra_shots else "") +
            (f"; MISSING, so the round fails: {', '.join(missing)}" if missing else ""),
            *([f"- content files of the save that were not loaded: {', '.join(not_loaded)}" +
@@ -726,7 +760,7 @@ def run_variant(profile, config, variant, out_dir, save, priority="low", guard=N
     name = safe_name(variant.get("name", "run"))
     run_dir = out_dir / name
     prepare_run(profile, config, variant, run_dir, save)
-    command = engine_command(profile, config, run_dir, save)
+    command = engine_command(profile, config, run_dir, save, extra=variant.get("extra_args", []))
     env = {**config.get("env", {}), **variant.get("env", {})}
     began = time.time()
     status, seconds, sampler, timed_out, ended_early, tripped = run_engine(command, run_dir, config["limit"] + 30, env, priority, guard)
@@ -741,7 +775,7 @@ def run_variant(profile, config, variant, out_dir, save, priority="low", guard=N
                         count_levels(text), shots, extra, command, tail=log_tail(text),
                         content_missing=missing_content(text), ended_early=ended_early, guard_reason=tripped,
                         window_server=guard.window_server() if guard is not None else None, policy=headless_policy(text),
-                        evidence=evidence)
+                        evidence=evidence, log_text=text)
 
 
 def make_system():
