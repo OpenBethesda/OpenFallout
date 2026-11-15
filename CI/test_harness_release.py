@@ -47,7 +47,7 @@ STATEMENT = engine_release.build_statement("0.1.0", TAG, SHA, "OpenFallout-arm64
 def with_engine_release(release):
     """The release as the gate wants an engine release: the statement uploaded, the two notes lines present."""
     release["body"] += (engine_release.supported_line("26.0") + "\n"
-                        + engine_release.played_on_line("MacBook Pro, Apple M3 Pro", "27.2") + "\n")
+                        + engine_release.played_on_line("MacBook Pro, Apple M9", "27.2") + "\n")
     release["assets"].append({"id": 99, "name": engine_release.STATEMENT_NAME, "size": 300, "state": "uploaded",
                               "digest": "sha256:" + "5" * 64})
     return release
@@ -366,7 +366,7 @@ class EngineReleaseGateTests(unittest.TestCase):
 
     def test_a_played_on_line_that_names_no_macos_version_is_refused(self):
         api = FakeGitHub()
-        api.release["body"] = api.release["body"].replace("MacBook Pro, Apple M3 Pro, macOS 27.2", "a Mac")
+        api.release["body"] = api.release["body"].replace("MacBook Pro, Apple M9, macOS 27.2", "a Mac")
         self.refused(api, "Played on")
 
 

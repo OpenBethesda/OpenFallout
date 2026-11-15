@@ -261,8 +261,8 @@ class NotesTests(unittest.TestCase):
                          "- Supported: any Apple Silicon Mac, macOS 26.0 or later.")
 
     def test_the_played_on_line_says_the_mac_and_the_macos_the_owner_gave(self):
-        self.assertEqual(engine_release.played_on_line("MacBook Pro, Apple M3 Pro", "27.2"),
-                         "- Played on: MacBook Pro, Apple M3 Pro, macOS 27.2.")
+        self.assertEqual(engine_release.played_on_line("MacBook Pro, Apple M9", "27.2"),
+                         "- Played on: MacBook Pro, Apple M9, macOS 27.2.")
 
     def test_the_played_on_line_is_never_made_up(self):
         for mac, macos in (("", "27.2"), ("  ", "27.2"), ("MacBook Pro", ""), ("MacBook Pro", "latest"), ("MacBook Pro", "27.")):
@@ -271,7 +271,7 @@ class NotesTests(unittest.TestCase):
 
     def test_notes_with_both_lines_pass_and_the_minimum_must_match_the_statement(self):
         notes = "\n".join(["text", engine_release.supported_line("26.0"),
-                            engine_release.played_on_line("MacBook Pro, Apple M3 Pro", "27.2"), ""])
+                            engine_release.played_on_line("MacBook Pro, Apple M9", "27.2"), ""])
         self.assertEqual(engine_release.notes_problems(notes, "26.0"), [])
         self.assertTrue(any("Supported" in problem for problem in engine_release.notes_problems(notes, "27.0")))
 
@@ -298,9 +298,9 @@ class NotesTests(unittest.TestCase):
             self.assertEqual(notes.read_text(), "earlier line\n- Supported: any Apple Silicon Mac, macOS 26.0 or later.\n")
             self.assertIn("Played on", out.getvalue())  # says it is still to be added by the owner
             with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(engine_release.main(["notes", str(path), "--played-on-mac", "MacBook Pro, Apple M3 Pro",
+                self.assertEqual(engine_release.main(["notes", str(path), "--played-on-mac", "MacBook Pro, Apple M9",
                                                       "--played-on-macos", "27.2", "--append", str(notes)]), 0)
-            self.assertIn("- Played on: MacBook Pro, Apple M3 Pro, macOS 27.2.\n", notes.read_text())
+            self.assertIn("- Played on: MacBook Pro, Apple M9, macOS 27.2.\n", notes.read_text())
 
     def test_the_notes_command_refuses_half_of_the_played_on_input(self):
         with tempfile.TemporaryDirectory() as directory:
