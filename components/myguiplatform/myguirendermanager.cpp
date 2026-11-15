@@ -93,9 +93,11 @@ namespace MyGUIPlatform
 
             state->disableAllVertexArrays();
             state->setClientActiveTextureUnit(0);
+#ifndef OPENFALLOUT_ANGLE
             glEnableClientState(GL_VERTEX_ARRAY);
             glEnableClientState(GL_TEXTURE_COORD_ARRAY);
             glEnableClientState(GL_COLOR_ARRAY);
+#endif
 
             mReadFrom = (mReadFrom + 1) % sNumBuffers;
             const std::vector<Batch>& vec = mBatchVector[mReadFrom];
@@ -122,6 +124,21 @@ namespace MyGUIPlatform
                 osg::GLBufferObject* bufferobject = state->isVertexBufferObjectSupported()
                     ? vbo->getOrCreateGLBufferObject(state->getContextID())
                     : nullptr;
+#ifdef OPENFALLOUT_ANGLE
+                // PROTOTYPE (ANGLE spike)
+                {
+                    const char* base = nullptr;
+                    if (bufferobject)
+                        state->bindVertexBufferObject(bufferobject);
+                    else
+                        base = reinterpret_cast<const char*>(vbo->getArray(0)->getDataPointer());
+                    state->setVertexPointer(3, GL_FLOAT, sizeof(MyGUI::Vertex), base);
+                    state->setColorPointer(4, GL_UNSIGNED_BYTE, sizeof(MyGUI::Vertex), base + 12, GL_TRUE);
+                    state->setTexCoordPointer(0, 2, GL_FLOAT, sizeof(MyGUI::Vertex), base + 16);
+                    state->applyDisablingOfVertexAttributes();
+                    state->applyModelViewAndProjectionUniformsIfRequired();
+                }
+#else
                 if (bufferobject)
                 {
                     state->bindVertexBufferObject(bufferobject);
@@ -139,6 +156,7 @@ namespace MyGUIPlatform
                     glTexCoordPointer(2, GL_FLOAT, sizeof(MyGUI::Vertex),
                         reinterpret_cast<const char*>(vbo->getArray(0)->getDataPointer()) + 16);
                 }
+#endif
 
                 glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(batch.mVertexCount));
 
@@ -149,9 +167,11 @@ namespace MyGUIPlatform
                 }
             }
 
+#ifndef OPENFALLOUT_ANGLE
             glDisableClientState(GL_VERTEX_ARRAY);
             glDisableClientState(GL_TEXTURE_COORD_ARRAY);
             glDisableClientState(GL_COLOR_ARRAY);
+#endif
 
             state->popStateSet();
 

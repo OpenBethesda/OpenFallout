@@ -4,6 +4,7 @@
 #include <cassert>
 #include <chrono>
 #include <filesystem>
+#include <cstdlib>
 #include <format>
 #include <fstream>
 #include <regex>
@@ -506,6 +507,155 @@ namespace Shader
         return true;
     }
 
+#ifdef OPENFALLOUT_ANGLE
+    // PROTOTYPE (ANGLE spike). Turns a finished GLSL 1.20 source into GLSL ES 3.00: the #version line goes, the regex
+    // rules in <shaders>/es/rules.txt are applied in order ("stage<TAB>regex<TAB>replacement", stage v, f or *), and
+    // <shaders>/es/vertex.glsl or fragment.glsl goes in front. Everything is read from disk at start, so the rules and
+    // preambles can be changed without rebuilding. OPENFALLOUT_ES_DUMP=<folder> writes every result there.
+    namespace
+    {
+        struct EsRule
+        {
+            char mStage;
+            std::regex mRegex;
+            std::string mReplacement;
+        };
+        struct EsRules
+        {
+            std::string mVertex, mFragment;
+            std::vector<EsRule> mRules;
+        };
+        std::string readWhole(const std::filesystem::path& path)
+        {
+            std::ifstream stream(path);
+            if (stream.fail())
+                Log(Debug::Error) << "ANGLE spike: cannot read " << path;
+            std::stringstream buffer;
+            buffer << stream.rdbuf();
+            return buffer.str();
+        }
+        const EsRules& esRules(const std::filesystem::path& root)
+        {
+            static const EsRules rules = [&] {
+                EsRules r;
+                r.mVertex = readWhole(root / "es" / "vertex.glsl");
+                r.mFragment = readWhole(root / "es" / "fragment.glsl");
+                std::istringstream lines(readWhole(root / "es" / "rules.txt"));
+                std::string line;
+                while (std::getline(lines, line))
+                {
+                    if (line.empty() || line[0] == '#')
+                        continue;
+                    const auto a = line.find('\t');
+                    const auto b = line.find('\t', a + 1);
+                    if (a != 1 || b == std::string::npos)
+                    {
+                        Log(Debug::Error) << "ANGLE spike: bad rule: " << line;
+                        continue;
+                    }
+                    r.mRules.push_back({ line[0],
+                        std::regex(line.substr(a + 1, b - a - 1), std::regex::ECMAScript | std::regex::multiline),
+                        line.substr(b + 1) });
+                }
+                Log(Debug::Info) << "ANGLE spike: " << r.mRules.size() << " shader rules";
+                return r;
+            }();
+            return rules;
+        }
+        void convertToEs(std::string& source, osg::Shader::Type type, const std::filesystem::path& root,
+            const std::string& name, unsigned int counter)
+        {
+            if (type != osg::Shader::VERTEX && type != osg::Shader::FRAGMENT)
+                return;
+            const EsRules& rules = esRules(root);
+            const char stage = type == osg::Shader::VERTEX ? 'v' : 'f';
+            for (const EsRule& rule : rules.mRules)
+                if (rule.mStage == '*' || rule.mStage == stage)
+                    source = std::regex_replace(source, rule.mRegex, rule.mReplacement);
+            source = (type == osg::Shader::VERTEX ? rules.mVertex : rules.mFragment) + "#line 1 0\n" + source;
+            if (const char* dump = std::getenv("OPENFALLOUT_ES_DUMP"))
+            {
+                std::string file = name;
+                std::replace(file.begin(), file.end(), '/', '_');
+                std::ofstream out(std::filesystem::path(dump) / std::format("{:04}_{}", counter, file));
+                out << source;
+            }
+        }
+
+        // A second declaration of the same uniform or varying is an error once several files are one unit.
+        void dropRepeatedDeclarations(std::string& source)
+        {
+            static const std::regex declaration(
+                R"(^[ \t]*(?:uniform|varying|centroid varying)\s+[A-Za-z0-9_]+\s+([A-Za-z0-9_]+)\s*(?:\[[^\]]*\])?\s*(?:=[^;]*)?;[ \t]*$)");
+            std::set<std::string> seen;
+            int depth = 0;
+            std::string result;
+            result.reserve(source.size());
+            std::size_t pos = 0;
+            while (pos < source.size())
+            {
+                std::size_t end = source.find('\n', pos);
+                if (end == std::string::npos)
+                    end = source.size();
+                const std::string line = source.substr(pos, end - pos);
+                // only a declaration outside every #if counts as made: one inside a branch may be switched off
+                const std::size_t first = line.find_first_not_of(" \t");
+                if (first != std::string::npos && line.compare(first, 3, "#if") == 0)
+                    ++depth;
+                else if (first != std::string::npos && line.compare(first, 6, "#endif") == 0)
+                    --depth;
+                std::smatch match;
+                if (std::regex_match(line, match, declaration)
+                    && (seen.count(match[1].str()) != 0 || (depth == 0 && !seen.insert(match[1].str()).second)))
+                    result += "// (repeated) " + line;
+                else
+                    result += line;
+                result += '\n';
+                pos = end + 1;
+            }
+            source = std::move(result);
+        }
+
+        // OpenGL ES takes one shader object per stage, so the library shaders that the desktop path links in as
+        // separate objects are appended as text; then the whole unit is converted.
+        template <class FromTemplate>
+        void angleFinish(std::string& source, std::vector<std::string>& linkedShaderNames,
+            const std::string& templateName, osg::Shader::Type type, const std::filesystem::path& root,
+            unsigned int counter, FromTemplate&& fromTemplate)
+        {
+            std::set<std::string> seen{ templateName };
+            std::vector<std::string> todo = linkedShaderNames;
+            while (!todo.empty())
+            {
+                std::string name = std::move(todo.back());
+                todo.pop_back();
+                if (!seen.insert(name).second)
+                    continue;
+                std::string linkedSource = readWhole(root / name);
+                int linkedFileNumber = 100 * static_cast<int>(seen.size());
+                std::set<std::filesystem::path> linkedPaths;
+                std::vector<std::string> more;
+                if (!addLineDirectivesAfterConditionalBlocks(linkedSource)
+                    || !parseIncludes(root, linkedSource, name, linkedFileNumber, {}, linkedPaths)
+                    || !fromTemplate(linkedSource, more, name))
+                    continue;
+                source += "\n// ---- linked: " + name + "\n" + linkedSource;
+                todo.insert(todo.end(), more.begin(), more.end());
+            }
+            linkedShaderNames.clear();
+            if (const char* dump = std::getenv("OPENFALLOUT_ES_DUMP"))
+            {
+                std::string file = templateName;
+                std::replace(file.begin(), file.end(), '/', '_');
+                std::ofstream out(std::filesystem::path(dump) / std::format("{:04}_{}.raw", counter, file));
+                out << source;
+            }
+            dropRepeatedDeclarations(source);
+            convertToEs(source, type, root, templateName, counter);
+        }
+    }
+#endif
+
     osg::ref_ptr<osg::Shader> ShaderManager::getShader(
         std::string templateName, const ShaderManager::DefineMap& defines, std::optional<osg::Shader::Type> type)
     {
@@ -562,10 +712,16 @@ namespace Shader
             }
 
             osg::ref_ptr<osg::Shader> shader(new osg::Shader(type ? *type : getShaderType(templateName)));
-            shader->setShaderSource(shaderSource);
             // Assign a unique prefix to allow the SharedStateManager to compare shaders efficiently.
             // Append shader source filename for debugging.
             static unsigned int counter = 0;
+#ifdef OPENFALLOUT_ANGLE
+            angleFinish(shaderSource, linkedShaderNames, templateName, shader->getType(), mPath, counter,
+                [&](std::string& source, std::vector<std::string>& linked, const std::string& name) {
+                    return createSourceFromTemplate(source, linked, name, defines);
+                });
+#endif
+            shader->setShaderSource(shaderSource);
             shader->setName(std::format("{} {}", counter++, templateName));
 
             mHotReloadManager->addShaderFiles(templateName, defines);
@@ -740,6 +896,12 @@ namespace Shader
                 // we would when creating the shader. If we put a nullptr in the shader map, we just lose the ability to
                 // put a working one in later.
                 continue;
+#ifdef OPENFALLOUT_ANGLE
+            angleFinish(shaderSource, linkedShaderNames, templateId, shader->getType(), mPath, 9000,
+                [&](std::string& source, std::vector<std::string>& linked, const std::string& name) {
+                    return createSourceFromTemplate(source, linked, name, defines);
+                });
+#endif
             shader->setShaderSource(shaderSource);
 
             getLinkedShaders(shader, linkedShaderNames, defines);

@@ -38,6 +38,9 @@ either expressed or implied, of the FreeBSD Project.
 #include <components/debug/debuglog.hpp>
 
 // OpenGL constants not provided by OSG:
+#ifdef OPENFALLOUT_ANGLE
+typedef double GLclampd; // PROTOTYPE (ANGLE spike): the desktop extension header wants it
+#endif
 #include <SDL_opengl_glext.h>
 
 namespace Debug
@@ -148,10 +151,18 @@ namespace Debug
 
         if (osg::isGLExtensionSupported(contextID, "GL_KHR_debug"))
         {
+#ifdef OPENFALLOUT_ANGLE
+            // PROTOTYPE (ANGLE spike): in OpenGL ES 3.0 the debug calls carry the KHR suffix
+            osg::setGLExtensionFuncPtr(glDebugMessageCallback, "glDebugMessageCallbackKHR");
+            osg::setGLExtensionFuncPtr(glDebugMessageControl, "glDebugMessageControlKHR");
+            osg::setGLExtensionFuncPtr(PushDebugGroup::sInstance->glPushDebugGroup, "glPushDebugGroupKHR");
+            osg::setGLExtensionFuncPtr(PushDebugGroup::sInstance->glPopDebugGroup, "glPopDebugGroupKHR");
+#else
             osg::setGLExtensionFuncPtr(glDebugMessageCallback, "glDebugMessageCallback");
             osg::setGLExtensionFuncPtr(glDebugMessageControl, "glDebugMessageControl");
             osg::setGLExtensionFuncPtr(PushDebugGroup::sInstance->glPushDebugGroup, "glPushDebugGroup");
             osg::setGLExtensionFuncPtr(PushDebugGroup::sInstance->glPopDebugGroup, "glPopDebugGroup");
+#endif
         }
         else if (osg::isGLExtensionSupported(contextID, "GL_ARB_debug_output"))
         {

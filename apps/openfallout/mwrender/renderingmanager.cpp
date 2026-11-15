@@ -401,7 +401,9 @@ namespace OFRender
         sceneRoot->setSunlight(mSunLight);
 
         sceneRoot->getOrCreateStateSet()->setMode(GL_CULL_FACE, osg::StateAttribute::ON);
+#ifndef OPENFALLOUT_ANGLE // PROTOTYPE (ANGLE spike): not a mode in OpenGL ES, the shaders normalize
         sceneRoot->getOrCreateStateSet()->setMode(GL_NORMALIZE, osg::StateAttribute::ON);
+#endif
         osg::ref_ptr<SceneUtil::Material> defaultMat(new SceneUtil::Material);
         defaultMat->updateStateSet(sceneRoot->getOrCreateStateSet());
         sceneRoot->getOrCreateStateSet()->setAttribute(defaultMat);

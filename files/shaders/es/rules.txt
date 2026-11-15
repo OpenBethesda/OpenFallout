@@ -1,0 +1,21 @@
+# PROTOTYPE (ANGLE spike): stage<TAB>regex<TAB>replacement, applied in order. Stage is v, f or * for both.
+*	^[ \t]*#version[^\n]*$	
+*	^[ \t]*#extension[^\n]*$	
+v	\bgl_ModelViewProjectionMatrix\b	osg_ModelViewProjectionMatrix
+*	\bgl_ModelViewMatrixInverse\b	inverse(osg_ModelViewMatrix)
+*	\bgl_ModelViewMatrix\b	osg_ModelViewMatrix
+*	\bgl_ProjectionMatrix\b	osg_ProjectionMatrix
+*	\bgl_NormalMatrix\b	osg_NormalMatrix
+v	\bgl_Vertex\b	osg_Vertex
+v	\bgl_Normal\b	osg_Normal
+v	\bgl_Color\b	osg_Color
+v	\bgl_MultiTexCoord([0-7])\b	osg_MultiTexCoord$1
+v	\bgl_ClipVertex\b	of_ClipVertex
+f	\bgl_FragData\b	of_FragData
+f	\bgl_FragColor\b	of_FragData[0]
+# textureSize is a built-in function in OpenGL ES 3, so a variable of that name is renamed first
+*	\btextureSize\b	of_texSize
+*	\btextureSize2D\(([^;]*)\);	vec2(textureSize($1));
+*	\btexture2DArray\b	texture
+# a uniform cannot have an initialiser in OpenGL ES: the value is lost here (false, 0)
+*	(uniform\s+[A-Za-z0-9_]+\s+[A-Za-z0-9_]+)\s*=[^;]*;	$1;

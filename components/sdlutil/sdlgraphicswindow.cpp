@@ -1,5 +1,9 @@
 #include "sdlgraphicswindow.hpp"
 
+#ifdef OPENFALLOUT_ANGLE
+#include <GLES3/gl3.h>
+#endif
+
 #include <SDL_video.h>
 
 #ifdef OPENFALLOUT_GL4ES_MANUAL_INIT
@@ -138,6 +142,13 @@ namespace SDLUtil
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
 #endif
 
+#ifdef OPENFALLOUT_ANGLE
+        // PROTOTYPE (ANGLE spike): an OpenGL ES 3.0 context, which SDL gets from the EGL library it was pointed at
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
+
         mContext = SDL_GL_CreateContext(mWindow);
         if (!mContext)
         {
@@ -147,6 +158,13 @@ namespace SDLUtil
 
 #ifdef OPENFALLOUT_GL4ES_MANUAL_INIT
         openmw_gl4es_init(mWindow);
+#endif
+
+#ifdef OPENFALLOUT_ANGLE
+        // PROTOTYPE (ANGLE spike): a mesh without a colour array gets the "current" colour. In desktop OpenGL that
+        // starts as white; a generic vertex attribute starts as (0, 0, 0, 1), which drew such meshes black.
+        // 3 is the place OpenSceneGraph gives the colour when it aliases the old built-in attributes.
+        glVertexAttrib4f(3, 1.f, 1.f, 1.f, 1.f);
 #endif
 
         setSwapInterval(mVSyncMode);

@@ -568,6 +568,13 @@ void OF::Engine::createWindow()
 
     SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, Settings::video().mMinimizeOnFocusLoss ? "1" : "0");
 
+#ifdef OPENFALLOUT_ANGLE
+    // PROTOTYPE (ANGLE spike): the window must be made for EGL and OpenGL ES before it exists
+    SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
+    checkSDLError(SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES));
+    checkSDLError(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3));
+    checkSDLError(SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0));
+#endif
     checkSDLError(SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8));
     checkSDLError(SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8));
     checkSDLError(SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8));

@@ -79,7 +79,25 @@ namespace OFRender
             int width = screenW - leftPadding * 2;
             int height = screenH - topPadding * 2;
 
+#ifdef OPENFALLOUT_ANGLE
+            // PROTOTYPE (ANGLE spike): OpenGL ES only promises RGBA read-back, the rest of the engine wants RGB
+            osg::ref_ptr<osg::Image> rgba = new osg::Image;
+            rgba->readPixels(leftPadding, topPadding, width, height, GL_RGBA, GL_UNSIGNED_BYTE);
+            mImage->allocateImage(width, height, 1, GL_RGB, GL_UNSIGNED_BYTE);
+            for (int y = 0; y < height; ++y)
+            {
+                const unsigned char* from = rgba->data(0, y);
+                unsigned char* to = mImage->data(0, y);
+                for (int x = 0; x < width; ++x, from += 4, to += 3)
+                {
+                    to[0] = from[0];
+                    to[1] = from[1];
+                    to[2] = from[2];
+                }
+            }
+#else
             mImage->readPixels(leftPadding, topPadding, width, height, GL_RGB, GL_UNSIGNED_BYTE);
+#endif
             mImage->scaleImage(mWidth, mHeight, 1);
         }
 

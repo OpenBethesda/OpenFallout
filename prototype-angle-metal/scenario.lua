@@ -1,0 +1,15 @@
+-- PROTOTYPE (ANGLE spike): one interior cell, frame times and three pictures
+return function(r)
+    r.wait(6)
+    r.eye('start')
+    r.actors('near', 3000, 8)
+    r.fps('first-person', 10)
+    r.shot('1-first-person')
+    r.look(math.pi, 0.1)
+    r.wait(1)
+    r.fps('turned', 5)
+    r.shot('2-turned')
+    r.camera('ThirdPerson')
+    r.wait(2)
+    r.shot('3-third-person')
+end

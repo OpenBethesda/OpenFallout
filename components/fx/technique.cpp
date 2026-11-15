@@ -9,6 +9,9 @@
 #include <osg/Texture2D>
 #include <osg/Texture3D>
 
+#ifdef OPENFALLOUT_ANGLE
+typedef double GLclampd; // PROTOTYPE (ANGLE spike): the desktop extension header wants it
+#endif
 #include <SDL_opengl_glext.h>
 
 #include <components/debug/debuglog.hpp>

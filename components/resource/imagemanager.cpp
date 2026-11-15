@@ -65,7 +65,11 @@ namespace
         if (!SceneUtil::glExtensionsReady())
             return true;
 
+#ifdef OPENFALLOUT_ANGLE
+        return true; // PROTOTYPE (ANGLE spike): GL_EXT_texture_compression_dxt1 + GL_ANGLE_texture_compression_dxt3/5
+#else
         return SceneUtil::getGLExtensions().isTextureCompressionS3TCSupported;
+#endif
     }
 
 }
@@ -150,6 +154,46 @@ namespace Resource
             osg::ref_ptr<osg::Image> image = result.getImage();
 
             image->setFileName(std::string(path.value()));
+#ifdef OPENFALLOUT_ANGLE
+            // PROTOTYPE (ANGLE spike): which formats arrive, with the rug and the HUD as the cases that draw wrongly
+            {
+                const std::string_view name = path.value();
+                if (name.find("rug") != std::string_view::npos || name.find("carpet") != std::string_view::npos
+                    || name.find("hud") != std::string_view::npos)
+                    Log(Debug::Info) << "ANGLE spike: watched image " << path << " format " << std::hex
+                                     << image->getPixelFormat() << " internal " << image->getInternalTextureFormat()
+                                     << " type " << image->getDataType() << std::dec << " " << image->s() << "x"
+                                     << image->t() << " mips " << image->getNumMipmapLevels();
+            }
+#endif
+#ifdef OPENFALLOUT_ANGLE
+            // PROTOTYPE (ANGLE spike): OpenGL ES has no BGR or BGRA upload format, so such images are turned round here;
+            // every other uncompressed format is logged once so that the ones OpenGL ES refuses can be found.
+            if (!image->isCompressed())
+            {
+                const GLenum format = image->getPixelFormat();
+                if ((format == GL_BGR || format == GL_BGRA) && image->getDataType() == GL_UNSIGNED_BYTE)
+                {
+                    const unsigned int step = format == GL_BGR ? 3 : 4;
+                    for (unsigned int level = 0; level < image->getNumMipmapLevels(); ++level)
+                    {
+                        unsigned char* data = image->getMipmapData(level);
+                        const unsigned int size = (std::max(image->s() >> level, 1) * std::max(image->t() >> level, 1)) * step;
+                        for (unsigned int i = 0; i + step <= size; i += step)
+                            std::swap(data[i], data[i + 2]);
+                    }
+                    image->setPixelFormat(format == GL_BGR ? GL_RGB : GL_RGBA);
+                    image->setInternalTextureFormat(format == GL_BGR ? GL_RGB : GL_RGBA);
+                }
+                static std::set<std::tuple<GLenum, GLint, GLenum>> seen;
+                static std::mutex seenMutex;
+                std::lock_guard<std::mutex> lock(seenMutex);
+                if (seen.insert({ format, image->getInternalTextureFormat(), image->getDataType() }).second)
+                    Log(Debug::Info) << "ANGLE spike: image format " << std::hex << format << " internal "
+                                     << image->getInternalTextureFormat() << " type " << image->getDataType() << std::dec
+                                     << " first seen in " << path;
+            }
+#endif
             if (!checkSupported(image))
             {
                 static bool uncompress = (getenv("OPENFALLOUT_DECOMPRESS_TEXTURES") != nullptr);

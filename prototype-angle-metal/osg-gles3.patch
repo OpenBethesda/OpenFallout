@@ -1,0 +1,37 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a03a9e2..aec4ab4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -248,8 +248,8 @@ IF(APPLE)
+         # Note that without this check, libosg would use Cocoa/OpenGL but
+         # libosgViewer would use X11/OpenGL, which causes compatibility
+         # issues for applications using OSG.
+-        UNSET(OPENGL_gl_LIBRARY CACHE)
+-        UNSET(OPENGL_INCLUDE_DIR CACHE)
++        # PROTOTYPE: keep the ES library given on the command line
++
+         IF(OSG_WINDOWING_SYSTEM STREQUAL "X11")
+           FIND_PACKAGE(X11)
+           IF(NOT X11_FOUND)
+@@ -821,7 +821,7 @@ ENDIF()
+ # Image readers/writers depend on 3rd party libraries except for OS X which
+ # can use Quicktime.
+ IF(NOT (ANDROID AND OSG_FIND_3RD_PARTY_DEPS))
+-    IF(NOT APPLE)
++    IF(TRUE) # PROTOTYPE: also on the Mac, the engine wants the png plugin
+         FIND_PACKAGE(GIFLIB)
+         FIND_PACKAGE(JPEG)
+         FIND_PACKAGE(PNG)
+diff --git a/src/osgViewer/ScreenCaptureHandler.cpp b/src/osgViewer/ScreenCaptureHandler.cpp
+index b02753b..f33d576 100644
+--- a/src/osgViewer/ScreenCaptureHandler.cpp
++++ b/src/osgViewer/ScreenCaptureHandler.cpp
+@@ -156,7 +156,7 @@ WindowCaptureCallback::ContextData::ContextData(osg::GraphicsContext* gc, Mode m
+         else
+         {
+             OSG_NOTIFY(level)<<"ScreenCaptureHandler: Selected GL_RGB read back format"<<std::endl;
+-            _pixelFormat = GL_RGB;
++            _pixelFormat = GL_RGBA; // PROTOTYPE: OpenGL ES only promises RGBA read-back
+         }
+     }
+ 

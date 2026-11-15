@@ -1,5 +1,8 @@
 #include "postprocessor.hpp"
 
+#ifdef OPENFALLOUT_ANGLE
+typedef double GLclampd; // PROTOTYPE (ANGLE spike): the desktop extension header wants it
+#endif
 #include <SDL_opengl_glext.h>
 #include <algorithm>
 #include <chrono>
@@ -204,6 +207,12 @@ namespace OFRender
         mWidth = gc->getTraits()->width;
         mHeight = gc->getTraits()->height;
 
+#ifdef OPENFALLOUT_ANGLE
+        // PROTOTYPE (ANGLE spike): OpenGL ES 3.0 has the indexed calls only as GL_OES_draw_buffers_indexed
+        osg::setGLExtensionFuncPtr(ext->glColorMaski, "glColorMaskiOES");
+        osg::setGLExtensionFuncPtr(ext->glDisablei, "glDisableiOES");
+        osg::setGLExtensionFuncPtr(ext->glEnablei, "glEnableiOES");
+#endif
         if (!ext->glDisablei && ext->glDisableIndexedEXT)
             ext->glDisablei = ext->glDisableIndexedEXT;
 

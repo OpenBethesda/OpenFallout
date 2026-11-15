@@ -281,7 +281,9 @@ namespace OFRender
         // render before the world is rendered
         mEarlyRenderBinRoot->getOrCreateStateSet()->setRenderBinDetails(RenderBin_Sky, "RenderBin");
         // Prevent unwanted clipping by water reflection camera's clipping plane
+#ifndef OPENFALLOUT_ANGLE // PROTOTYPE (ANGLE spike): no clip plane mode in OpenGL ES
         mEarlyRenderBinRoot->getOrCreateStateSet()->setMode(GL_CLIP_PLANE0, osg::StateAttribute::OFF);
+#endif
 
         if (enableSkyRTT)
         {
