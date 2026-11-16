@@ -102,4 +102,4 @@ actionlint .github/workflows/*.yml
 
 Release tests exercise read-only preview, invalid tags, failed or unmerged source
 rejection, tag immutability, draft lookup, asset requirements, and promotion.
-The lightweight `Changes` job of GitHub Actions, on a Mac runner, also runs the release helper tests.
+The lightweight `Changes` job of GitHub Actions, on a Linux runner, also runs the release helper tests.

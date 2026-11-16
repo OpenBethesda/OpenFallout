@@ -320,9 +320,10 @@ class PackageCheckTests(unittest.TestCase):
 
 
 # Stands in for macOS's `open`: records its arguments and writes the engine log that $SMOKE_LOG holds into the
-# --config folder of the engine arguments, as the engine would; exits with $OPEN_STATUS.
+# --config folder of the engine arguments, as the engine would; then waits $OPEN_SECONDS (an engine that is still
+# running) and exits with $OPEN_STATUS.
 OPEN_STUB = """#!/usr/bin/env python3
-import json, os, sys
+import json, os, sys, time
 from pathlib import Path
 argv = sys.argv[1:]
 Path(os.environ["OPEN_RECORD"]).write_text(json.dumps(argv))
@@ -330,6 +331,7 @@ engine = argv[argv.index("--args") + 1:]
 config = Path(engine[engine.index("--config") + 1])
 (config / "openfallout.log").write_text(os.environ["SMOKE_LOG"])
 Path(argv[argv.index("--stderr") + 1]).write_text(os.environ.get("SMOKE_STDERR", ""))
+time.sleep(float(os.environ.get("OPEN_SECONDS", "0")))
 sys.exit(int(os.environ.get("OPEN_STATUS", "0")))
 """
 
@@ -355,8 +357,9 @@ class SmokeRunTests(unittest.TestCase):
         self.app = StandIn(self.root).app
         self.environ = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "OPEN_RECORD": str(self.record)}
 
-    def smoke(self, log, *args, stderr=""):
-        with unittest.mock.patch.dict(os.environ, dict(self.environ, SMOKE_LOG=log, SMOKE_STDERR=stderr)):
+    def smoke(self, log, *args, stderr="", seconds=0):
+        environ = dict(self.environ, SMOKE_LOG=log, SMOKE_STDERR=stderr, OPEN_SECONDS=str(seconds))
+        with unittest.mock.patch.dict(os.environ, environ):
             status, output = run_check(self.app, "--work", self.root / "work", *args)
         return status, output, json.loads(self.record.read_text())
 
@@ -432,16 +435,51 @@ class SmokeRunTests(unittest.TestCase):
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL smoke", output)
 
-    def test_software_renderer_run_that_does_not_finish_is_skipped_in_auto_mode_only(self):
-        crash = "\n\n*** Fatal Error ***\nInvalid address alignment (signal 10)\nAddress: 0x900000a00\n"
-        log = SOFTWARE_GL + JIT_ON + STARTED
-        status, output, _ = self.smoke(log, "--smoke", "auto", stderr=crash)
-        self.assertEqual(status, 0, output)
-        self.assertIn("SKIP smoke: this machine has only Apple's software renderer", output)
-        self.assertIn("Invalid address alignment (signal 10)", output)
-        status, output, _ = self.smoke(log, "--smoke", "run", stderr=crash)
+    def test_crash_without_an_opengl_context_fails_in_auto_mode(self):
+        crash = "\n\n*** Fatal Error ***\nAbnormal termination condition (signal 6)\nAddress: 0x900000a00\n"
+        status, output, _ = self.smoke(NO_GL, "--smoke", "auto", stderr=crash)
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL smoke", output)
+        self.assertIn("the engine's standard error says: *** Fatal Error *** Abnormal termination condition (signal 6)",
+                      output)
+
+    def test_software_renderer_run_that_is_too_slow_is_skipped_in_auto_mode_only(self):
+        log = SOFTWARE_GL + JIT_ON + STARTED
+        status, output, _ = self.smoke(log, "--smoke", "auto", "--seconds", "1", seconds=3)
+        self.assertEqual(status, 0, output)
+        self.assertIn("SKIP smoke: this machine has only Apple's software renderer (no GPU) and the run was too slow "
+                      "there: the engine was still running after 1 s and was stopped", output)
+        status, output, _ = self.smoke(log, "--smoke", "run", "--seconds", "1", seconds=3)
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL smoke: the engine was still running after 1 s and was stopped", output)
+
+    def test_too_slow_run_on_a_gpu_fails_in_auto_mode(self):
+        status, output, _ = self.smoke(JIT_ON + STARTED, "--smoke", "auto", "--seconds", "1", seconds=3)
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL smoke: the engine was still running after 1 s and was stopped", output)
+
+    def test_crash_on_the_software_renderer_fails_in_auto_mode(self):
+        crash = "\n\n*** Fatal Error ***\nAbnormal termination condition (signal 6)\nAddress: 0x900000a00\n"
+        status, output, _ = self.smoke(SOFTWARE_GL + JIT_ON + STARTED, "--smoke", "auto", stderr=crash)
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL smoke: the engine did not quit peacefully", output)
+        self.assertIn("the engine's standard error says: *** Fatal Error *** Abnormal termination condition (signal 6)",
+                      output)
+
+    def test_crash_of_a_too_slow_run_on_the_software_renderer_fails_in_auto_mode(self):
+        crash = "\n\n*** Fatal Error ***\nInvalid address alignment (signal 10)\nAddress: 0x900000a00\n"
+        status, output, _ = self.smoke(SOFTWARE_GL + JIT_ON + STARTED, "--smoke", "auto", "--seconds", "1",
+                                       stderr=crash, seconds=3)
+        self.assertEqual(status, 1, output)
+        self.assertIn("Invalid address alignment (signal 10)", output)
+
+    def test_engine_that_ended_without_quitting_on_the_software_renderer_fails_in_auto_mode(self):
+        status, output, _ = self.smoke(SOFTWARE_GL + JIT_ON + STARTED, "--smoke", "auto")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL smoke: the engine did not quit peacefully", output)
+        status, output, _ = self.smoke(SOFTWARE_GL + JIT_ON, "--smoke", "auto")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL smoke: the game did not start", output)
 
     def test_wrong_compiler_state_fails_in_auto_mode_even_on_the_software_renderer(self):
         status, output, _ = self.smoke(SOFTWARE_GL + JIT_NOTHING_COMPILED + STARTED, "--smoke", "auto")
@@ -651,7 +689,10 @@ class ReleaseModeTests(unittest.TestCase):
         import engine_release
 
         notes = self.root / "notes.md"
-        run_check(self.disk_image(), "--mode", "local", "--smoke", "skip", "--notes", notes)
+        # the line ends with the machine the check ran on: an Apple Silicon Mac, also when this test runs on a Linux
+        # runner (whose x86_64 would look like a claim about Intel)
+        with unittest.mock.patch.object(check_mac_package.platform, "machine", return_value="arm64"):
+            run_check(self.disk_image(), "--mode", "local", "--smoke", "skip", "--notes", notes)
         line = notes.read_text()
         self.assertIn("ad hoc signed, not notarized (macOS asks before the first start)", line)
         for claim in ("Intel", "x86_64", "Supported", "Played on", "or later", "Game Mode"):

@@ -42,9 +42,10 @@ stays green. A run on a tag or the default branch that has only some of the secr
    it needs a `packaged-app check PASS (release mode; ...)` line and a `PASS` line with `smoke PASS` and a GPU renderer
    (not `Apple Software Renderer`, not `not reported`): the game must have started from that very image on a Mac with a
    GPU (both may be the same line). A smoke run of a locally built package does not count, even with the same file
-   name. When the smoke step was skipped on the runner (no OpenGL context, or only Apple's software renderer: the hosted
-   arm64 runner has no GPU, and on 12 November 2026 the engine ended there with a bus error about 9.5 s after the cell
-   started, while a package built from the same code on a Mac with a GPU passed; the cause on the runner is not known),
+   name. The hosted arm64 runner has no GPU: the smoke step runs there on Apple's software renderer, and it is skipped
+   only when the runner gives the engine no OpenGL context or the run is too slow to end in time. An engine that
+   crashes there, or ends without quitting peacefully, fails the job (until 16 November 2026 that was reported as
+   skipped too, and so the abort at quit of the 0.1.0 build passed CI). Whatever the runner said,
    download the Apple Silicon disk image from the draft release, run
    `CI/check_mac_package.py <dmg> --mode release --smoke run --notes notes.md` on a Mac with a display, and add its line
    to the release notes before publishing.
