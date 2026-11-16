@@ -130,20 +130,35 @@ historical component trends.
 
 ## Python tests
 
-The `Changes` job of `push.yml` runs on a Mac runner and runs every Python test
+The `Changes` job of `push.yml` runs on a Linux runner and runs every Python test
 on every pull request and every push to `master`, including the documentation-only
 changes that skip the Mac build: the tests of the CI scripts (`CI/test_*.py`),
 of the helper scripts (`scripts/openfallout/test_*.py`) and of the Lua
-documentation generator (`docs/test_luadoc.py`). On a Mac runner the tests that
-need macOS (`codesign`, `hdiutil`, `vtool`) run instead of being skipped.
+documentation generator (`docs/test_luadoc.py`). The tests that need macOS
+skip themselves there: those of the packaged-app check and the bundle selection
+(`codesign`, `hdiutil`, `vtool`), the top CMake file's refusal of Intel, and the
+whole runs of the round runner (`round.py run` works on macOS only). The Mac job runs the
+tests of the CI scripts and of the helper scripts again, on macOS, so those run
+too (`macos.yml`, "Run the Python tests on macOS"). A documentation-only change
+has no Mac job, and it changes nothing those tests cover: a change to the round
+runner (`round.py`, `roundguard.py`, `test_round.py`) always gets the Mac job
+(`CI/changed_paths.py`), and so does any change to `CI/`.
+
+The `Changes` job and the two documentation jobs (`links`, `HTML`) were on Mac
+runners from the Mac-only cut until 16 November 2026. That day GitHub's hosted
+Mac runners were short and the jobs of pull requests waited for hours, so the
+jobs that need no Mac went back to Linux runners. The engine is built and
+tested on a Mac only.
 
 The helper-script tests read the Lua scripts and the coverage tracker, so they
-check that those still agree. The job installs a `luajit` executable with
-Homebrew, and `lupa` and Pillow in a virtual environment (pinned in the workflow,
+check that those still agree. The `Changes` job installs a `luajit` executable
+with apt, and `lupa` and Pillow in a virtual environment (pinned in the workflow,
 so Dependabot does not update them); without them the Lua tests and one picture
-test of the round runner skip. lupa's wheels
-for Apple Silicon have no LuaJIT runtime, so the tests use its Lua 5.2 runtime,
-which accepts what LuaJIT accepts in these scripts. To run them locally:
+test of the round runner skip. The Mac job installs `lupa` and Pillow the same
+way and no `luajit` executable, so the two tests that need one run in the
+`Changes` job only. lupa's wheels
+for Apple Silicon have no LuaJIT runtime, so the tests use its Lua 5.2 runtime
+there, which accepts what LuaJIT accepts in these scripts. To run them locally:
 
 ```sh
 python3 -m unittest discover -s CI -p 'test_*.py'

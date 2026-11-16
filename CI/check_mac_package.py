@@ -44,8 +44,9 @@ the smoke run reported, the disk image's SHA-256, and the macOS version and chip
 then what the package holds (the engine's architecture, its signature, the macOS its engine was built for). The
 line says what was checked, not what is supported or played on: on a tag build CI/engine_release.py notes adds the
 "Supported" line, and the owner adds the "Played on" line. `--smoke auto` runs the smoke step but reports it as
-skipped when the machine gives the engine no OpenGL context, or only Apple's software renderer and the run does not
-finish there (a hosted CI runner has no GPU); run it with
+skipped when the machine gives the engine no OpenGL context, or only Apple's software renderer and the run is too
+slow to end in time there (a hosted CI runner has no GPU); a crash or an engine that does not quit peacefully fails
+there too. Run it with
 `--smoke run` on a Mac with a display before a release is tagged.
 
 The exit status is 0 when no step failed.
@@ -584,22 +585,25 @@ def check_smoke(app, options):
         RENDERER_SEEN.append(" ".join(re.sub(r"[;()]", " ", renderer.group(1)).split()) or "not reported")
     compiler, problems, state, no_gl = smoke_verdict(text, options.expect_jit)
     print(f"smoke: LuaJIT compiler: {state or 'not reported'} (log: {log})")
-    if no_gl and options.smoke == "auto":
-        raise SmokeSkipped(f"this machine gave the engine no OpenGL context; {CI_HINT}")
     stderr = (work / "stderr.log").read_text(encoding="utf-8", errors="replace") if (work / "stderr.log").exists() else ""
     # the loader's refusal (dyld, Reason:) and the engine's crash handler (*** Fatal Error ***, <what> (signal N))
     loader = [line.strip() for line in stderr.splitlines()
               if line.startswith("dyld") or "Reason:" in line or "Fatal Error" in line or re.search(r"\(signal \d+\)", line)]
+    # a machine without an OpenGL context cannot start the game; an engine that crashes over it is still a failure
+    if no_gl and not loader and options.smoke == "auto":
+        raise SmokeSkipped(f"this machine gave the engine no OpenGL context; {CI_HINT}")
     if loader:
         problems.append("the engine's standard error says: " + " ".join(loader[:2]))
     if helper_error and problems:
         problems.insert(0, helper_error)
     if timed_out:
         problems.insert(0, f"the engine was still running after {options.seconds:g} s and was stopped")
-    # A hosted runner without a GPU gives Apple's software renderer. A run that does not finish there says nothing
-    # about a player's Mac, so auto mode reports it as skipped; the compiler state is still judged.
-    if problems and not compiler and options.smoke == "auto" and SOFTWARE_GL in text:
-        raise SmokeSkipped(f"this machine has only Apple's software renderer (no GPU) and the run did not finish there: "
+    # A hosted runner without a GPU gives Apple's software renderer, which may be too slow for the run to end in time:
+    # that says nothing about a player's Mac, so auto mode reports it as skipped (the compiler state is still judged).
+    # Anything else is a failure there too: an engine that crashed, that the loader refused, or that ended without
+    # quitting peacefully (the 0.1.0 build aborted at quit on such a runner, and the step used to say "skipped").
+    if timed_out and not loader and not compiler and options.smoke == "auto" and SOFTWARE_GL in text:
+        raise SmokeSkipped(f"this machine has only Apple's software renderer (no GPU) and the run was too slow there: "
                            f"{'; '.join(problems)}; {CI_HINT}")
     problems = compiler + problems
     if problems:

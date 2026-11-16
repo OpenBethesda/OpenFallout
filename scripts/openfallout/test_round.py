@@ -408,6 +408,7 @@ class Pictures(unittest.TestCase):
         self.assertEqual(round_runner.convert_picture(good, self.tmp / "good.jpg"), self.tmp / "good.jpg")
 
 
+@unittest.skipUnless(round_runner.IS_MAC, "round.py run works on macOS only")
 class WholeRun(unittest.TestCase):
     """A run against a script that behaves like the engine: it reads --config and --user-data, writes the log there and
     one screenshot per `shot` line, and exits."""
@@ -716,6 +717,7 @@ class StandInSystem(round_runner.roundguard.System):
     def runningboardd_log(self): return "runningboardd evidence"
 
 
+@unittest.skipUnless(round_runner.IS_MAC, "round.py run works on macOS only")
 class GuardedRun(unittest.TestCase):
     """The guards around a whole round: the heartbeat, the kill switch, the lock, the pre-flight, one engine at a time."""
     ENGINE = WholeRun.ENGINE

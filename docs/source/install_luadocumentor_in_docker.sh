@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
-# Also used on the Mac runner of the Documentation workflow, which has no Docker and a home folder of its own:
-# OPENFALLOUT_LUADOC_INSTALL=1 allows it there.
+# OPENFALLOUT_LUADOC_INSTALL=1 allows it outside Docker, on a machine with a home folder of its own (a Mac, which has
+# no Docker by default). The Documentation workflow uses the image of docs/Dockerfile.
 if [ ! -f /.dockerenv ] && [ ! -f /home/docs/omw_luadoc_docker ] && [ "${OPENFALLOUT_LUADOC_INSTALL:-}" != 1 ]; then
     echo 'This script installs lua-5.1, luarocks, and openmwluadocumentor to $HOME. Should be used only in docker.'
     exit 1
