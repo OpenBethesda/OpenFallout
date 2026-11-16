@@ -23,8 +23,8 @@ jobs:
   # empty, which the job below reads as "build".  It also runs every Python test of the CI scripts, the helper scripts
   # and the documentation generator, on every change, including the documentation-only ones.  It runs on a Linux
   # runner, so that it does not wait for a Mac runner when those are short (on 16 November 2026 the jobs of pull
-  # requests waited for hours).  The tests that need macOS (codesign, hdiutil, vtool) skip themselves here and run in
-  # the Mac job (macos.yml, "Run the Python tests on macOS").
+  # requests waited for hours).  The tests that need macOS (codesign, hdiutil, vtool, a whole run of the round runner) skip
+  # themselves here and run in the Mac job (macos.yml, "Run the Python tests on macOS").
   Changes:
     runs-on: ubuntu-24.04
     timeout-minutes: 30

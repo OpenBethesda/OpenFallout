@@ -181,9 +181,9 @@ jobs:
       if: ${{ always() }}
       run: python3 CI/macos/release_signing.py cleanup
 
-    # The Changes job (push.yml) runs every Python test on a Linux runner, where the tests that need macOS (codesign,
-    # hdiutil, vtool: the packaged-app check, the bundle selection) skip themselves. Here they run. The two tests
-    # that need a luajit executable run in the Changes job only.
+    # The Changes job (push.yml) runs every Python test on a Linux runner, where the tests that need macOS skip
+    # themselves: the packaged-app check and the bundle selection (codesign, hdiutil, vtool) and the whole runs of
+    # the round runner. Here they run. The two tests that need a luajit executable run in the Changes job only.
     - name: Run the Python tests on macOS
       run: |
         python3 -m venv "$RUNNER_TEMP/script-tests"

@@ -135,7 +135,9 @@ on every pull request and every push to `master`, including the documentation-on
 changes that skip the Mac build: the tests of the CI scripts (`CI/test_*.py`),
 of the helper scripts (`scripts/openfallout/test_*.py`) and of the Lua
 documentation generator (`docs/test_luadoc.py`). The tests that need macOS
-(`codesign`, `hdiutil`, `vtool`) skip themselves there. The Mac job runs the
+skip themselves there: those of the packaged-app check and the bundle selection
+(`codesign`, `hdiutil`, `vtool`), the top CMake file's refusal of Intel, and the
+whole runs of the round runner (`round.py run` works on macOS only). The Mac job runs the
 tests of the CI scripts and of the helper scripts again, on macOS, so those run
 too (`macos.yml`, "Run the Python tests on macOS"); a documentation-only change
 has no Mac job and so does not run them.
