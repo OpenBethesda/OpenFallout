@@ -186,9 +186,10 @@ jobs:
 
     # Release mode on the notarized build (Developer ID on every binary, Gatekeeper, stapled tickets); local mode on the
     # ad hoc one (Gatekeeper is not asked). The smoke step starts the game from the disk image with a hidden window; a
-    # runner that gives it no OpenGL context reports it as skipped, and then the smoke step is run on the development
-    # Mac on the draft release's image (`--smoke run`). The check appends the release-notes line (renderer, SHA-256,
-    # macOS version and chip). The build makes exactly one disk image, for Apple Silicon.
+    # runner that gives it no OpenGL context, or whose software renderer is too slow for the run to end in time, reports
+    # it as skipped; a crash or an engine that does not quit peacefully fails the job. Before a release the smoke step
+    # is run on the development Mac on the draft release's image (`--smoke run`). The check appends the release-notes
+    # line (renderer, SHA-256, macOS version and chip). The build makes exactly one disk image, for Apple Silicon.
     - name: Check the packaged app
       env:
         CHECK_MODE: ${{ steps.signing.outputs.mode == 'release' && 'release' || 'local' }}
