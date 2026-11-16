@@ -76,11 +76,8 @@ declare -a CMAKE_CONF_OPTS=(
 -D CMAKE_OSX_DEPLOYMENT_TARGET="26.0"
 )
 
-# The wizard and the editor are not built (they do nothing for the Fallout games).
 declare -a BUILD_OPTS=(
 -D BUILD_OPENFALLOUT=TRUE
--D BUILD_OPENCS=FALSE
--D BUILD_WIZARD=FALSE
 -D BUILD_ESMTOOL=TRUE
 -D BUILD_BSATOOL=TRUE
 -D BUILD_ESSIMPORTER=TRUE

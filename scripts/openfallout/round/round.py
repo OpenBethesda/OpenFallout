@@ -1018,7 +1018,7 @@ def build_engine(args, jobs):
         generator = ["-G", "Ninja"] if shutil.which("ninja") else []
         launcher = ["-DCMAKE_C_COMPILER_LAUNCHER=ccache", "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"] if shutil.which("ccache") else []
         run("cmake", *generator, "-S", str(worktree), "-B", str(build), "-DCMAKE_BUILD_TYPE=Release", *launcher,
-            "-DBUILD_LAUNCHER=OFF", "-DBUILD_WIZARD=OFF", "-DBUILD_OPENCS=OFF", *args.cmake_arg)
+            "-DBUILD_LAUNCHER=OFF", *args.cmake_arg)
     run(*prefix, "cmake", "--build", str(build), "--target", "openfallout", "-j", str(jobs))
     seconds = time.monotonic() - started
     (build / "round-build.json").write_text(json.dumps({"commit": commit, "seconds": round(seconds, 1)}), encoding="utf-8")

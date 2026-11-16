@@ -17,20 +17,19 @@ TEAM = "EXAMPLE123"
 ENGINE_APP = "OpenFallout.app/Contents/Helpers/OpenFallout Engine.app"
 ENTITLEMENTS = {
     "OpenFallout.app": "openfallout.entitlements",
-    "OpenFallout-CS.app": "openfallout-cs.entitlements",
 }
 LOCAL_TEST_ENTITLEMENTS = ROOT / "files/mac/local-hardened-test.entitlements"
 
 
 class MacBundleTests(unittest.TestCase):
-    def configure(self, game, editor, qt):
+    def configure(self, game, launcher, *extra):
         temporary = tempfile.TemporaryDirectory(prefix="mac bundles ")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         source, build = root / "source", root / "build"
         (source / "files/mac").mkdir(parents=True)
         (source / "files/mac/qt.conf").write_text("[Paths]\nPlugins=../PlugIns\n")
-        for name in ("openfallout-engine-Info.plist.in", "openmw.icns"):
+        for name in ("openfallout-Info.plist.in", "openfallout-engine-Info.plist.in", "openmw.icns"):
             shutil.copy(ROOT / "files/mac" / name, source / "files/mac")
         for name in ("README.md", "CHANGELOG.md", "LICENSE", "AUTHORS.md"):
             (source / name).touch()
@@ -39,9 +38,10 @@ class MacBundleTests(unittest.TestCase):
         (source / "cmake/FindOSGPlugins.cmake").write_text(
             'set(DUMMY_LIBRARY_RELEASE "${CMAKE_CURRENT_LIST_DIR}/osg.dylib")\n')
         shutil.copy(ROOT / "cmake/SignMacApplications.cmake", source / "cmake")
-        # Execute the production block; no game dependencies or compiler are needed.
-        packaging = (ROOT / "CMakeLists.txt").read_text().split("# Apple bundling\n", 1)[1]
-        packaging = packaging.split("elseif(NOT APPLE)", 1)[0] + "endif()\n"
+        # Execute the production blocks; no game dependencies or compiler are needed.
+        top = (ROOT / "CMakeLists.txt").read_text()
+        plists = top.split("# Mac app property lists\n", 1)[1].split("# End of Mac app property lists", 1)[0]
+        packaging = top.split("# Apple bundling\n", 1)[1].split("# End of Apple bundling", 1)[0] + "endif()\n"
         (source / "CMakeLists.txt").write_text('''
 cmake_minimum_required(VERSION 3.19)
 project(BundleFixture NONE)
@@ -54,12 +54,9 @@ set(OPENFALLOUT_ENGINE_APP_DIR "${APP_BUNDLE_DIR}/Contents/Helpers/OpenFallout E
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 set(CPACK_PACKAGE_VERSION "0.1.0")
 set(OPENFALLOUT_VERSION "0.1.0")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0")
 set(OPENSCENEGRAPH_VERSION "3.6.5")
 set(USED_OSG_PLUGINS dummy)
-if(BUILD_OPENCS)
-    add_executable(openfallout-cs IMPORTED)
-    set_property(TARGET openfallout-cs PROPERTY OUTPUT_NAME "OpenFallout-CS")
-endif()
 if(USE_QT)
     set(QT_VERSION_MAJOR 6)
     foreach(plugin QCocoaIntegrationPlugin QMacStylePlugin QSvgPlugin QSvgIconPlugin)
@@ -69,37 +66,41 @@ if(USE_QT)
             "${CMAKE_BINARY_DIR}/qt/${plugin}/plugin.dylib")
     endforeach()
 endif()
-''' + packaging)
+''' + plists + packaging)
         result = subprocess.run([
             "cmake", "-S", str(source), "-B", str(build),
             f"-DBUILD_OPENFALLOUT={'ON' if game else 'OFF'}",
-            f"-DBUILD_OPENCS={'ON' if editor else 'OFF'}",
-            f"-DUSE_QT={'ON' if qt else 'OFF'}",
+            f"-DBUILD_LAUNCHER={'ON' if launcher else 'OFF'}",
+            # as in the top-level CMakeLists.txt: the launcher uses Qt
+            f"-DUSE_QT={'ON' if launcher else 'OFF'}",
+            *extra,
         ], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return root, build
 
-    def check_bundles(self, game, editor, qt):
-        root, build = self.configure(game, editor, qt)
-        expected = (["OpenFallout.app"] if game else []) + (["OpenFallout-CS.app"] if editor else [])
+    def check_no_package(self, game, launcher):
+        _, build = self.configure(game, launcher)
         install = (build / "cmake_install.cmake").read_text()
-        if not expected:
-            self.assertFalse((build / "CPackConfig.cmake").exists())
-            self.assertNotIn("fixup_bundle(", install)
-            return
+        self.assertFalse((build / "CPackConfig.cmake").exists())
+        self.assertNotIn("fixup_bundle(", install)
+        self.assertEqual(list((build / "OpenFallout.app").rglob("plugin.dylib")), [])
+        return build
+
+    def check_bundles(self, *extra):
+        # A package is made only when the engine and the launcher are both built, and holds OpenFallout.app only.
+        root, build = self.configure(True, True, *extra)
+        expected = ["OpenFallout.app"]
+        install = (build / "cmake_install.cmake").read_text()
         config = (build / "CPackConfig.cmake").read_text()
         self.assertIn(f'set(CPACK_OPENFALLOUT_APPLICATIONS "{";".join(expected)}")', config)
         entitlements = [f"{root}/source/files/mac/{ENTITLEMENTS[bundle]}" for bundle in expected]
         self.assertIn(f'set(CPACK_OPENFALLOUT_ENTITLEMENTS "{";".join(entitlements)}")', config)
-        for bundle in ("OpenFallout.app", "OpenFallout-CS.app"):
-            if bundle in expected:
-                self.assertIn(f'fixup_bundle("${{CMAKE_INSTALL_PREFIX}}/{bundle}"', install)
-            else:
-                self.assertNotIn(bundle, install)
-            plugins = list((build / bundle).rglob("plugin.dylib"))
-            self.assertEqual(len(plugins), 4 if qt and bundle in expected else 0)
+        self.assertIn('fixup_bundle("${CMAKE_INSTALL_PREFIX}/OpenFallout.app"', install)
+        self.assertEqual(install.count("fixup_bundle("), 1)
+        self.assertNotIn("OpenFallout-CS", install + config)
+        self.assertEqual(len(list((build / "OpenFallout.app").rglob("plugin.dylib"))), 4)
 
-        # CPack must sign only the selected bundles, even when one app is disabled.
+        # CPack must sign only the selected bundles.
         signed = self.sign(root, expected)
         self.assertEqual(len(signed), len(expected))
         for call, bundle in zip(signed, expected):
@@ -175,7 +176,7 @@ endif()
                          OPENFALLOUT_CODESIGN_IDENTITY=IDENTITY, **environment)
 
     def test_identity_signs_each_nested_binary_before_its_bundle(self):
-        bundles = ["OpenFallout.app", "OpenFallout-CS.app"]
+        bundles = ["OpenFallout.app"]
         calls = [call for call in self.sign_with_identity(bundles) if "--sign" in call]
         targets = [call[-1] for call in calls]
         for bundle in bundles:
@@ -200,7 +201,7 @@ endif()
                 sorted(t for t in targets if t.startswith(app + "/")), sorted(nested))
 
     def test_identity_uses_hardened_runtime_timestamp_and_entitlements(self):
-        bundles = ["OpenFallout.app", "OpenFallout-CS.app"]
+        bundles = ["OpenFallout.app"]
         calls = [call for call in self.sign_with_identity(bundles) if "--sign" in call]
         self.assertTrue(calls)
         for call in calls:
@@ -265,17 +266,6 @@ endif()
                 self.assertNotIn("--entitlements", call)
         self.assertIn("LOCAL TEST", self.output)
 
-    def test_local_test_overlay_also_merges_into_the_editors_empty_entitlements(self):
-        temporary = tempfile.TemporaryDirectory(prefix="mac signing ")
-        self.addCleanup(temporary.cleanup)
-        calls = self.sign(Path(temporary.name), ["OpenFallout.app", "OpenFallout-CS.app"],
-                          OPENFALLOUT_CODESIGN_IDENTITY="-", OPENFALLOUT_CODESIGN_LOCAL_TEST="1")
-        editor = str(self.app_root / "OpenFallout-CS.app")
-        used = [call[call.index("--entitlements") + 1] for call in calls if "--sign" in call and call[-1] == editor]
-        self.assertEqual(len(used), 1, self.output)
-        with open(used[0], "rb") as entitlements:
-            self.assertEqual(plistlib.load(entitlements), {"com.apple.security.cs.disable-library-validation": True})
-
     def test_local_test_is_refused_with_a_real_identity(self):
         temporary = tempfile.TemporaryDirectory(prefix="mac signing ")
         self.addCleanup(temporary.cleanup)
@@ -286,7 +276,7 @@ endif()
         self.assertNotIn(IDENTITY, self.output)
 
     def test_identity_never_uses_deep_or_prints_secrets(self):
-        calls = self.sign_with_identity(["OpenFallout.app", "OpenFallout-CS.app"],
+        calls = self.sign_with_identity(["OpenFallout.app"],
                                         OPENFALLOUT_CODESIGN_TEAM_ID=TEAM)
         for call in calls:
             if "--sign" in call or "-s" in call:
@@ -312,8 +302,7 @@ endif()
         calls = self.sign_with_identity(["OpenFallout.app"])
         self.assertEqual(calls[-1], ["--verify", "--deep", "--strict", str(self.app_root / "OpenFallout.app")])
 
-    def test_game_bundle_holds_the_engine_app(self):
-        _, build = self.configure(game=True, editor=False, qt=False)
+    def check_engine_app(self, build):
         engine = build / ENGINE_APP
         with (engine / "Contents/Info.plist").open("rb") as file:
             plist = plistlib.load(file)
@@ -325,26 +314,35 @@ endif()
         self.assertEqual(plist.get("LSApplicationCategoryType"), "public.app-category.role-playing-games")
         self.assertIs(plist.get("NSHighResolutionCapable"), True)
         self.assertNotIn("LSRequiresCarbon", plist)
+        self.assertEqual(plist.get("LSMinimumSystemVersion"), "26.0")
         self.assertTrue((engine / "Contents/Resources" / plist["CFBundleIconFile"]).is_file())
+        with (build / "OpenFallout.app/Contents/Info.plist").open("rb") as file:
+            self.assertEqual(plistlib.load(file).get("LSMinimumSystemVersion"), "26.0")
 
-    def test_editor_only_has_no_engine_app(self):
-        _, build = self.configure(game=False, editor=True, qt=True)
+    def test_game_bundle_holds_the_engine_app(self):
+        _, build = self.configure(game=True, launcher=True)
+        self.check_engine_app(build)
+
+    def test_engine_only_build_has_the_engine_app_but_no_package(self):
+        # the developer build: engine without the launcher still gets the nested app's property list and icon
+        build = self.check_no_package(game=True, launcher=False)
+        self.check_engine_app(build)
+        self.assertTrue((build / "OpenFallout.app/Contents/Info.plist").is_file())
+
+    def test_tools_only_has_no_package_and_no_engine_app(self):
+        build = self.check_no_package(game=False, launcher=False)
         self.assertFalse((build / ENGINE_APP).exists())
 
-    def test_tools_only_without_qt(self):
-        self.check_bundles(game=False, editor=False, qt=False)
+    def test_launcher_without_game_has_no_package_and_no_engine_app(self):
+        build = self.check_no_package(game=False, launcher=True)
+        self.assertFalse((build / ENGINE_APP).exists())
 
-    def test_game_without_qt(self):
-        self.check_bundles(game=True, editor=False, qt=False)
+    def test_game_with_launcher(self):
+        self.check_bundles()
 
-    def test_game_with_qt(self):
-        self.check_bundles(game=True, editor=False, qt=True)
-
-    def test_editor_only(self):
-        self.check_bundles(game=False, editor=True, qt=True)
-
-    def test_game_and_editor(self):
-        self.check_bundles(game=True, editor=True, qt=True)
+    def test_old_editor_and_wizard_options_add_nothing(self):
+        # CI passed BUILD_OPENCS=TRUE before the editor left; the option no longer exists
+        self.check_bundles("-DBUILD_OPENCS=ON", "-DBUILD_WIZARD=ON")
 
 
 class MacInfoPlistTests(unittest.TestCase):
@@ -355,7 +353,7 @@ class MacInfoPlistTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         output = Path(temporary.name) / "Info.plist"
         script = Path(temporary.name) / "render.cmake"
-        script.write_text(f'set(OPENFALLOUT_VERSION "0.1.0")\n'
+        script.write_text(f'set(OPENFALLOUT_VERSION "0.1.0")\nset(CMAKE_OSX_DEPLOYMENT_TARGET "26.1")\n'
                           f'configure_file("{ROOT / "files/mac" / template}" "{output}")\n')
         result = subprocess.run(["cmake", "-P", str(script)], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -370,10 +368,62 @@ class MacInfoPlistTests(unittest.TestCase):
         self.assertEqual(plist.get("CFBundleShortVersionString"), "0.1.0")
         self.assertNotIn("LSRequiresCarbon", plist)
 
-    def test_editor_plist_has_no_carbon_key(self):
-        plist = self.render("openfallout-cs-Info.plist.in")
-        self.assertNotIn("LSRequiresCarbon", plist)
-        self.assertIs(plist.get("NSHighResolutionCapable"), True)
+    def test_both_plists_take_the_minimum_macos_from_the_deployment_target(self):
+        # the shell reads LSMinimumSystemVersion of the nested engine app; both apps refuse older systems
+        for template in ("openfallout-Info.plist.in", "openfallout-engine-Info.plist.in"):
+            self.assertEqual(self.render(template).get("LSMinimumSystemVersion"), "26.1", template)
+
+
+class MacFloorTests(unittest.TestCase):
+    """Configure the head of the top-level CMakeLists.txt (up to the supported-Macs checks) without a compiler."""
+
+    def configure(self, *arguments):
+        temporary = tempfile.TemporaryDirectory(prefix="mac floor ")
+        self.addCleanup(temporary.cleanup)
+        source, build = Path(temporary.name) / "source", Path(temporary.name) / "build"
+        source.mkdir()
+        head = (ROOT / "CMakeLists.txt").read_text().split("# End of supported Macs\n", 1)[0]
+        self.assertIn("project(OpenFallout)\n", head)
+        (source / "CMakeLists.txt").write_text(head.replace("project(OpenFallout)\n", "project(OpenFallout NONE)\n"))
+        result = subprocess.run(["cmake", "-S", str(source), "-B", str(build), *arguments],
+                                text=True, capture_output=True)
+        return result, build
+
+    def cached(self, build, name):
+        for line in (build / "CMakeCache.txt").read_text().splitlines():
+            if line.startswith(name + ":"):
+                return line.split("=", 1)[1]
+        return None
+
+    @unittest.skipUnless(sys.platform == "darwin", "the default applies on macOS")
+    def test_default_deployment_target_is_26(self):
+        result, build = self.configure()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.cached(build, "CMAKE_OSX_DEPLOYMENT_TARGET"), "26.0")
+
+    @unittest.skipUnless(sys.platform == "darwin", "the default applies on macOS")
+    def test_an_empty_deployment_target_takes_the_default(self):
+        # a build folder configured before the floor existed has the value cached as an empty string
+        result, build = self.configure("-DCMAKE_OSX_DEPLOYMENT_TARGET=")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.cached(build, "CMAKE_OSX_DEPLOYMENT_TARGET"), "26.0")
+
+    @unittest.skipUnless(sys.platform == "darwin", "the default applies on macOS")
+    def test_a_higher_deployment_target_is_kept(self):
+        result, build = self.configure("-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.cached(build, "CMAKE_OSX_DEPLOYMENT_TARGET"), "27.0")
+
+    def test_a_lower_deployment_target_is_refused(self):
+        result, _ = self.configure("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.8")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("macOS 26.0 or later", result.stderr)
+
+    def test_intel_is_refused(self):
+        for architectures in ("x86_64", "arm64;x86_64"):
+            result, _ = self.configure(f"-DCMAKE_OSX_ARCHITECTURES={architectures}")
+            self.assertNotEqual(result.returncode, 0, architectures)
+            self.assertIn("Apple Silicon only", result.stderr)
 
 
 @unittest.skipUnless(sys.platform == "darwin" and shutil.which("c++"), "needs macOS and a C++ compiler")

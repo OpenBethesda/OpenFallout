@@ -726,7 +726,7 @@ if (USE_QT)
     add_library(components_qt STATIC ${COMPONENT_QT_FILES})
     target_link_libraries(components_qt components Qt::Widgets Qt::Core)
 
-    if (BUILD_LAUNCHER OR BUILD_WIZARD)
+    if (BUILD_LAUNCHER)
         add_dependencies(components_qt qm-files)
     endif()
 

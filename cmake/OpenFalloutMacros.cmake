@@ -84,31 +84,6 @@ endforeach (u)
 source_group ("components\\${dir}" FILES ${files})
 endmacro (add_component_qt_dir)
 
-macro (add_file project type file)
-list (APPEND ${project}${type} ${file})
-endmacro (add_file)
-
-macro (add_unit project dir unit)
-add_file (${project} _HDR ${comp} "${dir}/${unit}.hpp")
-add_file (${project} _SRC ${comp} "${dir}/${unit}.cpp")
-endmacro (add_unit)
-
-macro (add_hdr project dir unit)
-add_file (${project} _HDR ${comp} "${dir}/${unit}.hpp")
-endmacro (add_hdr)
-
-macro (opencs_units dir)
-foreach (u ${ARGN})
-add_unit (OPENCS ${dir} ${u})
-endforeach (u)
-endmacro (opencs_units)
-
-macro (opencs_hdrs dir)
-foreach (u ${ARGN})
-add_hdr (OPENCS ${dir} ${u})
-endforeach (u)
-endmacro (opencs_hdrs)
-
 include(CMakeParseArguments)
 
 macro (openfallout_add_executable target)

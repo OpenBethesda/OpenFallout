@@ -277,7 +277,7 @@ if(APPLE AND BUILD_OPENFALLOUT)
         COMMAND cp "${OpenFallout_BINARY_DIR}/resources/version" "${BUNDLE_RESOURCES_DIR}/resources")
 
     # Executable of the nested engine app (Contents/Helpers/OpenFallout Engine.app, its Info.plist is written by the
-    # Apple bundling block of the top-level CMakeLists.txt). It execs Contents/MacOS/openfallout of this bundle.
+    # "Mac app property lists" block of the top-level CMakeLists.txt). It execs Contents/MacOS/openfallout of this bundle.
     add_executable(openfallout-engine-app macos/engineappshim.cpp)
     set_target_properties(openfallout-engine-app PROPERTIES
         OUTPUT_NAME "OpenFallout Engine"
