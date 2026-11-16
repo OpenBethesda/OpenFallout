@@ -37,5 +37,4 @@ tree and are linked from that page.
 
         openfallout
         manuals/installation/index
-        manuals/openmw-cs/index
         manuals/documentationHowTo

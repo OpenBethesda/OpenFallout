@@ -22,6 +22,10 @@ The application Lua runtime and C++ bindings live in [`apps/openfallout/mwlua/`]
 
 Save orchestration is in [`apps/openfallout/mwscript/falloutsave.cpp`](../../apps/openfallout/mwscript/falloutsave.cpp) and [`apps/openfallout/mwstate/statemanagerimp.cpp`](../../apps/openfallout/mwstate/statemanagerimp.cpp). FalloutScript's save codec and versioned section contract are in [`components/falloutscript/savestate.hpp`](../../components/falloutscript/savestate.hpp), [`savescripts.cpp`](../../components/falloutscript/savescripts.cpp), and the `FalloutScripts::saveSections` implementation. Lua state has its own record path in [`LuaManager::write` and `readRecord`](../../apps/openfallout/mwlua/luamanagerimp.cpp). Keep the existing format versions, mapping behavior, and failure handling intact when changing saved state.
 
+## Core and edges
+
+The core (records, scripts, world, gameplay rules) makes no Apple calls. Mac-only code lives at the edges only. A rule check on the Mac job enforces this; see [Core and edges](core-and-edges.md).
+
 ## How to read evidence
 
 Source shows what is implemented. Unit tests show only the cases they exercise; find them alongside the owning component, including [`apps/components_tests/esm4/`](../../apps/components_tests/esm4/) and [`apps/openfallout_tests/`](../../apps/openfallout_tests/). Automated in-game evidence is recorded separately in the [harness guide](harness.md) and milestone sections of the [roadmap](gap-audit-and-roadmap.md). Manual play is a separate evidence category and should be claimed only where the project documentation records it. Do not infer game-engine parity from source resemblance, unit tests, or automated runs.

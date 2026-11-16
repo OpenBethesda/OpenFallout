@@ -1,101 +1,21 @@
-==============
-Install OpenMW
-==============
+===================
+Install OpenFallout
+===================
 
-Direct Download
-===============
+OpenFallout runs on Apple Silicon Macs with macOS 26.0 or later. There are no
+builds for Windows, Linux, Android or Intel Macs.
 
-If you're not sure what any of the different methods mean, you should probably stick to this one.
-Simply download the latest version for your operating system from
-`github.com/OpenMW/openmw/releases <https://github.com/OpenMW/openmw/releases>`_
-and run the install package once downloaded. It's now installed!
+Disk image
+==========
 
-.. note::
-	There is no need to uninstall previous versions
-	as OpenMW automatically installs into a separate directory for each new version.
-	Your saves and configuration are compatible and accessible between versions.
+Download the disk image ``OpenFallout-<version>-macOS-arm64.dmg`` from the
+`releases of the repository <https://github.com/OpenBethesda/OpenFallout/releases>`_,
+open it and drag ``OpenFallout.app`` to the Applications folder. The image is
+signed with the project's Developer ID and notarized by Apple.
 
 From Source
 ===========
 
-Visit the `Development Environment Setup <https://wiki.openmw.org/index.php?title=Development_Environment_Setup>`_
-section of the Wiki for detailed instructions on how to build the engine.
-
-Ubuntu
-======
-
-A `Launchpad PPA <https://launchpad.net/~openmw/+archive/openmw>`_ is available.
-Add it and install OpenMW.
-
-.. code-block:: console
-
-	$ sudo add-apt-repository ppa:openmw/openmw
-	$ sudo apt update
-	$ sudo apt install openmw
-
-Arch Linux
-==========
-
-The binary package is available in the official [community] Repositories.
-To install, simply run the following as root (or in sudo).
-
-.. code-block:: console
-
-	$ pacman -S openmw
-
-Void Linux
-==========
-
-The binary package is available in the official Repository
-To install simply run the following as root (or in sudo).
-
-.. code-block:: console
-
-	$ xbps-install openmw
-
-Debian
-======
-
-OpenMW is available from the unstable (sid) repository of Debian contrib
-and can be easily installed if you are using testing or unstable.
-However, it depends on several packages which are not in stable,
-so it is not possible to install OpenMW in Wheezy without creating a FrankenDebian.
-This is not recommended or supported.
-
-Fedora
-======
-
-OpenMW is available in the official repository of Fedora for versions 41 and up.
-To install simply run the following as root (or in sudo), depending on what packages
-you want.
-
-``openmw`` includes the launcher, install wizard, iniimporter and the engine itself.
-
-``openmw-cs`` includes the construction set.
-
-``openmw-tools`` includes ``bsatool``, ``esmtool`` and ``niftest``.
-
-.. code-block:: console
-
-	$ dnf install openmw
-	$ dnf install openmw-cs
-	$ dnf install openmw-tools
-
-Flatpak
-=======
-
-OpenMW is available as a flatpak. With flatpak installed, run the command below. It should show up on your desktop.
-
-.. code-block:: console
-
-	$ flatpak install openmw
-
-NixOS
-=====
-OpenMW is available as a Nix package. To install, add the following Nix code to your NixOS Configuration.
-
-.. code-block:: nix
-
-	environment.systemPackages = [
-	    pkgs.openmw
-	];
+See `Build baseline and plugin census
+<https://github.com/OpenBethesda/OpenFallout/blob/master/docs/openfallout/build-baseline.md>`_
+for how to build on a Mac.
