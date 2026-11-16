@@ -21,10 +21,12 @@ concurrency:
 jobs:
   # Documentation-only changes skip the Mac build.  The job fails open to a full build: a problem in it leaves "code"
   # empty, which the job below reads as "build".  It also runs every Python test of the CI scripts, the helper scripts
-  # and the documentation generator, on every change, including the documentation-only ones; on a Mac runner, so that
-  # the tests that need macOS (codesign, hdiutil, vtool) run instead of being skipped.
+  # and the documentation generator, on every change, including the documentation-only ones.  It runs on a Linux
+  # runner, so that it does not wait for a Mac runner when those are short (on 16 November 2026 the jobs of pull
+  # requests waited for hours).  The tests that need macOS (codesign, hdiutil, vtool) skip themselves here and run in
+  # the Mac job (macos.yml, "Run the Python tests on macOS").
   Changes:
-    runs-on: macos-26
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
       code: ${{ steps.classify.outputs.code }}
@@ -35,11 +37,9 @@ jobs:
     # Some helper script tests run the Lua scripts with a luajit executable (they are skipped without one); the Lua
     # checks need lupa and the picture test of the round runner Pillow, which go in their own virtual environment.
     - name: Install the tools of the script tests
-      env:
-        HOMEBREW_NO_AUTO_UPDATE: 1
-        HOMEBREW_NO_INSTALL_CLEANUP: 1
       run: |
-        brew install luajit
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends luajit
         luajit -v
         python3 -m venv "$RUNNER_TEMP/script-tests"
         "$RUNNER_TEMP/script-tests/bin/pip" install lupa==2.8 pillow==12.0.0

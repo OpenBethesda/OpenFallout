@@ -22,26 +22,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # A Mac runner has no Docker, so the build does what docs/Dockerfile does, natively: the Python packages of
-  # docs/requirements.txt in a virtual environment, and Lua 5.1, LuaRocks and LuaDocumentor in the runner's home
-  # folder (docs/source/install_luadocumentor_in_docker.sh).
+  # On a Linux runner, in the image of docs/Dockerfile (the Python packages of docs/requirements.txt, and Lua 5.1,
+  # LuaRocks and LuaDocumentor from docs/source/install_luadocumentor_in_docker.sh). A documentation change does not
+  # wait for a Mac runner.
   HTML:
-    runs-on: macos-26
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - name: Test Lua documentation failure handling
         run: python3 -m unittest discover -s docs -p test_luadoc.py -v
-      - name: Install the documentation dependencies
-        run: |
-          python3 -m venv "$RUNNER_TEMP/docs"
-          "$RUNNER_TEMP/docs/bin/pip" install -r docs/requirements.txt
-          echo "$RUNNER_TEMP/docs/bin" >> "$GITHUB_PATH"
-      - name: Install LuaDocumentor
-        env:
-          OPENFALLOUT_LUADOC_INSTALL: 1
-        run: bash docs/source/install_luadocumentor_in_docker.sh
+      - name: Build the documentation image
+        run: docker build --tag openfallout-docs docs
       - name: Check documentation dependencies
-        run: python -m pip check
+        run: docker run --rm openfallout-docs python -m pip check
       - name: Build HTML
-        run: sphinx-build -b html docs/source docs/build
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --volume "$PWD:/openfallout" openfallout-docs \
+            sphinx-build -b html /openfallout/docs/source /openfallout/docs/build

@@ -181,8 +181,15 @@ jobs:
       if: ${{ always() }}
       run: python3 CI/macos/release_signing.py cleanup
 
-    - name: Test the packaged-app check
-      run: python3 -m unittest discover -s CI -p test_check_mac_package.py -v
+    # The Changes job (push.yml) runs every Python test on a Linux runner, where the tests that need macOS (codesign,
+    # hdiutil, vtool: the packaged-app check, the bundle selection) skip themselves. Here they run. The two tests
+    # that need a luajit executable run in the Changes job only.
+    - name: Run the Python tests on macOS
+      run: |
+        python3 -m venv "$RUNNER_TEMP/script-tests"
+        "$RUNNER_TEMP/script-tests/bin/pip" install lupa==2.8 pillow==12.0.0
+        python3 -m unittest discover -s CI -p 'test_*.py' -v
+        "$RUNNER_TEMP/script-tests/bin/python" -m unittest discover -s scripts/openfallout -p 'test_*.py' -v
 
     # Release mode on the notarized build (Developer ID on every binary, Gatekeeper, stapled tickets); local mode on the
     # ad hoc one (Gatekeeper is not asked). The smoke step starts the game from the disk image with a hidden window; a
