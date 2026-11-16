@@ -5,7 +5,7 @@ OpenFallout is an open-source game engine project that aims to play Fallout 3, F
 
 It is built on [OpenMW](https://openmw.org), the open-source Morrowind engine, and starts from OpenMW's renderer, physics, audio, Lua scripting and content tools. OpenFallout is an independent project. It is not affiliated with or endorsed by the OpenMW team or Bethesda Softworks.
 
-* Version: 0.1.1 (not released yet; engine releases are numbered `0.<milestone>.<n>`, see [docs/openfallout/engine-release.md](docs/openfallout/engine-release.md))
+* Version: 0.1.1 (the first engine release; engine releases are numbered `0.<milestone>.<n>`, see [docs/openfallout/engine-release.md](docs/openfallout/engine-release.md))
 * Platform: Mac only. Apple Silicon, macOS 26.0 or later
 * License: GPLv3 (see [LICENSE](LICENSE) for more information)
 * Source code and bug tracker: https://github.com/OpenBethesda/OpenFallout
