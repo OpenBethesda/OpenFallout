@@ -441,6 +441,9 @@ OF::Engine::~Engine()
     mDialogueManager = nullptr;
     mJournal = nullptr;
     mWindowManager = nullptr;
+    // The world is destroyed after the scripts, and the bodies it draws tell the scripts when they go: they must find
+    // no scripts, not the place where the scripts were
+    mEnvironment.forgetFalloutScripts();
     mFalloutScripts = nullptr;
     mScriptManager = nullptr;
     mWorld = nullptr;
