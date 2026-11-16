@@ -86,6 +86,9 @@ namespace OFBase
         void setScriptManager(ScriptManager& value) { mScriptManager = &value; }
 
         void setFalloutScripts(OFScript::FalloutScripts& value) { mFalloutScripts = &value; }
+        /// The engine calls this before it destroys the scripts: what is destroyed after them (the world and what
+        /// it draws) asks hasFalloutScripts() before it tells them anything, and must hear "no"
+        void forgetFalloutScripts() { mFalloutScripts = nullptr; }
 
         void setWindowManager(WindowManager& value) { mWindowManager = &value; }
 
