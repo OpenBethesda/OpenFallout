@@ -117,6 +117,10 @@ bool parseOptions(int argc, char** argv, OF::Engine& engine, Files::Configuratio
 
     // OPENFALLOUT_HEADLESS=1 in the environment is the same as --headless
     const bool headless = variables["headless"].as<bool>() || Debug::isHeadlessRun();
+    // The option may come from a configuration file, which the look at the arguments in runApplication does not see:
+    // the program that reports a crash, and the box of a fatal error, go by the environment
+    if (headless)
+        setenv("OPENFALLOUT_HEADLESS", "1", 1);
     engine.setHeadless(headless);
     // A headless run must never reach for the pointer
     engine.setGrabMouse(!variables["no-grab"].as<bool>() && !headless);
