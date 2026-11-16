@@ -3,18 +3,12 @@
 
 #include <charconv>
 #include <cstdint>
-#include <optional>
-#include <string>
-#include <system_error>
-
-#if !(defined(_MSC_VER) && (_MSC_VER >= 1924)) && !(defined(__GNUC__) && __GNUC__ >= 11) || defined(__clang__)         \
-    || defined(__apple_build_version__)
-
 #include <ios>
 #include <locale>
+#include <optional>
 #include <sstream>
-
-#endif
+#include <string>
+#include <system_error>
 
 namespace Misc::StringUtils
 {
@@ -84,14 +78,8 @@ namespace Misc::StringUtils
         return defaultValue;
     }
 
-    // support for std::from_chars as of 2023-02-27
-    // - Visual Studio 2019 version 16.4 (1924)
-    // - GCC 11
-    // - Clang does not support floating points yet
-    // - Apples Clang does not support floating points yet
-
-#if !(defined(_MSC_VER) && (_MSC_VER >= 1924)) && !(defined(__GNUC__) && __GNUC__ >= 11) || defined(__clang__)         \
-    || defined(__apple_build_version__)
+    // Floating-point numbers are read with a stream: std::from_chars for floating points was not in Apple clang's
+    // library when this was written
     template <>
     inline std::optional<float> toNumeric<float>(std::string_view s)
     {
@@ -129,7 +117,6 @@ namespace Misc::StringUtils
 
         return std::nullopt;
     }
-#endif
 
     inline std::string toHex(std::string_view value)
     {

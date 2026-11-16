@@ -13,14 +13,13 @@
 #include <osg/Geometry>
 #include <osg/GraphicsContext>
 #include <osg/Texture2D>
-#include <osg/Version>
 #include <osgViewer/GraphicsWindow>
 
 #include <components/debug/debuglog.hpp>
 
 #include "imagetosurface.hpp"
 
-#if defined(OSG_LIBRARY_STATIC) && (!defined(ANDROID) || OSG_VERSION_GREATER_THAN(3, 6, 5))
+#ifdef OSG_LIBRARY_STATIC
 // Sets the default windowing system interface according to the OS.
 // Necessary for OpenSceneGraph to do some things, like decompression.
 USE_GRAPHICSWINDOW()
@@ -86,9 +85,7 @@ namespace SDLUtil
     void SDLCursorManager::createCursor(std::string_view name, double rotDegrees, osg::Image* image, int hotspotX,
         int hotspotY, int cursorWidth, int cursorHeight)
     {
-#ifndef ANDROID
         _createCursorFromResource(name, rotDegrees, image, hotspotX, hotspotY, cursorWidth, cursorHeight);
-#endif
     }
 
     void SDLCursorManager::removeCursor(std::string_view name)

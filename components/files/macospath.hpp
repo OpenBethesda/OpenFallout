@@ -1,8 +1,6 @@
 #ifndef COMPONENTS_FILES_MACOSPATH_H
 #define COMPONENTS_FILES_MACOSPATH_H
 
-#if defined(macintosh) || defined(Macintosh) || defined(__APPLE__) || defined(__MACH__)
-
 #include <filesystem>
 #include <vector>
 
@@ -63,7 +61,5 @@ namespace Files
     };
 
 } /* namespace Files */
-
-#endif /* defined(macintosh) || defined(Macintosh) || defined(__APPLE__) || defined(__MACH__) */
 
 #endif /* COMPONENTS_FILES_MACOSPATH_H */

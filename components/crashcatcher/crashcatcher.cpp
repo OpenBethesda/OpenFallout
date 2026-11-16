@@ -16,7 +16,6 @@
 #include <sys/ptrace.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -25,26 +24,11 @@
 
 #include <SDL_messagebox.h>
 
-#ifdef __linux__
-#include <sys/prctl.h>
-#include <sys/ucontext.h>
-#ifndef PR_SET_PTRACER
-#define PR_SET_PTRACER 0x59616d61
-#endif
-#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 #include <signal.h>
-#endif
 
-#if defined(__APPLE__)
 #include <cassert>
 #include <libproc.h>
 #include <sys/sysctl.h>
-#endif
-
-#if defined(__FreeBSD__)
-#include <sys/sysctl.h>
-#include <sys/user.h>
-#endif
 
 #include "crashcatcher.hpp"
 
@@ -86,7 +70,6 @@ namespace
     };
 
     constexpr SignalInfo sigIllCodes[] = {
-#if !defined(__FreeBSD__) && !defined(__FreeBSD_kernel__)
         { ILL_ILLOPC, "Illegal opcode" },
         { ILL_ILLOPN, "Illegal operand" },
         { ILL_ILLADR, "Illegal addressing mode" },
@@ -95,7 +78,6 @@ namespace
         { ILL_PRVREG, "Privileged register" },
         { ILL_COPROC, "Coprocessor error" },
         { ILL_BADSTK, "Internal stack error" },
-#endif
     };
 
     constexpr SignalInfo sigFpeCodes[] = {
@@ -110,18 +92,14 @@ namespace
     };
 
     constexpr SignalInfo sigSegvCodes[] = {
-#ifndef __FreeBSD__
         { SEGV_MAPERR, "Address not mapped to object" },
         { SEGV_ACCERR, "Invalid permissions for mapped object" },
-#endif
     };
 
     constexpr SignalInfo sigBusCodes[] = {
-#ifndef __FreeBSD__
         { BUS_ADRALN, "Invalid address alignment" },
         { BUS_ADRERR, "Non-existent physical address" },
         { BUS_OBJERR, "Object specific hardware error" },
-#endif
     };
 
     const char* findSignalDescription(std::span<const SignalInfo> info, int code)
@@ -265,19 +243,6 @@ quit
     }
 }
 
-static void printSystemInfo(void)
-{
-#ifdef __unix__
-    struct utsname info;
-    if (uname(&info) == -1)
-        printf("Failed to get system information: %s\n", std::generic_category().message(errno).c_str());
-    else
-        printf("System: %s %s %s %s %s\n", info.sysname, info.nodename, info.release, info.version, info.machine);
-
-    fflush(stdout);
-#endif
-}
-
 static size_t safe_write(int fd, const void* buf, size_t len)
 {
     size_t ret = 0;
@@ -341,9 +306,6 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
             _exit(1);
 
         default:
-#ifdef __linux__
-            prctl(PR_SET_PTRACER, dbgPid, 0, 0, 0);
-#endif
             safe_write(fd[1], &crash_info, sizeof(crash_info));
             close(fd[0]);
             close(fd[1]);
@@ -417,8 +379,6 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
     fputc('\n', stdout);
     fflush(stdout);
 
-    printSystemInfo();
-
     fflush(stdout);
 
     if (crash_info.pid > 0)
@@ -441,22 +401,10 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
 
 static void getExecPath(char** argv)
 {
-#if defined(__FreeBSD__)
-    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
-    size_t size = sizeof(argv0);
-
-    if (sysctl(mib, 4, argv0, &size, nullptr, 0) == 0)
-        return;
-
-    Log(Debug::Warning) << "Failed to call sysctl: " << std::generic_category().message(errno);
-#endif
-
-#if defined(__APPLE__)
     if (proc_pidpath(getpid(), argv0, sizeof(argv0)) > 0)
         return;
 
     Log(Debug::Warning) << "Failed to call proc_pidpath: " << std::generic_category().message(errno);
-#endif
     const char* statusPaths[] = { "/proc/self/exe", "/proc/self/file", "/proc/curproc/exe", "/proc/curproc/file" };
     memset(argv0, 0, sizeof(argv0));
 
@@ -527,39 +475,14 @@ static bool crashCatcherInstallHandlers(char** argv)
 
 namespace
 {
-#if defined(__APPLE__)
     bool isDebuggerPresent(const auto& info)
     {
         return (info.kp_proc.p_flag & P_TRACED) != 0;
     }
-#elif defined(__FreeBSD__)
-    bool isDebuggerPresent(const auto& info)
-    {
-        return (info.ki_flag & P_TRACED) != 0;
-    }
-#endif
 }
 
 static bool isDebuggerPresent()
 {
-#if defined(__linux__)
-    std::filesystem::path procstatus = std::filesystem::path("/proc/self/status");
-    if (std::filesystem::exists(procstatus))
-    {
-        std::ifstream file((procstatus));
-        while (!file.eof())
-        {
-            std::string word;
-            file >> word;
-            if (word == "TracerPid:")
-            {
-                file >> word;
-                return word != "0";
-            }
-        }
-    }
-    return false;
-#elif defined(__APPLE__) || defined(__FreeBSD__)
     struct kinfo_proc info;
     std::memset(&info, 0, sizeof(info));
 
@@ -576,9 +499,6 @@ static bool isDebuggerPresent()
     }
 
     return isDebuggerPresent(info);
-#else
-    return false;
-#endif
 }
 
 void crashCatcherInstall(int argc, char** argv, const std::filesystem::path& crashLogPath)

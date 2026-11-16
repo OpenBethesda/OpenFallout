@@ -24,7 +24,6 @@ namespace Launcher
 {
     class GraphicsPage;
     class DataFilesPage;
-    class UnshieldThread;
     class ImportPage;
     class SettingsPage;
 
@@ -34,10 +33,6 @@ namespace Launcher
         FirstRunDialogResultContinue,
         FirstRunDialogResultWizard
     };
-
-#ifndef WIN32
-    bool expansions(Launcher::UnshieldThread& cd);
-#endif
 
     class MainDialog : public QMainWindow, private Ui::MainWindow
     {

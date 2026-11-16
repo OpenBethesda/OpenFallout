@@ -1045,11 +1045,7 @@ void OF::Engine::go()
 
     prepareEngine();
 
-#ifdef _WIN32
-    const auto* statsFile = _wgetenv(L"OPENFALLOUT_OSG_STATS_FILE");
-#else
     const auto* statsFile = std::getenv("OPENFALLOUT_OSG_STATS_FILE");
-#endif
 
     std::filesystem::path path;
     if (statsFile != nullptr)

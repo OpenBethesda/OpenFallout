@@ -6,100 +6,17 @@
 #include <iostream>
 #include <memory>
 
-#ifdef _MSC_VER
-// TODO: why is this necessary? this has /external:I
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
 #include <boost/iostreams/stream.hpp>
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
 
 #include <components/crashcatcher/crashcatcher.hpp>
 #include <components/files/conversion.hpp>
 #include <components/misc/strings/conversion.hpp>
 #include <components/misc/strings/lower.hpp>
 
-#ifdef _WIN32
-#include <components/crashcatcher/windowscrashcatcher.hpp>
-#include <components/files/conversion.hpp>
-#include <components/misc/windows.hpp>
-
-#include <Knownfolders.h>
-
-#pragma push_macro("FAR")
-#pragma push_macro("NEAR")
-#undef FAR
-#define FAR
-#undef NEAR
-#define NEAR
-#include <Shlobj.h>
-#pragma pop_macro("NEAR")
-#pragma pop_macro("FAR")
-
-#endif
-
 #include <SDL_messagebox.h>
 
 namespace Debug
 {
-#ifdef _WIN32
-    bool isRedirected(DWORD nStdHandle)
-    {
-        DWORD fileType = GetFileType(GetStdHandle(nStdHandle));
-
-        return (fileType == FILE_TYPE_DISK) || (fileType == FILE_TYPE_PIPE);
-    }
-
-    bool attachParentConsole()
-    {
-        if (GetConsoleWindow() != nullptr)
-            return true;
-
-        bool inRedirected = isRedirected(STD_INPUT_HANDLE);
-        bool outRedirected = isRedirected(STD_OUTPUT_HANDLE);
-        bool errRedirected = isRedirected(STD_ERROR_HANDLE);
-
-        // Note: Do not spend three days reinvestigating this PowerShell bug thinking its our bug.
-        // https://gitlab.com/OpenMW/openmw/-/merge_requests/408#note_447467393
-        // The handles look valid, but GetFinalPathNameByHandleA can't tell what files they go to and writing to them
-        // doesn't work.
-
-        if (AttachConsole(ATTACH_PARENT_PROCESS))
-        {
-            fflush(stdout);
-            fflush(stderr);
-            std::cout.flush();
-            std::cerr.flush();
-
-            // this looks dubious but is really the right way
-            if (!inRedirected)
-            {
-                _wfreopen(L"CON", L"r", stdin);
-                freopen("CON", "r", stdin);
-                std::cin.clear();
-            }
-            if (!outRedirected)
-            {
-                _wfreopen(L"CON", L"w", stdout);
-                freopen("CON", "w", stdout);
-                std::cout.clear();
-            }
-            if (!errRedirected)
-            {
-                _wfreopen(L"CON", L"w", stderr);
-                freopen("CON", "w", stderr);
-                std::cerr.clear();
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-#endif
-
     static LogListener logListener;
     void setLogListener(LogListener listener)
     {
@@ -132,11 +49,7 @@ namespace Debug
                     const auto now = std::chrono::system_clock::now();
                     const auto time = std::chrono::system_clock::to_time_t(now);
                     tm timeInfo{};
-#ifdef _WIN32
-                    (void)localtime_s(&timeInfo, &time);
-#else
                     (void)localtime_r(&time, &timeInfo);
-#endif
                     prefixSize = std::strftime(prefix + 1, sizeof(prefix) - 1, "%T", &timeInfo) + 1;
                     char levelLetter = " EWIVD*"[int(level)];
                     const auto ms
@@ -179,29 +92,6 @@ namespace Debug
             }
         };
 
-#if defined _WIN32 && defined _DEBUG
-        class DebugOutput : public DebugOutputBase
-        {
-        public:
-            std::streamsize writeImpl(const char* str, std::streamsize size, Level debugLevel)
-            {
-                if (size > std::numeric_limits<int>::max())
-                    OutputDebugStringW(L"Next line truncated...");
-                auto wideSize = MultiByteToWideChar(CP_UTF8, 0, str,
-                    static_cast<int>(std::min<std::streamsize>(size, std::numeric_limits<int>::max())), nullptr, 0);
-                std::wstring wide(wideSize, L'\0');
-                MultiByteToWideChar(CP_UTF8, 0, str,
-                    static_cast<int>(std::min<std::streamsize>(size, std::numeric_limits<int>::max())), wide.data(),
-                    wideSize);
-                // Write string to Visual Studio Debug output
-                OutputDebugStringW(wide.c_str());
-                return size;
-            }
-
-            virtual ~DebugOutput() = default;
-        };
-#else
-
         struct Record
         {
             std::string mValue;
@@ -232,19 +122,7 @@ namespace Debug
 
         bool useColoredOutput()
         {
-#if defined(_WIN32)
-            if (std::getenv("NO_COLOR") != nullptr)
-                return false;
-
-            DWORD mode;
-            if (GetConsoleMode(GetStdHandle(STD_ERROR_HANDLE), &mode) && mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING)
-                return true;
-
-            // some console emulators may not use the Win32 API, so try the Unixy approach
-            return std::getenv("TERM") != nullptr && GetFileType(GetStdHandle(STD_ERROR_HANDLE)) == FILE_TYPE_CHAR;
-#else
             return std::getenv("TERM") != nullptr && std::getenv("NO_COLOR") == nullptr && isatty(fileno(stderr));
-#endif
         }
 
         class Identity
@@ -332,7 +210,6 @@ namespace Debug
             First mFirst;
             Second mSecond;
         };
-#endif
 
         Level toLevel(std::string_view value)
         {
@@ -355,14 +232,10 @@ namespace Debug
         static std::unique_ptr<std::mutex> rawStderrMutex = nullptr;
         static std::ofstream logfile;
 
-#if defined(_WIN32) && defined(_DEBUG)
-        static boost::iostreams::stream_buffer<DebugOutput> sb;
-#else
         static boost::iostreams::stream_buffer<Tee<Identity, Coloured>> standardOut;
         static boost::iostreams::stream_buffer<Tee<Identity, Coloured>> standardErr;
         static boost::iostreams::stream_buffer<Tee<Buffer, Coloured>> bufferedOut;
         static boost::iostreams::stream_buffer<Tee<Buffer, Coloured>> bufferedErr;
-#endif
     }
 
     std::ostream& getRawStdout()
@@ -401,7 +274,6 @@ namespace Debug
         Log::sMinDebugLevel = getDebugLevel();
         Log::sWriteLevel = true;
 
-#if !(defined(_WIN32) && defined(_DEBUG))
         const std::string logName = Misc::StringUtils::lowerCase(appName) + ".log";
         logfile.open(logDir / logName, std::ios::out);
 
@@ -417,33 +289,15 @@ namespace Debug
 
         std::cout.rdbuf(&standardOut);
         std::cerr.rdbuf(&standardErr);
-#endif
-
-#ifdef _WIN32
-        if (Crash::CrashCatcher::instance())
-        {
-            Crash::CrashCatcher::instance()->updateDumpPath(logDir);
-        }
-#endif
     }
 
     int wrapApplication(
         int (*innerApplication)(int argc, char* argv[]), int argc, char* argv[], std::string_view appName)
     {
-#if defined _WIN32
-        (void)attachParentConsole();
-        SetConsoleOutputCP(CP_UTF8);
-#endif
         rawStdout = std::make_unique<std::ostream>(std::cout.rdbuf());
         rawStderr = std::make_unique<std::ostream>(std::cerr.rdbuf());
         rawStderrMutex = std::make_unique<std::mutex>();
 
-#if defined(_WIN32) && defined(_DEBUG)
-        // Redirect cout and cerr to VS debug output when running in debug mode
-        sb.open(DebugOutput());
-        std::cout.rdbuf(&sb);
-        std::cerr.rdbuf(&sb);
-#else
         constexpr std::size_t bufferCapacity = 1024;
 
         bufferedOut.open(Tee(Buffer(bufferCapacity, globalBuffer), Coloured(*rawStdout)));
@@ -451,7 +305,6 @@ namespace Debug
 
         std::cout.rdbuf(&bufferedOut);
         std::cerr.rdbuf(&bufferedErr);
-#endif
 
         int ret = 0;
         try
@@ -459,22 +312,9 @@ namespace Debug
             if (const auto env = std::getenv("OPENFALLOUT_DISABLE_CRASH_CATCHER");
                 env == nullptr || Misc::StringUtils::toNumeric<int>(env, 0) == 0)
             {
-#if defined(_WIN32)
-                const std::string crashDumpName = Misc::StringUtils::lowerCase(appName) + "-crash.dmp";
-                const std::string freezeDumpName = Misc::StringUtils::lowerCase(appName) + "-freeze.dmp";
-                std::filesystem::path dumpDirectory = std::filesystem::temp_directory_path();
-                PWSTR userProfile = nullptr;
-                if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &userProfile)))
-                {
-                    dumpDirectory = userProfile;
-                }
-                CoTaskMemFree(userProfile);
-                Crash::CrashCatcher crashy(argc, argv, dumpDirectory, crashDumpName, freezeDumpName);
-#else
                 const std::string crashLogName = Misc::StringUtils::lowerCase(appName) + "-crash.log";
                 // install the crash handler as soon as possible.
                 crashCatcherInstall(argc, argv, std::filesystem::temp_directory_path() / crashLogName);
-#endif
                 ret = innerApplication(argc, argv);
             }
             else
@@ -482,9 +322,7 @@ namespace Debug
         }
         catch (const std::exception& e)
         {
-#if (defined(__APPLE__) || defined(__linux) || defined(__unix) || defined(__posix))
             if (!isatty(fileno(stdin)))
-#endif
                 SDL_ShowSimpleMessageBox(0, (std::string(appName) + ": Fatal error").c_str(), e.what(), nullptr);
 
             Log(Debug::Error) << "Fatal error: " << e.what();

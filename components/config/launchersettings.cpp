@@ -40,11 +40,7 @@ namespace Config
             // basically, use date and time as the name  e.g. YYYY-MM-DDThh:mm:ss
             const std::time_t rawtime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             tm timeinfo{};
-#ifdef _WIN32
-            (void)localtime_s(&timeinfo, &rawtime);
-#else
             (void)localtime_r(&rawtime, &timeinfo);
-#endif
             constexpr int base = 10;
             QChar zeroPad('0');
             return QString("%1-%2-%3T%4:%5:%6")
@@ -325,11 +321,7 @@ void Config::LauncherSettings::setContentList(const GameSettings& gameSettings)
     {
         const auto& listDirs = getDataDirectoryList(listName);
         constexpr auto compareDataDirectories = [](const SettingValue& dir, const QString& listDir) {
-#ifdef Q_OS_WINDOWS
-            constexpr auto caseSensitivity = Qt::CaseInsensitive;
-#else
             constexpr auto caseSensitivity = Qt::CaseSensitive;
-#endif
             return dir.originalRepresentation == listDir
                 || QDir::cleanPath(dir.originalRepresentation).compare(QDir::cleanPath(listDir), caseSensitivity) == 0;
         };

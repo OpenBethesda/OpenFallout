@@ -1,7 +1,5 @@
 #include "macospath.hpp"
 
-#if defined(macintosh) || defined(Macintosh) || defined(__APPLE__) || defined(__MACH__)
-
 #include <cstdlib>
 #include <filesystem>
 #include <mach-o/dyld.h>
@@ -120,5 +118,3 @@ namespace Files
     }
 
 } /* namespace Files */
-
-#endif /* defined(macintosh) || defined(Macintosh) || defined(__APPLE__) || defined(__MACH__) */

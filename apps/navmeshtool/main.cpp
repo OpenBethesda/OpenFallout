@@ -46,11 +46,6 @@
 #include <utility>
 #include <vector>
 
-#ifdef WIN32
-#include <fcntl.h>
-#include <io.h>
-#endif
-
 namespace NavMeshTool
 {
     namespace
@@ -191,11 +186,6 @@ namespace NavMeshTool
 
             const std::regex worldspaceFilter(variables["worldspace-filter"].as<std::string>());
 
-#ifdef WIN32
-            if (writeBinaryLog)
-                _setmode(_fileno(stderr), _O_BINARY);
-#endif
-
             Fallback::Map::init(variables["fallback"].as<Fallback::FallbackMap>().mMap);
 
             VFS::Manager vfs;
@@ -330,11 +320,7 @@ namespace NavMeshTool
     }
 }
 
-#ifdef ANDROID
-extern "C" int SDL_main(int argc, char* argv[])
-#else
 int main(int argc, char* argv[])
-#endif
 {
     return Debug::wrapApplication(NavMeshTool::runNavMeshTool, argc, argv, NavMeshTool::applicationName);
 }

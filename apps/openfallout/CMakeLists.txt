@@ -10,7 +10,7 @@ set(OPENFALLOUT_HEADERS
     profile.hpp
 )
 
-source_group(apps/openfallout FILES main.cpp androidmain.cpp ${OPENFALLOUT_SOURCES} ${OPENFALLOUT_HEADERS} ${OPENFALLOUT_RESOURCES})
+source_group(apps/openfallout FILES main.cpp ${OPENFALLOUT_SOURCES} ${OPENFALLOUT_HEADERS})
 
 add_openfallout_dir (mwrender
     actors objects renderingmanager animation rotatecontroller sky skyutil skyfallback npcanimation esm4npcanimation esm4creatureanimation falloutactoranimation falloutanimation falloutface falloutplayerbody vismask
@@ -219,7 +219,7 @@ endif()
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(openfallout-lib)
     openfallout_enable_coverage(openfallout-lua-lib)
-    if (NOT ANDROID AND BUILD_OPENFALLOUT)
+    if (BUILD_OPENFALLOUT)
         openfallout_enable_coverage(openfallout)
     endif()
 endif()

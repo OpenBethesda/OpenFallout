@@ -314,8 +314,7 @@ namespace OFGui
         getWidget(mObjectShadowsButton, "ObjectShadowsButton");
         getWidget(mShadowMapResolution, "ShadowMapResolution");
 
-#ifndef WIN32
-        // hide gamma controls since it currently does not work under Linux
+        // hide gamma controls since they currently do not work
         MyGUI::ScrollBar* gammaSlider;
         getWidget(gammaSlider, "GammaSlider");
         gammaSlider->setVisible(false);
@@ -326,7 +325,6 @@ namespace OFGui
         textBox->setVisible(false);
         getWidget(textBox, "GammaTextLight");
         textBox->setVisible(false);
-#endif
 
         mMainWidget->castType<MyGUI::Window>()->eventWindowChangeCoord
             += MyGUI::newDelegate(this, &SettingsWindow::onWindowResize);

@@ -21,11 +21,7 @@ namespace Files
 
     namespace
     {
-#if defined(_WIN32) || defined(__WINDOWS__)
-        constexpr auto sApplicationName = "OpenFallout";
-#else
         constexpr auto sApplicationName = "openfallout";
-#endif
 
         using GetPath = const std::filesystem::path& (Files::FixedPath<>::*)() const;
         constexpr std::array<std::pair<std::u8string_view, GetPath>, 4> sTokenMappings = {

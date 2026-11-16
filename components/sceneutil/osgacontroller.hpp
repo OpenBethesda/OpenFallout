@@ -35,14 +35,6 @@ namespace SceneUtil
         Resource::Animation* mAnimation;
     };
 
-#ifdef _MSC_VER
-#pragma warning(push)
-/*
- * Warning C4250: 'SceneUtil::OsgAnimationController': inherits 'osg::Callback::osg::Callback::asCallback' via
- * dominance, there is no way to solved this if an object must inherit from both osg::Object and osg::Callback
- */
-#pragma warning(disable : 4250)
-#endif
     class OsgAnimationController : public SceneUtil::KeyframeController,
                                    public SceneUtil::NodeCallback<OsgAnimationController>
     {
@@ -81,9 +73,6 @@ namespace SceneUtil
             mMergedAnimationTracks; // Used only by osgAnimation-based formats (e.g. dae)
         std::vector<EmulatedAnimation> mEmulatedAnimations;
     };
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
 }
 
 #endif

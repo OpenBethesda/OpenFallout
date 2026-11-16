@@ -253,11 +253,7 @@ namespace SDLUtil
 
     DesktopPlatform thisDesktopPlatform()
     {
-#ifdef __APPLE__
         return DesktopPlatform::Mac;
-#else
-        return DesktopPlatform::Other;
-#endif
     }
 
     bool followsMacDesktopConventions()
@@ -267,12 +263,10 @@ namespace SDLUtil
 
     void applyDesktopHints()
     {
-#ifdef __APPLE__
         // Full screen goes to a Space of its own (SDL's default on macOS, set so that it stays so), and the menu bar
         // SDL puts up answers Command-Q, -H, -M, -W and Control-Command-F; closing the only window quits through
         // SDL_QUIT, which the engine takes as its normal quit.
         SDL_SetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "1");
         SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "1");
-#endif
     }
 }

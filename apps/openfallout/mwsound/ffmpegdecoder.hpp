@@ -6,11 +6,6 @@
 #include <osg-ffmpeg-videoplayer/libavformatdefines.hpp>
 #include <osg-ffmpeg-videoplayer/libavutildefines.hpp>
 
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4244)
-#endif
-
 extern "C"
 {
 #include <libavcodec/avcodec.h>
@@ -22,10 +17,6 @@ extern "C"
 // https://ffmpeg.zeranoe.com/forum/viewtopic.php?f=15&t=872
 #include <libswresample/swresample.h>
 }
-
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
 
 #include <components/files/istreamptr.hpp>
 

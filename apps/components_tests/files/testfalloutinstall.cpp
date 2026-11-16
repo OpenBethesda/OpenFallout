@@ -123,7 +123,6 @@ namespace
         EXPECT_EQ(installs[3].mData, games / "Fallout3" / "data");
     }
 
-#ifndef _WIN32
     TEST(FilesFalloutInstallTest, readsTheDrivesOfWindowsThatSteamInAWinePrefixNames)
     {
         const auto dir = TestingOpenMW::outputDirPath("falloutinstall_wine");
@@ -148,7 +147,6 @@ namespace
         EXPECT_EQ(installs[1].mGame, FalloutGame::Fallout3);
         EXPECT_EQ(installs[1].mData, steam / "steamapps" / "common" / "Fallout 3 goty" / "Data");
     }
-#endif
 
     TEST(FilesFalloutInstallTest, listsACopyOnceWhereTwoPlacesLeadToIt)
     {
