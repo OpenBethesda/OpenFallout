@@ -49,7 +49,7 @@ Options:
 		Use warnings as errors (-Werror)
 	-T
 		Configure the unit-test tree in build-tests instead: Debug, coverage, the components
-		and OpenFallout test suites, no editor or wizard. It is never packaged.
+		and OpenFallout test suites. It is never packaged.
 EOF
 	    exit 1
 	    ;;
@@ -66,16 +66,21 @@ fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
+# Supported: Apple Silicon, macOS 26.0 or later (CI/check_mac_package.py checks both on the packaged app).
+VCPKG_TARGET_TRIPLET="arm64-osx-dynamic"
+
 declare -a CMAKE_CONF_OPTS=(
 -D CMAKE_C_COMPILER="clang"
 -D CMAKE_CXX_COMPILER="clang++"
 -DOPENFALLOUT_USE_SYSTEM_YAML_CPP=OFF
--D CMAKE_OSX_DEPLOYMENT_TARGET="14.8"
+-D CMAKE_OSX_DEPLOYMENT_TARGET="26.0"
 )
 
+# The wizard and the editor are not built (they do nothing for the Fallout games).
 declare -a BUILD_OPTS=(
 -D BUILD_OPENFALLOUT=TRUE
--D BUILD_OPENCS=TRUE
+-D BUILD_OPENCS=FALSE
+-D BUILD_WIZARD=FALSE
 -D BUILD_ESMTOOL=TRUE
 -D BUILD_BSATOOL=TRUE
 -D BUILD_ESSIMPORTER=TRUE
@@ -87,9 +92,8 @@ declare -a BUILD_OPTS=(
 
 # The unit tests and their coverage (CI/test_reports.py) need an unoptimized, instrumented build, and the packaged app
 # must not be instrumented, so they get their own tree. Only the test suites are built in it. The launcher stays on:
-# it turns on Qt, which the launcher-settings tests in components-tests need. The editor's tests stay off: the editor
-# is not built on the Mac. Debug without -g: coverage needs no debug information, and without it the tree, which the
-# job caches, is about a quarter of the size.
+# it turns on Qt, which the launcher-settings tests in components-tests need. Debug without -g: coverage needs no debug
+# information, and without it the tree, which the job caches, is about a quarter of the size.
 if [[ -n $TEST_TREE ]]; then
     CMAKE_BUILD_TYPE=Debug
     BUILD_OPTS+=(
@@ -98,18 +102,7 @@ if [[ -n $TEST_TREE ]]; then
         -D BUILD_WITH_CODE_COVERAGE=ON
         -D BUILD_COMPONENTS_TESTS=ON
         -D BUILD_OPENFALLOUT_TESTS=ON
-        -D BUILD_OPENCS=OFF
-        -D BUILD_WIZARD=OFF
     )
-fi
-
-if [[ "${MACOS_AMD64}" ]]; then
-    VCPKG_TARGET_TRIPLET="x64-osx-dynamic"
-    CMAKE_CONF_OPTS+=(
-        -D CMAKE_OSX_ARCHITECTURES="x86_64"
-    )
-else
-    VCPKG_TARGET_TRIPLET="arm64-osx-dynamic"
 fi
 
 DEPENDENCIES_INSTALLED_PATH="$DEPENDENCIES_ROOT_PATH/installed/$VCPKG_TARGET_TRIPLET"

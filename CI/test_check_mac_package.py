@@ -45,6 +45,9 @@ LUAJIT_HRT = ("#include <pthread.h>\nint luaL_newstate(void) { pthread_jit_write
 LUAJIT_MPROTECT = ("#include <sys/mman.h>\nint luaL_newstate(void) { return mprotect(0, 0, PROT_READ); }\n")
 
 
+MINIMUM = "-mmacosx-version-min=26.0"
+
+
 def sign(path, *options):
     subprocess.run(["codesign", "--force", "--sign", "-", *options, str(path)], check=True, capture_output=True)
 
@@ -53,15 +56,18 @@ class StandIn:
     """OpenFallout.app as the packaging block lays it out, with tiny programs in place of the real ones."""
 
     def __init__(self, root, system_openal=False, sign_engine=True, game_keys=None, engine_keys=None, hardened=None,
-                 luajit=LUAJIT_HRT):
+                 luajit=LUAJIT_HRT, launcher_flags=(), openal_flags=()):
         """hardened: None signs plain ad hoc; a dict of entitlements signs the engine with the hardened runtime.
-        luajit: the source of the bundled LuaJIT stand-in (LUAJIT_HRT or LUAJIT_MPROTECT)."""
+        luajit: the source of the bundled LuaJIT stand-in (LUAJIT_HRT or LUAJIT_MPROTECT).
+        The programs and OpenAL are built for macOS 26.0, the minimum; the LuaJIT library for 14.0, as the prebuilt
+        dependency set is (an older library is allowed). launcher_flags and openal_flags are added to the compiler
+        options of the launcher and of the OpenAL library."""
         self.app = root / "OpenFallout.app"
         contents = self.app / "Contents"
         frameworks = contents / "Frameworks"
         openal = frameworks / "libopenal.1.25.0.dylib"
-        compile_c(openal, "int alGetError(void) { return 0; }\n", "-dynamiclib",
-                  "-install_name", "@executable_path/../Frameworks/libopenal.1.25.0.dylib")
+        compile_c(openal, "int alGetError(void) { return 0; }\n", "-dynamiclib", MINIMUM,
+                  "-install_name", "@executable_path/../Frameworks/libopenal.1.25.0.dylib", *openal_flags)
         lua = frameworks / "libluajit-5.1.2.1.1767980792.dylib"
         compile_c(lua, luajit, "-dynamiclib", "-mmacosx-version-min=14.0",
                   "-install_name", "@rpath/libluajit-5.1.2.1.1767980792.dylib")
@@ -69,13 +75,13 @@ class StandIn:
         uses_lua = ["-Wl,-rpath,@executable_path/../Frameworks", str(lua)]
         if system_openal:
             compile_c(engine, "int luaL_newstate(void);\nint main(void) { return luaL_newstate(); }\n",
-                      "-framework", "OpenAL", *uses_lua)
+                      "-framework", "OpenAL", MINIMUM, *uses_lua)
         else:
             compile_c(engine, "int alGetError(void);\nint luaL_newstate(void);\n"
-                      "int main(void) { return alGetError() + luaL_newstate(); }\n", str(openal), *uses_lua)
-        compile_c(contents / "MacOS/openfallout-launcher", "int main(void) { return 0; }\n")
+                      "int main(void) { return alGetError() + luaL_newstate(); }\n", str(openal), MINIMUM, *uses_lua)
+        compile_c(contents / "MacOS/openfallout-launcher", "int main(void) { return 0; }\n", MINIMUM, *launcher_flags)
         nested = contents / "Helpers/OpenFallout Engine.app"
-        compile_c(nested / "Contents/MacOS/OpenFallout Engine", "int main(void) { return 0; }\n")
+        compile_c(nested / "Contents/MacOS/OpenFallout Engine", "int main(void) { return 0; }\n", MINIMUM)
         write_plist(self.app, CFBundleExecutable="openfallout-launcher", CFBundleIdentifier="org.openfallout.openfallout",
                     CFBundlePackageType="APPL", **(GAME_KEYS if game_keys is None else game_keys))
         write_plist(nested, CFBundleExecutable="OpenFallout Engine",
@@ -83,8 +89,7 @@ class StandIn:
                     **(GAME_KEYS if engine_keys is None else engine_keys))
         # inside out, as SignMacApplications does. The launcher is the bundle's own program: the bundle's signature
         # seals it, after everything in the bundle is signed. Signing it on its own before that signs the bundle, which
-        # codesign refuses while code inside is unsigned (on Apple Silicon the linker has signed every program already,
-        # on an Intel Mac nothing is signed until here)
+        # codesign refuses while code inside is unsigned (the linker has signed every program already)
         for item in (openal, lua):
             sign(item)
         if hardened is None:
@@ -242,29 +247,64 @@ class PackageCheckTests(unittest.TestCase):
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL layout: Contents/Helpers/OpenFallout Engine.app is missing", output)
 
-    def test_disk_image_with_extra_entry_fails(self):
+    def test_disk_image_with_extra_entry_or_the_editor_fails(self):
         stage = self.root / "stage"
         stage.mkdir()
         StandIn(stage)
         (stage / "OpenFallout-CS.app").mkdir()
         os.symlink("/Applications", stage / "Applications")
         (stage / "README.txt").write_text("extra")
-        dmg = self.root / "OpenFallout-test.dmg"
-        subprocess.run(["hdiutil", "create", "-quiet", "-fs", "HFS+", "-srcfolder", str(stage), "-volname", "OFTest",
-                        str(dmg)], check=True)
+        dmg = self.root / "OpenFallout-test-macOS-arm64.dmg"
+
+        def make_image():
+            dmg.unlink(missing_ok=True)
+            subprocess.run(["hdiutil", "create", "-quiet", "-fs", "HFS+", "-srcfolder", str(stage), "-volname",
+                            "OFTest", str(dmg)], check=True)
+
+        make_image()
         status, output = run_check(dmg, "--smoke", "skip")
         self.assertEqual(status, 1, output)
-        self.assertIn("FAIL dmg: the disk image holds what it should not: README.txt", output)
+        self.assertIn("FAIL dmg: the disk image holds what it should not: OpenFallout-CS.app, README.txt", output)
         self.assertIn("PASS signatures", output)
 
+        (stage / "OpenFallout-CS.app").rmdir()
         (stage / "README.txt").unlink()
         (stage / "README.md").write_text("read me")
-        dmg.unlink()
-        subprocess.run(["hdiutil", "create", "-quiet", "-fs", "HFS+", "-srcfolder", str(stage), "-volname", "OFTest",
-                        str(dmg)], check=True)
+        make_image()
         status, output = run_check(dmg, "--smoke", "skip")
         self.assertEqual(status, 0, output)
         self.assertIn("PASS dmg", output)
+        self.assertIn("PASS platform", output)
+
+    def test_program_built_for_an_older_macos_than_the_minimum_fails(self):
+        app = StandIn(self.root, launcher_flags=("-mmacosx-version-min=14.8",)).app
+        status, output = run_check(app, "--smoke", "skip")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL platform: Contents/MacOS/openfallout-launcher: built for macOS 14.8, not 26.0", output)
+
+    def test_library_built_for_a_newer_macos_than_the_minimum_fails(self):
+        app = StandIn(self.root, openal_flags=("-mmacosx-version-min=27.0",)).app
+        status, output = run_check(app, "--smoke", "skip")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL platform: Contents/Frameworks/libopenal.1.25.0.dylib: built for macOS 27.0, newer than "
+                      "26.0", output)
+
+    def test_intel_program_fails(self):
+        app = StandIn(self.root, launcher_flags=("-arch", "x86_64")).app
+        status, output = run_check(app, "--smoke", "skip")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL platform: Contents/MacOS/openfallout-launcher: architecture x86_64, not arm64 only", output)
+
+    def test_wizard_or_editor_program_in_the_app_fails_layout(self):
+        for name in ("Contents/MacOS/openfallout-wizard", "Contents/MacOS/openfallout-cs"):
+            with self.subTest(name=name):
+                root = self.root / name.rsplit("/", 1)[1]
+                app = StandIn(root).app
+                compile_c(app / name, "int main(void) { return 0; }\n", MINIMUM)
+                status, output = run_check(app, "--smoke", "skip")
+                self.assertEqual(status, 1, output)
+                self.assertIn(f"FAIL layout: {name} is not part of the packaged app (the wizard and the editor are not "
+                              "built)", output)
 
 
 # Stands in for macOS's `open`: records its arguments and writes the engine log that $SMOKE_LOG holds into the
@@ -430,6 +470,8 @@ class FakeTools:
         self.overrides = {}     # path suffix -> dict of details to change for that item
         self.fails = {}         # (tool, verb) -> (exit status, stderr)
         self.entitlements = {}  # path suffix -> entitlements dict
+        self.minos = {}         # path suffix -> the macOS vtool reports (default 26.0)
+        self.archs = {}         # path suffix -> what lipo -archs reports (default arm64)
 
     def details(self, path):
         info = {"authority": DEVELOPER_ID, "team": TEAM, "flags": "0x10000(runtime)", "timestamp": True}
@@ -468,7 +510,11 @@ class FakeTools:
         elif tool == "sysctl":
             out = "Apple M2 (Virtual)\n"
         elif tool == "vtool":
-            out = f"{command[-1]}:\nLoad command 11\n      cmd LC_BUILD_VERSION\n platform MACOS\n    minos 14.8\n      sdk 26.1\n"
+            minos = next((value for suffix, value in self.minos.items() if command[-1].endswith(suffix)), "26.0")
+            out = (f"{command[-1]}:\nLoad command 11\n      cmd LC_BUILD_VERSION\n platform MACOS\n    minos {minos}\n"
+                   "      sdk 26.1\n")
+        elif tool == "lipo":
+            out = next((value for suffix, value in self.archs.items() if command[-1].endswith(suffix)), "arm64") + "\n"
         return subprocess.CompletedProcess(command, status, out, err)
 
 
@@ -578,14 +624,28 @@ class ReleaseModeTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         return dmg
 
-    def test_notes_say_which_macs_the_image_is_for(self):
+    def test_notes_say_what_the_image_holds(self):
         notes = self.root / "notes.md"
         self.check("--notes", notes, package=self.disk_image())
         line = notes.read_text()
-        self.assertIn("For Apple Silicon Macs (arm64), Developer ID signed and notarized; needs macOS 14.8 or later "
-                      "(Game Mode: macOS 26 or later).", line)
+        self.assertTrue(line.endswith(" Apple Silicon (arm64), Developer ID signed and notarized, built for macOS "
+                                      "26.0.\n"), line)
         self.assertIn(["vtool", "-show-build", str(self.root / "volume/OpenFallout.app/Contents/MacOS/openfallout")],
                       self.tools.calls)
+
+    def test_notes_leave_supported_and_played_on_to_the_engine_release(self):
+        # CI/engine_release.py notes writes the Supported line and the owner's Played on line; the check line states
+        # only what was checked, on which machine
+        import engine_release
+
+        notes = self.root / "notes.md"
+        run_check(self.disk_image(), "--mode", "local", "--smoke", "skip", "--notes", notes)
+        line = notes.read_text()
+        self.assertIn("ad hoc signed, not notarized (macOS asks before the first start)", line)
+        for claim in ("Intel", "x86_64", "Supported", "Played on", "or later", "Game Mode"):
+            self.assertNotIn(claim, line)
+        self.assertIsNone(engine_release.SUPPORTED.match(line.strip()))
+        self.assertIsNone(engine_release.PLAYED_ON.match(line.strip()))
 
     def test_notes_record_the_sha256_of_the_image_in_the_form_the_release_harness_reads(self):
         import hashlib
@@ -602,12 +662,38 @@ class ReleaseModeTests(unittest.TestCase):
         self.assertEqual(found["chip"], "Apple M2 (Virtual)")
         self.assertEqual((found["mode"], found["smoke"], found["renderer"]), ("release", "SKIP", "not reported"))
 
-    def test_notes_of_the_intel_image_say_it_is_not_notarized(self):
-        notes = self.root / "notes.md"
-        run_check(self.disk_image("OpenFallout-1.0-macOS-x86_64.dmg"), "--mode", "local", "--smoke", "skip",
-                  "--notes", notes)
-        self.assertIn("For Intel Macs (x86_64), ad hoc signed, not notarized (macOS asks before the first start); "
-                      "needs macOS 14.8 or later (Game Mode: macOS 26 or later).", notes.read_text())
+    def test_an_image_for_another_architecture_fails(self):
+        for name in ("OpenFallout-1.0-macOS-x86_64.dmg", "OpenFallout-1.0-macOS-universal.dmg", "OpenFallout.dmg"):
+            with self.subTest(name=name):
+                status, output = self.check(package=self.disk_image(name))
+                self.assertEqual(status, 1, output)
+                self.assertIn(f"FAIL dmg: {name} is not named as the Apple Silicon image (OpenFallout-*-arm64.dmg)",
+                              output)
+                self.app = fake_package(self.root)
+                shutil.rmtree(self.root / "volume")
+
+    def test_programs_and_libraries_are_checked_against_the_minimum_and_arm64(self):
+        status, output = self.check()
+        self.assertIn("PASS platform: 4 Mach-O files, arm64; the 3 programs built for macOS 26.0, no library for a "
+                      "newer macOS", output)
+        self.tools.minos["MacOS/openfallout"] = "14.8"
+        self.tools.minos["libopenal.1.25.0.dylib"] = "26.1"
+        self.tools.archs["OpenFallout Engine"] = "x86_64 arm64"
+        self.tools.archs["libopenal.1.25.0.dylib"] = "x86_64"
+        status, output = self.check()
+        self.assertEqual(status, 1, output)
+        for problem in ("Contents/MacOS/openfallout: built for macOS 14.8, not 26.0",
+                        "Contents/Frameworks/libopenal.1.25.0.dylib: built for macOS 26.1, newer than 26.0",
+                        "Contents/Helpers/OpenFallout Engine.app/Contents/MacOS/OpenFallout Engine: architecture "
+                        "x86_64 arm64, not arm64 only",
+                        "Contents/Frameworks/libopenal.1.25.0.dylib: architecture x86_64, no arm64"):
+            self.assertIn(problem, output)
+
+    def test_a_universal_library_passes(self):
+        # Qt's frameworks are universal; the loader takes their arm64 part
+        self.tools.archs["libopenal.1.25.0.dylib"] = "x86_64 arm64"
+        _, output = self.check()
+        self.assertIn("PASS platform", output)
 
     def test_disk_image_is_assessed_as_a_download_and_its_ticket_validated(self):
         volume = self.root / "volume"

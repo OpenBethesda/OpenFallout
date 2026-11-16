@@ -1,7 +1,8 @@
 # Codecov coverage flags and Test Analytics
 
-The Apple Silicon Mac job (`.github/workflows/macos.yml`) runs the components and OpenFallout test suites
-and uploads their coverage and test results. Each suite produces its own coverage report and JUnit test
+The one Mac job (`.github/workflows/macos.yml`, check name `macOS / Build, test and package`) runs the
+components and OpenFallout test suites and uploads their coverage and test results. No other job builds or
+tests the engine. Each suite produces its own coverage report and JUnit test
 results. The existing `CODECOV_TOKEN` Actions secret authenticates both coverage and Test Analytics uploads;
 `push.yml` passes it to the Mac job.
 
@@ -15,20 +16,15 @@ not source-directory filters: shared production code can appear under several
 flags. Test sources, third-party dependencies, and generated build files are
 excluded from coverage.
 
-The Ubuntu job still builds and runs the components, OpenFallout and editor
-suites (`openfallout-cs-tests`) until the Mac-only cut removes it. It keeps its
-reports as the `ubuntu-coverage` and `ubuntu-test-results` artifacts and uploads
-nothing to Codecov, so no report is counted twice. The editor is not built on
-the Mac, so the `editor` flag ended when the uploads moved. Windows runs its
-own tests and reports nothing.
+The editor is not built, so it has no suite and the `editor` flag ended when
+the uploads moved from the Ubuntu job, which no longer exists, to the Mac job.
 
 ## The Mac job
 
 The packaged app is built RelWithDebInfo and is never instrumented. The tests
 get a second build tree in the same job, `build-tests`, configured by
 `CI/before_script.macos.sh -T`: Debug without debug information (`-O0`, no
-`-g`), `BUILD_WITH_CODE_COVERAGE=ON`, the two test suites, and no editor or
-wizard. Only `components-tests` and
+`-g`), `BUILD_WITH_CODE_COVERAGE=ON` and the two test suites. Only `components-tests` and
 `openfallout-tests` are built in it. The launcher stays configured because it
 turns on Qt, which the launcher-settings tests in `components-tests` need. The
 tree has its own incremental build cache, `build-macos-coverage-v1-…`, and
@@ -36,10 +32,10 @@ shares the job's ccache (see [CI build cache contract](ci-cache.md)). The test
 steps run whenever the app compiled, so a packaging or notarization failure
 does not hide the test results.
 
-Only the Apple Silicon build of a branch or pull request runs them. The Intel
-build does not. A release tag (`build-type: Release`) does not either: a tag is
-made from a commit whose branch run already tested it, and a second upload for
-the same commit would be counted twice by Codecov.
+Every run of the Mac job for a branch or pull request runs them. A release tag
+(`build-type: Release`) does not: a tag is made from a commit whose branch run
+already tested it, and a second upload for the same commit would be counted
+twice by Codecov.
 
 ## How coverage is measured
 
@@ -54,8 +50,10 @@ the method by compiler:
   executable. `CI/test_reports.py` turns the result into a Cobertura report in
   the same shape gcovr writes. A branch here is a condition in the source, so
   the reports count no exception exits.
-- **GCC (Ubuntu)** writes gcov counters, which gcovr 8.3 reads into
-  `coverage/<suite>.xml` and a JSON trace, `coverage/<suite>.json`.
+- **GCC** writes gcov counters, which gcovr 8.3 reads into
+  `coverage/<suite>.xml` and a JSON trace, `coverage/<suite>.json`. No CI job
+  builds with GCC since the Ubuntu job was removed; `CI/test_reports.py` keeps
+  the path for a local GCC build.
 
 Clang's gcov-style counters (`--coverage`) were not used: they count the exit
 that the compiler adds to every call that may throw as a branch, and Apple's
@@ -120,8 +118,7 @@ the split.
 | Formats and loaders (`loaders`) | ESM, NIF, BSA, VFS, file, navigation, script and other data code under `components/` |
 | Rendering, GUI and audio helpers (`render_helpers`) | scene graph, shaders, terrain, widgets, SDL and other helpers under `components/` |
 | OpenFallout engine (`engine`) | `apps/openfallout/` |
-| Construction Set editor (`editor`) | `apps/opencs/` |
-| Launcher and installation wizard (`desktop_ui`) | `apps/launcher/`, `apps/wizard/` |
+| Launcher (`desktop_ui`) | `apps/launcher/` |
 | Data and navigation tools (`tools`) | BSA, Bullet, ESM, navigation and NIF tools under `apps/` |
 
 These groups cover the production files in the coverage report without
@@ -131,17 +128,28 @@ default-branch view, merge the PR and allow its `master` coverage run to
 finish. Codecov may offer **Enable Component Analytics** to backfill
 historical component trends.
 
-## Python tests of the helper scripts
+## Python tests
 
-The `Changes` job of `push.yml` runs the unit tests under `scripts/openfallout/`
+The `Changes` job of `push.yml` runs on a Mac runner and runs every Python test
 on every pull request and every push to `master`, including the documentation-only
-ones that skip the platform builds. They read the Lua scripts and the coverage tracker, so
-they check that those still agree. The job installs a `luajit` executable and
-`lupa` (pinned in the workflow, so Dependabot does not update it); without
-them the Lua tests skip. To run them locally:
+changes that skip the Mac build: the tests of the CI scripts (`CI/test_*.py`),
+of the helper scripts (`scripts/openfallout/test_*.py`) and of the Lua
+documentation generator (`docs/test_luadoc.py`). On a Mac runner the tests that
+need macOS (`codesign`, `hdiutil`, `vtool`) run instead of being skipped.
+
+The helper-script tests read the Lua scripts and the coverage tracker, so they
+check that those still agree. The job installs a `luajit` executable with
+Homebrew, and `lupa` and Pillow in a virtual environment (pinned in the workflow,
+so Dependabot does not update them); without them the Lua tests and one picture
+test of the round runner skip. lupa's wheels
+for Apple Silicon have no LuaJIT runtime, so the tests use its Lua 5.2 runtime,
+which accepts what LuaJIT accepts in these scripts. To run them locally:
 
 ```sh
-python3 -m unittest discover -s scripts/openfallout -p 'test_*.py'
+python3 -m unittest discover -s CI -p 'test_*.py'
+python3 -m venv .venv-tests && .venv-tests/bin/pip install lupa==2.8 pillow==12.0.0
+.venv-tests/bin/python -m unittest discover -s scripts/openfallout -p 'test_*.py'
+python3 -m unittest discover -s docs -p test_luadoc.py
 ```
 
 On the Mac, with an instrumented test tree in `build-tests/` (as the Mac job
@@ -155,8 +163,8 @@ python3 CI/test_reports.py --build-dir build-tests merge components openfallout
 ```
 
 With an instrumented GCC build in `build/` and gcovr 8.3 on `PATH`, `run` and
-`merge` without `--build-dir` work as on the Ubuntu job, including `run editor`.
-`--tool gcov` or `--tool llvm` overrides the choice by platform.
+`merge` without `--build-dir` read gcov counters. `--tool gcov` or `--tool llvm`
+overrides the choice by platform.
 
 References: [Codecov flags](https://docs.codecov.com/docs/flags),
 [Test Analytics](https://docs.codecov.com/docs/test-analytics),
@@ -166,7 +174,8 @@ References: [Codecov flags](https://docs.codecov.com/docs/flags),
 ## Dependabot
 
 `.github/dependabot.yml` checks GitHub Actions, `docs/requirements.txt`, and the
-Dockerfiles under `docker/` and `docs/` every Monday at 09:00 America/New_York.
+Dockerfile under `docs/` (a local documentation build; CI builds the documentation
+without Docker) every Monday at 09:00 America/New_York.
 GitHub Actions updates are grouped into one PR, including major versions.
 Documentation Python updates are also grouped so related Sphinx dependencies
 are validated together. Sphinx 9 and Docutils 0.22 and later are held back until

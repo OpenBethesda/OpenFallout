@@ -6,15 +6,11 @@ on:
       build-type:
         default: RelWithDebInfo
         type: string
-      image:
-        description: MacOS Runner image
-        required: true
-        type: string
       signing-environment:
         description: >-
           GitHub environment that holds the release signing secrets (docs/openfallout/mac-release.md). Callers name it
-          only for the arm64 build of a tag or the default branch; empty means the job has no environment and can only
-          make the ad hoc build.
+          only for a tag or the default branch; empty means the job has no environment and can only make the ad hoc
+          build.
         default: ""
         type: string
     # Release signing (CI/macos/release_signing.py, docs/openfallout/mac-release.md). All optional: without them, and
@@ -38,8 +34,10 @@ on:
 
 jobs:
   MacOS:
-    name: ${{ inputs.image }}
-    runs-on: ${{ inputs.image }}
+    # A fixed name: the check is "macOS / Build, test and package" (CI/harness_release.py MAC_JOB).
+    name: Build, test and package
+    # The one runner image: Apple Silicon, macOS 26. The cache keys below spell it out.
+    runs-on: macos-26
     # The environment's own rules (which branches and tags may use it, who must approve) decide whether this job gets
     # the signing secrets; a tag or branch outside those rules cannot read them whatever its copy of the scripts says.
     environment: ${{ inputs.signing-environment }}
@@ -47,19 +45,10 @@ jobs:
     - uses: actions/checkout@v7
     - run: echo "CMAKE_BUILD_TYPE=${{ inputs.build-type }}" >> "$GITHUB_ENV"
 
-    - run: echo "MACOS_AMD64=true" >> "$GITHUB_ENV"
-      if: ${{ inputs.image == 'macos-26-intel' }}
-
-    - run: echo "DMG_IDENTIFIER=x86_64" >> "$GITHUB_ENV"
-      if: ${{ inputs.image == 'macos-26-intel' }}
-    - run: echo "DMG_IDENTIFIER=arm64" >> "$GITHUB_ENV"
-      if: ${{ inputs.image != 'macos-26-intel' }}
-
-    # The unit tests and their coverage run on the Apple Silicon build of branches and pull requests. A release tag
-    # skips them: it is made from a commit whose branch run already tested it, and a second report for the same commit
+    # The unit tests and their coverage run on the build of branches and pull requests. A release tag skips them: it is made from a commit whose branch run already tested it, and a second report for the same commit
     # would be counted twice by Codecov.
     - run: echo "UNIT_TESTS=true" >> "$GITHUB_ENV"
-      if: ${{ inputs.build-type != 'Release' && inputs.image != 'macos-26-intel' }}
+      if: ${{ inputs.build-type != 'Release' }}
 
     # The manifest comes from the main branch of openmw-deps, so its digest has to be part of the cache key.
     - name: Fetch dependency manifest
@@ -75,13 +64,13 @@ jobs:
         path: |
           /tmp/Qt
           /tmp/openmw-deps
-        key: macos-deps-${{ inputs.image }}-${{ runner.arch }}-${{ steps.deps-manifest.outputs.digest }}-${{ hashFiles('CI/macos/deps_versions.sh', 'CI/macos/fetch_deps_manifest.sh', 'CI/before_install.macos.sh', 'CI/macos/build_luajit_hrt.sh', 'CI/macos/luajit-osx-hrt-void-return.patch') }}
+        key: macos-deps-macos-26-${{ runner.arch }}-${{ steps.deps-manifest.outputs.digest }}-${{ hashFiles('CI/macos/deps_versions.sh', 'CI/macos/fetch_deps_manifest.sh', 'CI/before_install.macos.sh', 'CI/macos/build_luajit_hrt.sh', 'CI/macos/luajit-osx-hrt-void-return.patch') }}
 
     - name: Install Building Dependencies
       if: steps.deps-cache.outputs.cache-hit != 'true'
       run: CI/before_install.macos.sh
 
-    # Use a pinned universal binary to avoid Homebrew source builds on Intel.
+    # A pinned, checksummed release of ccache rather than whatever Homebrew has.
     - name: Install prebuilt ccache
       env:
         CCACHE_VERSION: 4.14.1
@@ -98,7 +87,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@v1.2.24
       with:
         install: 'no'
-        key: ${{ inputs.image }}-${{ inputs.build-type }}
+        key: macos-26-${{ inputs.build-type }}
         max-size: 1000M
         # Only master and release builds store caches, so that pull request runs
         # do not push the caches pull requests start from out of the 10 GB budget.
@@ -107,7 +96,7 @@ jobs:
     - name: Fingerprint build environment
       id: build-env
       run: |
-        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode '${{ inputs.image }}-${{ inputs.build-type }}' --dependency-file "$RUNNER_TEMP/openmw-manifest.txt")" >> "$GITHUB_OUTPUT"
+        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-${{ inputs.build-type }}' --dependency-file "$RUNNER_TEMP/openmw-manifest.txt")" >> "$GITHUB_OUTPUT"
 
     - name: Restore incremental build
       id: build-cache
@@ -144,10 +133,9 @@ jobs:
 
     # Tags and the default branch with the signing secrets: import the Developer ID identity into a temporary keychain
     # and hand it to the packaging step (OPENFALLOUT_CODESIGN_IDENTITY / _TEAM_ID through GITHUB_ENV). Anything else:
-    # "ad hoc build, notarization skipped". Only the Apple Silicon build is signed with Developer ID and notarized.
+    # "ad hoc build, notarization skipped".
     - name: Release signing
       id: signing
-      if: ${{ inputs.image != 'macos-26-intel' }}
       env:
         OPENFALLOUT_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         MACOS_DEVELOPER_ID_P12_BASE64: ${{ github.event_name != 'pull_request' && secrets.MACOS_DEVELOPER_ID_P12_BASE64 || '' }}
@@ -195,26 +183,29 @@ jobs:
     # ad hoc one (Gatekeeper is not asked). The smoke step starts the game from the disk image with a hidden window; a
     # runner that gives it no OpenGL context reports it as skipped, and then the smoke step is run on the development
     # Mac on the draft release's image (`--smoke run`). The check appends the release-notes line (renderer, SHA-256,
-    # macOS version and chip).
+    # macOS version and chip). The build makes exactly one disk image, for Apple Silicon.
     - name: Check the packaged app
       env:
         CHECK_MODE: ${{ steps.signing.outputs.mode == 'release' && 'release' || 'local' }}
       run: |
         set -- build/OpenFallout-*.dmg
+        if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+          echo "FAIL dmg: expected exactly one disk image in build/, found: $*"
+          exit 1
+        fi
         python3 CI/check_mac_package.py "$1" --mode "$CHECK_MODE" --smoke auto --work "$RUNNER_TEMP/package-check" \
           --notes "$RUNNER_TEMP/release-notes.md"
 
-    # The engine release (docs/openfallout/engine-release.md), on an `openfallout-*` tag build of the Apple Silicon
-    # image only (an `openmw-*` tag has no engine release). The statement the shell reads is written from the checked
+    # The engine release (docs/openfallout/engine-release.md), on an `openfallout-*` tag build. The statement the shell reads is written from the checked
     # disk image; the job fails when the statement, the property lists, the CMake version, the tag and the binaries
     # disagree. The "Supported" line joins the release notes. The "Played on" line is the owner's, added to the draft
     # before publishing; the release gate asks for it.
     - name: Test the engine-release tooling
-      if: ${{ inputs.build-type == 'Release' && runner.arch == 'ARM64' && startsWith(github.ref_name, 'openfallout-') }}
+      if: ${{ inputs.build-type == 'Release' && startsWith(github.ref_name, 'openfallout-') }}
       run: python3 -m unittest discover -s CI -p test_engine_release.py -v
 
     - name: Write the engine-release statement
-      if: ${{ inputs.build-type == 'Release' && runner.arch == 'ARM64' && startsWith(github.ref_name, 'openfallout-') }}
+      if: ${{ inputs.build-type == 'Release' && startsWith(github.ref_name, 'openfallout-') }}
       run: |
         set -- build/OpenFallout-*.dmg
         python3 CI/engine_release.py write "$1" --tag "$GITHUB_REF_NAME" --commit "$GITHUB_SHA" \
@@ -226,7 +217,7 @@ jobs:
       if: ${{ always() }}
       uses: actions/upload-artifact@v7
       with:
-        name: openfallout-macos-package-check-${{ env.DMG_IDENTIFIER }}-${{ github.sha }}
+        name: openfallout-macos-package-check-arm64-${{ github.sha }}
         path: |
           ${{ runner.temp }}/package-check/config/openfallout.log
           ${{ runner.temp }}/package-check/*.log
@@ -236,7 +227,7 @@ jobs:
     - name: Store dmg
       uses: actions/upload-artifact@v7
       with:
-        name: openfallout-macos-dmg-${{ env.DMG_IDENTIFIER }}-${{ github.sha }}
+        name: openfallout-macos-dmg-arm64-${{ github.sha }}
         path: |
           ${{ github.workspace }}/build/OpenFallout-*.dmg
 
@@ -251,7 +242,7 @@ jobs:
       id: test-build-env
       if: ${{ !cancelled() && env.UNIT_TESTS == 'true' && steps.build.outcome == 'success' }}
       run: |
-        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode '${{ inputs.image }}-coverage' --dependency-file "$RUNNER_TEMP/openmw-manifest.txt")" >> "$GITHUB_OUTPUT"
+        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-coverage' --dependency-file "$RUNNER_TEMP/openmw-manifest.txt")" >> "$GITHUB_OUTPUT"
 
     - name: Restore incremental unit-test build
       id: test-build-cache

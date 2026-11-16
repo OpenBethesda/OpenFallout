@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decide whether a change needs the platform builds and the tests.
+"""Decide whether a change needs the Mac build and its tests.
 
 Only a change that touches nothing but the notes and trackers under docs/openfallout,
 the helper scripts under scripts/openfallout (their Python tests run in the Changes job

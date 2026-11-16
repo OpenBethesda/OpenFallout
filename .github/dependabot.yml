@@ -33,9 +33,9 @@ updates:
       - dependency-name: docutils
         versions: [">=0.22"]
 
+  # docs/Dockerfile: the documentation image for a local build (docs/README.md); CI builds the documentation natively.
   - package-ecosystem: docker
     directories:
-      - /docker
       - /docs
     schedule:
       interval: weekly

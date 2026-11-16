@@ -238,28 +238,11 @@ class Commands(unittest.TestCase):
             if saves:
                 self.assertEqual(written["saves"]["nv"], saves)
 
-    def test_the_default_saves_folder_on_windows_is_the_user_data_folder_of_the_engine(self):
-        with mock.patch.object(Path, "home", return_value=self.tmp), mock.patch.object(round_runner, "IS_MAC", False), \
-                mock.patch.object(round_runner, "IS_WINDOWS", True):
-            self.assertEqual(round_runner.player_user_data_dir(), self.tmp / "Documents" / "My Games" / "OpenFallout")
-
-    @unittest.skipIf(round_runner.IS_MAC or round_runner.IS_WINDOWS, "only Linux follows XDG_DATA_HOME")
-    def test_the_default_saves_folder_follows_xdg_data_home(self):
-        class Given:
-            engine = str(self.tmp / "bin" / "openfallout")
-            out = None
-            saves = None
-            profile = str(self.tmp / "xdg-profile.json")
-
-        (self.tmp / "bin").mkdir(exist_ok=True)
-        (self.tmp / "bin" / "openfallout").write_text("x")
-        (self.tmp / "Games" / "Fallout New Vegas").mkdir(parents=True, exist_ok=True)
-        (self.tmp / "Games" / "Fallout New Vegas" / "FalloutNV.esm").write_text("x")
-        with mock.patch.object(Path, "home", return_value=self.tmp), \
-                mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(self.tmp / "xdg")}), \
-                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            round_runner.command_profile(Given)
-        self.assertEqual(json.loads(Path(Given.profile).read_text())["saves"]["nv"], str(self.tmp / "xdg" / "openfallout" / "saves"))
+    def test_the_default_folders_are_the_engines_on_macos(self):
+        with mock.patch.object(Path, "home", return_value=self.tmp):
+            self.assertEqual(round_runner.player_config_dir(), self.tmp / "Library" / "Preferences" / "openfallout")
+            self.assertEqual(round_runner.player_user_data_dir(),
+                             self.tmp / "Library" / "Application Support" / "openfallout")
 
     def test_command_is_headless_and_private(self):
         config = round_runner.load_round(self.round_file, self.Args())
@@ -366,11 +349,11 @@ class Commands(unittest.TestCase):
             round_runner.load_round(self.round_file, self.Args())
 
 
-class WindowsRun(unittest.TestCase):
-    def test_run_says_that_it_needs_macos_or_linux_on_windows(self):
-        with mock.patch.object(round_runner, "IS_WINDOWS", True), self.assertRaises(SystemExit) as stop:
+class OtherSystemRun(unittest.TestCase):
+    def test_run_says_that_it_needs_macos_elsewhere(self):
+        with mock.patch.object(round_runner, "IS_MAC", False), self.assertRaises(SystemExit) as stop:
             round_runner.command_run(object())
-        self.assertIn("macOS and Linux", str(stop.exception))
+        self.assertIn("works on macOS only", str(stop.exception))
 
 
 class Pictures(unittest.TestCase):
@@ -507,6 +490,16 @@ class WholeRun(unittest.TestCase):
         self.assertEqual(report["exit_status"], 3)
         self.assertIn("after the scenario had finished", report["exit_note"])
         self.assertIn("after the scenario had finished", (run / "one" / "report.md").read_text())
+
+    def test_an_engine_that_ends_a_moment_after_its_scenario_keeps_its_own_exit_status(self):
+        # the runner sees the end of the scenario in the log while the engine is still on its way out: it is not stopped at
+        # once (the status would then be the runner's signal, and which of the two came first would decide the report)
+        tmp, code = self.run_round(3, linger=1)
+        self.assertEqual(code, 0)
+        (run,) = runs_of(tmp)
+        report = json.loads((run / "one" / "report.json").read_text())
+        self.assertEqual((report["verdict"], report["exit_status"]), ("PASS", 3))
+        self.assertIn("after the scenario had finished", report["exit_note"])
 
     def test_a_screenshot_that_was_asked_for_and_never_written_fails_the_round(self):
         tmp, code = self.run_round(0, written=1)
@@ -773,9 +766,14 @@ class GuardedRun(unittest.TestCase):
         release = threading.Event()
         calls = {"n": 0}
 
+        def engine_has_logged():
+            return any("accessory set" in log.read_text() for log in (tmp / "out").rglob("openfallout.log"))
+
         def ping():
             calls["n"] += 1
-            if calls["n"] <= 2:                       # the test call and the first heartbeat answer, then it hangs
+            # the test call and the first heartbeat answer, and every one until the engine has written its log (a busy computer
+            # starts the engine late, and the report reads the log); then it hangs
+            if calls["n"] <= 2 or not engine_has_logged():
                 return True
             release.wait(60)
             return True

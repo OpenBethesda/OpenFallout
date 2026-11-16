@@ -19,7 +19,6 @@ import xml.etree.ElementTree as ET
 SUITES = {
     "components": "components-tests",
     "openfallout": "openfallout-tests",
-    "editor": "openfallout-cs-tests",
 }
 
 # On the Mac, CMake writes every executable into the app bundle.

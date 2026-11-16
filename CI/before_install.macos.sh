@@ -4,8 +4,8 @@ DEPS_DIR="/tmp"
 
 source ./CI/macos/deps_versions.sh
 
-# GitHub runner images already provide these tools. Upgrading curl on Intel
-# macOS 26 builds curl and its dependencies from source and adds many minutes.
+# GitHub runner images already provide these tools; installing them only when missing keeps Homebrew from upgrading
+# them and their dependencies.
 export HOMEBREW_NO_AUTO_UPDATE=1
 command -v curl >/dev/null 2>&1 || brew install curl
 command -v 7z >/dev/null 2>&1 || brew install p7zip

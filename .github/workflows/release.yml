@@ -3,38 +3,22 @@ name: Release
 on:
   push:
       tags:
-        - openmw-**
         - openfallout-*
 
 permissions:
   contents: read
 
 jobs:
-  Windows:
-    permissions:
-      contents: write
-    uses: ./.github/workflows/windows.yml
-    with:
-      image: "2025"
-      build-type: Release
-      package: true
-      release: true
-    secrets: inherit
+  # The one disk image, for Apple Silicon, signed, notarized and checked, with the engine-release statement
+  # (macos.yml). CI/harness_release.py follows this run by the tag.
   MacOS:
-    name: MacOS (${{ matrix.args.image }})
+    name: macOS
     permissions:
       contents: write
-    strategy:
-      fail-fast: true
-      matrix:
-        args:
-          - image: macos-26
-          - image: macos-26-intel
     uses: ./.github/workflows/macos.yml
     with:
-      image: ${{ matrix.args.image }}
       build-type: Release
-      signing-environment: ${{ matrix.args.image == 'macos-26' && 'macos-release' || '' }}
+      signing-environment: macos-release
     secrets:
       MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
       MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}

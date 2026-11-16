@@ -2,7 +2,8 @@
 
 A tag (`openfallout-*`, `release.yml`) or a push to the default branch (`push.yml`) builds the Apple Silicon disk image
 signed with the project's Developer ID, notarized by Apple and stapled, so that a player can open it without a
-Gatekeeper warning, also offline (spec #166, stories 1, 2, 19 to 22 and 35). The Intel image keeps the ad hoc signature.
+Gatekeeper warning, also offline (spec #166, stories 1, 2, 19 to 22 and 35). It is the only disk image: the project
+supports Apple Silicon Macs with macOS 26.0 or later and builds no Intel image.
 
 Nothing of this runs without the secrets below. Pull requests (from forks or not), other branches and any run without
 the secrets build the ad hoc package as before; the log says `ad hoc build, notarization skipped: <why>` and the job
@@ -25,13 +26,18 @@ stays green. A run on a tag or the default branch that has only some of the secr
    Application signature of the one team, the hardened runtime and a secure timestamp on every Mach-O file and bundle,
    no `get-task-allow`, Gatekeeper's acceptance (`spctl --assess --type open --context context:primary-signature` for
    the image, `spctl --assess --type execute` for the app) and a stapled ticket on both. Ad hoc builds are checked in
-   local mode.
-6. **Release notes**: the check appends one line per disk image to the draft release (`--notes`): the result, the mode,
-   the smoke result, the OpenGL renderer the smoke run reported, the image's SHA-256 and the macOS version and chip it
-   ran on, e.g. `- OpenFallout-0.52.0-macOS-arm64.dmg: packaged-app check PASS (release mode; smoke SKIP; renderer not
-   reported; sha256 3f2a...) on macOS 26.1 (25B78), Apple M2 (Virtual), arm64. For ...`. `CI/harness_release.py`
-   refuses to publish a release whose disk images lack such a line with both a macOS version and a chip. For the Apple
-   Silicon image it counts only lines whose `sha256` equals the digest GitHub reports for the uploaded asset (the
+   local mode. In both modes the check also requires the Apple Silicon image (`OpenFallout-*-arm64.dmg`, the only one
+   the job may make), no wizard or editor in the image or the app, and its `platform` step: every program in the app
+   is arm64 only and built for exactly macOS 26.0, and no library is built for a newer macOS.
+6. **Release notes**: the check appends one line for the disk image to the draft release (`--notes`): the result, the
+   mode, the smoke result, the OpenGL renderer the smoke run reported, the image's SHA-256, the macOS version and chip it
+   was checked on, and what the image holds, e.g. `- OpenFallout-0.1.0-macOS-arm64.dmg: packaged-app check PASS (release
+   mode; smoke SKIP; renderer not reported; sha256 3f2a...) on macOS 26.1 (25B78), Apple M2 (Virtual), arm64. Apple
+   Silicon (arm64), Developer ID signed and notarized, built for macOS 26.0.` The line says what was checked; the
+   *supported* and *played on* lines come from the engine release ([engine-release.md](engine-release.md)).
+   `CI/harness_release.py` refuses to publish a release that holds anything but the one Apple Silicon image (a second
+   image, an Intel image, a Windows installer or a Linux package), or whose image lacks such a line with both a macOS
+   version and a chip. It counts only lines whose `sha256` equals the digest GitHub reports for the uploaded asset (the
    `digest` field of the release asset, `sha256:<hex>`; a release asset without one blocks publishing), and among those
    it needs a `packaged-app check PASS (release mode; ...)` line and a `PASS` line with `smoke PASS` and a GPU renderer
    (not `Apple Software Renderer`, not `not reported`): the game must have started from that very image on a Mac with a
@@ -55,8 +61,8 @@ that someone with push access can start, including a tag on a commit nobody revi
 copy of the signing scripts. An environment's rules are applied by GitHub before the job starts and cannot be changed
 from the pushed commit.
 
-1. Repository settings, Environments, New environment, name `macos-release` (the name the workflows use for the arm64
-   build of a tag or of the default branch; every other macOS job has no environment).
+1. Repository settings, Environments, New environment, name `macos-release` (the name the workflows use for the Mac job
+   of a tag or of the default branch; pull requests and other branches have no environment).
 2. Deployment branches and tags: Selected branches and tags; add the default branch and the tag pattern
    `openfallout-*`.
 3. Optional, and the strongest guard: Required reviewers. Each signing job then waits for an approval, also on every
@@ -138,6 +144,4 @@ built for 67089ed566:
 Not run yet: the workflows themselves with the secrets (the `macos-release` environment, CPack calling the signing
 script in the job, the notes line appended to the draft release, publishing through the gate). The first tag or push
 to the default branch with the secrets is the first run of those. The unit tests with stand-in tools stay
-(`CI/test_release_signing.py`, `CI/test_check_mac_package.py`). Two macOS jobs append their notes lines to the same
-draft release; if they finish at the same moment, one line can be lost, and `harness_release.py` then refuses to publish
-until it is added by hand.
+(`CI/test_release_signing.py`, `CI/test_check_mac_package.py`).

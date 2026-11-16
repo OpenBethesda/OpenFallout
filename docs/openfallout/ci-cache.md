@@ -2,18 +2,19 @@
 
 `CI/build_cache.py` fingerprints a build environment and reconciles source file
 timestamps after a workflow restores a cached build directory. It does not
-transfer or save the build directory itself: the GitHub Actions cache steps in
-the [Linux](../../.github/workflows/push.yml),
-[macOS](../../.github/workflows/macos.yml), and
-[Windows](../../.github/workflows/windows.yml) workflows do that. The related
+transfer or save the build directory itself: the GitHub Actions cache steps of
+the one Mac job ([macos.yml](../../.github/workflows/macos.yml), called by
+[push.yml](../../.github/workflows/push.yml) and
+[release.yml](../../.github/workflows/release.yml)) do that. The related
 test-report behavior is described in [CI reporting](ci-reporting.md).
 
-The macOS job keeps two build trees. `build` is the packaged app; its cache key
-starts with `build-macos-v1-` and its fingerprint mode is the image and build
-type. `build-tests` is the instrumented unit-test tree (Debug without `-g`,
+The Mac job runs on one runner image, `macos-26` (Apple Silicon), and keeps two
+build trees. `build` is the packaged app; its cache key starts with
+`build-macos-v1-` and its fingerprint mode is the image name and build type
+(`macos-26-RelWithDebInfo`). `build-tests` is the instrumented unit-test tree (Debug without `-g`,
 coverage, only the two test suites; about 1.8 GB before compression, against
 about 8 GB with debug information); its key starts with `build-macos-coverage-v1-`, its mode
-is the image followed by `-coverage`, and the job passes `--build-dir
+is `macos-26-coverage`, and the job passes `--build-dir
 build-tests` to `restore` and `snapshot`. The two never share a cache entry, so
 ordinary objects are never restored into an instrumented build. Both trees use
 the job's one ccache, which is limited to 768 MB when it is stored after a run
@@ -32,11 +33,9 @@ The `key` command prints a SHA-256 fingerprint of:
 
 - the canonical absolute checkout root;
 - the supplied mode and `ImageVersion` environment value;
-- the resolved compiler path and its version (on Windows, the compiler file's
-  SHA-256; elsewhere, the compiler's `--version` output);
-- `cmake --version`, and the SDK path on systems where `xcrun` is available;
-- `VCToolsVersion`, `WindowsSDKVersion`, `SDKROOT`, `DEVELOPER_DIR`, `CC`,
-  `CXX`, `CFLAGS`, `CXXFLAGS`, and `LDFLAGS`;
+- the resolved compiler path and its `--version` output;
+- `cmake --version`, and the SDK path when `xcrun` is available;
+- `SDKROOT`, `DEVELOPER_DIR`, `CC`, `CXX`, `CFLAGS`, `CXXFLAGS`, and `LDFLAGS`;
 - contents of tracked CMake rules (`CMakeLists.txt`, `.cmake` files, `CI/`, and
   `.github/workflows/`); and
 - the contents of each explicitly supplied dependency file.

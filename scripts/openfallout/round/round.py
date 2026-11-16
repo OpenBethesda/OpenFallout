@@ -49,7 +49,6 @@ SAVE_SUFFIXES = (".fos", ".ess", ".omwsave", ".fo3save")
 ROOT = HERE.parents[2]
 PROFILE_DEFAULT = Path(os.environ.get("OPENFALLOUT_ROUND_PROFILE", Path.home() / ".config" / "openfallout-rounds.json"))
 IS_MAC = platform.system() == "Darwin"
-IS_WINDOWS = os.name == "nt"
 
 # What every run changes in the settings, under what the round file asks for: a plain window of a fixed size (a screenshot is
 # exactly that many pixels), no vsync and a low frame rate limit (it is a check, not a game, and it shares the computer; every
@@ -418,24 +417,12 @@ def engine_command(profile, config, run_dir, save, extra=()):
 
 def player_config_dir():
     """The folder of the player's own configuration (where the engine keeps its openfallout.cfg and settings.cfg)."""
-    home = Path.home()
-    if IS_MAC:
-        return home / "Library" / "Preferences" / "openfallout"
-    if IS_WINDOWS:
-        return home / "Documents" / "My Games" / "OpenFallout"
-    return Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "openfallout"
+    return Path.home() / "Library" / "Preferences" / "openfallout"
 
 
 def player_user_data_dir():
     """The folder where the engine keeps the saves of the player by default."""
-    home = Path.home()
-    if IS_MAC:
-        return home / "Library" / "Application Support" / "openfallout"
-    if IS_WINDOWS:
-        # the engine's user data folder is its configuration folder there (components/files/windowspath.cpp)
-        return player_config_dir()
-    # the engine's own default honours XDG_DATA_HOME (components/files/linuxpath.cpp)
-    return Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share") / "openfallout"
+    return Path.home() / "Library" / "Application Support" / "openfallout"
 
 
 def prepare_run(profile, config, variant, run_dir, save):
@@ -574,6 +561,10 @@ def engine_environment(extra, is_mac):
     return dict(os.environ, **env)
 
 
+# Seconds an engine whose scenario has ended is given to end on its own before the runner stops it
+ENDING_GRACE = 2.0
+
+
 def run_engine(command, run_dir, limit, env_extra=None, priority="low", guard=None):
     """Starts the engine at low priority and waits for it; gives (exit status, seconds, focus sampler, timed out, ended early,
     guard reason). The run ends when the engine does, when the scenario ended and its pictures are written (`ended early`: the runner
@@ -605,6 +596,13 @@ def run_engine(command, run_dir, limit, env_extra=None, priority="low", guard=No
             gone = kill_engine(process)
             break
         if pictures.poll():
+            # An engine that is already ending on its own (or crashing on its way out) is given a moment: its own exit status is
+            # the report's. Without it the status depends on which comes first, the end of the engine or this look at the log
+            try:
+                process.wait(timeout=ENDING_GRACE)
+                break
+            except subprocess.TimeoutExpired:
+                pass
             ended_early = True
             gone, tripped = stop_engine(process, guard)
             break
@@ -841,8 +839,8 @@ def refusal_exit(refusals):
 
 
 def command_run(args):
-    if IS_WINDOWS:
-        sys.exit("round.py run works on macOS and Linux only: it gives the engine a pseudo-terminal and stops it by process group")
+    if not IS_MAC:
+        sys.exit("round.py run works on macOS only: the engine is built for macOS only")
     if args.parallel != 1:
         print(f"--parallel {args.parallel}: the variants run one after the other (never more than one engine at a time)", flush=True)
     profile = load_profile(args.profile)

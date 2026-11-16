@@ -6,11 +6,6 @@ on:
       - master
   pull_request:
   workflow_dispatch:
-    inputs:
-      validate-release:
-        description: Also validate Windows release packaging
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -23,228 +18,60 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  BUILD_TYPE: RelWithDebInfo
-
 jobs:
-  # Documentation-only changes skip the platform builds.  The job fails open to a full
-  # build: a problem in it leaves "code" empty, which the jobs below read as "build".
+  # Documentation-only changes skip the Mac build.  The job fails open to a full build: a problem in it leaves "code"
+  # empty, which the job below reads as "build".  It also runs every Python test of the CI scripts, the helper scripts
+  # and the documentation generator, on every change, including the documentation-only ones; on a Mac runner, so that
+  # the tests that need macOS (codesign, hdiutil, vtool) run instead of being skipped.
   Changes:
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
+    timeout-minutes: 30
     outputs:
       code: ${{ steps.classify.outputs.code }}
 
     steps:
     - uses: actions/checkout@v7
 
-    - name: Test the rule for skipping builds
-      run: python3 -m unittest discover -s CI -p test_changed_paths.py -v
-
-    - name: Test Harness release orchestration
-      run: python3 -m unittest discover -s CI -p test_harness_release.py -v
-
-    - name: Test macOS bundle selection
-      run: python3 -m unittest discover -s CI -p test_mac_bundles.py -v
-
-    - name: Test macOS release signing (stand-in tools)
-      run: python3 -m unittest discover -s CI -p test_release_signing.py -v
-
-    - name: Test the apt mirror fallback of the Harness build
-      run: python3 -m unittest discover -s CI -p test_apt_mirrors.py -v
-
-    # These tests read the Lua scripts and the tracker, so they run on every change, including the
-    # documentation-only ones that skip the platform builds.  The Lua checks need lupa, and some tests need
-    # a luajit executable (they are skipped without one).
-    - name: Install the tools of the helper script tests
+    # Some helper script tests run the Lua scripts with a luajit executable (they are skipped without one); the Lua
+    # checks need lupa and the picture test of the round runner Pillow, which go in their own virtual environment.
+    - name: Install the tools of the script tests
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: 1
+        HOMEBREW_NO_INSTALL_CLEANUP: 1
       run: |
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends luajit
-        python3 -m venv "$RUNNER_TEMP/helper-tests"
-        "$RUNNER_TEMP/helper-tests/bin/pip" install lupa==2.8
+        brew install luajit
+        luajit -v
+        python3 -m venv "$RUNNER_TEMP/script-tests"
+        "$RUNNER_TEMP/script-tests/bin/pip" install lupa==2.8 pillow==12.0.0
+
+    - name: Test the CI scripts
+      run: python3 -m unittest discover -s CI -p 'test_*.py' -v
 
     - name: Test the helper scripts and the Lua scripts they read
       run: >
-        "$RUNNER_TEMP/helper-tests/bin/python" -m unittest discover
+        "$RUNNER_TEMP/script-tests/bin/python" -m unittest discover
         -s scripts/openfallout -p 'test_*.py' -v
 
-    - name: Decide whether the platform builds are needed
+    - name: Test the Lua documentation generator
+      run: python3 -m unittest discover -s docs -p test_luadoc.py -v
+
+    - name: Decide whether the Mac build is needed
       id: classify
       env:
         EVENT: ${{ github.event_name }}
         BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: python3 CI/changed_paths.py --event "$EVENT" --base "$BASE" --github-output "$GITHUB_OUTPUT"
 
-  # Builds and runs the components, OpenFallout and editor suites. Their coverage and test results are uploaded to
-  # Codecov by the Mac job (macos.yml); the reports made here are kept as artifacts only.
-  Ubuntu:
-    needs: Changes
-    if: ${{ !cancelled() && needs.Changes.outputs.code != 'false' && (github.event_name != 'workflow_dispatch' || !inputs.validate-release) }}
-    runs-on: ubuntu-24.04
-    env:
-      # Collect coverage without optimizer-induced changes to executable lines.
-      BUILD_TYPE: Debug
-
-    steps:
-    - uses: actions/checkout@v7
-
-    - name: Test incremental cache invalidation
-      run: python3 -m unittest discover -s CI -p test_build_cache.py -v
-
-    - name: Test coverage and JUnit report collection
-      run: python3 -m unittest discover -s CI -p test_test_reports.py -v
-
-    - name: Cache dependency downloads
-      uses: actions/cache@v6
-      with:
-        path: apt-cache/*.deb
-        key: apt-${{ runner.arch }}-${{ hashFiles('CI/install_debian_deps.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
-        restore-keys: apt-${{ runner.arch }}-${{ hashFiles('CI/install_debian_deps.sh') }}-
-
-    - name: Add OpenMW PPA Dependencies
-      run: sudo add-apt-repository ppa:openmw/openmw; sudo apt-get update
-
-    - name: Install Building Dependencies
-      run: sudo CI/install_debian_deps.sh gcc openmw-deps openmw-deps-dynamic openmw-coverage
-
-    - name: Install coverage tools
-      env:
-        PIPX_BIN_DIR: ${{ runner.temp }}/coverage-bin
-      run: |
-        pipx install gcovr==8.3
-        echo "$PIPX_BIN_DIR" >> "$GITHUB_PATH"
-        "$PIPX_BIN_DIR/gcovr" --version
-
-    - name: Prime ccache
-      id: compiler-cache
-      uses: hendrikmuhs/ccache-action@v1.2.24
-      with:
-        key: ubuntu-coverage-v1-${{ runner.arch }}-${{ env.BUILD_TYPE }}
-        max-size: 1000M
-        # Only master builds store caches, so that pull request runs do not push
-        # the caches pull requests start from out of the 10 GB budget.
-        save: ${{ github.ref == 'refs/heads/master' }}
-
-    - name: Fingerprint build environment
-      id: build-env
-      run: |
-        dpkg-query -W -f='${Package}=${Version}\n' > "$RUNNER_TEMP/dependency-versions.txt"
-        echo "key=$(python3 CI/build_cache.py key --compiler gcc --mode '${{ env.BUILD_TYPE }}' --dependency-file "$RUNNER_TEMP/dependency-versions.txt")" >> "$GITHUB_OUTPUT"
-
-    - name: Restore incremental build
-      id: build-cache
-      uses: actions/cache/restore@v6
-      with:
-        path: build
-        # Never restore ordinary build objects into an instrumented build.
-        key: build-linux-coverage-v1-${{ steps.build-env.outputs.key }}-${{ github.sha }}
-        restore-keys: build-linux-coverage-v1-${{ steps.build-env.outputs.key }}-
-
-    - name: Restore unchanged source timestamps
-      run: python3 CI/build_cache.py restore
-
-    - name: Configure
-      run: >
-        cmake -S . -B build
-        -D CMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
-        -D CMAKE_C_COMPILER_LAUNCHER=ccache
-        -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
-        -D BUILD_WITH_CODE_COVERAGE=ON
-        -D OPENFALLOUT_USE_SYSTEM_RECASTNAVIGATION=ON
-        -D USE_SYSTEM_TINYXML=ON
-        -D BUILD_COMPONENTS_TESTS=ON
-        -D BUILD_OPENFALLOUT_TESTS=ON
-        -D BUILD_OPENCS_TESTS=ON
-        -D CMAKE_INSTALL_PREFIX=install
-
-    - name: Build
-      id: build
-      run: cmake --build build --parallel "$(nproc)"
-
-    - name: Run components tests
-      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-      run: python3 CI/test_reports.py run components
-
-    - name: Run OpenFallout tests
-      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-      run: python3 CI/test_reports.py run openfallout
-
-    - name: Run OpenFallout-CS tests
-      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-      run: python3 CI/test_reports.py run editor
-
-    - name: Merge suite coverage reports
-      if: >-
-        !cancelled() && hashFiles('coverage/components.json') != '' &&
-        hashFiles('coverage/openfallout.json') != '' && hashFiles('coverage/editor.json') != ''
-      run: python3 CI/test_reports.py merge
-
-    - name: Record source timestamps
-      run: python3 CI/build_cache.py snapshot
-
-    - name: Save incremental build
-      if: steps.build-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/master'
-      uses: actions/cache/save@v6
-      with:
-        path: build
-        key: ${{ steps.build-cache.outputs.cache-primary-key }}
-
-    - name: Keep coverage reports
-      if: ${{ !cancelled() && hashFiles('coverage/*.xml') != '' }}
-      uses: actions/upload-artifact@v7
-      with:
-        name: ubuntu-coverage
-        path: |
-          coverage.xml
-          coverage/*.xml
-          coverage/*.json
-        if-no-files-found: error
-
-    - name: Keep test results
-      if: ${{ !cancelled() && hashFiles('test-results/*.xml') != '' }}
-      uses: actions/upload-artifact@v7
-      with:
-        name: ubuntu-test-results
-        path: test-results/*.xml
-        if-no-files-found: error
-
-    - name: Limit stored compiler cache
-      if: always() && steps.compiler-cache.outcome == 'success'
-      run: |
-        ccache --max-size=384M
-        ccache --cleanup
-
-    # - name: Install
-    #   shell: bash
-    #   run: cmake --install .
-
-    # - name: Create Artifact
-    #   shell: bash
-    #   working-directory: install
-    #   run: |
-    #     ls -laR
-    #     7z a ../build_artifact.7z .
-
-    # - name: Upload Artifact
-    #   uses: actions/upload-artifact@v1
-    #   with:
-    #     path: ./build_artifact.7z
-    #     name: build_artifact.7z
-
+  # The one job that builds the engine: the packaged app, its checks, the unit tests and coverage (macos.yml). Its check
+  # name, "macOS / Build, test and package", is fixed here and in macos.yml; CI/harness_release.py and the documentation
+  # name it.
   MacOS:
-    # Keep check names independent of the runner label (CI/harness_release.py matches them).
-    name: MacOS (${{ matrix.args.image }})
+    name: macOS
     needs: Changes
-    if: ${{ !cancelled() && needs.Changes.outputs.code != 'false' && (github.event_name != 'workflow_dispatch' || !inputs.validate-release) }}
-    strategy:
-      fail-fast: true
-      matrix:
-        args:
-          - image: macos-26
-          - image: macos-26-intel
+    if: ${{ !cancelled() && needs.Changes.outputs.code != 'false' }}
     uses: ./.github/workflows/macos.yml
     with:
-      image: ${{ matrix.args.image }}
-      signing-environment: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && matrix.args.image == 'macos-26' && 'macos-release' || '' }}
+      signing-environment: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'macos-release' || '' }}
     secrets:
       MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
       MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
@@ -253,25 +80,3 @@ jobs:
       MACOS_NOTARY_API_KEY_ID: ${{ secrets.MACOS_NOTARY_API_KEY_ID }}
       MACOS_NOTARY_API_ISSUER_ID: ${{ secrets.MACOS_NOTARY_API_ISSUER_ID }}
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  Windows:
-    needs: Changes
-    if: ${{ !cancelled() && needs.Changes.outputs.code != 'false' && (github.event_name != 'workflow_dispatch' || !inputs.validate-release) }}
-    strategy:
-      fail-fast: true
-      matrix:
-        image:
-        - "2025"
-
-    uses: ./.github/workflows/windows.yml
-    with:
-      image: ${{ matrix.image }}
-
-  Windows-release:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate-release }}
-    name: Windows release packaging
-    uses: ./.github/workflows/windows.yml
-    with:
-      image: "2025"
-      build-type: Release
-      package: true

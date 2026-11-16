@@ -6,9 +6,10 @@
 
 PATH is OpenFallout-*.dmg or OpenFallout.app. The steps run in this order and each prints PASS, FAIL or SKIP:
 
-  dmg          the disk image holds an Applications link and OpenFallout.app, and besides them only OpenFallout-CS.app and
-               the README, CHANGELOG, LICENSE and AUTHORS files
-  layout       the app holds its launcher, the engine and the nested Contents/Helpers/OpenFallout Engine.app
+  dmg          the disk image is the Apple Silicon one (OpenFallout-*-arm64.dmg) and holds an Applications link and
+               OpenFallout.app, and besides them only the README, CHANGELOG, LICENSE and AUTHORS files (no editor app)
+  layout       the app holds its launcher, the engine and the nested Contents/Helpers/OpenFallout Engine.app, and no
+               wizard or editor program
   signatures   every Mach-O file and every nested bundle has a valid signature, and so has the app as a whole; in
                release mode each of them (and the app) is also signed by a Developer ID Application identity of one
                team (--team-id, else the app's), with the hardened runtime and a secure timestamp, and none carries
@@ -17,6 +18,8 @@ PATH is OpenFallout-*.dmg or OpenFallout.app. The steps run in this order and ea
                image, `spctl --assess --type execute` accepts the app, and `stapler validate` finds a ticket on both
   info.plist   the app and its engine app declare Game Mode, the role-playing-games category and high resolution, and
                neither carries the Carbon key
+  platform     the programs of the app and of its engine app (Contents/MacOS) are arm64 only and built for exactly
+               macOS 26.0, the supported minimum; every other Mach-O file has arm64 and is built for no newer macOS
   openal       the engine links the OpenAL Soft that is in the bundle, not the system's OpenAL framework
   library-validation  when the engine has the hardened runtime, every Mach-O file in the app has its Team ID (or
                the engine's entitlements turn library validation off, which release mode refuses); otherwise the loader would refuse the bundled
@@ -37,8 +40,9 @@ Local mode accepts an ad hoc signature and skips the gatekeeper step; release mo
 Gatekeeper's acceptance and the stapled tickets (CI runs it on the notarized build, CI/macos/release_signing.py).
 `--notes FILE` appends one release-notes line: the package, the result, the mode, the smoke result, the OpenGL renderer
 the smoke run reported, the disk image's SHA-256, and the macOS version and chip of the machine that ran the check,
-then which Macs the package is for (chip from the file name, notarized in
-release mode, the engine's minimum macOS). `--smoke auto` runs the smoke step but reports it as
+then what the package holds (the engine's architecture, its signature, the macOS its engine was built for). The
+line says what was checked, not what is supported or played on: on a tag build CI/engine_release.py notes adds the
+"Supported" line, and the owner adds the "Played on" line. `--smoke auto` runs the smoke step but reports it as
 skipped when the machine gives the engine no OpenGL context, or only Apple's software renderer and the run does not
 finish there (a hosted CI runner has no GPU); run it with
 `--smoke run` on a Mac with a display before a release is tagged.
@@ -57,13 +61,21 @@ import subprocess
 import sys
 import tempfile
 
+import engine_release
+
 ROOT = Path(__file__).resolve().parent.parent
 ENGINE_APP = Path("Contents/Helpers/OpenFallout Engine.app")
 ENGINE = Path("Contents/MacOS/openfallout")
-# what the packaging block puts in the disk image: the apps (the editor only when it is built), a link to
-# /Applications and the documents it installs at the top
+# what the packaging block puts in the disk image: the app, a link to /Applications and the documents it installs at
+# the top
 DMG_REQUIRED = {"Applications", "OpenFallout.app"}
-DMG_ALLOWED = DMG_REQUIRED | {"OpenFallout-CS.app", "AUTHORS.md", "CHANGELOG.md", "LICENSE", "README.md"}
+DMG_ALLOWED = DMG_REQUIRED | {"AUTHORS.md", "CHANGELOG.md", "LICENSE", "README.md"}
+DMG_NAME = re.compile(r"OpenFallout-.*-arm64\.dmg")
+# Supported: Apple Silicon, macOS 26.0 or later. The programs are built for exactly this macOS.
+ARCHITECTURE = "arm64"
+MINIMUM_MACOS = "26.0"
+# the wizard and the editor are not built, so neither may reach the app
+NOT_PACKAGED = {"openfallout-wizard", "openfallout-cs", "OpenFallout-CS.app"}
 CATEGORY = "public.app-category.role-playing-games"
 MACHO_MAGICS = {bytes.fromhex(magic) for magic in ("cffaedfe", "cefaedfe", "feedfacf", "feedface", "cafebabe", "bebafeca")}
 SYSTEM_OPENAL = "/System/Library/Frameworks/OpenAL.framework"
@@ -96,9 +108,11 @@ def mounted(dmg):
             mountpoint.rmdir()
 
 
-def check_dmg_layout(volume):
+def check_dmg_layout(volume, dmg=None):
     entries = {entry.name for entry in volume.iterdir() if not entry.name.startswith(".")}
     problems = []
+    if dmg is not None and not DMG_NAME.fullmatch(dmg.name):
+        problems.append(f"{dmg.name} is not named as the Apple Silicon image (OpenFallout-*-arm64.dmg)")
     if DMG_REQUIRED - entries:
         problems.append(f"the disk image lacks {', '.join(sorted(DMG_REQUIRED - entries))}")
     if entries - DMG_ALLOWED:
@@ -129,8 +143,54 @@ def check_app_layout(app):
             problems.append(f"{relative(bundle, app)}: CFBundleExecutable {executable!r} is not in Contents/MacOS")
     if not (app / ENGINE).is_file():
         problems.append(f"{ENGINE} is missing")
+    for path in sorted(app.rglob("*")):
+        if path.name in NOT_PACKAGED:
+            problems.append(f"{relative(path, app)} is not part of the packaged app (the wizard and the editor are not "
+                            f"built)")
     if problems:
         raise StepFailed("; ".join(problems))
+
+
+# ----------------------------------------------------------------------------------------------------------- platform
+
+def programs(app):
+    """The programs this project builds: every Mach-O file in Contents/MacOS of the app and of the apps inside it."""
+    bundles = [app] + [path for path in app.rglob("*.app") if path.is_dir() and not path.is_symlink()]
+    return {path for bundle in bundles for path in (bundle / "Contents/MacOS").glob("*") if is_macho(path)}
+
+
+def architectures(path):
+    return run(["lipo", "-archs", path]).stdout.split()
+
+
+def check_platform(app):
+    """Apple Silicon only, macOS 26.0: the programs are arm64 only and built for exactly the minimum; every other Mach-O
+    file (a library, a plug-in) has arm64 and is built for no newer macOS (the prebuilt ones are older)."""
+    machos = sorted(path for path in app.rglob("*") if is_macho(path))
+    own = programs(app)
+    problems = []
+    try:
+        for binary in machos:
+            name = relative(binary, app)
+            archs = architectures(binary)
+            shown = " ".join(archs) or "unknown"
+            if binary in own and archs != [ARCHITECTURE]:
+                problems.append(f"{name}: architecture {shown}, not {ARCHITECTURE} only")
+            elif binary not in own and ARCHITECTURE not in archs:
+                problems.append(f"{name}: architecture {shown}, no {ARCHITECTURE}")
+            built_for = engine_release.parse_vtool(run(["vtool", "-show-build", binary]).stdout)
+            if built_for is None:
+                problems.append(f"{name}: the macOS it was built for cannot be read")
+            elif binary in own and not engine_release.same_macos(built_for, MINIMUM_MACOS):
+                problems.append(f"{name}: built for macOS {built_for}, not {MINIMUM_MACOS}")
+            elif binary not in own and engine_release.macos_newer(built_for, MINIMUM_MACOS):
+                problems.append(f"{name}: built for macOS {built_for}, newer than {MINIMUM_MACOS}")
+    except OSError as error:
+        raise StepFailed(f"lipo or vtool cannot be run ({error})") from None
+    if problems:
+        raise StepFailed("; ".join(problems))
+    return (f"{len(machos)} Mach-O files, {ARCHITECTURE}; the {len(own)} programs built for macOS {MINIMUM_MACOS}, "
+            f"no library for a newer macOS")
 
 
 # --------------------------------------------------------------------------------------------------------- signatures
@@ -585,6 +645,7 @@ def check_app(app, options, dmg_ok=True, dmg=None):
     else:
         results.append(skip("gatekeeper", "local mode"))
     results.append(report("info.plist", check_info_plists, app))
+    results.append(report("platform", check_platform, app))
     results.append(report("openal", check_openal, app))
     loadable = report("library-validation", check_library_validation, app, options.mode)
     results.append(loadable)
@@ -620,28 +681,23 @@ def tested_on():
     return f"macOS {version} ({build}), {chip}, {platform.machine()}"
 
 
-def minimum_macos(app):
-    """The oldest macOS the engine was built for (its LC_BUILD_VERSION minos), or None."""
+def engine_facts(app):
+    """(the macOS the engine was built for (its LC_BUILD_VERSION minos) or None, its architectures)."""
     try:
-        shown = run(["vtool", "-show-build", app / ENGINE]).stdout
+        return (engine_release.parse_vtool(run(["vtool", "-show-build", app / ENGINE]).stdout),
+                architectures(app / ENGINE))
     except OSError:
-        return None
-    found = re.search(r"^\s*minos\s+(\S+)", shown, re.MULTILINE)
-    return found.group(1) if found else None
+        return None, []
 
 
-def supported_macs(package, mode, minimum):
-    """What a player reads about which Macs this package is for."""
-    if "arm64" in package.name:
-        kind = "Apple Silicon Macs (arm64)"
-    elif "x86_64" in package.name:
-        kind = "Intel Macs (x86_64)"
-    else:
-        kind = "Macs"
+def package_facts(mode, minimum, archs):
+    """What the package holds, as checked. Which Macs are supported is the engine release's line (CI/engine_release.py
+    notes), which Mac it was played on the owner's."""
+    kind = "Apple Silicon (arm64)" if archs == [ARCHITECTURE] else f"architecture {' '.join(archs) or 'unknown'}"
     signed = ("Developer ID signed and notarized" if mode == "release"
               else "ad hoc signed, not notarized (macOS asks before the first start)")
-    needs = f"; needs macOS {minimum} or later" if minimum else ""
-    return f"For {kind}, {signed}{needs} (Game Mode: macOS 26 or later)."
+    built = f", built for macOS {minimum}" if minimum else ""
+    return f"{kind}, {signed}{built}."
 
 
 def sha256_of(package):
@@ -655,14 +711,14 @@ def sha256_of(package):
     return digest.hexdigest()
 
 
-def write_notes(path, package, mode, ok, minimum=None):
+def write_notes(path, package, mode, ok, minimum=None, archs=()):
     """Appends the release-notes line for this package: what was checked, with what result, the renderer the smoke
     run reported and the image's SHA-256 (CI/harness_release.py binds the passes to the uploaded image and to a GPU),
-    on which Mac, and which Macs the package is for."""
+    on which Mac, and what the package holds."""
     renderer = RENDERER_SEEN[-1] if RENDERER_SEEN else "not reported"
     line = (f"- {package.name}: packaged-app check {'PASS' if ok else 'FAIL'} ({mode} mode; smoke "
             f"{RESULTS.get('smoke', 'not run')}; renderer {renderer}; sha256 {sha256_of(package)}) on {tested_on()}. "
-            f"{supported_macs(package, mode, minimum)}")
+            f"{package_facts(mode, minimum, list(archs))}")
     with path.open("a", encoding="utf-8") as file:
         file.write(line + "\n")
 
@@ -693,25 +749,25 @@ def main(argv=None):
     RENDERER_SEEN.clear()
 
     package = options.package.absolute()
-    minimum = None
+    minimum, archs = None, []
     if not package.exists():
         print(f"FAIL layout: {package} does not exist")
         return 1
     if package.suffix == ".dmg":
         try:
             with mounted(package) as volume:
-                dmg_ok = report("dmg", check_dmg_layout, volume)
+                dmg_ok = report("dmg", check_dmg_layout, volume, package)
                 ok = check_app(volume / "OpenFallout.app", options, dmg_ok, package)
-                minimum = minimum_macos(volume / "OpenFallout.app")
+                minimum, archs = engine_facts(volume / "OpenFallout.app")
         except StepFailed as error:
             fail("dmg", str(error))
             ok = False
     else:
         ok = check_app(package, options)
-        minimum = minimum_macos(package)
+        minimum, archs = engine_facts(package)
     print("package check: " + ("PASS" if ok else "FAIL"))
     if options.notes:
-        write_notes(options.notes, package, options.mode, ok, minimum)
+        write_notes(options.notes, package, options.mode, ok, minimum, archs)
     return 0 if ok else 1
 
 

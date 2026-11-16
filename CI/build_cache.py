@@ -33,23 +33,19 @@ def build_key(root, compiler, dependency_files, mode):
         "compiler": str(Path(shutil.which(compiler) or compiler).resolve()),
         "cmake": subprocess.check_output(["cmake", "--version"], text=True),
         "environment": {key: os.environ.get(key, "") for key in (
-            "VCToolsVersion", "WindowsSDKVersion", "SDKROOT", "DEVELOPER_DIR",
+            "SDKROOT", "DEVELOPER_DIR",
             "CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS",
         )},
         "rules": {},
         "dependencies": [digest(Path(path)) for path in dependency_files],
     }
-    if os.name == "nt":
-        # cl.exe doesn't support --version; its content identifies MSVC exactly.
-        identity["compiler_version"] = digest(Path(identity["compiler"]))
-    else:
-        identity["compiler_version"] = subprocess.check_output(
-            [compiler, "--version"], text=True
+    identity["compiler_version"] = subprocess.check_output(
+        [compiler, "--version"], text=True
+    )
+    if shutil.which("xcrun"):
+        identity["sdk"] = subprocess.check_output(
+            ["xcrun", "--show-sdk-path"], text=True
         )
-        if shutil.which("xcrun"):
-            identity["sdk"] = subprocess.check_output(
-                ["xcrun", "--show-sdk-path"], text=True
-            )
     for relative in tracked_files(root):
         if (relative.name == "CMakeLists.txt" or relative.suffix == ".cmake"
                 or relative.parts[0] == "CI"

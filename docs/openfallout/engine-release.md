@@ -87,8 +87,10 @@ what the owner ran the real games on):
 
 CI adds the first line, from the statement. The second comes from the owner at release time and is never filled in by a
 tool: `CI/engine_release.py notes <statement> --played-on-mac "<Mac and chip>" --played-on-macos <version>` prints it for
-the release notes of the draft. The release notes also hold one line per disk image from the packaged-app check
-(`CI/check_mac_package.py --notes`, see [mac-release.md](mac-release.md)): the result, the digest and the Mac it ran on.
+the release notes of the draft. The release notes also hold the lines of the packaged-app check for the one disk image
+(`CI/check_mac_package.py --notes`, see [mac-release.md](mac-release.md)): the result, the digest, the Mac it was checked
+on and what the image holds (Apple Silicon, signed and notarized, built for macOS 26.0). Those lines say what was checked
+and never repeat the supported or the played-on line.
 
 ## The release gate
 
@@ -100,8 +102,10 @@ publish a release when:
   the uploaded image;
 - the statement's `source_commit` is not the commit of the tag, or its `tag` is not the release's;
 - the notes lack the `Supported` line, say another minimum macOS than the statement, or lack the `Played on` line;
-- and, as before, the checks of [mac-release.md](mac-release.md): the image has a release-mode check PASS and a smoke PASS
-  on a Mac with a GPU, both for the uploaded image's digest.
+- and, as before, the checks of [mac-release.md](mac-release.md): the release holds exactly one disk image, the Apple
+  Silicon one, and no package of another platform; the image has a release-mode check PASS and a smoke PASS on a Mac
+  with a GPU, both for the uploaded image's digest; and the latest master run passed the one Mac job,
+  `macOS / Build, test and package`.
 
 `CI/test_harness_release.py` has one test per refusal.
 

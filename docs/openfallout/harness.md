@@ -11,26 +11,10 @@ the inline definitions. Apply reviewed changes in Harness too.
 
 ## Build and test
 
-`openfallout_ci` supplements the Windows/macOS/Linux GitHub Actions matrix with
-an Ubuntu 24.04 container build on Harness Cloud. The host VM remains on Harness's
-GA Ubuntu 22.04 image; Docker provides the same Ubuntu generation used by GitHub
-Actions. `CI/harness_ci.sh` installs the repository's Debian dependencies and Qt
-translation tools, builds in Debug with eight compiler jobs, and runs all three
-GoogleTest suites with JUnit ingestion.
-
-The container's `apt-get update` goes through `CI/apt_mirrors.sh`: it retries failed downloads and, when the default
-mirror does not answer (the Harness VMs lost their route to `archive.ubuntu.com` port 80 in November 2026, while
-`security.ubuntu.com` kept working and serves the whole archive), takes `security.ubuntu.com` and then two cloud mirrors
-instead of failing the run. The security suites stay on `security.ubuntu.com`; when that host fails the update as well, a cloud mirror takes the security suites too. The update runs with `APT::Update::Error-Mode=any`, so an archive whose indexes could not be downloaded counts as a failure even when `apt-get update` would end with status 0 (it only prints "Failed to fetch" otherwise). `CI/test_apt_mirrors.py` tests it without a network.
-
-The checked-out `CI/harness_ci.sh` is used when present, so PRs exercise their
-driver changes. Older source branches use an immutable fallback driver pinned in
-the pipeline YAML, allowing master builds before this setup is merged.
-
-The `.ccache` compiler cache is separate from GitHub Actions caches. Master builds
-may save it; PR builds only restore it. Build output and test results are not
-cached. `preflight_only=true` checks checkout and the VM without compiling.
-An initial native cache miss can appear as an ignored cache-restore failure.
+Harness no longer builds or tests OpenFallout. Its build pipeline, `openfallout_ci`, was an Ubuntu container build
+that duplicated the Linux job of GitHub Actions; the owner switched it and its webhook triggers off in Harness when the
+codebase became Mac-only. The one build is the Mac job of GitHub Actions (`macOS / Build, test and package`, see
+[CI reporting](ci-reporting.md)). What is left in Harness is the security scan and the release pipeline below.
 
 ## Source and supply-chain security
 
@@ -46,11 +30,8 @@ nine low. A successful scan means ingestion worked; it does not mean zero findin
 Review findings in the pipeline execution's **Security** tab before selecting a
 blocking threshold.
 
-Both CI and Security have enabled GitHub webhook triggers for master pushes and
-non-draft, same-repository pull requests targeting master. The duplicate Harness
-C++ build excludes Dependabot PRs, which retain the GitHub Actions platform matrix
-and Harness Security scans. This prevents the initial dependency-update burst
-from exhausting Harness's execution queue. PR updates abort the
+Security has enabled GitHub webhook triggers for master pushes and
+non-draft, same-repository pull requests targeting master. PR updates abort the
 previous execution. Fork PRs are excluded. The registered GitHub webhook was
 verified active with a successful response. Trigger definitions live under
 `.harness/triggers/`.
@@ -58,8 +39,9 @@ verified active with a successful response. Trigger definitions live under
 ## Desktop releases
 
 `openfallout_release` is manual. It orchestrates the existing GitHub Actions
-`Release` workflow, which builds the Windows installer and both macOS disk images.
-The workflow accepts `openfallout-*` tags as well as its existing `openmw-**` tags.
+`Release` workflow, which builds the one disk image, for Apple Silicon (macOS 26.0
+or later), and the engine release's statement. The workflow runs for
+`openfallout-*` tags only.
 
 Run it with these variables:
 
@@ -76,12 +58,14 @@ The hosted preview was tested successfully. It correctly blocks release creation
 until this setup is merged into master. No tag or release is created by preview.
 
 `draft` requires the source to be on master, this setup to exist at that commit,
-and its latest master **Build and test** push or manual run to have passed all
-four platform jobs. A green docs-only run with skipped platform jobs does not
-qualify; run the full workflow manually on that master commit if necessary.
-It creates a
+and its latest master **Build and test** push or manual run to have passed the
+one Mac job, `macOS / Build, test and package`. A green docs-only run with a
+skipped Mac job does not qualify; run the full workflow manually on that master
+commit if necessary. It creates a
 lightweight tag, waits for release packaging through `gh run watch`, and verifies
-nonempty uploaded Windows `.exe`, macOS `arm64.dmg`, and macOS `x86_64.dmg` assets.
+exactly one nonempty uploaded disk image, the Apple Silicon one
+(`OpenFallout-<version>-macOS-arm64.dmg`). A second image, an Intel image, a
+Windows installer or a Linux package is refused.
 GitHub Actions leaves the release as a draft prerelease. Harness retries the wait
 step while GitHub registers the new tag's workflow run.
 
@@ -102,6 +86,10 @@ The release pipeline checks out an immutable commit containing
 `CI/harness_release.py`. Its application source is selected separately, preventing
 a runtime source ref from replacing the privileged release script. When changing
 the helper, push and review it first, then update the pipeline's pinned commit.
+The pin must move after the Mac-only cut is merged: the commit pinned in
+`.harness/openfallout-release.yaml` holds the old helper, which waits for the
+Ubuntu, Windows and Intel Mac jobs and asks for a Windows installer and an Intel
+image, so it would refuse every release now.
 Credentials use the existing Harness GitHub OAuth secret by reference only;
 no token value is stored in Git. CI/Security do not persist checkout credentials.
 
@@ -109,9 +97,9 @@ no token value is stored in Git. CI/Security do not persist checkout credentials
 
 ```sh
 python3 -m unittest discover -s CI -p 'test_*.py'
-actionlint .github/workflows/push.yml .github/workflows/release.yml
+actionlint .github/workflows/*.yml
 ```
 
 Release tests exercise read-only preview, invalid tags, failed or unmerged source
 rejection, tag immutability, draft lookup, asset requirements, and promotion.
-The lightweight GitHub Actions Changes job also runs the release helper tests.
+The lightweight `Changes` job of GitHub Actions, on a Mac runner, also runs the release helper tests.
