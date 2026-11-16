@@ -13,8 +13,6 @@ set(LAUNCHER
     utils/textinputdialog.cpp
     utils/lineedit.cpp
     utils/openalutil.cpp
-
-    ${CMAKE_SOURCE_DIR}/files/windows/launcher.rc
 )
 
 set(LAUNCHER_HEADER
@@ -39,28 +37,16 @@ set(QT_USE_QTGUI 1)
 
 set (LAUNCHER_RES ${CMAKE_SOURCE_DIR}/files/launcher/launcher.qrc)
 
-# Set some platform specific settings
-if(WIN32)
-    set(LAUNCHER_RES ${LAUNCHER_RES} ${CMAKE_SOURCE_DIR}/files/windows/QWindowsVistaDark/dark.qrc)
-    set(GUI_TYPE WIN32)
-    set(QT_USE_QTMAIN TRUE)
-endif(WIN32)
-
 QT_ADD_RESOURCES(RCC_SRCS ${LAUNCHER_RES})
 
 # Main executable
 openfallout_add_executable(openfallout-launcher
-    ${GUI_TYPE}
     ${LAUNCHER}
     ${LAUNCHER_HEADER}
     ${RCC_SRCS}
 )
 
 add_dependencies(openfallout-launcher qm-files)
-
-if (NOT APPLE)
-    INSTALL(TARGETS openfallout-launcher)
-endif ()
 
 target_link_libraries(openfallout-launcher
     SDL2::SDL2
@@ -69,10 +55,6 @@ target_link_libraries(openfallout-launcher
 )
 
 target_link_libraries(openfallout-launcher Qt::Widgets Qt::Core Qt::Svg)
-
-if (WIN32)
-    target_sources(openfallout-launcher PRIVATE ${CMAKE_SOURCE_DIR}/files/windows/other-apps.manifest)
-endif()
 
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(openfallout-launcher)
@@ -83,13 +65,3 @@ if(USE_QT)
     set_property(TARGET openfallout-launcher PROPERTY AUTOUIC ON)
     set_property(TARGET openfallout-launcher PROPERTY AUTOUIC_SEARCH_PATHS ui)
 endif(USE_QT)
-
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    target_precompile_headers(openfallout-launcher PRIVATE
-        <boost/program_options/options_description.hpp>
-
-        <algorithm>
-        <string>
-        <vector>
-    )
-endif()

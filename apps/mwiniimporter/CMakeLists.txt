@@ -18,22 +18,6 @@ target_link_libraries(openfallout-iniimporter
     components
 )
 
-if (WIN32)
-    target_sources(openfallout-iniimporter PRIVATE ${CMAKE_SOURCE_DIR}/files/windows/other-apps.manifest)
-endif()
-
-if (NOT APPLE)
-    INSTALL(TARGETS openfallout-iniimporter)
-endif()
-
-if (MINGW)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -municode")
-endif()
-
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(openfallout-iniimporter)
-endif()
-
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    target_precompile_headers(openfallout-iniimporter REUSE_FROM components)
 endif()

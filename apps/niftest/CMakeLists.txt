@@ -12,18 +12,6 @@ target_link_libraries(niftest
     components
 )
 
-if (WIN32)
-    target_sources(niftest PRIVATE ${CMAKE_SOURCE_DIR}/files/windows/other-apps.manifest)
-endif()
-
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(niftest)
-endif()
-
-if (NOT APPLE)
-    install(TARGETS niftest)
-endif()
-
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    target_precompile_headers(niftest REUSE_FROM components)
 endif()

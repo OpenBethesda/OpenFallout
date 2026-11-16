@@ -4,18 +4,6 @@ target_link_libraries(openfallout_settings_access_benchmark benchmark::benchmark
 target_compile_definitions(openfallout_settings_access_benchmark
     PRIVATE OPENFALLOUT_PROJECT_SOURCE_DIR=u8"${PROJECT_SOURCE_DIR}")
 
-if (UNIX AND NOT APPLE)
-    target_link_libraries(openfallout_settings_access_benchmark ${CMAKE_THREAD_LIBS_INIT})
-endif()
-
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    target_precompile_headers(openfallout_settings_access_benchmark REUSE_FROM components)
-endif()
-
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(openfallout_settings_access_benchmark)
-endif()
-
-if (WIN32)
-    target_sources(openfallout_settings_access_benchmark PRIVATE ${CMAKE_SOURCE_DIR}/files/windows/other-apps.manifest)
 endif()

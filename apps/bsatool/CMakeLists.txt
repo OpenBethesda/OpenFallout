@@ -13,18 +13,6 @@ target_link_libraries(bsatool
     components
 )
 
-if (WIN32)
-    target_sources(bsatool PRIVATE ${CMAKE_SOURCE_DIR}/files/windows/other-apps.manifest)
-endif()
-
 if (BUILD_WITH_CODE_COVERAGE)
     openfallout_enable_coverage(bsatool)
-endif()
-
-if (NOT APPLE)
-    install(TARGETS bsatool)
-endif()
-
-if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
-    target_precompile_headers(bsatool REUSE_FROM components)
 endif()
