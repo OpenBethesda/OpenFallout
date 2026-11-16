@@ -681,7 +681,10 @@ class ReleaseModeTests(unittest.TestCase):
         import engine_release
 
         notes = self.root / "notes.md"
-        run_check(self.disk_image(), "--mode", "local", "--smoke", "skip", "--notes", notes)
+        # the line ends with the machine the check ran on: an Apple Silicon Mac, also when this test runs on a Linux
+        # runner (whose x86_64 would look like a claim about Intel)
+        with unittest.mock.patch.object(check_mac_package.platform, "machine", return_value="arm64"):
+            run_check(self.disk_image(), "--mode", "local", "--smoke", "skip", "--notes", notes)
         line = notes.read_text()
         self.assertIn("ad hoc signed, not notarized (macOS asks before the first start)", line)
         for claim in ("Intel", "x86_64", "Supported", "Played on", "or later", "Game Mode"):

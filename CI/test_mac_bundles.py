@@ -419,6 +419,7 @@ class MacFloorTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("macOS 26.0 or later", result.stderr)
 
+    @unittest.skipUnless(sys.platform == "darwin", "another system is refused before the architecture is looked at")
     def test_intel_is_refused(self):
         for architectures in ("x86_64", "arm64;x86_64"):
             result, _ = self.configure(f"-DCMAKE_OSX_ARCHITECTURES={architectures}")
