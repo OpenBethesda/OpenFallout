@@ -585,12 +585,13 @@ def check_smoke(app, options):
         RENDERER_SEEN.append(" ".join(re.sub(r"[;()]", " ", renderer.group(1)).split()) or "not reported")
     compiler, problems, state, no_gl = smoke_verdict(text, options.expect_jit)
     print(f"smoke: LuaJIT compiler: {state or 'not reported'} (log: {log})")
-    if no_gl and options.smoke == "auto":
-        raise SmokeSkipped(f"this machine gave the engine no OpenGL context; {CI_HINT}")
     stderr = (work / "stderr.log").read_text(encoding="utf-8", errors="replace") if (work / "stderr.log").exists() else ""
     # the loader's refusal (dyld, Reason:) and the engine's crash handler (*** Fatal Error ***, <what> (signal N))
     loader = [line.strip() for line in stderr.splitlines()
               if line.startswith("dyld") or "Reason:" in line or "Fatal Error" in line or re.search(r"\(signal \d+\)", line)]
+    # a machine without an OpenGL context cannot start the game; an engine that crashes over it is still a failure
+    if no_gl and not loader and options.smoke == "auto":
+        raise SmokeSkipped(f"this machine gave the engine no OpenGL context; {CI_HINT}")
     if loader:
         problems.append("the engine's standard error says: " + " ".join(loader[:2]))
     if helper_error and problems:

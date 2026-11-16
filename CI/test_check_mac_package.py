@@ -435,6 +435,14 @@ class SmokeRunTests(unittest.TestCase):
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL smoke", output)
 
+    def test_crash_without_an_opengl_context_fails_in_auto_mode(self):
+        crash = "\n\n*** Fatal Error ***\nAbnormal termination condition (signal 6)\nAddress: 0x900000a00\n"
+        status, output, _ = self.smoke(NO_GL, "--smoke", "auto", stderr=crash)
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL smoke", output)
+        self.assertIn("the engine's standard error says: *** Fatal Error *** Abnormal termination condition (signal 6)",
+                      output)
+
     def test_software_renderer_run_that_is_too_slow_is_skipped_in_auto_mode_only(self):
         log = SOFTWARE_GL + JIT_ON + STARTED
         status, output, _ = self.smoke(log, "--smoke", "auto", "--seconds", "1", seconds=3)
