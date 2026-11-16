@@ -58,9 +58,8 @@ openfallout --skip-menu --new-game --content Fallout3.esm \
     --data scripts/openfallout/autoplay --content autoplay.omwscripts
 ```
 
-The scripts need `core.messageBox` (Lua API revision 170). `scripts/openfallout/fallout_start_smoke_test.py --only newgame`
-runs the same files against the synthetic plugin, and `--only autoplay` runs the gates that shoot, teleport and activate
-several things at once, on the arena of the plugin.
+The scripts need `core.messageBox` (Lua API revision 170). They are run on the real data of the games, on the Mac. (A smoke
+test that ran them against a synthetic plugin under a virtual X11 display left with the Linux build.)
 
 ## The probe of the saves
 
@@ -85,5 +84,4 @@ python3 scripts/openfallout/savediff.py autoplay_save.omwsave autoplay_again.omw
 `savediff.py` compares the sections of the state of Fallout in two saved games. A game that is loaded and saved again at once has
 the same bytes in every section except for what really changed in between: the clock and the timers of the quests, and what the
 `OnLoad` blocks of the scripts do when their cells are loaded again (the scripts of the games run those on every load, so a
-karma or an item they give is given again). `scripts/openfallout/fallout_start_smoke_test.py --only savesprobe` runs the probe
-against the synthetic plugin, in one engine and then in a second one started on the save.
+karma or an item they give is given again).
