@@ -11,7 +11,6 @@
 #include <components/files/configurationmanager.hpp>
 #include <components/files/multidircollection.hpp>
 #include <components/misc/strings/conversion.hpp>
-#include <components/platform/platform.hpp>
 #include <components/resource/bgsmfilemanager.hpp>
 #include <components/resource/bulletshape.hpp>
 #include <components/resource/bulletshapemanager.hpp>
@@ -109,8 +108,6 @@ namespace
 
     int runBulletObjectTool(int argc, char* argv[])
     {
-        Platform::init();
-
         bpo::options_description desc = makeOptionsDescription();
 
         bpo::parsed_options options = bpo::command_line_parser(argc, argv).options(desc).allow_unregistered().run();

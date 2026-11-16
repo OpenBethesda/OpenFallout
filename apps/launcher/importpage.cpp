@@ -20,14 +20,8 @@ Launcher::ImportPage::ImportPage(const Files::ConfigurationManager& cfg, Config:
 {
     setupUi(this);
 
-    mWizardInvoker = new ProcessInvoker();
     mImporterInvoker = new ProcessInvoker();
     resetProgressBar();
-
-    connect(mWizardInvoker->getProcess(), &QProcess::started, this, &ImportPage::wizardStarted);
-
-    connect(mWizardInvoker->getProcess(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-        &ImportPage::wizardFinished);
 
     connect(mImporterInvoker->getProcess(), &QProcess::started, this, &ImportPage::importerStarted);
 
@@ -69,16 +63,7 @@ Launcher::ImportPage::ImportPage(const Files::ConfigurationManager& cfg, Config:
 
 Launcher::ImportPage::~ImportPage()
 {
-    delete mWizardInvoker;
     delete mImporterInvoker;
-}
-
-void Launcher::ImportPage::on_wizardButton_clicked()
-{
-    mMain->writeSettings();
-
-    if (!mWizardInvoker->startProcess(QLatin1String("openfallout-wizard"), false))
-        return;
 }
 
 void Launcher::ImportPage::on_importerButton_clicked()
@@ -159,24 +144,6 @@ void Launcher::ImportPage::on_browseButton_clicked()
         settingsComboBox->setCurrentIndex(settingsComboBox->findText(path));
         importerButton->setEnabled(true);
     }
-}
-
-void Launcher::ImportPage::wizardStarted()
-{
-    mMain->hide(); // Hide the launcher
-
-    wizardButton->setEnabled(false);
-}
-
-void Launcher::ImportPage::wizardFinished(int exitCode, QProcess::ExitStatus exitStatus)
-{
-    if (exitCode != 0 || exitStatus == QProcess::CrashExit)
-        return qApp->quit();
-
-    mMain->reloadSettings();
-    wizardButton->setEnabled(true);
-
-    mMain->show(); // Show the launcher again
 }
 
 void Launcher::ImportPage::importerStarted()

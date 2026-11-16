@@ -15,35 +15,6 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QGroupBox" name="wizardGroup">
-     <property name="title">
-      <string>Morrowind Installation Wizard</string>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_3" columnstretch="1,1">
-      <item row="1" column="1">
-       <spacer name="horizontalSpacer_2">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item row="1" column="0">
-       <widget class="QPushButton" name="wizardButton">
-        <property name="text">
-         <string>Run &amp;Installation Wizard</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
     <widget class="QGroupBox" name="importerGroup">
      <property name="title">
       <string>Morrowind Settings Importer</string>

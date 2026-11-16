@@ -42,17 +42,6 @@ endif (GIT_CHECKOUT)
 
 list (APPEND COMPONENT_FILES "${OpenFallout_BINARY_DIR}/${VERSION_CPP_FILE}")
 
-# OSG plugin checker
-# Helpfully, OSG doesn't export this to its CMake config as it doesn't have one
-list(TRANSFORM USED_OSG_PLUGINS REPLACE "^osgdb_" "" OUTPUT_VARIABLE USED_OSG_PLUGIN_NAMES)
-list(TRANSFORM USED_OSG_PLUGIN_NAMES PREPEND "\"" OUTPUT_VARIABLE USED_OSG_PLUGIN_NAMES_FORMATTED)
-list(TRANSFORM USED_OSG_PLUGIN_NAMES_FORMATTED APPEND "\"")
-list(JOIN USED_OSG_PLUGIN_NAMES_FORMATTED ", " USED_OSG_PLUGIN_NAMES_FORMATTED)
-
-set(OSG_PLUGIN_CHECKER_CPP_FILE "components/misc/osgpluginchecker.cpp")
-configure_file("${OpenFallout_SOURCE_DIR}/${OSG_PLUGIN_CHECKER_CPP_FILE}.in" "${OpenFallout_BINARY_DIR}/${OSG_PLUGIN_CHECKER_CPP_FILE}")
-list(APPEND COMPONENT_FILES "${OpenFallout_BINARY_DIR}/${OSG_PLUGIN_CHECKER_CPP_FILE}")
-
 # source files
 
 add_component_dir (lua
@@ -378,8 +367,8 @@ add_component_dir (falloutscript
 
 add_component_dir (misc
     barrier budgetmeasurement color compression constants convert coordinateconverter display endianness float16 frameratelimiter
-    guarded math mathutil messageformatparser notnullptr objectpool osgpluginchecker osguservalues progressreporter resourcehelpers
-    rng strongtypedef thread timeconvert timer tuplehelpers tuplemeta utf8stream weakcache
+    guarded math mathutil messageformatparser notnullptr objectpool osguservalues progressreporter resourcehelpers
+    rng strongtypedef thread timeconvert timer tuplehelpers tuplemeta utf8stream
     )
 
 add_component_dir (misc/strings
@@ -405,7 +394,7 @@ set_source_files_properties(files/configfileparser.cpp PROPERTIES COMPILE_FLAGS 
 add_component_dir (compiler
     context controlparser errorhandler exception exprparser extensions fileparser generator
     lineparser literals locals output parser scanner scriptparser skipparser streamerrorhandler
-    stringparser tokenloc nullerrorhandler opcodes extensions0 declarationparser
+    stringparser tokenloc opcodes extensions0 declarationparser
     quickfileparser discardparser junkparser
     )
 
@@ -565,7 +554,6 @@ add_component_dir(navmeshtool
     )
 
 add_component_dir(platform
-    platform
     file
     )
 

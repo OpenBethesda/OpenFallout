@@ -10,7 +10,6 @@
 #include <components/files/qtconversion.hpp>
 #include <components/l10n/qttranslations.hpp>
 #include <components/platform/application.hpp>
-#include <components/platform/platform.hpp>
 
 #ifdef MAC_OS_X_VERSION_MIN_REQUIRED
 #undef MAC_OS_X_VERSION_MIN_REQUIRED
@@ -22,8 +21,6 @@
 
 int runLauncher(int argc, char* argv[])
 {
-    Platform::init();
-
     boost::program_options::variables_map variables;
     boost::program_options::options_description description;
     Files::ConfigurationManager configurationManager;
@@ -52,8 +49,7 @@ int runLauncher(int argc, char* argv[])
         if (result == Launcher::FirstRunDialogResultFailure)
             return 0;
 
-        if (result == Launcher::FirstRunDialogResultContinue)
-            mainWin.show();
+        mainWin.show();
 
         int exitCode = app.exec();
 

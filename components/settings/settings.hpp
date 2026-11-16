@@ -44,7 +44,7 @@ namespace Settings
         static void clear();
         ///< clears all settings and default settings
 
-        static std::filesystem::path load(const Files::ConfigurationManager& cfgMgr, bool loadEditorSettings = false);
+        static std::filesystem::path load(const Files::ConfigurationManager& cfgMgr);
         ///< load settings from all active config dirs. Returns the path of the last loaded file.
 
         static void saveUser(const std::filesystem::path& file);

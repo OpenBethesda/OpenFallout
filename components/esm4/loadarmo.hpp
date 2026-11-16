@@ -168,7 +168,7 @@ namespace ESM4
         ESM::FormId mPickUpSound;
         ESM::FormId mDropSound;
 
-        ESM::Path mModel; // FIXME: for OpenCS
+        ESM::Path mModel;
 
         float mBoundRadius;
 
