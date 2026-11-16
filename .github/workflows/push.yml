@@ -4,7 +4,10 @@ on:
   push:
     branches:
       - master
+  # A draft pull request runs nothing: its pushes used to start Mac runs that the next push cancelled. Marking it ready
+  # for review starts the run.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -24,6 +27,7 @@ jobs:
   # and the documentation generator, on every change, including the documentation-only ones; on a Mac runner, so that
   # the tests that need macOS (codesign, hdiutil, vtool) run instead of being skipped.
   Changes:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
@@ -68,7 +72,8 @@ jobs:
   MacOS:
     name: macOS
     needs: Changes
-    if: ${{ !cancelled() && needs.Changes.outputs.code != 'false' }}
+    # !cancelled() lets the build run when Changes failed (fail open), so the draft rule is repeated here.
+    if: ${{ !cancelled() && !github.event.pull_request.draft && needs.Changes.outputs.code != 'false' }}
     uses: ./.github/workflows/macos.yml
     with:
       signing-environment: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'macos-release' || '' }}

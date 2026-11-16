@@ -3,7 +3,9 @@ name: Documentation links
 on:
   push:
     branches: [master]
+  # A draft pull request runs nothing (see push.yml); marking it ready for review starts the run.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -15,6 +17,7 @@ concurrency:
 
 jobs:
   links:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: macos-26
     timeout-minutes: 5
     steps:
