@@ -138,12 +138,14 @@ The owner runs these steps. Nothing starts without the owner.
 The unit tests (`CI/test_engine_release.py`, `CI/test_harness_release.py`) run on stand-in trees and stand-in GitHub
 answers.
 
-The whole path has run on real releases. The tag `openfallout-0.1.0` (15 November 2026) was the first run of the
-workflow's steps: a real notarized image went through `CI/engine_release.py write`, and the statement was downloaded
-from the real draft and verified. That image aborted when it quit, which the smoke check on a Mac with a GPU found; the
-draft was never published, and tags are not moved, so the first engine release is `openfallout-0.1.1` (16 November
-2026). For it every step above ran: the gate's `verify` and `publish` phases passed, both openings played through on
-the image's app, and the asset addresses of [The address](#the-address) answer without a login.
+Everything but the Harness pipeline has run on real releases. The tag `openfallout-0.1.0` (15 November 2026) was the
+first run of the workflow's steps: a real notarized image went through `CI/engine_release.py write`, and the statement
+was downloaded from the real draft and verified. That image aborted when it quit, which the smoke check on a Mac with a
+GPU found; the draft was never published, and tags are not moved, so the first engine release is `openfallout-0.1.1`
+(16 November 2026). For it steps 1 to 5 ran as written, and the asset addresses of [The address](#the-address) answer
+without a login.
 
-Not run: the Harness pipeline itself. Both releases were cut with `CI/harness_release.py` run by hand from a checkout
-of the tagged commit, phase by phase, with the same arguments the pipeline gives it.
+Not run: the Harness pipeline itself, which steps 2 and 6 name. For both tags the gate script was run by hand instead,
+from a checkout of the tagged commit: `CI/harness_release.py` with the phases `preview`, `tag` and `wait` for both,
+and `verify` and `publish` for 0.1.1, each with the arguments the pipeline gives it. The checks are the same ones; the
+pipeline's own run, with its pinned checkout and its secrets, is still a first.
