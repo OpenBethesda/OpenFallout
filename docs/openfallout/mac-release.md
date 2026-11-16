@@ -141,7 +141,8 @@ built for 67089ed566:
   against a real draft release with the ad hoc images: GitHub reports a `sha256:` digest for the assets of a draft,
   equal to the local hash, and the gate refused that release for lacking a release-mode line.
 
-Not run yet: the workflows themselves with the secrets (the `macos-release` environment, CPack calling the signing
-script in the job, the notes line appended to the draft release, publishing through the gate). The first tag or push
-to the default branch with the secrets is the first run of those. The unit tests with stand-in tools stay
-(`CI/test_release_signing.py`, `CI/test_check_mac_package.py`).
+The workflows themselves have run with the secrets since (the `macos-release` environment, CPack calling the signing
+script in the job, the notes line appended to the draft release, publishing through the gate): on master builds, and
+on the tags `openfallout-0.1.0` (a draft that was never published) and `openfallout-0.1.1` (the first engine release,
+16 November 2026). The unit tests with stand-in tools stay (`CI/test_release_signing.py`,
+`CI/test_check_mac_package.py`).

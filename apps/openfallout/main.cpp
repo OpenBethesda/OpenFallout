@@ -108,6 +108,14 @@ bool parseOptions(int argc, char** argv, OF::Engine& engine, Files::Configuratio
 
     cfgMgr.readConfiguration(variables, desc);
 
+    // OPENFALLOUT_HEADLESS=1 in the environment is the same as --headless
+    const bool headless = variables["headless"].as<bool>() || Debug::isHeadlessRun();
+    // The option may come from a configuration file, which the look at the arguments in runApplication does not see.
+    // The program that reports a crash, and the box of a fatal error, go by the environment, so it is set as soon as
+    // the configuration is read: before the settings are loaded, which ends the run when their file is damaged
+    if (headless)
+        setenv("OPENFALLOUT_HEADLESS", "1", 1);
+
     Debug::setupLogging(cfgMgr.getLogPath(), "OpenFallout");
     Log(Debug::Info) << Version::getOpenmwVersionDescription();
 
@@ -115,12 +123,6 @@ bool parseOptions(int argc, char** argv, OF::Engine& engine, Files::Configuratio
 
     OFGui::DebugWindow::startLogRecording();
 
-    // OPENFALLOUT_HEADLESS=1 in the environment is the same as --headless
-    const bool headless = variables["headless"].as<bool>() || Debug::isHeadlessRun();
-    // The option may come from a configuration file, which the look at the arguments in runApplication does not see:
-    // the program that reports a crash, and the box of a fatal error, go by the environment
-    if (headless)
-        setenv("OPENFALLOUT_HEADLESS", "1", 1);
     engine.setHeadless(headless);
     // A headless run must never reach for the pointer
     engine.setGrabMouse(!variables["no-grab"].as<bool>() && !headless);
