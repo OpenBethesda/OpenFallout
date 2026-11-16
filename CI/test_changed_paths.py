@@ -32,6 +32,20 @@ class ClassificationTest(unittest.TestCase):
             ("D", "scripts/openfallout/old_tool.py"),
         ]))
 
+    def test_the_round_runner_builds_because_its_whole_run_tests_need_macos(self):
+        for path in ("scripts/openfallout/round/round.py", "scripts/openfallout/round/roundguard.py",
+                     "scripts/openfallout/test_round.py"):
+            with self.subTest(path=path):
+                self.assertTrue(changed_paths.needs_build(modified(path)))
+                self.assertTrue(changed_paths.needs_build([("D", path)]))
+        # the rounds and scenarios it runs are data, and their tests run on any system
+        self.assertFalse(changed_paths.needs_build(modified(
+            "scripts/openfallout/round/rounds/m13-mountains.json",
+            "scripts/openfallout/round/scenarios/smoke.lua",
+            "scripts/openfallout/round/README.md",
+            "scripts/openfallout/test_round_scenario.py",
+        )))
+
     def test_code_hidden_among_documentation_builds(self):
         self.assertTrue(changed_paths.needs_build(modified(
             "docs/openfallout/roadmap.md",

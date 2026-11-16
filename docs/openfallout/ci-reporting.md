@@ -139,8 +139,10 @@ skip themselves there: those of the packaged-app check and the bundle selection
 (`codesign`, `hdiutil`, `vtool`), the top CMake file's refusal of Intel, and the
 whole runs of the round runner (`round.py run` works on macOS only). The Mac job runs the
 tests of the CI scripts and of the helper scripts again, on macOS, so those run
-too (`macos.yml`, "Run the Python tests on macOS"); a documentation-only change
-has no Mac job and so does not run them.
+too (`macos.yml`, "Run the Python tests on macOS"). A documentation-only change
+has no Mac job, and it changes nothing those tests cover: a change to the round
+runner (`round.py`, `roundguard.py`, `test_round.py`) always gets the Mac job
+(`CI/changed_paths.py`), and so does any change to `CI/`.
 
 The `Changes` job and the two documentation jobs (`links`, `HTML`) were on Mac
 runners from the Mac-only cut until 16 November 2026. That day GitHub's hosted
