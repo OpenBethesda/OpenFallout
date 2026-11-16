@@ -7,7 +7,9 @@ on:
       - docs/**
       - .readthedocs.yaml
       - .github/workflows/docs.yml
+  # A draft pull request runs nothing (see push.yml); marking it ready for review starts the run.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - docs/**
       - .readthedocs.yaml
@@ -26,6 +28,7 @@ jobs:
   # LuaRocks and LuaDocumentor from docs/source/install_luadocumentor_in_docker.sh). A documentation change does not
   # wait for a Mac runner.
   HTML:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
