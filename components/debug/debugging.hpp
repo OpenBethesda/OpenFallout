@@ -34,6 +34,11 @@ namespace Debug
 
     Level getRecastMaxLogLevel();
 
+    // A headless run: the environment says OPENFALLOUT_HEADLESS=1 (the engine sets it too when it is started with
+    // --headless, so the copy of the program that reports a crash knows it as well). A headless run shows no box:
+    // nobody watches it, and the screen may belong to somebody who is working on it.
+    bool isHeadlessRun();
+
     // Redirect cout and cerr to the log file
     void setupLogging(const std::filesystem::path& logDir, std::string_view appName);
 

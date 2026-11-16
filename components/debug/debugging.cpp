@@ -238,6 +238,12 @@ namespace Debug
         static boost::iostreams::stream_buffer<Tee<Buffer, Coloured>> bufferedErr;
     }
 
+    bool isHeadlessRun()
+    {
+        const char* value = std::getenv("OPENFALLOUT_HEADLESS");
+        return value != nullptr && std::string_view(value) == "1";
+    }
+
     std::ostream& getRawStdout()
     {
         return rawStdout ? *rawStdout : std::cout;
@@ -322,7 +328,7 @@ namespace Debug
         }
         catch (const std::exception& e)
         {
-            if (!isatty(fileno(stdin)))
+            if (!isatty(fileno(stdin)) && !isHeadlessRun())
                 SDL_ShowSimpleMessageBox(0, (std::string(appName) + ": Fatal error").c_str(), e.what(), nullptr);
 
             Log(Debug::Error) << "Fatal error: " << e.what();

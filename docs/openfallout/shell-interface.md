@@ -28,7 +28,7 @@ handler listed here is not an engine handler of menu scripts.
 | `--load-savegame <file>` | load this save when the engine starts |
 | `--skip-menu` | do not show the main menu at the start |
 | `--new-game` | with `--skip-menu`, start a new game |
-| `--headless` | the window is created hidden and never shown; no focus, no pointer, no sound (`OPENFALLOUT_HEADLESS=1` in the environment does the same) |
+| `--headless` | the window is created hidden and never shown; no focus, no pointer, no sound, and no box on a fatal error or a crash: standard error and the crash log say what happened (`OPENFALLOUT_HEADLESS=1` in the environment does the same) |
 | `--no-grab` | do not grab the pointer |
 | `--no-sound` | no sound |
 | `--missing-content <answer>` | `ask`, `accept` or `refuse`: see below |

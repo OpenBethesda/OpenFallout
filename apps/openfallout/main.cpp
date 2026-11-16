@@ -35,13 +35,6 @@
 
 namespace
 {
-    // OPENFALLOUT_HEADLESS=1 in the environment is the same as --headless
-    bool isHeadlessEnvironment()
-    {
-        const char* value = std::getenv("OPENFALLOUT_HEADLESS");
-        return value != nullptr && std::string_view(value) == "1";
-    }
-
     // OPENFALLOUT_HEADLESS_POLICY=accessory or =prohibited sets the activation policy of the application
     // (NSApplication), for a headless run on macOS: an application that is neither of the foreground nor able to be
     // activated is never made the frontmost application, whatever SDL does with its window. It is done through the
@@ -122,7 +115,8 @@ bool parseOptions(int argc, char** argv, OF::Engine& engine, Files::Configuratio
 
     OFGui::DebugWindow::startLogRecording();
 
-    const bool headless = variables["headless"].as<bool>() || isHeadlessEnvironment();
+    // OPENFALLOUT_HEADLESS=1 in the environment is the same as --headless
+    const bool headless = variables["headless"].as<bool>() || Debug::isHeadlessRun();
     engine.setHeadless(headless);
     // A headless run must never reach for the pointer
     engine.setGrabMouse(!variables["no-grab"].as<bool>() && !headless);
@@ -389,11 +383,13 @@ int runApplication(int argc, char* argv[])
     // The engine starts SDL when it is made, before the options are read, so a headless run is recognised here: on
     // macOS the application is told not to become an application of the foreground (SDL does that when it starts the
     // video system) for as long as the window is hidden
-    bool headlessArgument = isHeadlessEnvironment();
+    bool headlessArgument = Debug::isHeadlessRun();
     for (int i = 1; i < argc; ++i)
         headlessArgument = headlessArgument || std::string_view(argv[i]) == "--headless";
     if (headlessArgument)
     {
+        // The copy of the program that reports a crash gets no arguments, only the environment: it must know too
+        setenv("OPENFALLOUT_HEADLESS", "1", 1);
         SDL_SetHint("SDL_MAC_BACKGROUND_APP", "1");
         // SDL keeps the screen awake by default, and on macOS that is a power assertion (PreventUserIdleDisplaySleep) held for the
         // whole run: a hidden window has no screen to keep awake, and the assertion is one more thing the power daemon, and
