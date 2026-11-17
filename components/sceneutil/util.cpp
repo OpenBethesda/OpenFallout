@@ -360,6 +360,37 @@ namespace SceneUtil
                 osg::Image::USE_NEW_DELETE, 1);
             image.setMipmapLevels(offsets);
         }
+
+        // 2-10-10-10 pixels: BGRA order (blue in the lowest bits) becomes RGBA order, and an unsized internal format
+        // the sized 10-bit one, the only one OpenGL ES takes them under; every bit is kept
+        bool toRgb10A2(osg::Image& image)
+        {
+            if (image.getDataType() != GL_UNSIGNED_INT_2_10_10_10_REV
+                || (image.getPixelFormat() != GL_BGRA && image.getPixelFormat() != GL_RGBA))
+                return false;
+            bool changed = false;
+            if (image.getPixelFormat() == GL_BGRA)
+            {
+                forEachRow(image, [](unsigned char* row, int width) {
+                    for (int x = 0; x < width; ++x)
+                    {
+                        std::uint32_t value;
+                        std::memcpy(&value, row + 4 * x, 4);
+                        value = (value & 0xc00ffc00u) | ((value & 0x3ffu) << 20) | ((value >> 20) & 0x3ffu);
+                        std::memcpy(row + 4 * x, &value, 4);
+                    }
+                });
+                image.setPixelFormat(GL_RGBA);
+                changed = true;
+            }
+            const GLint internalFormat = image.getInternalTextureFormat();
+            if (internalFormat == GL_RGBA || internalFormat == GL_BGRA || internalFormat == 4)
+            {
+                image.setInternalTextureFormat(GL_RGB10_A2);
+                changed = true;
+            }
+            return changed;
+        }
     }
 
     bool toOpenGLESFormat(osg::Image& image)
@@ -374,6 +405,7 @@ namespace SceneUtil
             widenPackedBgra(image);
             changed = true;
         }
+        changed = toRgb10A2(image) || changed;
         changed = toRgbOrder(image) || changed;
 
         const GLint internalFormat = image.getInternalTextureFormat();

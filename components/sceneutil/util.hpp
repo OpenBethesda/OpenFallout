@@ -128,8 +128,9 @@ namespace SceneUtil
 
     // Turns an uncompressed image OpenGL ES 3.0 would refuse to upload into one it takes and samples as desktop OpenGL
     // samples the original, in place, and says whether it did: BGR and BGRA become RGB and RGBA (toRgbOrder), the
-    // 16-bit BGRA packings (1-5-5-5 and 4-4-4-4) become 8-bit RGBA, and 4-byte pixels under an RGB internal format take
-    // an opaque alpha and an RGBA internal format. The Metal build does this to images as they load.
+    // 16-bit BGRA packings (1-5-5-5 and 4-4-4-4) become 8-bit RGBA, 2-10-10-10 pixels become RGBA order under the sized
+    // 10-bit format, and 4-byte pixels under an RGB internal format take an opaque alpha and an RGBA internal format.
+    // The Metal build does this to images as they load.
     bool toOpenGLESFormat(osg::Image& image);
 
     // Recover the presumed texture type for the given texture unit

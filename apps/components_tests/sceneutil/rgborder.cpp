@@ -136,6 +136,58 @@ namespace
         EXPECT_TRUE(std::equal(std::begin(expected), std::end(expected), image->data()));
     }
 
+    // 10-bit DDS files come as 2-10-10-10 packings: BGRA order (blue in the lowest bits), which OpenGL ES does not
+    // upload, or RGBA order under an unsized internal format, which OpenGL ES takes only under the sized 10-bit format
+    osg::ref_ptr<osg::Image> tenBitImage(int width, int height, GLenum pixelFormat,
+        const std::vector<std::uint32_t>& pixels, const std::vector<unsigned int>& mipmaps = {})
+    {
+        osg::ref_ptr<osg::Image> image = new osg::Image;
+        unsigned char* data = new unsigned char[pixels.size() * 4];
+        std::memcpy(data, pixels.data(), pixels.size() * 4);
+        image->setImage(width, height, 1, GL_RGBA, pixelFormat, GL_UNSIGNED_INT_2_10_10_10_REV, data,
+            osg::Image::USE_NEW_DELETE, 1);
+        image->setMipmapLevels(mipmaps);
+        return image;
+    }
+
+    std::uint32_t tenBitPixel(std::uint32_t first, std::uint32_t second, std::uint32_t third, std::uint32_t alpha)
+    {
+        return first | (second << 10) | (third << 20) | (alpha << 30);
+    }
+
+    TEST(SceneUtilOpenGLESFormatTest, a_bgra_2_10_10_10_image_becomes_rgba_with_every_mipmap_and_all_its_bits)
+    {
+        // 2x1 then 1x1, each pixel written blue, green, red, alpha from the lowest bits
+        osg::ref_ptr<osg::Image> image = tenBitImage(
+            2, 1, GL_BGRA, { tenBitPixel(1023, 512, 1, 3), tenBitPixel(0, 1, 2, 0), tenBitPixel(7, 8, 9, 1) }, { 8 });
+
+        EXPECT_TRUE(SceneUtil::toOpenGLESFormat(*image));
+        EXPECT_EQ(image->getPixelFormat(), static_cast<GLenum>(GL_RGBA));
+        EXPECT_EQ(image->getDataType(), static_cast<GLenum>(GL_UNSIGNED_INT_2_10_10_10_REV));
+        EXPECT_EQ(image->getInternalTextureFormat(), static_cast<GLint>(GL_RGB10_A2));
+        ASSERT_EQ(image->getNumMipmapLevels(), 2u);
+        std::uint32_t level0[2];
+        std::memcpy(level0, image->getMipmapData(0), sizeof(level0));
+        EXPECT_EQ(level0[0], tenBitPixel(1, 512, 1023, 3));
+        EXPECT_EQ(level0[1], tenBitPixel(2, 1, 0, 0));
+        std::uint32_t level1;
+        std::memcpy(&level1, image->getMipmapData(1), sizeof(level1));
+        EXPECT_EQ(level1, tenBitPixel(9, 8, 7, 1));
+    }
+
+    TEST(SceneUtilOpenGLESFormatTest, an_rgba_2_10_10_10_image_gets_the_sized_10_bit_format_and_keeps_its_pixels)
+    {
+        const std::uint32_t pixel = tenBitPixel(1, 512, 1023, 2);
+        osg::ref_ptr<osg::Image> image = tenBitImage(1, 1, GL_RGBA, { pixel });
+
+        EXPECT_TRUE(SceneUtil::toOpenGLESFormat(*image));
+        EXPECT_EQ(image->getPixelFormat(), static_cast<GLenum>(GL_RGBA));
+        EXPECT_EQ(image->getInternalTextureFormat(), static_cast<GLint>(GL_RGB10_A2));
+        std::uint32_t kept;
+        std::memcpy(&kept, image->data(), sizeof(kept));
+        EXPECT_EQ(kept, pixel);
+    }
+
     TEST(SceneUtilOpenGLESFormatTest, images_opengl_es_takes_are_left_alone)
     {
         osg::ref_ptr<osg::Image> rgba = new osg::Image;
@@ -149,5 +201,9 @@ namespace
         osg::ref_ptr<osg::Image> rgb565 = new osg::Image;
         rgb565->allocateImage(1, 1, 1, GL_RGB, GL_UNSIGNED_SHORT_5_6_5);
         EXPECT_FALSE(SceneUtil::toOpenGLESFormat(*rgb565));
+
+        osg::ref_ptr<osg::Image> tenBit = tenBitImage(1, 1, GL_RGBA, { tenBitPixel(1, 2, 3, 0) });
+        tenBit->setInternalTextureFormat(GL_RGB10_A2);
+        EXPECT_FALSE(SceneUtil::toOpenGLESFormat(*tenBit));
     }
 }
