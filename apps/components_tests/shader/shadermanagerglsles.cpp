@@ -110,6 +110,7 @@ namespace
         on["diffuseMapUV"] = "1";
         on["lightingMethodClustered"] = "0";
         on["simpleLighting"] = "0";
+        on["useGPUShader4"] = "1";
 
         std::size_t converted = 0;
         for (const auto& [variant, defines] : { std::pair{ "off", off }, std::pair{ "on", on } })
