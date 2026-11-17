@@ -400,6 +400,13 @@ namespace SceneUtil
     {
         if (image.isCompressed() || image.data() == nullptr)
             return false;
+        if (image.getPixelFormat() == GL_DEPTH_COMPONENT && image.getDataType() == GL_FLOAT
+            && image.getInternalTextureFormat() == GL_DEPTH_COMPONENT)
+        {
+            // OpenGL ES takes float depth pixels only under the sized float depth format
+            image.setInternalTextureFormat(GL_DEPTH_COMPONENT32F);
+            return true;
+        }
         bool changed = false;
         if (image.getPixelFormat() == GL_BGRA
             && (image.getDataType() == GL_UNSIGNED_SHORT_1_5_5_5_REV

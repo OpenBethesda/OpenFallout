@@ -9,7 +9,9 @@
 #include <components/settings/categories/shadows.hpp>
 #include <components/stereo/stereomanager.hpp>
 
+#include "gldialect.hpp"
 #include "mwshadowtechnique.hpp"
+#include "util.hpp"
 
 namespace SceneUtil
 {
@@ -110,6 +112,14 @@ namespace SceneUtil
         fakeShadowMapTexture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
         fakeShadowMapTexture->setShadowComparison(true);
         fakeShadowMapTexture->setShadowCompareFunc(osg::Texture::ShadowCompareFunc::ALWAYS);
+        if constexpr (GLDialect::sOpenGLES)
+        {
+            // OpenGL ES uploads float depth pixels only under a sized format and makes no mipmaps of a depth texture;
+            // one texel compared with ALWAYS gives the same answer whatever the filter
+            toOpenGLESFormat(*fakeShadowMapImage);
+            fakeShadowMapTexture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::NEAREST);
+            fakeShadowMapTexture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::NEAREST);
+        }
         for (unsigned int i = mShadowSettings->getBaseShadowTextureUnit();
              i < mShadowSettings->getBaseShadowTextureUnit() + mShadowSettings->getNumShadowMapsPerLight(); ++i)
         {
