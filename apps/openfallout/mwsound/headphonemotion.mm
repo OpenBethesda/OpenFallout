@@ -2,7 +2,9 @@
 // (headtracking.hpp). It is the only Objective-C++ in the sound edge; keep it thin, the logic is in headtracking.cpp.
 //
 // Threads:
-//   - start, stop and latest: the engine's main thread (the sound manager's update and its settings changes).
+//   - start, stop, update and latest: the engine's main thread (the sound manager's update and its settings changes).
+//     When Core Motion says device motion is not available, update tries again every few seconds while the setting
+//     is on (Apple does not say whether that answer depends on headphones being connected).
 //   - the motion handler: mQueue, a serial operation queue of this bridge. It only publishes to the box.
 //   - the delegate's connect and disconnect: a thread Core Motion chooses. They only write to the box.
 // The box (HeadSampleBox) holds the latest sample under a lock, and the handler and the delegate keep it alive, so a
@@ -74,6 +76,9 @@ namespace OFSound
             return "unknown";
         }
 
+        // How often to ask Core Motion again while device motion is not available
+        constexpr std::chrono::seconds sRetryInterval{ 3 };
+
         class HeadphoneMotion final : public HeadMotionSource
         {
         public:
@@ -86,14 +91,57 @@ namespace OFSound
 
             void start() override
             {
-                if (mManager != nil)
+                if (mManager != nil || mWaiting)
                     return;
-                CMHeadphoneMotionManager* manager = [[CMHeadphoneMotionManager alloc] init];
-                if (!manager.deviceMotionAvailable)
+                if (!tryStart())
                 {
-                    Log(Debug::Warning) << "Head tracking: this Mac cannot read headphone motion";
+                    mWaiting = true;
+                    mNextTry = HeadClock::now() + sRetryInterval;
+                    Log(Debug::Warning) << "Head tracking: Core Motion says headphone motion is not available now; "
+                                           "trying again every "
+                                        << sRetryInterval.count() << " seconds while the setting is on";
+                }
+            }
+
+            void update(HeadClock::time_point now) override
+            {
+                if (!mWaiting || now < mNextTry)
+                    return;
+                if (tryStart())
+                {
+                    mWaiting = false;
+                    Log(Debug::Info) << "Head tracking: headphone motion is available now";
                     return;
                 }
+                mNextTry = now + sRetryInterval;
+            }
+
+            void stop() override
+            {
+                mWaiting = false;
+                if (mManager == nil)
+                    return;
+                [mManager stopDeviceMotionUpdates];
+                [mManager stopConnectionStatusUpdates];
+                mManager.delegate = nil;
+                [mQueue waitUntilAllOperationsAreFinished];
+                mManager = nil;
+                mDelegate = nil;
+                mQueue = nil;
+                // No sample or connection message can arrive any more; a later start begins as the first did
+                mBox->reset();
+                Log(Debug::Info) << "Head tracking: stopped reading headphone motion";
+            }
+
+            std::optional<HeadSample> latest() const override { return mBox->latest(); }
+
+        private:
+            /// Starts reading when Core Motion says device motion is available; false (and nothing kept) otherwise
+            bool tryStart()
+            {
+                CMHeadphoneMotionManager* manager = [[CMHeadphoneMotionManager alloc] init];
+                if (!manager.deviceMotionAvailable)
+                    return false;
                 const CMAuthorizationStatus permission = [CMHeadphoneMotionManager authorizationStatus];
                 Log(Debug::Info) << "Head tracking: reading headphone motion through Core Motion (permission "
                                  << permissionName(permission) << ")";
@@ -126,30 +174,16 @@ namespace OFSound
                 [manager startConnectionStatusUpdates];
                 [manager startDeviceMotionUpdatesToQueue:mQueue withHandler:handler];
                 mManager = manager;
+                return true;
             }
 
-            void stop() override
-            {
-                if (mManager == nil)
-                    return;
-                [mManager stopDeviceMotionUpdates];
-                [mManager stopConnectionStatusUpdates];
-                mManager.delegate = nil;
-                [mQueue waitUntilAllOperationsAreFinished];
-                mManager = nil;
-                mDelegate = nil;
-                mQueue = nil;
-                mBox->disconnect();
-                Log(Debug::Info) << "Head tracking: stopped reading headphone motion";
-            }
-
-            std::optional<HeadSample> latest() const override { return mBox->latest(); }
-
-        private:
             std::shared_ptr<HeadSampleBox> mBox;
             CMHeadphoneMotionManager* mManager = nil;
             OFHeadphoneMotionDelegate* mDelegate = nil;
             NSOperationQueue* mQueue = nil;
+            /// Started while device motion was not available: update() asks again at mNextTry
+            bool mWaiting = false;
+            HeadClock::time_point mNextTry;
         };
     }
 
