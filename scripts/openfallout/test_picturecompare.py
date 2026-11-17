@@ -226,9 +226,15 @@ class Scenario(unittest.TestCase):
             self.assertIsNone(load(picturecompare.scenario_of(scene, SCENES), scene["name"]), scene["name"])
 
 
+NO_VALUES = {}  # what the round runner records when a round lays no values for the post-processing techniques
+
+
 def make_side(folder, scene, picture, verdict="PASS", settings="[Video]\nantialiasing = 0\n", simulation="60.000",
-              stamp="20261116-100000", shader_values=None):
-    """A folder of the results of one round as round.py writes it: report.json, the shot and the run's settings.cfg."""
+              stamp="20261116-100000", shader_values=NO_VALUES):
+    """A folder of the results of one round as round.py writes it: report.json, the shot and the run's settings.cfg.
+
+    `shader_values=None` leaves the key out of the report, as a round from before the report recorded it did.
+    """
     run = folder / f"{stamp}-{scene}" / "run"
     (run / "shots").mkdir(parents=True)
     (run / "config").mkdir()
@@ -397,8 +403,7 @@ class CompareFolders(unittest.TestCase):
         make_side(self.candidate, "nv-post", textured(64, 48), shader_values={"bloomlinear": {"uThreshold": 0.9}})
         make_side(self.reference, "fo3-post", textured(64, 48), shader_values={"bloomlinear": {"uThreshold": 0.2}})
         make_side(self.candidate, "fo3-post", textured(64, 48), shader_values={"bloomlinear": {"uThreshold": 0.2}})
-        # results of rounds from before the report recorded the values, on one side: no values there
-        make_side(self.reference, "nv-busy", textured(64, 48))
+        make_side(self.reference, "nv-busy", textured(64, 48), shader_values={})
         make_side(self.candidate, "nv-busy", textured(64, 48), shader_values={})
         self.assertEqual(self.compare(), 1)
         results = self.results()
@@ -406,6 +411,19 @@ class CompareFolders(unittest.TestCase):
                          {"nv-post": False, "fo3-post": True, "nv-busy": True})
         self.assertEqual(results["nv-post"]["verdict"], "FLAG")
         self.assertIn("technique", "; ".join(results["nv-post"]["reasons"]))
+
+    def test_a_report_that_does_not_record_the_technique_values_is_not_a_valid_comparison(self):
+        # results of rounds from before the report recorded the values: what the round laid is not known, so two such
+        # reports are not shown to be the same, and one of them against a round that laid none is not either
+        make_side(self.reference, "nv-post", textured(64, 48), shader_values=None)
+        make_side(self.candidate, "nv-post", textured(64, 48), shader_values=None)
+        make_side(self.reference, "nv-busy", textured(64, 48), shader_values=None)
+        make_side(self.candidate, "nv-busy", textured(64, 48), shader_values={})
+        self.assertEqual(self.compare(), 1)
+        results = self.results()
+        self.assertEqual({scene: row["valid"] for scene, row in results.items()}, {"nv-post": False, "nv-busy": False})
+        for row in results.values():
+            self.assertIn("does not record", "; ".join(row["reasons"]))
 
     def test_a_run_without_its_settings_file_is_not_a_valid_comparison(self):
         # the settings of the two runs cannot be shown to be the same

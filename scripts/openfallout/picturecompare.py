@@ -143,8 +143,10 @@ class Shot:
         settings = self.run / "config" / "settings.cfg"
         self.settings = settings.read_text(encoding="utf-8", errors="replace") if settings.is_file() else None
         # what the round laid for the post-processing techniques (the engine writes shaders.yaml again in its own words when
-        # it quits, so the report is the record)
-        self.shader_values = report.get("shader_values") or {}
+        # it quits, so the report is the record). None: the report does not say (a round from before it recorded them),
+        # which is not the same as a round that laid none.
+        values = report.get("shader_values")
+        self.shader_values = values if isinstance(values, dict) else None
         self.simulation = None
         for line in report.get("round_lines", []):
             if line.startswith("note\tstill\tsimulation="):
@@ -212,7 +214,11 @@ def compare_folders(reference_dir, candidate_dir, out, limits_doc, scenes_doc, n
             row["valid"] = False
             row["reasons"].append("the two runs had other settings (config/settings.cfg of each run): the profiles or the "
                                   "player's own settings differ")
-        if reference.shader_values != candidate.shader_values:
+        if reference.shader_values is None or candidate.shader_values is None:
+            row["valid"] = False
+            row["reasons"].append("the report.json of one of the runs does not record the values of the post-processing "
+                                  "techniques (shader_values): they cannot be compared")
+        elif reference.shader_values != candidate.shader_values:
             row["valid"] = False
             row["reasons"].append("the two runs had other values for the post-processing techniques (shader_values in "
                                   "the report.json of each run)")
