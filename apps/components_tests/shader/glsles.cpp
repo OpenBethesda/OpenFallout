@@ -506,6 +506,22 @@ namespace
         EXPECT_THAT(result.mErrors, Contains(HasSubstr("texture")));
     }
 
+    // Each name of a declaration of several uniforms is set from outside the shader
+    TEST(ShaderGlslEsTest, every_uniform_of_a_declaration_of_several_is_checked)
+    {
+        EXPECT_THAT(
+            fragment("#version 120\nuniform float gain, filter;\nvoid main() { gl_FragColor = vec4(gain); }\n").mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(
+            fragment("#version 120\nuniform vec2 offsets[2], texture;\nvoid main() { gl_FragColor = vec4(0.0); }\n")
+                .mErrors,
+            Contains(HasSubstr("uniform texture")));
+        EXPECT_THAT(fragment("#version 120\nuniform float gain, level[2], scale;\n"
+                             "void main() { gl_FragColor = vec4(gain * scale); }\n")
+                        .mErrors,
+            IsEmpty());
+    }
+
     TEST(ShaderGlslEsTest, multiview_view_index_keeps_its_name)
     {
         const GlslEsShader result = fragment(

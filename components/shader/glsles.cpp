@@ -129,6 +129,34 @@ namespace Shader
             return sReservedNames.contains(name) || name == "texture";
         }
 
+        // The names a declaration declares, from the text after its type: "a, b[2], c = 1.0" gives a, b and c
+        std::vector<std::string> declaratorNames(std::string_view declarators)
+        {
+            std::vector<std::string> names;
+            int depth = 0;
+            bool expectName = true;
+            for (std::size_t i = 0; i < declarators.size(); ++i)
+            {
+                const char c = declarators[i];
+                if (c == '(' || c == '[' || c == '{')
+                    ++depth;
+                else if (c == ')' || c == ']' || c == '}')
+                    --depth;
+                else if (c == ',' && depth == 0)
+                    expectName = true;
+                else if (expectName && depth == 0 && isIdentifierStart(c))
+                {
+                    std::size_t end = i + 1;
+                    while (end < declarators.size() && isIdentifierPart(declarators[end]))
+                        ++end;
+                    names.emplace_back(declarators.substr(i, end - i));
+                    expectName = false;
+                    i = end - 1;
+                }
+            }
+            return names;
+        }
+
         // What a constant expression may name besides numbers and constants: constructors and the built-in
         // functions other than the texture functions
         const std::set<std::string_view> sConstantExpressionNames = { "true", "false", "bool", "int", "uint", "float",
@@ -525,8 +553,8 @@ namespace Shader
             static const std::regex initialiser(
                 R"(^(\s*uniform\s+([A-Za-z_]\w*)\s+([A-Za-z_]\w*))\s*=\s*([^;]*);(.*)$)");
             static const std::regex anyInitialiser(R"(^\s*uniform\b[^;]*=)");
-            static const std::regex uniformName(
-                R"(^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))");
+            static const std::regex uniformDeclarators(
+                R"(^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([^;]*))");
 
             const std::string code = blankComments(original);
             const std::string_view source = code;
@@ -545,9 +573,11 @@ namespace Shader
                 const std::string_view text = original.substr(pos, end - pos);
                 skipped.push_back(branches.active() == Branches::Active::No);
                 std::smatch match;
-                if (std::regex_search(line, match, uniformName) && isUnusableUniformName(match[1].str()))
-                    result.mErrors.push_back(
-                        std::format("uniform {} has a name GLSL ES 3.00 keeps for itself", match[1].str()));
+                if (std::regex_search(line, match, uniformDeclarators))
+                    for (const std::string& name : declaratorNames(match[1].str()))
+                        if (isUnusableUniformName(name))
+                            result.mErrors.push_back(
+                                std::format("uniform {} has a name GLSL ES 3.00 keeps for itself", name));
                 if (std::regex_match(line, match, version))
                 {
                     const int number = Misc::StringUtils::toNumeric<int>(match[1].str(), 0);
