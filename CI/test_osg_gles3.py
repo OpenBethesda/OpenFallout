@@ -116,7 +116,7 @@ class CacheKey(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = write_tree(Path(self.temporary.name))
-        self.angle = self.root / "angle_version.sh"
+        self.angle = self.root / "angle.json"
         self.angle.write_text("ANGLE_COMMIT='1f6526a566c27c7c33aa73a78517450a4a2a1714'\n")
 
     def key(self):
@@ -262,6 +262,9 @@ class BeforeScript(unittest.TestCase):
         self.assertIn("-DCMAKE_PREFIX_PATH=/tmp/openmw-deps/installed/arm64-osx-dynamic;/tmp/Qt/6.11.2/macos", arguments)
         self.assertIn("-DCMAKE_BUILD_TYPE=RelWithDebInfo", arguments)
         self.assertIn("-DBUILD_ESMTOOL=TRUE", arguments)
+        # ANGLE is named only to keep it out of the OpenGL app (the early notarized test switches it on with -A)
+        self.assertIn("-DOPENFALLOUT_BUNDLE_ANGLE=OFF", arguments)
+        arguments.remove("-DOPENFALLOUT_BUNDLE_ANGLE=OFF")
         self.assertFalse([a for a in arguments if "METAL" in a or "ANGLE" in a or "OSG_DIR" in a])
 
     @unittest.skipUnless(shutil.which("bash"), "needs bash")

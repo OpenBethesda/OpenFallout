@@ -2,7 +2,7 @@
 
 # Builds the OpenSceneGraph for OpenGL ES 3 that the Metal build uses (docs/openfallout/osg-gles3.md). The workflow runs
 # it only when the cache of $OSG_GLES3_PREFIX missed. It needs the dependency set (CI/before_install.macos.sh) for the
-# picture libraries and ANGLE (CI/macos/angle/fetch_angle.sh) for the OpenGL ES headers and libraries.
+# picture libraries and ANGLE (CI/angle_asset.py fetch) for the OpenGL ES headers and libraries.
 
 DEPENDENCIES_ROOT_PATH="${DEPENDENCIES_ROOT_PATH:-/tmp/openmw-deps}"
 ANGLE_ROOT_PATH="${ANGLE_ROOT_PATH:-/tmp/openfallout-angle}"
