@@ -715,6 +715,8 @@ namespace Shader
 
         void apply(osg::State& state) const override;
 
+        void compileGLObjects(osg::State& state) const override;
+
         void resizeGLObjectBuffers(unsigned int maxSize) override;
 
     private:
@@ -779,6 +781,16 @@ namespace Shader
         for (const osg::ref_ptr<osg::Uniform>& sampler : mSamplers)
             pcp->apply(*sampler);
         applied = pcp;
+    }
+
+    // A state set compiled ahead of drawing may link the program again (after a hot reload or new defines), which
+    // resets its uniforms: the next apply sets the initial values and samplers again
+    void SamplerProgram::compileGLObjects(osg::State& state) const
+    {
+        const bool relink = getNumShaders() != 0 && getPCP(state)->needsLink();
+        osg::Program::compileGLObjects(state);
+        if (relink)
+            mApplied[state.getContextID()] = nullptr;
     }
 
     void SamplerProgram::resizeGLObjectBuffers(unsigned int maxSize)
