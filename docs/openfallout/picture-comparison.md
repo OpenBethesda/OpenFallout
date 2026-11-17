@@ -121,7 +121,7 @@ Two pictures can only be compared when everything except the renderer is the sam
 | the interface over the picture | the engine's head-up display and the crosshair are hidden, and message boxes (the notices of add-ons) are answered before the picture. The Fallout display (health, compass, action points) is a script of its own with no switch and stays in the picture: it is the same in both runs, and it is drawn by the interface renderer, which the Metal build changes too, so comparing it is wanted |
 | the player's own body and its idle movements | the camera is in its static mode, ahead of the eye or at a fixed place |
 | water waves, cloud drift, animated textures, particles, animations | the world is paused when the simulation time reaches 60 s: they stop at the same phase on both builds (the two pause times are in the report; they differ by at most one frame, 33 ms at 30 frames a second) |
-| loading in progress | the place has 15 real seconds to load before the view is set, and the picture is taken 3 s after the pause; a scene that is not ready by 60 s of simulation time fails its round |
+| loading in progress | the place has 15 real seconds to load before the view is set, and the picture is taken 3 s after the pause; a scene that is not ready by 60 s of simulation time fails its round, and so does one that does not reach it within 150 real seconds: the round says whether something held the world (`held`) or the engine ran too slowly on a busy computer (`slow`) |
 
 What is not held exactly, and why the comparison tolerates it:
 

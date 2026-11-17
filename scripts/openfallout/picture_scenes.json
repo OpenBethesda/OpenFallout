@@ -8,6 +8,7 @@
     "settle": 15,
     "pause_at": 60,
     "after_pause": 3,
+    "wait_pause": 150,
     "forward": 48
   },
   "settings": {

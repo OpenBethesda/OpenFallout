@@ -107,7 +107,7 @@ def scenario_of(scene, doc):
     hold = doc["hold"]
     table = {"name": scene["name"], "hour": scene.get("hour"), "weather": scene.get("weather"), "place": scene.get("place"),
              "camera": scene["camera"], "forward": hold["forward"], "settle": hold["settle"], "pauseAt": hold["pause_at"],
-             "afterPause": hold["after_pause"], "limit": doc["limit"]}
+             "afterPause": hold["after_pause"], "waitPause": hold["wait_pause"], "limit": doc["limit"]}
     return f"local SCENE = {lua_literal(table)}\n" + TEMPLATE.read_text(encoding="utf-8")
 
 

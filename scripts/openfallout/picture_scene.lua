@@ -32,10 +32,16 @@ return { limit = SCENE.limit, delay = 0, run = function(r)
         r.error('late', string.format('ready at simulation time %.1f, after the time the scene is paused at (%.1f)', now,
             SCENE.pauseAt))
     else
-        -- the simulation time stands still while anything else holds the world (a menu, a box): the scene is then not the same
-        if not r.waitFor(function() return r.simulationTime() >= SCENE.pauseAt end, SCENE.pauseAt - now + 30, 'pause time') then
-            r.error('held', string.format('the simulation time stopped at %.1f before the time the scene is paused at (%.1f): '
-                .. 'something else holds the world', r.simulationTime(), SCENE.pauseAt))
+        -- the simulation time stands still while anything else holds the world (a menu, a box), and it creeps on a computer so
+        -- busy that a frame takes longer than the engine's longest step (0.2 s): either way the scene is not the same
+        if not r.waitFor(function() return r.simulationTime() >= SCENE.pauseAt end, SCENE.waitPause, 'pause time') then
+            if r.core.isWorldPaused() then
+                r.error('held', string.format('the simulation time stopped at %.1f before the time the scene is paused at (%.1f): '
+                    .. 'something else holds the world', r.simulationTime(), SCENE.pauseAt))
+            else
+                r.error('slow', string.format('the simulation time reached only %.1f of %.1f in %d real seconds: the engine ran '
+                    .. 'too slowly (a busy computer?)', r.simulationTime(), SCENE.pauseAt, SCENE.waitPause))
+            end
         end
     end
     r.pause(true)

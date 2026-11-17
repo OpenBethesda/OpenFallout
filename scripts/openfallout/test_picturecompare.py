@@ -128,7 +128,7 @@ class Scenario(unittest.TestCase):
     """The scenario of a scene, run by the scenario player of the rounds against the stand-ins of the engine's Lua modules."""
     WORLD = (HERE / "round" / "scripts" / "roundworld.lua").read_text(encoding="utf-8")
 
-    def play(self, name, simulation_start=20.0, steps=200, frozen_after=None):
+    def play(self, name, simulation_start=20.0, steps=200, frozen_after=None, held=False):
         scene = next(s for s in SCENES["scenes"] if s["name"] == name)
         source = picturecompare.scenario_of(scene, SCENES)
         self.lua = make_runtime(self.WORLD)
@@ -138,6 +138,8 @@ class Scenario(unittest.TestCase):
             self.lua.execute("clock = clock + 1; if not paused_tags.round then simulation = simulation + 1 end")
             if frozen_after is not None:
                 self.lua.execute(f"if simulation > {frozen_after} then simulation = {frozen_after} end")
+                if held and self.lua.eval(f"simulation >= {frozen_after}"):
+                    self.lua.execute("paused = true")
             module.engineHandlers.onUpdate(0)
             sent = self.lua.eval("sent_to_player")
             for index in range(1, len(sent) + 1):
@@ -171,10 +173,14 @@ class Scenario(unittest.TestCase):
         lines, _ = self.play("nv-interior", simulation_start=100.0)
         self.assertTrue(any(line.startswith("ROUND\terror\tlate") for line in lines), lines)
 
-    def test_a_scene_whose_simulation_time_stands_still_is_an_error(self):
+    def test_a_scene_whose_simulation_time_stands_still_is_an_error_that_names_the_cause(self):
         # a menu or a box holds the world: the pause time is never reached
-        lines, _ = self.play("nv-busy", simulation_start=20.0, steps=200, frozen_after=30.0)
+        lines, _ = self.play("nv-busy", simulation_start=20.0, steps=300, frozen_after=30.0, held=True)
         self.assertTrue(any(line.startswith("ROUND\terror\theld") and "stopped at 30.0" in line for line in lines), lines)
+        # nothing holds it, but the engine is too slow to get there in time
+        lines, _ = self.play("nv-busy", simulation_start=20.0, steps=300, frozen_after=30.0)
+        self.assertTrue(any(line.startswith("ROUND\terror\tslow") and "only 30.0 of 60.0 in 150 real seconds" in line
+                            for line in lines), lines)
 
     def test_every_scenario_is_valid_lua(self):
         lua = LuaRuntime(unpack_returned_tuples=True)
