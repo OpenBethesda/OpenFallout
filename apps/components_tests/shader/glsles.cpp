@@ -772,6 +772,18 @@ namespace
                              "void main() { gl_FragColor = vec4(x); }\n")
                         .mErrors,
             Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        // The text of a #define that goes on over lines is followed on every line of it
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define B 1.0\n"
+                             "#define A \\\n"
+                             "    (B * u)\n"
+                             "float x = A;\n"
+                             "#undef B\n"
+                             "#define B 2.0\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("B"))));
         // A branch decided only when compiling may give a macro either text: each is followed
         EXPECT_THAT(fragment("#version 120\n"
                              "#define SCALE 2.0\n"

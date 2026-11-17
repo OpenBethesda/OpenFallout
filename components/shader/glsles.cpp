@@ -1206,6 +1206,8 @@ namespace Shader
 
             Macros macros;
             MacroTexts macroTexts;
+            // The #define whose text goes on over the lines being read
+            std::string openDefine;
             for (std::size_t index = 0; index < sourceLines.size(); ++index)
             {
                 const std::string_view line = sourceLines[index];
@@ -1232,11 +1234,21 @@ namespace Shader
                                 macros[directive->mName] = Macro{ directive->mValue,
                                     !directive->mTakesArguments && !continued && isKept(index) };
                                 macroTexts[directive->mName].push_back(directive->mValue);
+                                if (continued)
+                                    openDefine = directive->mName;
                             }
                             else
                                 macros.erase(directive->mName);
                         }
                     }
+                    else if (!openDefine.empty())
+                    {
+                        // The next line of that #define's text (a line continuation is no name, so it can stay)
+                        macroTexts[openDefine].back() += ' ';
+                        macroTexts[openDefine].back() += line;
+                    }
+                    if (!continued)
+                        openDefine.clear();
                     inDirective = continued;
                     lines.emplace_back(line);
                     ++lineNumber;
