@@ -2368,11 +2368,18 @@ namespace NifOsg
 
             image->setMipmapLevels(mipmapOffsets);
             // The graphics library and the conversion below take each level at the size that follows from the first
-            // level's, at its stored offset. A chain that does not fit the data at those sizes is not used.
+            // level's, at its stored offset. A first level that does not fit the data is no picture; a chain that does
+            // not fit is not used.
+            if (!SceneUtil::mipmapLevelFits(*image, 0, dataSize))
+            {
+                Log(Debug::Info) << "Internal texture's first level in " << mFilename
+                                 << " does not fit its data, ignoring texture";
+                return nullptr;
+            }
             if (!SceneUtil::mipmapsFit(*image, dataSize))
             {
                 Log(Debug::Warning) << "Internal texture's mipmaps in " << mFilename
-                                    << " do not fit its data, using the first level only";
+                                    << " do not fit its size or data, using the first level only";
                 image->setMipmapLevels({});
             }
 
