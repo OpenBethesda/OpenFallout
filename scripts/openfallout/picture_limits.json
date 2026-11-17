@@ -1,0 +1,29 @@
+{
+  "about": "The limits of the picture comparison (docs/openfallout/picture-comparison.md, 'The limit'). method: how the pictures are measured. allowance: what two renderers may legitimately differ by, the limits of a scene until its own are set from runs. margin: how far above its noise floor a scene's limit sits (worst value x factor + pad; for ssim and worst_tile_ssim the same on the distance from 1). scenes: the limits set from the first runs, written by `picturecompare.py limits --write`. noise_floor: what those runs measured.",
+  "method": {
+    "pixel_tolerance": 24,
+    "tile": 32,
+    "block": 8
+  },
+  "allowance": {
+    "bad_share": 0.01,
+    "worst_tile_bad": 0.10,
+    "mean_shift": 2.0,
+    "worst_tile_shift": 12.0,
+    "ssim": 0.97,
+    "worst_tile_ssim": 0.75
+  },
+  "margin": {
+    "factor": 1.5,
+    "pad": {
+      "bad_share": 0.002,
+      "worst_tile_bad": 0.02,
+      "mean_shift": 0.5,
+      "worst_tile_shift": 3.0,
+      "ssim": 0.005,
+      "worst_tile_ssim": 0.03
+    }
+  },
+  "scenes": {},
+  "noise_floor": {}
+}

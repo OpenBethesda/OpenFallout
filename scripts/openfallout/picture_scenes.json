@@ -1,0 +1,176 @@
+{
+  "about": "The fixed scenes of the picture comparison (docs/openfallout/picture-comparison.md). A place is a start cell (an editor id, or a worldspace and a grid cell) and positions in game units; a weather is a form id of the game's master with its editor id. Angles are degrees: yaw 0 looks north, 90 east; pitch is positive down.",
+  "resolution": [1280, 720],
+  "framerate": 30,
+  "random_seed": 1,
+  "limit": 240,
+  "hold": {
+    "settle": 15,
+    "pause_at": 60,
+    "after_pause": 3,
+    "forward": 48
+  },
+  "settings": {
+    "General": {
+      "screenshot format": "png",
+      "anisotropy": "4",
+      "texture mag filter": "linear",
+      "texture min filter": "linear",
+      "texture mipmap": "nearest"
+    },
+    "Video": { "antialiasing": "0", "gamma": "1.0", "contrast": "1.0" },
+    "Camera": {
+      "field of view": "60.0",
+      "first person field of view": "60.0",
+      "viewing distance": "7168.0",
+      "reverse z": "true"
+    },
+    "Terrain": { "distant terrain": "false", "game lod": "true" },
+    "Shadows": { "enable shadows": "false" },
+    "Post Processing": { "enabled": "false" },
+    "Water": { "shader": "false" },
+    "Sound": { "master volume": "0" }
+  },
+  "scenes": [
+    {
+      "name": "nv-interior",
+      "game": "nv",
+      "kind": "interior",
+      "for": "An interior: the lamps of a room, furniture and the textures of walls and floor. The place of the measurement scene nv-interior.",
+      "start": "GSDocMitchellHouse",
+      "camera": { "yaw": 0, "pitch": 5 }
+    },
+    {
+      "name": "nv-exterior",
+      "game": "nv",
+      "kind": "exterior",
+      "for": "The open desert by day: land, rocks, plants and the sky. The place of the measurement scene nv-exterior.",
+      "start": "WastelandNV:6,15",
+      "hour": 13,
+      "weather": { "master": "FalloutNV.esm", "form": "0x0FFC88", "editor_id": "NVWastelandClear" },
+      "camera": { "yaw": 0, "pitch": 3 }
+    },
+    {
+      "name": "nv-busy",
+      "game": "nv",
+      "kind": "busy",
+      "for": "A busy exterior: many buildings, objects and characters near the start point. The place of the measurement scene nv-busy.",
+      "start": "WastelandNV:-18,0",
+      "hour": 13,
+      "weather": { "master": "FalloutNV.esm", "form": "0x0FFC88", "editor_id": "NVWastelandClear" },
+      "camera": { "yaw": 0, "pitch": 3 }
+    },
+    {
+      "name": "fo3-interior",
+      "game": "fo3",
+      "kind": "interior",
+      "for": "An interior: the metal rooms and lights of a vault. The place of the measurement scene fo3-interior.",
+      "start": "Vault101d",
+      "camera": { "yaw": 0, "pitch": 5 }
+    },
+    {
+      "name": "fo3-exterior",
+      "game": "fo3",
+      "kind": "exterior",
+      "for": "The open wasteland by day: land, ruins and the sky. The place of the measurement scene fo3-exterior.",
+      "start": "Wasteland:18,24",
+      "hour": 13,
+      "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
+      "camera": { "yaw": 0, "pitch": 3 }
+    },
+    {
+      "name": "fo3-busy",
+      "game": "fo3",
+      "kind": "busy",
+      "for": "A busy exterior: a town of many structures, objects and characters. The place of the measurement scene fo3-busy.",
+      "start": "MegatonWorld:-1,-6",
+      "hour": 13,
+      "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
+      "camera": { "yaw": 0, "pitch": 3 }
+    },
+    {
+      "name": "nv-shadows",
+      "game": "nv",
+      "kind": "shadows",
+      "for": "Shadows: a low afternoon sun over buildings, objects and characters, with every kind of shadow on.",
+      "start": "WastelandNV:-18,0",
+      "hour": 17,
+      "weather": { "master": "FalloutNV.esm", "form": "0x0FFC88", "editor_id": "NVWastelandClear" },
+      "camera": { "yaw": 90, "pitch": 8 },
+      "settings": {
+        "Shadows": {
+          "enable shadows": "true",
+          "actor shadows": "true",
+          "player shadows": "true",
+          "terrain shadows": "true",
+          "object shadows": "true"
+        }
+      }
+    },
+    {
+      "name": "fo3-shadows",
+      "game": "fo3",
+      "kind": "shadows",
+      "for": "Shadows: a low afternoon sun over the structures of a town, with every kind of shadow on.",
+      "start": "MegatonWorld:-1,-6",
+      "hour": 16,
+      "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
+      "camera": { "yaw": 90, "pitch": 8 },
+      "settings": {
+        "Shadows": {
+          "enable shadows": "true",
+          "actor shadows": "true",
+          "player shadows": "true",
+          "terrain shadows": "true",
+          "object shadows": "true"
+        }
+      }
+    },
+    {
+      "name": "nv-water",
+      "game": "nv",
+      "kind": "water",
+      "for": "Water with the water shader, reflection and refraction: the lake of grid cell 13,12 (water level 2600, land under water in the whole cell), the camera 250 units above it looking west to the shore of cell 12,12.",
+      "start": "WastelandNV:13,12",
+      "hour": 13,
+      "weather": { "master": "FalloutNV.esm", "form": "0x0FFC88", "editor_id": "NVWastelandClear" },
+      "place": { "pos": [55296, 51200], "onGround": true },
+      "camera": { "pos": [55296, 51200, 2850], "yaw": -90, "pitch": 8 },
+      "settings": { "Water": { "shader": "true", "refraction": "true", "reflection detail": "2" } }
+    },
+    {
+      "name": "fo3-water",
+      "game": "fo3",
+      "kind": "water",
+      "for": "Water with the water shader, reflection and refraction: the river of grid cell 20,-17 (water level 10500, land under water in the whole cell), the camera 250 units above it looking south to cell 20,-18 (RivetCityExterior07).",
+      "start": "Wasteland:20,-17",
+      "hour": 13,
+      "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
+      "place": { "pos": [83968, -67584], "onGround": true },
+      "camera": { "pos": [83968, -67584, 10750], "yaw": 180, "pitch": 5 },
+      "settings": { "Water": { "shader": "true", "refraction": "true", "reflection detail": "2" } }
+    },
+    {
+      "name": "nv-post",
+      "game": "nv",
+      "kind": "post-processing",
+      "for": "Post-processing: the bloom and adjustment shaders of the engine over a bright desert and sky (the place of nv-exterior).",
+      "start": "WastelandNV:6,15",
+      "hour": 13,
+      "weather": { "master": "FalloutNV.esm", "form": "0x0FFC88", "editor_id": "NVWastelandClear" },
+      "camera": { "yaw": 0, "pitch": -5 },
+      "settings": { "Post Processing": { "enabled": "true", "chain": "bloomlinear,adjustments" } }
+    },
+    {
+      "name": "fo3-post",
+      "game": "fo3",
+      "kind": "post-processing",
+      "for": "Post-processing: the bloom and adjustment shaders of the engine over ruins and sky (the place of fo3-exterior).",
+      "start": "Wasteland:18,24",
+      "hour": 13,
+      "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
+      "camera": { "yaw": 0, "pitch": -5 },
+      "settings": { "Post Processing": { "enabled": "true", "chain": "bloomlinear,adjustments" } }
+    }
+  ]
+}
