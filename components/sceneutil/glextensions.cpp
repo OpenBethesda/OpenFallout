@@ -68,6 +68,14 @@ namespace SceneUtil
             // OpenSceneGraph takes "version 1.2 or later" to mean that the texture LOD bias parameter exists
             extensions.isTextureLODBiasSupported = false;
 
+            // Clip control, which a reversed depth buffer needs (depth.cpp), is GL_EXT_clip_control in OpenGL ES, under
+            // the same numbers as desktop OpenGL's
+            if (supported("GL_EXT_clip_control"))
+            {
+                loadFunction(extensions.glClipControl, "glClipControlEXT");
+                extensions.isClipControlSupported = extensions.glClipControl != nullptr;
+            }
+
             // The S3TC formats come as three extensions in OpenGL ES, under other names than desktop OpenGL's
             extensions.isTextureCompressionS3TCSupported = extensions.isTextureCompressionS3TCSupported
                 || (supported("GL_EXT_texture_compression_dxt1") && supported("GL_ANGLE_texture_compression_dxt3")

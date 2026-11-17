@@ -347,6 +347,7 @@ file(GLOB UNITTEST_SRC_FILES
     sceneutil/loddebug.cpp
     sceneutil/rgborder.cpp
     sceneutil/clipplane.cpp
+    sceneutil/depthformat.cpp
     sceneutil/screencapture.cpp
     sceneutil/userdata.cpp
 

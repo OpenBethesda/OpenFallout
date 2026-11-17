@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
 
 #include <components/debug/debuglog.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/glextensions.hpp>
 #include <components/settings/values.hpp>
 
@@ -111,6 +113,21 @@ namespace SceneUtil
         }
     }
 
+    std::vector<GLenum> requestedDepthFormats(bool reversed, const std::function<bool(std::string_view)>& hasExtension)
+    {
+        std::vector<GLenum> formats;
+        if (reversed)
+        {
+            // OpenGL ES 3.0 has it in its core
+            if (GLDialect::sOpenGLES || hasExtension("GL_ARB_depth_buffer_float"))
+                formats.push_back(GL_DEPTH32F_STENCIL8);
+            else if (hasExtension("GL_NV_depth_buffer_float"))
+                formats.push_back(GL_DEPTH32F_STENCIL8_NV);
+        }
+        formats.push_back(GL_DEPTH24_STENCIL8);
+        return formats;
+    }
+
     void SelectDepthFormatOperation::operator()(osg::GraphicsContext* graphicsContext)
     {
         bool enableReverseZ = false;
@@ -131,26 +148,14 @@ namespace SceneUtil
         SceneUtil::AutoDepth::setReversed(enableReverseZ);
 
         constexpr char errPreamble[] = "Postprocessing and floating point depth buffers disabled: ";
-        std::vector<GLenum> requestedFormats;
-        unsigned int contextID = graphicsContext->getState()->getContextID();
-        if (SceneUtil::AutoDepth::isReversed())
-        {
-            if (osg::isGLExtensionSupported(contextID, "GL_ARB_depth_buffer_float"))
-            {
-                requestedFormats.push_back(GL_DEPTH32F_STENCIL8);
-            }
-            else if (osg::isGLExtensionSupported(contextID, "GL_NV_depth_buffer_float"))
-            {
-                requestedFormats.push_back(GL_DEPTH32F_STENCIL8_NV);
-            }
-            else
-            {
-                Log(Debug::Warning) << errPreamble
-                                    << "'GL_ARB_depth_buffer_float' and 'GL_NV_depth_buffer_float' unsupported.";
-            }
-        }
-
-        requestedFormats.push_back(GL_DEPTH24_STENCIL8);
+        const unsigned int contextID = graphicsContext->getState()->getContextID();
+        const std::vector<GLenum> requestedFormats
+            = requestedDepthFormats(SceneUtil::AutoDepth::isReversed(), [&](std::string_view extension) {
+                  return osg::isGLExtensionSupported(contextID, std::string(extension).c_str());
+              });
+        if (SceneUtil::AutoDepth::isReversed() && requestedFormats.size() == 1)
+            Log(Debug::Warning) << errPreamble
+                                << "'GL_ARB_depth_buffer_float' and 'GL_NV_depth_buffer_float' unsupported.";
         if (mSupportedFormats.empty())
         {
             SceneUtil::AutoDepth::setDepthFormat(requestedFormats.front());
