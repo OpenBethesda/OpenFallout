@@ -20,6 +20,10 @@ namespace SceneUtil::GLDialect
     // and folds the separately linked library shaders into each shader (OpenGL ES links one shader object per stage).
     inline constexpr bool sConvertsShadersToGlslEs = sOpenGLES;
 
+    // OpenGL ES has no user clip planes (glClipPlane, gl_ClipVertex). The Metal build gives the shaders the planes as
+    // uniforms and they write clip distances instead (SceneUtil::setEyeSpaceClipPlane).
+    inline constexpr bool sHasUserClipPlanes = !sOpenGLES;
+
     // OpenGL ES promises only RGBA read-back of the frame buffer, and has no BGR or BGRA upload formats.
     inline constexpr bool sReadsBackRGB = !sOpenGLES;
     inline constexpr bool sUploadsBGR = !sOpenGLES;

@@ -118,6 +118,9 @@ namespace Shader
 
         constexpr std::string_view sClipVertex = "of_ClipVertex";
         constexpr std::string_view sFragData = "of_FragData";
+        // The shader's own main, when a main of the converter's runs after it
+        constexpr std::string_view sShaderMain = "of_main";
+        constexpr std::string_view sClipDistanceExtension = "GL_ANGLE_clip_cull_distance";
 
         // The text with every comment turned into spaces, line breaks kept
         std::string blankComments(std::string_view source)
@@ -718,6 +721,9 @@ namespace Shader
         std::string preamble(osg::Shader::Type stage, const Uses& uses)
         {
             std::string out = "#version 300 es\n";
+            // #extension comes before any declaration; a context without the extension draws unclipped
+            if (uses.mClipVertex)
+                out += std::format("#ifdef {0}\n#extension {0} : enable\n#endif\n", sClipDistanceExtension);
             out += "precision highp float;\nprecision highp int;\n";
             for (const char* sampler : sSamplerTypes)
                 out += std::format("precision highp {};\n", sampler);
@@ -730,11 +736,48 @@ namespace Shader
             if (stage == osg::Shader::FRAGMENT && uses.mFragData >= 0)
                 out += std::format("layout(location = 0) out vec4 {}[{}];\n", sFragData, uses.mFragData + 1);
             if (uses.mClipVertex)
+            {
                 out += std::format("vec4 {};\n", sClipVertex);
+                for (unsigned int i = 0; i < sClipPlaneCount; ++i)
+                    out += std::format("uniform vec4 {};\n", clipPlaneUniformName(i));
+            }
             for (const Helper& helper : sHelpers)
                 if (uses.mHelpers.contains(helper.mName))
                     out += std::string(helper.mDefinition) + "\n";
             out += "#line 1 0\n";
+            return out;
+        }
+
+        // Renames one identifier wherever it stands as a whole word (the text has no comments left)
+        std::string renameWord(const std::string& source, std::string_view from, std::string_view to)
+        {
+            std::string out;
+            out.reserve(source.size());
+            std::size_t i = 0;
+            while (i < source.size())
+            {
+                if (!isIdentifierStart(source[i]) || (i > 0 && isIdentifierPart(source[i - 1])))
+                {
+                    out += source[i++];
+                    continue;
+                }
+                std::size_t end = i + 1;
+                while (end < source.size() && isIdentifierPart(source[end]))
+                    ++end;
+                const std::string_view word = std::string_view(source).substr(i, end - i);
+                out += word == from ? to : word;
+                i = end;
+            }
+            return out;
+        }
+
+        // The main of a vertex shader that wrote gl_ClipVertex: the shader's own main, then each clip distance
+        std::string clipDistanceMain()
+        {
+            std::string out = std::format("void main()\n{{\n    {}();\n#ifdef {}\n", sShaderMain, sClipDistanceExtension);
+            for (unsigned int i = 0; i < sClipPlaneCount; ++i)
+                out += std::format("    gl_ClipDistance[{}] = dot({}, {});\n", i, sClipVertex, clipPlaneUniformName(i));
+            out += "#endif\n}\n";
             return out;
         }
 
@@ -814,16 +857,26 @@ namespace Shader
         convertLines(source, result, lines, skipped);
 
         Uses uses;
-        const std::string body = convertNames(lines, stage, uses, skipped);
+        std::string body = convertNames(lines, stage, uses, skipped);
         for (const std::string& name : uses.mUnknown)
             result.mErrors.push_back(name + " has no GLSL ES 3.00 equivalent");
         if (uses.mDynamicFragData)
             result.mErrors.push_back("gl_FragData is indexed by something other than a number");
         if (uses.mClipVertex)
-            result.mDropped.push_back("gl_ClipVertex (user clip planes)");
+        {
+            body = renameWord(body, "main", sShaderMain);
+            if (!body.empty() && body.back() != '\n')
+                body += '\n';
+            body += clipDistanceMain();
+        }
 
         result.mSource = preamble(stage, uses) + body;
         return result;
+    }
+
+    std::string clipPlaneUniformName(unsigned int index)
+    {
+        return std::format("of_ClipPlane{}", index);
     }
 
     std::string foldLinkedShaders(std::string_view main, const std::vector<std::string>& linked)

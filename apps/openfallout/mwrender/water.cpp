@@ -1,5 +1,6 @@
 #include "water.hpp"
 
+#include <array>
 #include <cmath>
 #include <limits>
 #include <sstream>
@@ -20,8 +21,10 @@
 #include <components/resource/resourcesystem.hpp>
 #include <components/resource/scenemanager.hpp>
 
+#include <components/sceneutil/clipplane.hpp>
 #include <components/sceneutil/depth.hpp>
 #include <components/sceneutil/fog.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/material.hpp>
 #include <components/sceneutil/rtt.hpp>
 #include <components/sceneutil/shadow.hpp>
@@ -99,6 +102,9 @@ namespace OFRender
             FlipCallback(const osg::Plane* cullPlane)
                 : mCullPlane(cullPlane)
             {
+                if constexpr (!SceneUtil::GLDialect::sHasUserClipPlanes)
+                    for (osg::ref_ptr<osg::StateSet>& stateSet : mClipStateSets)
+                        stateSet = new osg::StateSet;
             }
 
             void operator()(osg::Node* node, osgUtil::CullVisitor* cv)
@@ -127,12 +133,26 @@ namespace OFRender
                 modelViewMatrix->preMultTranslate(mCullPlane->getNormal() * clipFudge);
 
                 cv->pushModelViewMatrix(modelViewMatrix, osg::Transform::RELATIVE_RF);
-                traverse(node, cv);
+                if constexpr (SceneUtil::GLDialect::sHasUserClipPlanes)
+                    traverse(node, cv);
+                else
+                {
+                    // The clip node below holds no plane here: its plane, in eye space where the clip node puts it,
+                    // reaches the shaders through a state set of this frame
+                    osg::Plane eyePlane(mCullPlane->getNormal(), 0);
+                    eyePlane.transform(*modelViewMatrix);
+                    osg::StateSet* stateSet = mClipStateSets[cv->getTraversalNumber() % 2];
+                    SceneUtil::setEyeSpaceClipPlane(*stateSet, 0, eyePlane);
+                    cv->pushStateSet(stateSet);
+                    traverse(node, cv);
+                    cv->popStateSet();
+                }
                 cv->popModelViewMatrix();
             }
 
         private:
             const osg::Plane* mCullPlane;
+            std::array<osg::ref_ptr<osg::StateSet>, 2> mClipStateSets;
         };
 
     public:
@@ -155,10 +175,13 @@ namespace OFRender
                 return;
             mPlane = plane;
 
-            mClipNode->getClipPlaneList().clear();
-            mClipNode->addClipPlane(
-                new osg::ClipPlane(0, osg::Plane(mPlane.getNormal(), 0))); // mPlane.d() applied in FlipCallback
-            mClipNode->setStateSetModes(*getOrCreateStateSet(), osg::StateAttribute::ON);
+            if constexpr (SceneUtil::GLDialect::sHasUserClipPlanes)
+            {
+                mClipNode->getClipPlaneList().clear();
+                mClipNode->addClipPlane(
+                    new osg::ClipPlane(0, osg::Plane(mPlane.getNormal(), 0))); // mPlane.d() applied in FlipCallback
+                mClipNode->setStateSetModes(*getOrCreateStateSet(), osg::StateAttribute::ON);
+            }
             mClipNode->setCullingActive(false);
         }
 

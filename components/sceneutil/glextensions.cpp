@@ -16,6 +16,7 @@
 #include <osg/Transform>
 
 #include <components/debug/debuglog.hpp>
+#include <components/shader/glsles.hpp>
 
 #include "gldialect.hpp"
 
@@ -48,11 +49,13 @@ namespace SceneUtil
                 GL_TEXTURE_CUBE_MAP_SEAMLESS, GL_LINE_STIPPLE, GL_POLYGON_OFFSET_LINE, GL_POLYGON_OFFSET_POINT };
             for (GLenum mode : desktopModes)
                 state.setModeValidity(mode, false);
+            // A user clip plane is a clip distance in OpenGL ES (GL_CLIP_DISTANCE0 + i is GL_CLIP_PLANE0 + i); the converted
+            // shaders write the first Shader::sClipPlaneCount (components/shader/glsles.hpp)
+            const bool clipDistances = supported("GL_ANGLE_clip_cull_distance");
             for (GLenum i = 0; i < 8; ++i)
             {
                 state.setModeValidity(GL_LIGHT0 + i, false);
-                // gl_ClipVertex is not converted (see components/shader/glsles.hpp), so no clip distance is written
-                state.setModeValidity(GL_CLIP_PLANE0 + i, false);
+                state.setModeValidity(GL_CLIP_PLANE0 + i, clipDistances && i < Shader::sClipPlaneCount);
             }
             state.setModeValidity(GL_DEPTH_CLAMP, supported("GL_EXT_depth_clamp"));
             state.setModeValidity(GL_FRAMEBUFFER_SRGB, supported("GL_EXT_sRGB_write_control"));
@@ -88,7 +91,8 @@ namespace SceneUtil
             const bool depthClamp = supported("GL_EXT_depth_clamp");
             Log(Debug::Info) << "OpenGL ES: per-draw-buffer switches " << (indexed.empty() ? "missing" : indexed)
                              << ", S3TC textures " << (extensions.isTextureCompressionS3TCSupported ? "yes" : "no")
-                             << ", depth clamp " << (depthClamp ? "yes" : "no");
+                             << ", depth clamp " << (depthClamp ? "yes" : "no")
+                             << ", clip distances " << (clipDistances ? "yes" : "no");
         }
 #endif
         std::set<osg::observer_ptr<osg::GLExtensions>> sGLExtensions;

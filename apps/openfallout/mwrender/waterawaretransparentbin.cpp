@@ -1,7 +1,6 @@
 #include "waterawaretransparentbin.hpp"
 
 #include <osg/BoundingBox>
-#include <osg/ClipPlane>
 #include <osg/Plane>
 #include <osg/State>
 #include <osg/StateSet>
@@ -9,6 +8,7 @@
 #include <osgUtil/StateGraph>
 
 #include <components/misc/constants.hpp>
+#include <components/sceneutil/clipplane.hpp>
 
 #include "opaqueblit.hpp"
 #include "water.hpp"
@@ -152,7 +152,7 @@ namespace OFRender
 
         osg::Plane viewPlane = worldPlane;
         viewPlane.transformProvidingInverse(inverseView);
-        mClipStateSet->setAttributeAndModes(new osg::ClipPlane(1, viewPlane),
+        SceneUtil::setEyeSpaceClipPlane(*mClipStateSet, 1, viewPlane,
             osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
 
         if (previous)

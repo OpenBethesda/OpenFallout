@@ -298,13 +298,48 @@ namespace
         EXPECT_THAT(result.mErrors, Contains(HasSubstr("uniform float a = 1.0;")));
     }
 
-    TEST(ShaderGlslEsTest, clip_vertex_is_dropped_and_reported)
+    TEST(ShaderGlslEsTest, clip_vertex_becomes_clip_distances_against_the_clip_plane_uniforms)
     {
-        const GlslEsShader result
-            = vertex("#version 120\nvoid main() { gl_ClipVertex = vec4(1.0); gl_Position = vec4(1.0); }\n");
+        const GlslEsShader result = vertex(
+            "#version 120\nvoid main() { gl_ClipVertex = vec4(1.0); gl_Position = vec4(1.0); }\nvoid domain() { }\n");
         EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mDropped, IsEmpty());
         EXPECT_THAT(result.mSource, Not(HasSubstr("gl_ClipVertex")));
-        EXPECT_THAT(result.mDropped, Contains(HasSubstr("gl_ClipVertex")));
+        // The extension is asked for before any declaration, and only when the context has it
+        EXPECT_THAT(result.mSource,
+            StartsWith("#version 300 es\n#ifdef GL_ANGLE_clip_cull_distance\n"
+                       "#extension GL_ANGLE_clip_cull_distance : enable\n#endif\n"));
+        ASSERT_EQ(sClipPlaneCount, 2);
+        for (unsigned int i = 0; i < sClipPlaneCount; ++i)
+        {
+            EXPECT_THAT(result.mSource, HasSubstr("uniform vec4 " + clipPlaneUniformName(i) + ";"));
+            EXPECT_THAT(result.mSource,
+                HasSubstr("gl_ClipDistance[" + std::to_string(i) + "] = dot(of_ClipVertex, "
+                    + clipPlaneUniformName(i) + ");"));
+        }
+        // The shader's own main runs first; the distances follow from the eye-space position it wrote
+        EXPECT_THAT(body(result.mSource), HasSubstr("void of_main() { of_ClipVertex = vec4(1.0);"));
+        EXPECT_THAT(body(result.mSource), HasSubstr("void domain() { }"));
+        EXPECT_LT(result.mSource.find("void of_main()"), result.mSource.find("void main()"));
+        EXPECT_THAT(result.mSource, HasSubstr("void main()\n{\n    of_main();\n"));
+    }
+
+    TEST(ShaderGlslEsTest, shaders_without_clip_vertex_write_no_clip_distance)
+    {
+        for (const GlslEsShader& result : { vertex("#version 120\nvoid main() { gl_Position = vec4(1.0); }\n"),
+                 fragment("#version 120\nvoid main() { gl_FragColor = vec4(1.0); }\n") })
+        {
+            EXPECT_THAT(result.mErrors, IsEmpty());
+            EXPECT_THAT(result.mSource, Not(HasSubstr("gl_ClipDistance")));
+            EXPECT_THAT(result.mSource, Not(HasSubstr("clip_cull_distance")));
+            EXPECT_THAT(result.mSource, Not(HasSubstr("of_main")));
+        }
+    }
+
+    TEST(ShaderGlslEsTest, clip_plane_uniforms_have_one_name_each)
+    {
+        EXPECT_EQ(clipPlaneUniformName(0), "of_ClipPlane0");
+        EXPECT_EQ(clipPlaneUniformName(1), "of_ClipPlane1");
     }
 
     TEST(ShaderGlslEsTest, built_ins_glsl_es_keeps_are_left_alone)
