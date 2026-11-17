@@ -22,6 +22,19 @@ namespace CrashCatcher
                     put(*value);
             }
 
+            void decimal(unsigned int value)
+            {
+                char digits[16];
+                std::size_t count = 0;
+                do
+                {
+                    digits[count++] = static_cast<char>('0' + value % 10);
+                    value /= 10;
+                } while (value != 0);
+                while (count > 0)
+                    put(digits[--count]);
+            }
+
             void hex(std::uintptr_t value)
             {
                 text("0x");
@@ -78,6 +91,14 @@ namespace CrashCatcher
             }
         }
         writer.put('\n');
+        return writer.finish();
+    }
+
+    std::size_t formatFrameNumber(std::span<char> out, unsigned int number)
+    {
+        Writer writer{ out };
+        writer.put('#');
+        writer.decimal(number);
         return writer.finish();
     }
 }

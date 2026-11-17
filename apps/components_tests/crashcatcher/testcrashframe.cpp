@@ -49,4 +49,17 @@ namespace
         EXPECT_EQ(CrashCatcher::formatFrame(std::span<char>(out.data(), 0), "pc", 1, nullptr, 0, nullptr, 0), 0u);
         EXPECT_EQ(out[0], 'x');
     }
+
+    // The labels of the frames after the program counter and the link register, made in the signal handler, which may
+    // not call snprintf
+    TEST(CrashCatcherFrameTest, labelsAFrameByItsNumber)
+    {
+        std::array<char, 8> out{};
+        EXPECT_EQ(CrashCatcher::formatFrameNumber(out, 0), 2u);
+        EXPECT_STREQ(out.data(), "#0");
+        EXPECT_EQ(CrashCatcher::formatFrameNumber(out, 63), 3u);
+        EXPECT_STREQ(out.data(), "#63");
+        EXPECT_EQ(CrashCatcher::formatFrameNumber(std::span<char>(out.data(), 3), 105), 2u);
+        EXPECT_STREQ(out.data(), "#1");
+    }
 }

@@ -15,6 +15,11 @@ namespace CrashCatcher
     /// Called from a signal handler: no allocation.
     std::size_t formatFrame(std::span<char> out, const char* label, std::uintptr_t address, const char* image,
         std::uintptr_t imageBase, const char* symbol, std::uintptr_t symbolAddress);
+
+    /// The label "#<number>" of a frame of the frame pointer chain, cut to the room in `out` and ended with a null
+    /// character when there is room for one. Gives the characters written, the null not counted. Called from a signal
+    /// handler: no allocation, no formatting function of the C library.
+    std::size_t formatFrameNumber(std::span<char> out, unsigned int number);
 }
 
 #endif
