@@ -258,6 +258,23 @@ namespace
         EXPECT_EQ(result.mUniformInitialisers[1].mValue, "false");
     }
 
+    // A macro is replaced by its tokens, not by its value: 1 + 2 * 3 == 7
+    TEST(ShaderGlslEsTest, a_macro_in_a_condition_is_replaced_by_its_text)
+    {
+        const GlslEsShader result = vertex(
+            "#version 120\n"
+            "#define N 1 + 2\n"
+            "#if N * 3 == 7\n"
+            "uniform float a = 1.0;\n"
+            "#else\n"
+            "uniform float a = 2.0;\n"
+            "#endif\n"
+            "void main() { }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        ASSERT_EQ(result.mUniformInitialisers.size(), 1);
+        EXPECT_EQ(result.mUniformInitialisers[0].mValue, "1.0");
+    }
+
     TEST(ShaderGlslEsTest, an_initialiser_folded_in_twice_is_taken_once)
     {
         const GlslEsShader result = vertex(foldLinkedShaders("#version 120\nuniform bool b = true;\nvoid main() { }\n",

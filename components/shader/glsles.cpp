@@ -469,12 +469,14 @@ namespace Shader
                         return 300;
                     if (word == "GL_ES" || word == "GL_FRAGMENT_PRECISION_HIGH")
                         return 1;
-                    // A macro the text defines with a value; GLSL has no value for an undefined name
+                    // A macro the text defines with a value is replaced by that text, which is then read in its place
+                    // (#define N 1 + 2 makes N * 3 seven); GLSL has no value for an undefined name
                     const auto it = mBranches.mMacros.find(word);
-                    if (it == mBranches.mMacros.end() || it->second.mDefined != Active::Yes || mDepth > 16)
+                    if (it == mBranches.mMacros.end() || it->second.mDefined != Active::Yes || ++mDepth > 64)
                         return std::nullopt;
-                    Expression inner{ mBranches, it->second.mValue, 0, mDepth + 1 };
-                    return inner.parse();
+                    mPos -= word.size();
+                    mText.replace(mPos, word.size(), " " + it->second.mValue + " ");
+                    return unary();
                 }
             };
 
