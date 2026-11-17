@@ -83,9 +83,12 @@ namespace SceneUtil
             loadFunction(extensions.glObjectLabel,
                 supported("GL_KHR_debug") ? std::string("glObjectLabel") + GLDialect::sDebugFunctionSuffix : "");
 
+            // Asked before the log line: OpenSceneGraph logs each question at its INFO level, through the engine's
+            // log, and a log line that is being written holds the log's lock (a question inside it never returned)
+            const bool depthClamp = supported("GL_EXT_depth_clamp");
             Log(Debug::Info) << "OpenGL ES: per-draw-buffer switches " << (indexed.empty() ? "missing" : indexed)
                              << ", S3TC textures " << (extensions.isTextureCompressionS3TCSupported ? "yes" : "no")
-                             << ", depth clamp " << (supported("GL_EXT_depth_clamp") ? "yes" : "no");
+                             << ", depth clamp " << (depthClamp ? "yes" : "no");
         }
 #endif
         std::set<osg::observer_ptr<osg::GLExtensions>> sGLExtensions;
