@@ -823,6 +823,18 @@ namespace
                              "void main() { gl_FragColor = vec4(x); }\n")
                         .mErrors,
             Contains(AllOf(HasSubstr(" x "), HasSubstr("B"))));
+        // A line continuation joins the lines as they are, so a name can be split by one
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define SCALE 1.0\n"
+                             "#define A SC\\\n"
+                             "ALE * u\n"
+                             "float x = A;\n"
+                             "#undef SCALE\n"
+                             "#define SCALE 2.0\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
         // A branch decided only when compiling may give a macro either text: each is followed
         EXPECT_THAT(fragment("#version 120\n"
                              "#define SCALE 2.0\n"

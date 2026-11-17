@@ -1259,9 +1259,12 @@ namespace Shader
                     }
                     else if (!openDefine.empty())
                     {
-                        // The next line of that #define's text (a line continuation is no name, so it can stay)
-                        macroTexts[openDefine].back() += ' ';
-                        macroTexts[openDefine].back() += line;
+                        // The next line of that #define's text. A line continuation joins the two lines as they are,
+                        // with nothing between them, so a name may start on one and end on the next.
+                        std::string& text = macroTexts[openDefine].back();
+                        if (!text.empty() && text.back() == '\\')
+                            text.pop_back();
+                        text += line;
                     }
                     if (!continued)
                         openDefine.clear();
