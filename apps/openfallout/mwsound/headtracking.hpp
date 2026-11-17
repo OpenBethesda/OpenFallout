@@ -30,6 +30,10 @@ namespace OFSound
         static HeadRotation fromAxisAngle(double x, double y, double z, double radians);
     };
 
+    /// Whether an attitude from a source may turn the listener: every component finite and the length close to one.
+    /// Anything else is dropped where samples are handed over, so it never reaches OpenAL.
+    bool isUsableAttitude(const HeadRotation& attitude);
+
     /// `a * b` turns by `b` first and then by `a`; in a frame that turns with the head, it is `a` and then `b`
     HeadRotation operator*(const HeadRotation& a, const HeadRotation& b);
 
@@ -49,6 +53,10 @@ namespace OFSound
 
     using HeadClock = std::chrono::steady_clock;
 
+    /// A sample older than this means the headphones stopped delivering: the listener is the camera's again, and the
+    /// next sample is straight ahead
+    constexpr std::chrono::milliseconds sHeadSampleStale{ 500 };
+
     /// One reading of the headphones
     struct HeadSample
     {
@@ -58,7 +66,8 @@ namespace OFSound
         HeadClock::time_point mTime;
         /// Samples since the box was made, for the rate in the log
         std::uint64_t mCount = 0;
-        /// Goes up each time headphones connect; a new connection sets straight ahead again
+        /// Goes up each time headphones connect, and when samples resume after a gap longer than sHeadSampleStale; a
+        /// new number sets straight ahead again
         std::uint32_t mConnection = 0;
     };
 
@@ -69,17 +78,27 @@ namespace OFSound
     public:
         /// Headphones that report motion connected (a second call while connected does nothing)
         void connect();
-        /// They went; no sample is handed out until the next connection
+        /// They went; no sample is handed out, and samples are dropped, until the next connect()
         void disconnect();
-        /// A new attitude; one without a connect before it counts as a connection
+        /// A new attitude. Dropped when it is not usable (isUsableAttitude) or after a disconnect. Before any connect
+        /// or disconnect it counts as a connection. After a gap longer than sHeadSampleStale it counts as a new one.
         void publish(const HeadRotation& attitude, HeadClock::time_point time);
         /// The latest sample of the current connection
         std::optional<HeadSample> latest() const;
+        /// Forget the sample and any disconnect, as before the first call (for a source that starts again)
+        void reset();
 
     private:
+        enum class Link
+        {
+            Unknown,
+            Connected,
+            Disconnected,
+        };
+
         mutable std::mutex mMutex;
         std::optional<HeadSample> mSample;
-        bool mConnected = false;
+        Link mLink = Link::Unknown;
         std::uint32_t mConnection = 0;
         std::uint64_t mCount = 0;
     };
@@ -94,6 +113,9 @@ namespace OFSound
         virtual void start() = 0;
         /// Stop reading; after it no new sample arrives
         virtual void stop() = 0;
+        /// Called on the same thread each time the tracker reads, while the setting is on: a cheap place to try
+        /// again to start
+        virtual void update(HeadClock::time_point /*now*/) {}
         /// The latest sample while headphones that report motion are connected and delivering
         virtual std::optional<HeadSample> latest() const = 0;
     };
@@ -113,11 +135,9 @@ namespace OFSound
         bool mStarted = false;
     };
 
-    /// A sample older than this means the headphones stopped delivering: the listener is the camera's again
-    constexpr std::chrono::milliseconds sHeadSampleStale{ 500 };
-
     /// Turns the listener by the head's motion while the setting is on and a source delivers. Straight ahead is the
-    /// pose of the first sample after tracking starts, after headphones connect, and after recentre().
+    /// pose of the first sample after tracking starts, after headphones connect, after a gap in the samples longer
+    /// than sHeadSampleStale, and after recentre().
     class HeadTracker
     {
     public:
@@ -140,6 +160,12 @@ namespace OFSound
 
         /// The listener for the camera's axes: exactly the camera's when rotation() gives none
         ListenerAxes listener(const osg::Vec3f& forward, const osg::Vec3f& up, HeadClock::time_point now);
+
+        /// The listener turned by the head while a source delivers; none when the setting is off, no headphones
+        /// deliver, or the latest sample is stale. The sound manager sets the listener's direction from it every
+        /// frame, between its own updates, and sets nothing when it gives none.
+        std::optional<ListenerAxes> turnedListener(
+            const osg::Vec3f& forward, const osg::Vec3f& up, HeadClock::time_point now);
 
     private:
         void setDelivering(bool delivering);

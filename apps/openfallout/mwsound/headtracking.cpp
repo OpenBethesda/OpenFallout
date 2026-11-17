@@ -62,6 +62,20 @@ namespace OFSound
         }
     }
 
+    bool isUsableAttitude(const HeadRotation& attitude)
+    {
+        const double components[] = { attitude.mW, attitude.mX, attitude.mY, attitude.mZ };
+        double lengthSquared = 0;
+        for (const double c : components)
+        {
+            if (!std::isfinite(c))
+                return false;
+            lengthSquared += c * c;
+        }
+        // Core Motion's quaternions are unit to float precision; this allows far more and drops only nonsense
+        return std::abs(lengthSquared - 1) <= 0.01;
+    }
+
     HeadRotation HeadRotation::fromAxisAngle(double x, double y, double z, double radians)
     {
         const Vec axis = normalized(Vec{ x, y, z });
@@ -104,9 +118,9 @@ namespace OFSound
     void HeadSampleBox::connect()
     {
         std::lock_guard lock(mMutex);
-        if (mConnected)
+        if (mLink == Link::Connected)
             return;
-        mConnected = true;
+        mLink = Link::Connected;
         ++mConnection;
         mSample.reset();
     }
@@ -114,17 +128,36 @@ namespace OFSound
     void HeadSampleBox::disconnect()
     {
         std::lock_guard lock(mMutex);
-        mConnected = false;
+        mLink = Link::Disconnected;
+        mSample.reset();
+    }
+
+    void HeadSampleBox::reset()
+    {
+        std::lock_guard lock(mMutex);
+        mLink = Link::Unknown;
         mSample.reset();
     }
 
     void HeadSampleBox::publish(const HeadRotation& attitude, HeadClock::time_point time)
     {
+        if (!isUsableAttitude(attitude))
+            return;
         std::lock_guard lock(mMutex);
-        if (!mConnected)
+        switch (mLink)
         {
-            mConnected = true;
-            ++mConnection;
+            case Link::Disconnected:
+                // A sample still on its way when the headphones went: only a connect starts a connection
+                return;
+            case Link::Unknown:
+                mLink = Link::Connected;
+                ++mConnection;
+                break;
+            case Link::Connected:
+                // The headphones left the ears and came back without a disconnect: start afresh
+                if (mSample.has_value() && time - mSample->mTime > sHeadSampleStale)
+                    ++mConnection;
+                break;
         }
         mSample = HeadSample{ attitude, time, ++mCount, mConnection };
     }
@@ -200,9 +233,12 @@ namespace OFSound
     {
         if (!mEnabled)
             return std::nullopt;
+        mSource->update(now);
         const std::optional<HeadSample> sample = mSource->latest();
         if (!sample.has_value() || now - sample->mTime > sHeadSampleStale)
         {
+            // The next sample that arrives is straight ahead
+            mReference.reset();
             setDelivering(false);
             return std::nullopt;
         }
@@ -220,9 +256,17 @@ namespace OFSound
 
     ListenerAxes HeadTracker::listener(const osg::Vec3f& forward, const osg::Vec3f& up, HeadClock::time_point now)
     {
+        return turnedListener(forward, up, now).value_or(ListenerAxes{ forward, up });
+    }
+
+    std::optional<ListenerAxes> HeadTracker::turnedListener(
+        const osg::Vec3f& forward, const osg::Vec3f& up, HeadClock::time_point now)
+    {
         const std::optional<HeadRotation> head = rotation(now);
-        if (!head.has_value() || isIdentity(*head))
-            return { forward, up };
+        if (!head.has_value())
+            return std::nullopt;
+        if (isIdentity(*head))
+            return ListenerAxes{ forward, up };
         return turnListener(forward, up, *head);
     }
 }

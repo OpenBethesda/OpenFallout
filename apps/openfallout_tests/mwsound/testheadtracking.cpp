@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <thread>
 
@@ -70,6 +71,13 @@ namespace OFSound
         public:
             int mStarts = 0;
             int mStops = 0;
+            int mUpdates = 0;
+
+            void update(HeadClock::time_point now) override
+            {
+                ++mUpdates;
+                StandInHeadMotion::update(now);
+            }
 
             void start() override
             {
@@ -264,9 +272,135 @@ namespace OFSound
         publish(yawLeft(90));
         mNow += sHeadSampleStale + 1ms;
         expectCamera(listen());
-        // It turns again when samples come back
+        // It turns again when samples come back, from the pose they come back with
+        publish(yawLeft(90));
+        expectCamera(listen());
+        publish(yawLeft(180));
+        expectNear(listen().mForward, sWest);
+    }
+
+    TEST_F(TrackerTest, a_gap_on_one_connection_sets_straight_ahead_again)
+    {
+        // The headphones leave the ears and come back without a disconnect; the tracker does not look during the gap
+        mTracker->setEnabled(true);
+        publish(HeadRotation{});
+        expectCamera(listen());
         publish(yawLeft(90));
         expectNear(listen().mForward, sWest);
+        mNow += sHeadSampleStale + 1ms;
+        publish(yawLeft(-30));
+        expectCamera(listen());
+        publish(yawLeft(60));
+        expectNear(listen().mForward, sWest);
+    }
+
+    TEST_F(TrackerTest, a_short_pause_between_samples_keeps_straight_ahead)
+    {
+        mTracker->setEnabled(true);
+        publish(HeadRotation{});
+        expectCamera(listen());
+        mNow += sHeadSampleStale - 50ms;
+        publish(yawLeft(90));
+        expectNear(listen().mForward, sWest);
+    }
+
+    TEST_F(TrackerTest, a_late_sample_after_a_disconnect_is_not_a_connection)
+    {
+        mTracker->setEnabled(true);
+        publish(HeadRotation{});
+        expectCamera(listen());
+        publish(yawLeft(45));
+        mSource->box().disconnect();
+        // Core Motion's queue delivers one more sample after the disconnect message
+        publish(yawLeft(90));
+        expectCamera(listen());
+        EXPECT_FALSE(mTracker->rotation(mNow).has_value());
+        // The real reconnection: straight ahead is its first sample
+        mSource->box().connect();
+        publish(yawLeft(30));
+        expectCamera(listen());
+        publish(yawLeft(120));
+        expectNear(listen().mForward, sWest);
+    }
+
+    TEST_F(TrackerTest, bad_numbers_never_reach_the_listener)
+    {
+        constexpr double nan = std::numeric_limits<double>::quiet_NaN();
+        constexpr double inf = std::numeric_limits<double>::infinity();
+        const HeadRotation bad[] = {
+            { nan, 0, 0, 0 },
+            { 1, 0, nan, 0 },
+            { inf, 0, 0, 0 },
+            { 1, 0, 0, -inf },
+            { 0, 0, 0, 0 },
+            { 2, 0, 0, 0 },
+            { 0.5, 0, 0, 0.5 },
+        };
+        mTracker->setEnabled(true);
+        for (const HeadRotation& q : bad)
+        {
+            publish(q);
+            expectCamera(listen());
+            EXPECT_FALSE(mTracker->rotation(mNow).has_value());
+            EXPECT_FALSE(mTracker->turnedListener(sNorth, sUp, mNow).has_value());
+        }
+        // A good sample afterwards works: it is straight ahead, and the next turns the listener
+        publish(yawLeft(10));
+        expectCamera(listen());
+        publish(yawLeft(100));
+        expectNear(listen().mForward, sWest);
+        // A bad sample in the middle is as if none came: the listener keeps the last good turn
+        for (const HeadRotation& q : bad)
+        {
+            publish(q);
+            expectNear(listen().mForward, sWest);
+        }
+    }
+
+    // Between the sound manager's updates only the listener's direction is set, and only when the head turns it
+
+    TEST_F(TrackerTest, between_updates_nothing_is_set_with_the_setting_off)
+    {
+        publish(HeadRotation{});
+        publish(yawLeft(90));
+        EXPECT_FALSE(mTracker->turnedListener(sNorth, sUp, mNow).has_value());
+        EXPECT_EQ(mSource->mUpdates, 0);
+    }
+
+    TEST_F(TrackerTest, between_updates_nothing_is_set_without_a_device)
+    {
+        mTracker->setEnabled(true);
+        EXPECT_FALSE(mTracker->turnedListener(sNorth, sUp, mNow).has_value());
+        publish(HeadRotation{});
+        mNow += sHeadSampleStale + 1ms;
+        EXPECT_FALSE(mTracker->turnedListener(sNorth, sUp, mNow).has_value());
+    }
+
+    TEST_F(TrackerTest, between_updates_the_direction_follows_the_head)
+    {
+        mTracker->setEnabled(true);
+        publish(HeadRotation{});
+        std::optional<ListenerAxes> axes = mTracker->turnedListener(sNorth, sUp, mNow);
+        ASSERT_TRUE(axes.has_value());
+        expectCamera(*axes);
+        publish(yawLeft(90));
+        axes = mTracker->turnedListener(sNorth, sUp, mNow);
+        ASSERT_TRUE(axes.has_value());
+        expectNear(axes->mForward, sWest);
+        expectNear(axes->mUp, sUp);
+    }
+
+    TEST_F(TrackerTest, the_source_is_given_a_turn_on_the_main_thread_only_while_on)
+    {
+        listen();
+        EXPECT_EQ(mSource->mUpdates, 0);
+        mTracker->setEnabled(true);
+        listen();
+        mTracker->turnedListener(sNorth, sUp, mNow);
+        EXPECT_EQ(mSource->mUpdates, 2);
+        mTracker->setEnabled(false);
+        listen();
+        EXPECT_EQ(mSource->mUpdates, 2);
     }
 
     TEST_F(TrackerTest, headphones_connected_again_set_straight_ahead_again)
@@ -355,12 +489,67 @@ namespace OFSound
         box.publish(yawLeft(10), Clock::time_point{} + 1s);
         const std::uint32_t first = box.latest()->mConnection;
         box.connect();
-        box.publish(yawLeft(10), Clock::time_point{} + 2s);
+        box.publish(yawLeft(10), Clock::time_point{} + 1s + 40ms);
         EXPECT_EQ(box.latest()->mConnection, first);
         box.disconnect();
         box.connect();
-        box.publish(yawLeft(10), Clock::time_point{} + 3s);
+        box.publish(yawLeft(10), Clock::time_point{} + 1s + 80ms);
         EXPECT_EQ(box.latest()->mConnection, first + 1);
+    }
+
+    TEST(OFSoundHeadSampleBoxTest, after_a_disconnect_only_a_connect_starts_a_connection)
+    {
+        HeadSampleBox box;
+        box.connect();
+        box.publish(yawLeft(10), Clock::time_point{} + 1s);
+        const std::uint32_t first = box.latest()->mConnection;
+        box.disconnect();
+        box.publish(yawLeft(20), Clock::time_point{} + 2s);
+        EXPECT_FALSE(box.latest().has_value());
+        box.connect();
+        box.publish(yawLeft(30), Clock::time_point{} + 3s);
+        ASSERT_TRUE(box.latest().has_value());
+        EXPECT_EQ(box.latest()->mConnection, first + 1);
+        EXPECT_NEAR(box.latest()->mAttitude.mZ, yawLeft(30).mZ, 1e-12);
+    }
+
+    TEST(OFSoundHeadSampleBoxTest, reset_forgets_the_disconnect)
+    {
+        // A source that stops and starts again may not be told that headphones already worn are connected
+        HeadSampleBox box;
+        box.connect();
+        box.disconnect();
+        box.reset();
+        box.publish(yawLeft(10), Clock::time_point{} + 1s);
+        EXPECT_TRUE(box.latest().has_value());
+    }
+
+    TEST(OFSoundHeadSampleBoxTest, a_gap_in_the_samples_counts_as_a_new_connection)
+    {
+        HeadSampleBox box;
+        box.publish(yawLeft(10), Clock::time_point{} + 1s);
+        const std::uint32_t first = box.latest()->mConnection;
+        box.publish(yawLeft(10), Clock::time_point{} + 1s + sHeadSampleStale);
+        EXPECT_EQ(box.latest()->mConnection, first);
+        box.publish(yawLeft(10), Clock::time_point{} + 1s + 2 * sHeadSampleStale + 1ms);
+        EXPECT_EQ(box.latest()->mConnection, first + 1);
+    }
+
+    TEST(OFSoundHeadSampleBoxTest, an_unusable_attitude_is_dropped)
+    {
+        EXPECT_TRUE(isUsableAttitude(yawLeft(33)));
+        EXPECT_TRUE(isUsableAttitude(HeadRotation{ 1.001, 0, 0, 0 }));
+        EXPECT_FALSE(isUsableAttitude(HeadRotation{ std::numeric_limits<double>::quiet_NaN(), 0, 0, 0 }));
+        EXPECT_FALSE(isUsableAttitude(HeadRotation{ 1, std::numeric_limits<double>::infinity(), 0, 0 }));
+        EXPECT_FALSE(isUsableAttitude(HeadRotation{ 1.2, 0, 0, 0 }));
+        EXPECT_FALSE(isUsableAttitude(HeadRotation{ 0, 0, 0, 0 }));
+
+        HeadSampleBox box;
+        box.publish(HeadRotation{ 0, 0, 0, 0 }, Clock::time_point{} + 1s);
+        EXPECT_FALSE(box.latest().has_value());
+        box.publish(yawLeft(10), Clock::time_point{} + 2s);
+        ASSERT_TRUE(box.latest().has_value());
+        EXPECT_EQ(box.latest()->mCount, 1u);
     }
 
     TEST(OFSoundHeadSampleBoxTest, a_reader_never_sees_a_half_written_sample)
