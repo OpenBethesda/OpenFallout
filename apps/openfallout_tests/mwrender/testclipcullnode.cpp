@@ -59,9 +59,10 @@ namespace
             collectLeaves(*child, leaves);
     }
 
-    // Culls the scene as a camera whose eye stands below the water and looks along the y axis at the box. That is
-    // where the reflection camera's eye is: its view is the camera's view mirrored at the water.
-    void cull(osg::Node& scene, CulledFrame& frame)
+    // Culls the scene as a camera whose eye stands at the height `eyeHeight` and looks along the y axis at the box.
+    // The reflection camera's eye is below the water when the player looks from above it (its view is the camera's
+    // view mirrored at the water), and above the water when the player looks from under it.
+    void cull(osg::Node& scene, CulledFrame& frame, double eyeHeight = 50)
     {
         osgUtil::CullVisitor* cv = frame.mCullVisitor.get();
         osg::ref_ptr<osg::FrameStamp> frameStamp = new osg::FrameStamp;
@@ -72,7 +73,7 @@ namespace
         cv->setRenderStage(frame.mRenderStage);
 
         const osg::Matrixd view
-            = osg::Matrixd::lookAt(osg::Vec3d(0, -500, 50), osg::Vec3d(0, 0, 50), osg::Vec3d(0, 0, 1));
+            = osg::Matrixd::lookAt(osg::Vec3d(0, -500, eyeHeight), osg::Vec3d(0, 0, 100), osg::Vec3d(0, 0, 1));
         frame.mRenderStage->setInitialViewMatrix(new osg::RefMatrix(view));
         osg::ref_ptr<osg::Viewport> viewport = new osg::Viewport(0, 0, 256, 256);
         frame.mRenderStage->setViewport(viewport);
@@ -186,5 +187,28 @@ namespace
         const osg::Matrixd& modelView = *leaf._modelview;
         EXPECT_GT(plane->distance(osg::Vec3d(0, 0, sWaterHeight + 31) * modelView), 0.0);
         EXPECT_LT(plane->distance(osg::Vec3d(0, 0, sWaterHeight + 10) * modelView), 0.0);
+    }
+
+    // With the eye above the water the plane turns round: what lies under the water is kept, and what lies above it
+    // (but for the margin at the shore) is cut away
+    TEST(OpenFalloutRenderClipCullNode, theSceneIsCutTheOtherWayWhenTheEyeIsAboveTheWater)
+    {
+        osg::ref_ptr<ClipCullNode> clipCullNode = new ClipCullNode;
+        clipCullNode->setPlane(osg::Plane(osg::Vec3d(0, 0, 1), osg::Vec3d(0, 0, sWaterHeight)));
+        clipCullNode->addChild(boxThroughTheWater());
+
+        CulledFrame frame;
+        cull(*clipCullNode, frame, sWaterHeight + 150);
+
+        ASSERT_EQ(frame.mLeaves.size(), 1u);
+        const osgUtil::RenderLeaf& leaf = *frame.mLeaves.front();
+        EXPECT_EQ(modeOf(leaf, GL_CLIP_PLANE0) & osg::StateAttribute::ON, osg::StateAttribute::ON);
+        const std::optional<osg::Plane> plane = eyeSpaceClipPlane0(leaf, *frame.mRenderStage);
+        ASSERT_TRUE(plane.has_value());
+        const osg::Matrixd& modelView = *leaf._modelview;
+        EXPECT_GT(plane->distance(osg::Vec3d(0, 0, sWaterHeight - 1) * modelView), 0.0);
+        EXPECT_GT(plane->distance(osg::Vec3d(0, 0, sWaterHeight - 40) * modelView), 0.0);
+        EXPECT_LT(plane->distance(osg::Vec3d(0, 0, sWaterHeight + 20) * modelView), 0.0);
+        EXPECT_LT(plane->distance(osg::Vec3d(15, 15, 150) * modelView), 0.0);
     }
 }
