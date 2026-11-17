@@ -35,6 +35,7 @@
 
 #include <components/stereo/stereomanager.hpp>
 
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/glextensions.hpp>
 #include <components/sceneutil/workqueue.hpp>
 
@@ -662,7 +663,9 @@ void OF::Engine::createWindow()
         if (traits->depth < 24)
             Log(Debug::Warning) << "Warning: Framebuffer only has " << traits->depth << " bits of depth precision.";
 
-        traits->alpha = 0; // set to 0 to stop ScreenCaptureHandler reading the alpha channel
+        // 0 stops ScreenCaptureHandler reading the alpha channel. OpenGL ES reads back only RGBA, so the Metal build
+        // reads it and the screenshot writer drops it (SceneUtil::withoutAlpha).
+        traits->alpha = SceneUtil::GLDialect::sReadsBackRGB ? 0 : 8;
     }
 
     osg::ref_ptr<osg::Camera> camera = mViewer->getCamera();

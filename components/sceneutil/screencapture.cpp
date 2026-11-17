@@ -9,6 +9,7 @@
 #include <osgDB/ReaderWriter>
 #include <osgDB/Registry>
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <filesystem>
@@ -58,6 +59,24 @@ namespace
 
 namespace SceneUtil
 {
+    osg::ref_ptr<const osg::Image> withoutAlpha(const osg::Image& image)
+    {
+        if (image.getPixelFormat() != GL_RGBA || image.getDataType() != GL_UNSIGNED_BYTE)
+            return &image;
+        osg::ref_ptr<osg::Image> rgb = new osg::Image;
+        rgb->allocateImage(image.s(), image.t(), image.r(), GL_RGB, GL_UNSIGNED_BYTE);
+        rgb->setOrigin(image.getOrigin());
+        for (int r = 0; r < image.r(); ++r)
+            for (int t = 0; t < image.t(); ++t)
+            {
+                const unsigned char* from = image.data(0, t, r);
+                unsigned char* to = rgb->data(0, t, r);
+                for (int s = 0; s < image.s(); ++s, from += 4, to += 3)
+                    std::copy(from, from + 3, to);
+            }
+        return rgb;
+    }
+
     std::filesystem::path writeScreenshotToFile(
         const std::filesystem::path& screenshotPath, const std::string& screenshotFormat, const osg::Image& image)
     {
@@ -91,7 +110,7 @@ namespace SceneUtil
             return std::string();
         }
 
-        osgDB::ReaderWriter::WriteResult result = readerwriter->writeImage(image, outStream);
+        osgDB::ReaderWriter::WriteResult result = readerwriter->writeImage(*withoutAlpha(image), outStream);
         if (!result.success())
         {
             Log(Debug::Error) << "Error: Can't write screenshot: " << result.message() << " code " << result.status();

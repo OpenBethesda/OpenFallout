@@ -340,6 +340,7 @@ file(GLOB UNITTEST_SRC_FILES
     sceneutil/osgacontroller.cpp
     sceneutil/smoothnormals.cpp
     sceneutil/loddebug.cpp
+    sceneutil/screencapture.cpp
     sceneutil/userdata.cpp
 
     bgsm/testfile.cpp
