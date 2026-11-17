@@ -56,7 +56,7 @@ The verdicts:
 
 - **PASS**: every measure is within its limit. Nobody needs to look.
 - **FLAG**: a measure is beyond its limit, or the scene was not held still on one side (its round failed: the round's
-  `report.md` says why), or the two runs had other settings. The owner looks at the page and decides whether the
+  `report.md` says why), or the two runs had other settings or other values for the post-processing techniques. The owner looks at the page and decides whether the
   difference is a fault of the candidate or a legitimate difference of renderers (see "After a flag").
 - **MISSING**: one side has no picture (the engine did not start, crashed, or the round failed before the picture). A
   scene that was run and left no result on either side is MISSING too: it cannot drop out of the report.

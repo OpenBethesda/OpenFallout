@@ -227,7 +227,7 @@ class Scenario(unittest.TestCase):
 
 
 def make_side(folder, scene, picture, verdict="PASS", settings="[Video]\nantialiasing = 0\n", simulation="60.000",
-              stamp="20261116-100000"):
+              stamp="20261116-100000", shader_values=None):
     """A folder of the results of one round as round.py writes it: report.json, the shot and the run's settings.cfg."""
     run = folder / f"{stamp}-{scene}" / "run"
     (run / "shots").mkdir(parents=True)
@@ -239,6 +239,8 @@ def make_side(folder, scene, picture, verdict="PASS", settings="[Video]\nantiali
     lines = [f"note\tstill\tsimulation={simulation}", f"shot\t{scene}\tn=1", "done\tend\treal=80.0 steps=40"]
     report = {"round": scene, "variant": "run", "verdict": verdict, "round_lines": lines,
               "shots": [{"n": 1, "name": scene, "file": str(shot) if picture is not None else None}]}
+    if shader_values is not None:
+        report["shader_values"] = shader_values
     (run / "report.json").write_text(json.dumps(report))
     (run / "report.md").write_text(f"# Round {scene} / run: {verdict}\n")
     return run
@@ -388,6 +390,22 @@ class CompareFolders(unittest.TestCase):
         self.assertEqual(verdicts, {"nv-interior": "PASS", "nv-busy": "MISSING"})
         self.assertIn("| nv-busy | MISSING |", (self.out / "summary.md").read_text())
         self.assertEqual(quietly(picturecompare.report_status, rows, self.out), 1)
+
+    def test_runs_with_other_technique_values_are_not_a_valid_comparison(self):
+        # the settings files are the same; the values of the post-processing techniques come from another file of the run
+        make_side(self.reference, "nv-post", textured(64, 48), shader_values={"bloomlinear": {"uThreshold": 0.2}})
+        make_side(self.candidate, "nv-post", textured(64, 48), shader_values={"bloomlinear": {"uThreshold": 0.9}})
+        make_side(self.reference, "fo3-post", textured(64, 48), shader_values={"bloomlinear": {"uThreshold": 0.2}})
+        make_side(self.candidate, "fo3-post", textured(64, 48), shader_values={"bloomlinear": {"uThreshold": 0.2}})
+        # results of rounds from before the report recorded the values, on one side: no values there
+        make_side(self.reference, "nv-busy", textured(64, 48))
+        make_side(self.candidate, "nv-busy", textured(64, 48), shader_values={})
+        self.assertEqual(self.compare(), 1)
+        results = self.results()
+        self.assertEqual({scene: row["valid"] for scene, row in results.items()},
+                         {"nv-post": False, "fo3-post": True, "nv-busy": True})
+        self.assertEqual(results["nv-post"]["verdict"], "FLAG")
+        self.assertIn("technique", "; ".join(results["nv-post"]["reasons"]))
 
     def test_a_run_without_its_settings_file_is_not_a_valid_comparison(self):
         # the settings of the two runs cannot be shown to be the same

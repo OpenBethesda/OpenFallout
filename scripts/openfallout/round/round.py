@@ -757,6 +757,7 @@ def write_report(run_dir, config, variant, status, seconds, sampler, timed_out, 
               "warnings": levels["W"], "errors": levels["E"], "scenario_errors": errors, "missing_shots": missing,
               "content_not_loaded": not_loaded, "content_not_loaded_serious": serious, "expectations_failed": failed,
               "guard_tripped": guard_reason, "window_server": window_server, "headless_policy": policy, "evidence": list(evidence),
+              "shader_values": config.get("shader_values") or {},
               "shots": [{"n": n, "name": shot, "file": str(path) if path else None} for n, shot, path in shots],
               "round_lines": lines, "command": command}
     (run_dir / "report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")

@@ -142,6 +142,9 @@ class Shot:
         self.picture = own if own is not None and own.is_file() else None
         settings = self.run / "config" / "settings.cfg"
         self.settings = settings.read_text(encoding="utf-8", errors="replace") if settings.is_file() else None
+        # what the round laid for the post-processing techniques (the engine writes shaders.yaml again in its own words when
+        # it quits, so the report is the record)
+        self.shader_values = report.get("shader_values") or {}
         self.simulation = None
         for line in report.get("round_lines", []):
             if line.startswith("note\tstill\tsimulation="):
@@ -209,6 +212,10 @@ def compare_folders(reference_dir, candidate_dir, out, limits_doc, scenes_doc, n
             row["valid"] = False
             row["reasons"].append("the two runs had other settings (config/settings.cfg of each run): the profiles or the "
                                   "player's own settings differ")
+        if reference.shader_values != candidate.shader_values:
+            row["valid"] = False
+            row["reasons"].append("the two runs had other values for the post-processing techniques (shader_values in "
+                                  "the report.json of each run)")
         times = row["simulation"]
         if times.get("reference") is not None and times.get("candidate") is not None:
             row["notes"].append(f"paused at simulation time {times['reference']:.3f} and {times['candidate']:.3f} s")

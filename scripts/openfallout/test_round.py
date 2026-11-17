@@ -521,6 +521,18 @@ class WholeRun(unittest.TestCase):
         self.assertIn("two", (run / "summary.md").read_text())
         self.assertTrue((run / "two" / "report.md").read_text().startswith("# Round fake / two: PASS"))
 
+    def test_the_report_says_which_technique_values_the_round_laid(self):
+        # the engine writes `shaders.yaml` again in its own words when it quits, so the report is where a later comparison of
+        # two runs can read what each was given
+        values = {"bloomlinear": {"uThreshold": 0.2}}
+        tmp, code = self.run_round(0, round_extra={"shader_values": values}, variants=[{"name": "one"}])
+        self.assertEqual(code, 0)
+        (run,) = runs_of(tmp)
+        self.assertEqual(json.loads((run / "one" / "report.json").read_text())["shader_values"], values)
+        tmp, code = self.run_round(0, variants=[{"name": "one"}])
+        (run,) = runs_of(tmp)
+        self.assertEqual(json.loads((run / "one" / "report.json").read_text())["shader_values"], {})
+
     def test_a_crash_after_the_scenario_ended_is_a_note(self):
         tmp, code = self.run_round(3)
         self.assertEqual(code, 0)
