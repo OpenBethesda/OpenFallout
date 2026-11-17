@@ -9,6 +9,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      bundle-angle:
+        description: >-
+          The early notarized test of ANGLE (docs/openfallout/angle.md): put the published ANGLE libraries and the ANGLE
+          probe into the OpenGL app. On the default branch the image is signed and notarized. Never for a release.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -76,7 +83,9 @@ jobs:
     if: ${{ !cancelled() && !github.event.pull_request.draft && needs.Changes.outputs.code != 'false' }}
     uses: ./.github/workflows/macos.yml
     with:
-      signing-environment: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'macos-release' || '' }}
+      # a push to the default branch, or the manual ANGLE test run on it, signs and notarizes
+      signing-environment: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.bundle-angle)) && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'macos-release' || '' }}
+      bundle-angle: ${{ github.event_name == 'workflow_dispatch' && inputs.bundle-angle }}
     secrets:
       MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
       MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}

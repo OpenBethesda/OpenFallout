@@ -7,10 +7,11 @@ USE_WERROR=""
 TEST_TREE=""
 BUILD_DIR="build"
 DEPENDENCIES_ROOT_PATH="/tmp/openmw-deps"
+BUNDLE_ANGLE_ROOT=""
 
 source ./CI/macos/deps_versions.sh
 
-while getopts VCkETd: ARG
+while getopts VCkETd:A: ARG
 do
     case $ARG in
 	V )
@@ -33,6 +34,9 @@ do
             DEPENDENCIES_ROOT_PATH="$OPTARG"
             ;;
 
+	A )
+	    BUNDLE_ANGLE_ROOT="$OPTARG" ;;
+
 	* )
 	    cat <<EOF
 Usage: $0 [-VCkETd]
@@ -50,6 +54,9 @@ Options:
 	-T
 		Configure the unit-test tree in build-tests instead: Debug, coverage, the components
 		and OpenFallout test suites. It is never packaged.
+	-A <dir>
+		The early notarized test of ANGLE (docs/openfallout/angle.md): package the ANGLE
+		libraries unpacked in <dir> and the ANGLE probe into the OpenGL app. Never for a release.
 EOF
 	    exit 1
 	    ;;
@@ -119,6 +126,18 @@ if [[ "${CMAKE_BUILD_TYPE}" ]]; then
 else
     CMAKE_CONF_OPTS+=(
         -D CMAKE_BUILD_TYPE=RelWithDebInfo
+    )
+fi
+
+# Always explicit: a cached build tree must not carry the test switch into the next build.
+if [[ -n $BUNDLE_ANGLE_ROOT ]]; then
+    CMAKE_CONF_OPTS+=(
+        -D OPENFALLOUT_BUNDLE_ANGLE=ON
+        -D OPENFALLOUT_ANGLE_ROOT="$BUNDLE_ANGLE_ROOT"
+    )
+else
+    CMAKE_CONF_OPTS+=(
+        -D OPENFALLOUT_BUNDLE_ANGLE=OFF
     )
 fi
 
