@@ -38,7 +38,7 @@
       "kind": "interior",
       "for": "An interior: the lamps of a room, furniture and the textures of walls and floor. The place of the measurement scene nv-interior.",
       "start": "GSDocMitchellHouse",
-      "camera": { "yaw": 0, "pitch": 5 }
+      "camera": { "pitch": 5 }
     },
     {
       "name": "nv-exterior",
@@ -66,7 +66,7 @@
       "kind": "interior",
       "for": "An interior: the metal rooms and lights of a vault. The place of the measurement scene fo3-interior.",
       "start": "Vault101d",
-      "camera": { "yaw": 0, "pitch": 5 }
+      "camera": { "pitch": 5 }
     },
     {
       "name": "fo3-exterior",

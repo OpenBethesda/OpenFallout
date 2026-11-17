@@ -69,8 +69,10 @@ class SceneList(unittest.TestCase):
             self.assertIn(scene["game"], ("nv", "fo3"))
             self.assertRegex(scene["start"], r"^[A-Za-z0-9_]+(:-?\d+,-?\d+)?$", scene["name"])
             self.assertTrue(scene["for"], scene["name"])
+            # no yaw: the camera looks the way the start put the player
             for key in ("yaw", "pitch"):
-                self.assertIsInstance(scene["camera"][key], (int, float), scene["name"])
+                if key in scene["camera"] or key == "pitch":
+                    self.assertIsInstance(scene["camera"][key], (int, float), scene["name"])
             for value in scene["camera"].get("pos", []) + scene.get("place", {}).get("pos", []):
                 self.assertIsInstance(value, (int, float), scene["name"])
             if "weather" in scene:
