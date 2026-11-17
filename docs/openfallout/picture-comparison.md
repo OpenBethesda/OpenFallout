@@ -61,7 +61,8 @@ The verdicts:
 - **MISSING**: one side has no picture (the engine did not start, crashed, or the round failed before the picture). A
   scene that was run and left no result on either side is MISSING too: it cannot drop out of the report.
 
-A folder of results is judged by the pictures inside it. It can be copied or moved and compared again.
+A folder of results is judged only by the pictures inside it. It can be copied or moved and compared again; a
+picture that the copy lost is MISSING.
 
 ## The scenes
 

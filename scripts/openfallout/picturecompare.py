@@ -135,11 +135,11 @@ class Shot:
         self.run = report_path.parent
         self.report = report
         self.verdict = report.get("verdict")
-        # The picture in this folder comes first: the report records where the picture was when the round ran, and a folder
-        # that was copied or moved must be judged by its own pictures, not by the ones at the old place.
-        recorded = Path(entry["file"]) if entry.get("file") else None
-        own = self.run / "shots" / recorded.name if recorded is not None else None
-        self.picture = next((path for path in (own, recorded) if path is not None and path.is_file()), None)
+        # Only the picture in this folder counts. The report records where the picture was when the round ran (always
+        # `shots/` of the run); a folder that was copied or moved is judged by its own pictures, and one that lost a
+        # picture has none, whatever still lies at the old place.
+        own = self.run / "shots" / Path(entry["file"]).name if entry.get("file") else None
+        self.picture = own if own is not None and own.is_file() else None
         settings = self.run / "config" / "settings.cfg"
         self.settings = settings.read_text(encoding="utf-8", errors="replace") if settings.is_file() else None
         self.simulation = None

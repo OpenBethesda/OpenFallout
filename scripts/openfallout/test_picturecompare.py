@@ -5,6 +5,7 @@ a whole run of the round runner against a stand-in engine that draws a picture f
 import contextlib
 import io
 import json
+import os
 import re
 import shutil
 import stat
@@ -348,6 +349,23 @@ class CompareFolders(unittest.TestCase):
         picturediff.write_png(copy, changed(reference, lambda x, y, c: (0, 0, 0)))
         self.assertEqual(self.compare(), 1)
         self.assertEqual(self.results()["nv-exterior"]["verdict"], "FLAG")
+
+    def test_a_picture_that_the_copied_folder_lost_is_missing_whatever_lies_at_the_old_place(self):
+        reference = textured(64, 48)
+        make_side(self.reference, "nv-exterior", reference)
+        first = self.tmp / "first"
+        run = make_side(first, "nv-exterior", reference)
+        shutil.copytree(first, self.candidate)
+        (self.candidate / run.relative_to(first) / "shots" / "01-nv-exterior.png").unlink()
+        self.assertEqual(self.compare(), 1)
+        row = self.results()["nv-exterior"]
+        self.assertEqual(row["verdict"], "MISSING")
+        self.assertIn("no picture from the candidate", "; ".join(row["reasons"]))
+
+    def test_the_tools_can_be_started_as_the_documentation_writes_them(self):
+        for name in ("picturecompare.py", "picturediff.py"):
+            self.assertTrue(os.access(HERE / name, os.X_OK), f"{name} is not executable")
+            self.assertTrue((HERE / name).read_text(encoding="utf-8").startswith("#!/usr/bin/env python3\n"))
 
     def test_a_scene_that_was_expected_and_has_no_result_on_either_side_is_missing(self):
         make_side(self.reference, "nv-interior", textured(64, 48))
