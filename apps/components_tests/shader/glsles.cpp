@@ -535,6 +535,23 @@ namespace
             fragment("#version 120\nuniform vec2 offsets[2], texture;\nvoid main() { gl_FragColor = vec4(0.0); }\n")
                 .mErrors,
             Contains(HasSubstr("uniform texture")));
+        // Two declarations on one line, and a declaration that goes on over the next line
+        EXPECT_THAT(fragment("#version 120\nuniform float gain; uniform float filter;\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\nuniform float gain,\n    filter;\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\nuniform float gain, /* a note, ended; */\n    filter;\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\nuniform float gain,\n    level; uniform float scale;\n"
+                             "void main() { gl_FragColor = vec4(gain * level * scale); }\n")
+                        .mErrors,
+            IsEmpty());
         EXPECT_THAT(fragment("#version 120\nuniform float gain, level[2], scale;\n"
                              "void main() { gl_FragColor = vec4(gain * scale); }\n")
                         .mErrors,
@@ -546,6 +563,10 @@ namespace
     {
         EXPECT_THAT(fragment("#version 120\n#if 0\nuniform sampler2D texture;\n#endif\nuniform sampler2D tex;\n"
                              "void main() { gl_FragColor = texture2D(tex, vec2(0.0)); }\n")
+                        .mErrors,
+            IsEmpty());
+        EXPECT_THAT(fragment("#version 120\n#if 0\nuniform float gain,\n    filter;\n#endif\n"
+                             "void main() { gl_FragColor = vec4(0.0); }\n")
                         .mErrors,
             IsEmpty());
         // In a branch the converter cannot decide it may be compiled

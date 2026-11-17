@@ -137,33 +137,41 @@ namespace Shader
             return sReservedNames.contains(name) || name == "texture";
         }
 
-        // The names a declaration declares, from the text after its type: "a, b[2], c = 1.0" gives a, b and c
-        std::vector<std::string> declaratorNames(std::string_view declarators)
+        // Reads the names a declaration declares from the text after its type, "a, b[2], c = 1.0" gives a, b and c.
+        // The text can come a line at a time: the declaration goes on until its semicolon.
+        struct DeclaratorScanner
         {
-            std::vector<std::string> names;
-            int depth = 0;
-            bool expectName = true;
-            for (std::size_t i = 0; i < declarators.size(); ++i)
+            int mDepth = 0;
+            bool mExpectName = true;
+
+            // Adds the names in text to names. Gives the length of text through the declaration's semicolon, or npos
+            // when the declaration goes on past text.
+            std::size_t scan(std::string_view text, std::vector<std::string>& names)
             {
-                const char c = declarators[i];
-                if (c == '(' || c == '[' || c == '{')
-                    ++depth;
-                else if (c == ')' || c == ']' || c == '}')
-                    --depth;
-                else if (c == ',' && depth == 0)
-                    expectName = true;
-                else if (expectName && depth == 0 && isIdentifierStart(c))
+                for (std::size_t i = 0; i < text.size(); ++i)
                 {
-                    std::size_t end = i + 1;
-                    while (end < declarators.size() && isIdentifierPart(declarators[end]))
-                        ++end;
-                    names.emplace_back(declarators.substr(i, end - i));
-                    expectName = false;
-                    i = end - 1;
+                    const char c = text[i];
+                    if (c == '(' || c == '[' || c == '{')
+                        ++mDepth;
+                    else if (c == ')' || c == ']' || c == '}')
+                        --mDepth;
+                    else if (c == ';' && mDepth <= 0)
+                        return i + 1;
+                    else if (c == ',' && mDepth == 0)
+                        mExpectName = true;
+                    else if (mExpectName && mDepth == 0 && isIdentifierStart(c))
+                    {
+                        std::size_t end = i + 1;
+                        while (end < text.size() && isIdentifierPart(text[end]))
+                            ++end;
+                        names.emplace_back(text.substr(i, end - i));
+                        mExpectName = false;
+                        i = end - 1;
+                    }
                 }
+                return std::string_view::npos;
             }
-            return names;
-        }
+        };
 
         // What a constant expression may name besides numbers and constants: constructors and the built-in
         // functions other than the texture functions
@@ -561,13 +569,16 @@ namespace Shader
             static const std::regex initialiser(
                 R"(^(\s*uniform\s+([A-Za-z_]\w*)\s+([A-Za-z_]\w*))\s*=\s*([^;]*);(.*)$)");
             static const std::regex anyInitialiser(R"(^\s*uniform\b[^;]*=)");
-            static const std::regex uniformDeclarators(
-                R"(^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([^;]*))");
+            static const std::regex uniformStart(
+                R"(^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*(?:\s+|$))");
+            static const std::regex directive(R"(^\s*#)");
 
             const std::string code = blankComments(original);
             const std::string_view source = code;
             Branches branches;
             std::map<std::string, UniformInitialiser> taken;
+            // A uniform declaration that goes on to the next line
+            std::optional<DeclaratorScanner> openUniform;
 
             std::size_t pos = 0;
             while (pos < source.size())
@@ -581,12 +592,44 @@ namespace Shader
                 const std::string_view text = original.substr(pos, end - pos);
                 skipped.push_back(branches.active() == Branches::Active::No);
                 std::smatch match;
-                // The compiler never sees a declaration the preprocessor skips
-                if (branches.active() != Branches::Active::No && std::regex_search(line, match, uniformDeclarators))
-                    for (const std::string& name : declaratorNames(match[1].str()))
+                // Every uniform the line declares, in each of its statements. The compiler never sees a declaration
+                // the preprocessor skips.
+                if (branches.active() == Branches::Active::No)
+                    openUniform.reset();
+                else if (!std::regex_search(line, directive))
+                {
+                    std::vector<std::string> names;
+                    std::size_t at = 0;
+                    while (at < line.size())
+                    {
+                        std::smatch start;
+                        if (openUniform)
+                        {
+                            const std::size_t read = openUniform->scan(std::string_view(line).substr(at), names);
+                            if (read == std::string_view::npos)
+                                break;
+                            openUniform.reset();
+                            at += read;
+                        }
+                        else if (std::regex_search(line.cbegin() + at, line.cend(), start, uniformStart))
+                        {
+                            openUniform.emplace();
+                            at += static_cast<std::size_t>(start.length(0));
+                        }
+                        else
+                        {
+                            // Another statement: the next can start after its end
+                            const std::size_t next = line.find_first_of(";{}", at);
+                            if (next == std::string::npos)
+                                break;
+                            at = next + 1;
+                        }
+                    }
+                    for (const std::string& name : names)
                         if (isUnusableUniformName(name))
                             result.mErrors.push_back(
                                 std::format("uniform {} has a name GLSL ES 3.00 keeps for itself", name));
+                }
                 if (std::regex_match(line, match, version))
                 {
                     const int number = Misc::StringUtils::toNumeric<int>(match[1].str(), 0);
