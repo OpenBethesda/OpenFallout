@@ -60,6 +60,13 @@ if (OPENFALLOUT_BUNDLE_ANGLE)
 endif()
 
 if (OPENFALLOUT_ANGLE_PACKAGED)
+    # install(FILES) leaves a destination alone when its time stamp equals the source's to the second, and fixup_bundle
+    # may have rewritten its copy of a library within that second. Removing that copy first makes the copy below certain.
+    install(CODE "
+        file(REMOVE
+            \"\${CMAKE_INSTALL_PREFIX}/${APP_BUNDLE_NAME}/Contents/Frameworks/libEGL.dylib\"
+            \"\${CMAKE_INSTALL_PREFIX}/${APP_BUNDLE_NAME}/Contents/Frameworks/libGLESv2.dylib\")
+    " COMPONENT Runtime)
     install(FILES "${OPENFALLOUT_ANGLE_ROOT}/lib/libEGL.dylib" "${OPENFALLOUT_ANGLE_ROOT}/lib/libGLESv2.dylib"
         DESTINATION "${APP_BUNDLE_NAME}/Contents/Frameworks"
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
