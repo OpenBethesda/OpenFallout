@@ -42,6 +42,7 @@
 #include "falloutmusic.hpp"
 #include "ffmpegdecoder.hpp"
 #include "headcache.hpp"
+#include "headtracking.hpp"
 #include "openaloutput.hpp"
 #include "sound.hpp"
 #include "soundbuffer.hpp"
@@ -182,6 +183,10 @@ namespace OFSound
             Log(Debug::Info) << stream.str();
         }
 
+        // Nothing of Core Motion is touched while the setting is off
+        mHeadTracker = std::make_unique<HeadTracker>(makeHeadphoneMotion());
+        setHeadTracking(Settings::sound().mHeadTracking);
+
         if (mHeadCache != nullptr && Settings::sound().mWarmSounds)
         {
             mWarmQueue = std::make_unique<WarmQueue>(*vfs, *mHeadCache);
@@ -207,8 +212,17 @@ namespace OFSound
             Log(Debug::Info) << out.str();
         }
         SoundManager::clear();
+        mHeadTracker.reset();
         mSoundBuffers.clear();
         mOutput.reset();
+    }
+
+    void SoundManager::setHeadTracking(bool enabled)
+    {
+        if (enabled && Settings::sound().mHrtfEnable != Settings::HrtfMode::Enable)
+            Log(Debug::Warning) << "Head tracking turns the listener, which is heard only when HRTF is on: set "
+                                   "'hrtf enable = 1' (the line 'Enabled HRTF' or 'HRTF disabled' above says which)";
+        mHeadTracker->setEnabled(enabled);
     }
 
     // Buffered decoders only read cached data.
@@ -1360,7 +1374,11 @@ namespace OFSound
         }
 
         mOutput->startUpdate();
-        mOutput->updateListener(mListenerPos, mListenerDir, mListenerUp, mListenerVel, env);
+        // With head tracking off, or no headphones delivering, these are the camera's axes as they are
+        ListenerAxes listener{ mListenerDir, mListenerUp };
+        if (mHeadTracker != nullptr)
+            listener = mHeadTracker->listener(mListenerDir, mListenerUp, HeadClock::now());
+        mOutput->updateListener(mListenerPos, listener.mForward, listener.mUp, mListenerVel, env);
 
         updateMusic(duration);
 
@@ -1518,6 +1536,8 @@ namespace OFSound
     {
         if (!mOutput->isInitialized())
             return;
+        if (mHeadTracker != nullptr && settings.contains({ "Sound", "head tracking" }))
+            setHeadTracking(Settings::sound().mHeadTracking);
         mOutput->startUpdate();
         for (SoundMap::value_type& snd : mActiveSounds)
         {

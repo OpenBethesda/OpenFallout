@@ -86,6 +86,7 @@ set(OPENFALLOUT_FILES ${OPENFALLOUT_FILES_BEFORE_LUA})
 add_openfallout_dir (mwsound
     soundmanagerimp openaloutput ffmpegdecoder headcache warmqueue sound soundbuffer sounddecoder soundoutput
     loudness movieaudiofactory alext efx efxpresets regionsoundselector watersoundupdater falloutsound falloutfootsteps falloutmusic
+    headtracking
     )
 
 add_openfallout_dir (mwworld
@@ -141,6 +142,11 @@ add_library(openfallout-lua-lib STATIC
 )
 target_link_libraries(openfallout-lua-lib openfallout-lib)
 target_link_libraries(openfallout-lib openfallout-lua-lib)
+
+# The native bridge of head-tracked sound (docs/openfallout/head-tracking.md): the one Objective-C++ file, with ARC
+target_sources(openfallout-lib PRIVATE mwsound/headphonemotion.mm)
+set_source_files_properties(mwsound/headphonemotion.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+target_link_libraries(openfallout-lib "-framework CoreMotion" "-framework Foundation")
 
 if(BUILD_OPENFALLOUT)
     openfallout_add_executable(openfallout
