@@ -29,6 +29,7 @@
 #include <sstream>
 #include <vector>
 
+#include "gldialect.hpp"
 #include "glextensions.hpp"
 #include "shadowsbin.hpp"
 #include "lightmanager.hpp"
@@ -555,7 +556,15 @@ MWShadowTechnique::ShadowData::ShadowData(MWShadowTechnique::ViewDependentData* 
     }
     else
     {
-        _texture->setInternalFormat(GL_DEPTH_COMPONENT);
+        if constexpr (GLDialect::sOpenGLES)
+        {
+            // OpenGL ES makes an empty depth texture only of a sized format with its own pixel format and type
+            _texture->setInternalFormat(GL_DEPTH_COMPONENT24);
+            _texture->setSourceFormat(GL_DEPTH_COMPONENT);
+            _texture->setSourceType(GL_UNSIGNED_INT);
+        }
+        else
+            _texture->setInternalFormat(GL_DEPTH_COMPONENT);
         _texture->setShadowComparison(true);
         _texture->setShadowTextureMode(osg::Texture2D::LUMINANCE);
     }

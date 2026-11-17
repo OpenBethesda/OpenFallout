@@ -61,6 +61,10 @@ namespace SceneUtil
             state.setModeValidity(GL_FRAMEBUFFER_SRGB, supported("GL_EXT_sRGB_write_control"));
             state.setModeValidity(GL_MULTISAMPLE_ARB, supported("GL_EXT_multisample_compatibility"));
 
+            // Depth comparison (sampler2DShadow) is core in OpenGL ES 3.0; OpenSceneGraph looks only for GL_ARB_shadow, and
+            // without it never sets a shadow map's comparison mode
+            extensions.isShadowSupported = true;
+
             // OpenSceneGraph takes "version 1.2 or later" to mean that the texture LOD bias parameter exists
             extensions.isTextureLODBiasSupported = false;
 
