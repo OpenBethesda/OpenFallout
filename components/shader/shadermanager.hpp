@@ -106,6 +106,8 @@ namespace Shader
             std::optional<osg::Shader::Type> type = std::nullopt);
         // Reads a template and its includes once; end() if it cannot be read
         std::map<std::string, std::string>::iterator loadTemplate(const std::string& templateName);
+        // Reads a template and its includes from disk; false, leaving source as it is, if it cannot be read
+        bool readTemplate(const std::string& templateName, std::string& source);
         // Turns the source createSourceFromTemplate gives into the text the graphics library compiles
         bool finishSource(std::string& source, std::vector<std::string>& linkedShaderNames,
             const std::string& templateName, osg::Shader::Type type, const DefineMap& defines,

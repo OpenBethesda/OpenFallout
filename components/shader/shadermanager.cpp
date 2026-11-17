@@ -241,16 +241,27 @@ namespace Shader
                             viewer.stopThreading();
                     }
 
+                    // The cell preloading threads read the same maps through getShader
+                    std::lock_guard<std::mutex> lock(manager.mMutex);
+
                     // Every template that includes the file is read again: those of the shaders below, and in the
-                    // Metal build those of the library shaders folded into them
+                    // Metal build those of the library shaders folded into them. A template that cannot be read keeps
+                    // its previous text, and the shaders of this file keep theirs.
                     const std::filesystem::path touched(pathShaderToTest);
-                    for (auto it = manager.mShaderTemplates.begin(); it != manager.mShaderTemplates.end();)
+                    bool readAgain = true;
+                    for (auto& [name, text] : manager.mShaderTemplates)
                     {
-                        if (templateIncludedFiles[it->first].contains(touched))
-                            it = manager.mShaderTemplates.erase(it);
+                        const auto included = templateIncludedFiles.find(name);
+                        if (included == templateIncludedFiles.end() || !included->second.contains(touched))
+                            continue;
+                        std::string source;
+                        if (manager.readTemplate(name, source))
+                            text = std::move(source);
                         else
-                            ++it;
+                            readAgain = false;
                     }
+                    if (!readAgain)
+                        continue;
 
                     for (const auto& [templateName, shaderDefines] : shaderKeys)
                     {
@@ -262,7 +273,7 @@ namespace Shader
                             continue;
                         }
 
-                        ShaderManager::TemplateMap::iterator templateIt = manager.loadTemplate(templateName);
+                        ShaderManager::TemplateMap::iterator templateIt = manager.mShaderTemplates.find(templateName);
                         if (templateIt == manager.mShaderTemplates.end())
                             break;
                         std::string shaderSource = templateIt->second;
@@ -562,26 +573,35 @@ namespace Shader
         if (templateIt != mShaderTemplates.end())
             return templateIt;
 
+        std::string source;
+        if (!readTemplate(templateName, source))
+            return mShaderTemplates.end();
+        return mShaderTemplates.insert(std::make_pair(templateName, std::move(source))).first;
+    }
+
+    bool ShaderManager::readTemplate(const std::string& templateName, std::string& source)
+    {
         std::filesystem::path path = mPath / templateName;
         std::ifstream stream;
         stream.open(path);
         if (stream.fail())
         {
             Log(Debug::Error) << "Failed to open shader " << path << ": " << std::generic_category().message(errno);
-            return mShaderTemplates.end();
+            return false;
         }
         std::stringstream buffer;
         buffer << stream.rdbuf();
 
         // parse includes
         int fileNumber = 1;
-        std::string source = buffer.str();
+        std::string text = buffer.str();
         std::set<std::filesystem::path> insertedPaths;
-        if (!addLineDirectivesAfterConditionalBlocks(source)
-            || !parseIncludes(mPath, source, templateName, fileNumber, {}, insertedPaths))
-            return mShaderTemplates.end();
+        if (!addLineDirectivesAfterConditionalBlocks(text)
+            || !parseIncludes(mPath, text, templateName, fileNumber, {}, insertedPaths))
+            return false;
         mHotReloadManager->templateIncludedFiles[templateName] = std::move(insertedPaths);
-        return mShaderTemplates.insert(std::make_pair(templateName, std::move(source))).first;
+        source = std::move(text);
+        return true;
     }
 
     bool ShaderManager::finishSource(std::string& source, std::vector<std::string>& linkedShaderNames,
@@ -811,7 +831,13 @@ namespace Shader
                 // I'm not sure how to handle a shader that was already broken as there's no way to get a potential
                 // replacement to the nodes that need it.
                 continue;
-            std::string shaderSource = mShaderTemplates[templateId];
+            const TemplateMap::iterator templateIt = mShaderTemplates.find(templateId);
+            if (templateIt == mShaderTemplates.end())
+            {
+                Log(Debug::Error) << "Shader " << templateId << " keeps its text: its template is not loaded";
+                continue;
+            }
+            std::string shaderSource = templateIt->second;
             std::vector<std::string> linkedShaderNames;
             UniformList initialValues;
             if (!createSourceFromTemplate(shaderSource, linkedShaderNames, templateId, defines)

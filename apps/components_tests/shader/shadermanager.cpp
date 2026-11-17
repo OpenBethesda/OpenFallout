@@ -2,7 +2,10 @@
 #include <components/shader/shadermanager.hpp>
 #include <components/testing/util.hpp>
 
+#include <chrono>
 #include <fstream>
+
+#include <osgViewer/Viewer>
 
 #include <gtest/gtest.h>
 
@@ -234,6 +237,54 @@ namespace
 
         withShaderFile(content, [&](const std::filesystem::path& templateName) {
             EXPECT_FALSE(mManager.getShader(Files::pathToUnicodeString(templateName), mDefines));
+        });
+    }
+
+    // A hot reload reads a touched template again. A template that cannot be read (a bad include while someone edits
+    // the file) keeps its previous text, and so do the shaders made from it, now and when the defines change later.
+    TEST_F(ShaderManagerTest, a_hot_reload_that_cannot_read_the_template_keeps_the_previous_text)
+    {
+        const std::string content
+            = "#version 120\n"
+              "void main() {}\n";
+
+        withShaderFile(content, [&](const std::filesystem::path& templateName) {
+            const auto shader = mManager.getShader(Files::pathToUnicodeString(templateName), mDefines);
+            ASSERT_TRUE(shader);
+
+            const std::filesystem::path path = TestingOpenMW::outputFilePathWithSubDir(templateName);
+            std::ofstream(path) << "#include \"missing.glsl\"\nvoid main() {}\n";
+            std::filesystem::last_write_time(
+                path, std::filesystem::file_time_type::clock::now() + std::chrono::hours(1));
+            osgViewer::Viewer viewer;
+            mManager.triggerShaderReload();
+            mManager.update(viewer);
+            EXPECT_EQ(shader->getShaderSource(), content);
+
+            ShaderManager::DefineMap globalDefines = getDefaultDefines();
+            mManager.setGlobalDefines(globalDefines);
+            EXPECT_EQ(shader->getShaderSource(), content);
+            EXPECT_EQ(
+                mManager.getShader(Files::pathToUnicodeString(templateName), { { "other", "1" } })->getShaderSource(),
+                content);
+        });
+    }
+
+    TEST_F(ShaderManagerTest, a_hot_reload_gives_the_shader_the_new_text)
+    {
+        withShaderFile("#version 120\nvoid main() {}\n", [&](const std::filesystem::path& templateName) {
+            const auto shader = mManager.getShader(Files::pathToUnicodeString(templateName), mDefines);
+            ASSERT_TRUE(shader);
+
+            const std::string changed = "#version 120\nvoid main() { gl_Position = vec4(1.0); }\n";
+            const std::filesystem::path path = TestingOpenMW::outputFilePathWithSubDir(templateName);
+            std::ofstream(path) << changed;
+            std::filesystem::last_write_time(
+                path, std::filesystem::file_time_type::clock::now() + std::chrono::hours(1));
+            osgViewer::Viewer viewer;
+            mManager.triggerShaderReload();
+            mManager.update(viewer);
+            EXPECT_EQ(shader->getShaderSource(), changed);
         });
     }
 }

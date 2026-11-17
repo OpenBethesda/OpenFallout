@@ -3,9 +3,12 @@
 #include <components/testing/util.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+
+#include <osgViewer/Viewer>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -72,6 +75,29 @@ namespace
             = mManager.getShader(vertex, { { "value", "2.5" } }, osg::Shader::VERTEX);
         ASSERT_TRUE(shader);
         EXPECT_THAT(shader->getShaderSource(), HasSubstr("float foo() { return 2.5; }"));
+    }
+
+    TEST_F(ShaderManagerGlslEsTest, a_hot_reload_that_cannot_read_a_linked_template_keeps_the_previous_text)
+    {
+        const std::string library = write("library.glsl", "#version 120\nfloat foo() { return 1.0; }\n");
+        const std::string vertex = write("main.vert",
+            "#version 120\n@link \"" + library + "\"\nfloat foo();\nvoid main() { gl_Position = vec4(foo()); }\n");
+        const osg::ref_ptr<osg::Shader> shader = mManager.getShader(vertex, {}, osg::Shader::VERTEX);
+        ASSERT_TRUE(shader);
+        const std::string before = shader->getShaderSource();
+
+        write("library.glsl", "#version 120\n#include \"missing.glsl\"\nfloat foo() { return 2.0; }\n");
+        std::filesystem::last_write_time(TestingOpenMW::outputFilePathWithSubDir(library),
+            std::filesystem::file_time_type::clock::now() + std::chrono::hours(1));
+        osgViewer::Viewer viewer;
+        mManager.triggerShaderReload();
+        mManager.update(viewer);
+        EXPECT_EQ(shader->getShaderSource(), before);
+
+        ShaderManager::DefineMap globalDefines = getDefaultDefines();
+        mManager.setGlobalDefines(globalDefines);
+        EXPECT_EQ(shader->getShaderSource(), before);
+        EXPECT_THAT(shader->getShaderSource(), HasSubstr("return 1.0;"));
     }
 
     // Every vertex and fragment shader the engine ships, with its options all off and all on, must convert. With
