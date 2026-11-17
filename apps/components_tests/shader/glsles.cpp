@@ -436,6 +436,19 @@ namespace
                       "#endif\n#ifdef OF_GLOBAL_INIT_1\n#line 6 0\n    twice = time * k;\n#endif\n}\n"));
     }
 
+    TEST(ShaderGlslEsTest, a_global_array_whose_initialiser_moves_keeps_its_size)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float steps[2] = float[2](t, 1.0);\n"
+            "void main() { gl_FragColor = vec4(steps[0]); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nfloat steps[2];\n#define OF_GLOBAL_INIT_0\n#line 4 0\n"));
+        EXPECT_THAT(text, HasSubstr("#ifdef OF_GLOBAL_INIT_0\n#line 3 0\n    steps = float[2](t, 1.0);\n#endif\n"));
+    }
+
     TEST(ShaderGlslEsTest, a_global_initialiser_moved_to_main_keeps_its_preprocessor_branch)
     {
         const GlslEsShader result = vertex(

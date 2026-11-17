@@ -1050,6 +1050,7 @@ namespace Shader
         std::string moveGlobalInitialisers(
             const std::string& source, GlslEsShader& result, Uses& uses, const std::vector<bool>& skipped)
         {
+            // The first group is the declaration without its initialiser, an array's size included
             static const std::regex global(R"(^(\s*(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))"
                                            R"((?:\s*\[[^\]]*\])?)\s*=\s*([^;{}]*?)\s*;\s*$)");
             static const std::regex constant(
