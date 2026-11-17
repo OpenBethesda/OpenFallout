@@ -189,9 +189,6 @@ if (OPENFALLOUT_METAL)
     set(OPENGL_INCLUDE_DIR "${ANGLE_INCLUDE_DIR}")
     set(OPENGL_gl_LIBRARY "${ANGLE_GLESV2_LIBRARY}" "${ANGLE_EGL_LIBRARY}")
     add_compile_definitions(OPENFALLOUT_METAL)
-    # A MyGUI built here draws nothing itself (components/myguiplatform does); its OpenGL render system would look for
-    # desktop OpenGL, its dummy one for nothing
-    set(MYGUI_RENDERSYSTEM 1 CACHE STRING "")
 else()
     # Force CMake to use the installed version of OpenGL on macOS
     set(_SAVE_CMAKE_FIND_FRAMEWORK ${CMAKE_FIND_FRAMEWORK})
@@ -200,6 +197,28 @@ else()
     set(CMAKE_FIND_FRAMEWORK ${_SAVE_CMAKE_FIND_FRAMEWORK})
     unset(_SAVE_CMAKE_FIND_FRAMEWORK)
 endif()
+
+# MyGUI render system
+# A MyGUI built here (extern/) draws nothing itself: components/myguiplatform does. In the Metal build its OpenGL render
+# system (4, the default extern/ gives) would look for desktop OpenGL, so it takes the dummy one (1). The value follows
+# OPENFALLOUT_METAL on every configure of a build folder: the value the OpenGL build had, also one a person set, comes
+# back when the option goes off, unless a new one is given at that time (CI/test_mygui_render_system.py).
+if (OPENFALLOUT_METAL)
+    if (NOT DEFINED CACHE{OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL})
+        set(OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL "${MYGUI_RENDERSYSTEM}" CACHE INTERNAL "")
+    endif()
+    set(MYGUI_RENDERSYSTEM 1 CACHE STRING "" FORCE)
+elseif (DEFINED CACHE{OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL})
+    if (MYGUI_RENDERSYSTEM STREQUAL "1")
+        if (OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL STREQUAL "")
+            unset(MYGUI_RENDERSYSTEM CACHE)
+        else()
+            set(MYGUI_RENDERSYSTEM "${OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL}" CACHE STRING "" FORCE)
+        endif()
+    endif()
+    unset(OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL CACHE)
+endif()
+# End of MyGUI render system
 
 find_package(LZ4 REQUIRED)
 
