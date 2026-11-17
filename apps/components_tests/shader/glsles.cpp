@@ -571,6 +571,65 @@ namespace
         EXPECT_THAT(text, HasSubstr("\nvoid main() {of_initialiseGlobals(); of_FragData[0] = vec4(x); }\n"));
     }
 
+    // A macro is expanded where the line stands. One whose text is a constant expression keeps the initialiser
+    // constant, so it stays there, even when the macro is given another value further down.
+    TEST(ShaderGlslEsTest, a_global_initialiser_from_a_constant_macro_stays_where_it_is)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "#define BASE 2.0\n"
+            "#define SCALE (BASE * 0.5)\n"
+            "float x = SCALE;\n"
+            "#undef SCALE\n"
+            "#define SCALE 2.0\n"
+            "void main() { gl_FragColor = vec4(x * SCALE); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, Not(HasSubstr("of_initialiseGlobals")));
+        EXPECT_THAT(body(result.mSource), HasSubstr("\nfloat x = SCALE;\n"));
+    }
+
+    TEST(ShaderGlslEsTest, macros_that_name_each_other_are_not_followed_for_ever)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "#define A B\n"
+            "#define B A\n"
+            "float x = A;\n"
+            "void main() { gl_FragColor = vec4(x); }\n");
+        EXPECT_THAT(result.mSource, HasSubstr("of_initialiseGlobals"));
+    }
+
+    // Moved to the end, the initialiser would read the macro's later value, or a macro no longer there
+    TEST(ShaderGlslEsTest, a_moved_global_initialiser_naming_a_macro_changed_later_is_an_error)
+    {
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define SCALE 1.0\n"
+                             "float x = u * SCALE;\n"
+                             "#undef SCALE\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define SCALE(v) (v * 2.0)\n"
+                             "float x = SCALE(u);\n"
+                             "#undef SCALE\n"
+                             "#define SCALE(v) (v * 3.0)\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        // A macro that keeps its value moves with the initialiser as before
+        const GlslEsShader kept = fragment(
+            "#version 120\n"
+            "uniform float u;\n"
+            "#define SCALE 2.0\n"
+            "float x = u * SCALE;\n"
+            "void main() { gl_FragColor = vec4(x); }\n");
+        EXPECT_THAT(kept.mErrors, IsEmpty());
+        EXPECT_THAT(kept.mSource, HasSubstr("    x = u * SCALE;\n"));
+    }
+
     TEST(ShaderGlslEsTest, multiview_view_index_keeps_its_name)
     {
         const GlslEsShader result = fragment(

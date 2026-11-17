@@ -917,8 +917,20 @@ namespace Shader
             return lines;
         }
 
-        // Whether an initialiser names nothing but numbers, constants, constructors and built-in functions
-        bool isConstantExpression(std::string_view value, const std::set<std::string, std::less<>>& constants)
+        // An object-like macro: its text, and whether the converter knows that it holds at a line (it was defined
+        // outside every preprocessor branch). A macro that takes arguments, or one defined in a branch, is not known.
+        struct Macro
+        {
+            std::string mValue;
+            bool mKnown = false;
+        };
+
+        using Macros = std::map<std::string, Macro, std::less<>>;
+
+        // Whether an initialiser names nothing but numbers, constants, constructors, built-in functions and macros
+        // known to stand for such text (followed to a depth, so that macros that name each other end)
+        bool isConstantExpression(std::string_view value, const std::set<std::string, std::less<>>& constants,
+            const Macros& macros, int depth = 0)
         {
             std::size_t i = 0;
             while (i < value.size())
@@ -945,10 +957,59 @@ namespace Shader
                     --before;
                 const bool field = before > 0 && value[before - 1] == '.';
                 if (!field && !sConstantExpressionNames.contains(word) && !constants.contains(word))
-                    return false;
+                {
+                    const auto macro = macros.find(word);
+                    if (macro == macros.end() || !macro->second.mKnown || depth >= 16
+                        || !isConstantExpression(macro->second.mValue, constants, macros, depth + 1))
+                        return false;
+                }
                 i = end;
             }
             return true;
+        }
+
+        // The words of a text that are names (not numbers, not fields)
+        std::set<std::string, std::less<>> namesIn(std::string_view value)
+        {
+            std::set<std::string, std::less<>> names;
+            for (std::size_t i = 0; i < value.size();)
+            {
+                if (std::isdigit(static_cast<unsigned char>(value[i])))
+                {
+                    while (i < value.size() && (isIdentifierPart(value[i]) || value[i] == '.'))
+                        ++i;
+                    continue;
+                }
+                if (!isIdentifierStart(value[i]))
+                {
+                    ++i;
+                    continue;
+                }
+                std::size_t end = i + 1;
+                while (end < value.size() && isIdentifierPart(value[end]))
+                    ++end;
+                names.emplace(value.substr(i, end - i));
+                i = end;
+            }
+            return names;
+        }
+
+        // A #define or #undef line: the macro's name, and for an object-like #define its text
+        struct MacroDirective
+        {
+            std::string mName;
+            bool mDefine;
+            bool mTakesArguments;
+            std::string mValue;
+        };
+
+        std::optional<MacroDirective> readMacroDirective(std::string_view line)
+        {
+            static const std::regex directive(R"(^\s*#\s*(define|undef)\s+([A-Za-z_]\w*)(\()?\s*(.*?)\s*$)");
+            std::match_results<std::string_view::const_iterator> match;
+            if (!std::regex_match(line.begin(), line.end(), match, directive))
+                return std::nullopt;
+            return MacroDirective{ match[2].str(), match[1].str() == "define", match[3].matched, match[4].str() };
         }
 
         bool hasTopLevelComma(std::string_view value)
@@ -973,8 +1034,11 @@ namespace Shader
         // assigns only the variables whose declarations the preprocessor kept. #line directives keep line numbers.
         // A declaration of several variables, or one that runs over several lines, is left alone.
         //
-        // Lines the preprocessor is known to skip are left as they are; main is the one of the lines it may keep, or
-        // each of them where the converter cannot tell.
+        // A macro is expanded where its line stands. An initialiser whose macros are known to be constant stays (GLSL
+        // ES 3.00 takes it); one that moves takes its macros' text at the end, so a macro it names that is defined
+        // again or undefined further down makes the conversion fail rather than give another value. Lines the
+        // preprocessor is known to skip are left as they are; main is the one of the lines it may keep, or each of them
+        // where the converter cannot tell.
         std::string moveGlobalInitialisers(
             const std::string& source, GlslEsShader& result, Uses& uses, const std::vector<bool>& skipped)
         {
@@ -996,6 +1060,19 @@ namespace Shader
             const std::vector<std::string_view> sourceLines = splitLines(source);
             const auto isSkipped = [&](std::size_t index) { return index < skipped.size() && skipped[index]; };
 
+            // Where each macro is defined or undefined, line by line
+            std::map<std::string, std::vector<std::size_t>, std::less<>> macroChanges;
+            for (std::size_t index = 0; index < sourceLines.size(); ++index)
+                if (!isSkipped(index))
+                    if (const std::optional<MacroDirective> directive = readMacroDirective(sourceLines[index]))
+                        macroChanges[directive->mName].push_back(index);
+            const auto changedAfter = [&](std::string_view name, std::size_t index) {
+                const auto it = macroChanges.find(name);
+                return it != macroChanges.end() && it->second.back() > index;
+            };
+
+            Macros macros;
+            int branchDepth = 0;
             for (std::size_t index = 0; index < sourceLines.size(); ++index)
             {
                 const std::string_view line = sourceLines[index];
@@ -1009,7 +1086,24 @@ namespace Shader
                 const std::size_t first = line.find_first_not_of(" \t");
                 if (inDirective || (first != std::string_view::npos && line[first] == '#'))
                 {
-                    inDirective = !line.empty() && line.back() == '\\';
+                    const bool continued = !line.empty() && line.back() == '\\';
+                    if (!inDirective)
+                    {
+                        static const std::regex conditional(R"(^\s*#\s*(if|ifdef|ifndef|endif)\b.*$)");
+                        std::match_results<std::string_view::const_iterator> match;
+                        if (std::regex_match(line.begin(), line.end(), match, conditional))
+                            branchDepth += match[1].str() == "endif" ? -1 : 1;
+                        else if (const std::optional<MacroDirective> directive = readMacroDirective(line);
+                            directive && !isSkipped(index))
+                        {
+                            if (directive->mDefine)
+                                macros[directive->mName] = Macro{ directive->mValue,
+                                    !directive->mTakesArguments && !continued && branchDepth == 0 };
+                            else
+                                macros.erase(directive->mName);
+                        }
+                    }
+                    inDirective = continued;
                     lines.emplace_back(line);
                     ++lineNumber;
                     continue;
@@ -1026,8 +1120,14 @@ namespace Shader
                 if (depth == 0 && std::regex_search(text, match, constant))
                     constants.insert(match[1].str());
                 else if (depth == 0 && std::regex_match(text, match, global) && !hasTopLevelComma(match[3].str())
-                    && !isConstantExpression(match[3].str(), constants))
+                    && !isConstantExpression(match[3].str(), constants, macros))
                 {
+                    for (const std::string& name : namesIn(match[3].str()))
+                        if (changedAfter(name, index))
+                            result.mErrors.push_back(std::format(
+                                "global {} starts from {}, which is defined again or undefined further down: its "
+                                "initialiser cannot move to main",
+                                match[2].str(), name));
                     lines.push_back(std::format("{};\n#define {}{}\n#line {} {}", match[1].str(),
                         sGlobalInitialiserMacro, moved, lineNumber + 1, sourceNumber));
                     initialisers += std::format("#ifdef {}{}\n#line {} {}\n    {} = {};\n#endif\n",
