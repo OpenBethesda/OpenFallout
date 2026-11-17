@@ -185,21 +185,25 @@ def compare_folders(reference_dir, candidate_dir, out, limits_doc, scenes_doc, n
         scene = by_name.get(key.split("/")[0], {})
         method, limits, from_runs = picturediff.limits_of(limits_doc, key.split("/")[0])
         reference, candidate = references.get(key), candidates.get(key)
-        row = {"scene": key, "for": scene.get("for", ""), "verdict": "PASS", "reasons": [], "notes": [], "measures": {},
-               "limits": limits, "limits_from_runs": from_runs, "simulation": {}, "page": None}
+        # `valid`: both pictures are there, both rounds held their scene still and the two runs had the same settings. Only
+        # then do the measures say what the two builds (or one build twice) differ by.
+        row = {"scene": key, "for": scene.get("for", ""), "verdict": "PASS", "valid": True, "reasons": [], "notes": [],
+               "measures": {}, "limits": limits, "limits_from_runs": from_runs, "simulation": {}, "page": None}
         for side, shot in (("reference", reference), ("candidate", candidate)):
             if shot is None or shot.picture is None:
                 row["reasons"].append(f"no picture from the {side}" + (f" (its round: {shot.verdict})" if shot else ""))
             else:
                 row["simulation"][side] = shot.simulation
                 if shot.verdict != "PASS":
+                    row["valid"] = False
                     row["reasons"].append(f"the round of the {side} failed ({os.path.relpath(shot.run / 'report.md', out)}):"
                                           " the scene may not have been held still")
         if row["reasons"] and (reference is None or reference.picture is None or candidate is None or candidate.picture is None):
-            row["verdict"] = "MISSING"
+            row["verdict"], row["valid"] = "MISSING", False
             rows.append(row)
             continue
         if reference.settings != candidate.settings:
+            row["valid"] = False
             row["reasons"].append("the two runs had other settings (config/settings.cfg of each run): the profiles or the "
                                   "player's own settings differ")
         times = row["simulation"]
@@ -212,7 +216,7 @@ def compare_folders(reference_dir, candidate_dir, out, limits_doc, scenes_doc, n
                 row["notes"].append("not compared: " + "; ".join(region["why"] for region in scene["ignore"]))
             result = picturediff.measure(first, second, method)
         except picturediff.PictureError as error:
-            row["verdict"] = "MISSING"
+            row["verdict"], row["valid"] = "MISSING", False
             row["reasons"].append(str(error))
             rows.append(row)
             continue
@@ -365,11 +369,21 @@ def command_limits(args):
         if not results.get("noise"):
             print(f"{path} is a comparison of two builds, not of one build with itself: it is no noise floor", file=sys.stderr)
             return 2
+        # bad pixels counted with another tolerance, or windows of another size, are other numbers
+        if results.get("method") != limits_doc["method"]:
+            print(f"{path} was measured by another method ({results.get('method')}) than the limits file's "
+                  f"({limits_doc['method']})", file=sys.stderr)
+            return 2
         for row in results["scenes"]:
-            if row.get("verdict") != "MISSING" and row.get("measures"):
-                floors.setdefault(row["scene"], []).append(row["measures"])
+            if row.get("verdict") == "MISSING" or not row.get("measures"):
+                continue
+            # a failed round or other settings: what was measured there is not what one build varies by
+            if not row.get("valid", True):
+                print(f"left out: {row['scene']} of {path} ({'; '.join(row.get('reasons', [])) or 'not held still'})")
+                continue
+            floors.setdefault(row["scene"], []).append(row["measures"])
     if not floors:
-        print("no scene with pictures in these results", file=sys.stderr)
+        print("no scene with pictures that were held still in these results", file=sys.stderr)
         return 2
     allowance, margin = limits_doc["allowance"], limits_doc["margin"]
     print("| scene | runs | " + " | ".join(allowance) + " |")

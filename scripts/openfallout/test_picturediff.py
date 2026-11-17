@@ -97,6 +97,14 @@ class Png(unittest.TestCase):
                          + chunk(b"IEND", b""))
         return path
 
+    def test_a_header_chunk_that_is_too_short_is_a_picture_error(self):
+        def chunk(kind, body):
+            return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+        path = self.tmp / "short-header.png"
+        path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", b"\0\0\0\1") + chunk(b"IEND", b""))
+        with self.assertRaises(picturediff.PictureError):
+            picturediff.read_png(path)
+
     def test_every_filter_type_and_colour_type_is_read(self):
         width, height = 6, 5
         rgba = [bytes(v for x in range(width) for v in (x * 40 + y, y * 50, (x * y * 13) % 256, 200)) for y in range(height)]

@@ -204,8 +204,8 @@ The limits are in one file, `scripts/openfallout/picture_limits.json`:
 - `noise_floor`: what those runs measured, with the date, the number of runs and the build.
 
 A scene's own limits take the place of the whole allowance. So the limits of a scene, and the allowance, must name
-all six measures and no other name. The tool refuses a limits file with a misspelled or missing measure (exit
-status 2), because such a measure would not be checked.
+all six measures and no other name, each with a number. The tool refuses a limits file with a misspelled or missing
+measure, or one without a number (exit status 2), because such a measure would not be checked.
 
 The limit is set from the first runs, on the OpenGL build, before the Metal build is judged:
 
@@ -216,7 +216,9 @@ The limit is set from the first runs, on the OpenGL build, before the Metal buil
    difference of water or sky), is fixed in the list and its noise runs are made again.
 3. `limits <run 1>/report/results.json <run 2>/report/results.json --write --build "<commit> OpenGL"` records each scene's
    limits: for each measure, the worst value of the noise runs plus the margin, but never inside the allowance. A quiet
-   scene keeps the allowance; a noisy one gets more room, by as much as it was seen to vary.
+   scene keeps the allowance; a noisy one gets more room, by as much as it was seen to vary. `limits` takes only
+   results measured by the method of the limits file. It leaves out a scene whose round failed or whose two runs
+   had other settings, and prints each one it left out.
 4. Commit the limits file. Its `noise_floor` says what was measured and when (`runs` there is the number of comparisons
    of two runs).
 

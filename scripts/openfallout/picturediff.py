@@ -112,6 +112,8 @@ def read_png(path):
     header, packed = None, bytearray()
     for kind, body in _chunks(data):
         if kind == b"IHDR":
+            if len(body) < 13:
+                raise PictureError(f"{path}: the header chunk is too short")
             header = struct.unpack(">IIBBBBB", body[:13])
         elif kind == b"IDAT":
             packed += body
@@ -424,11 +426,14 @@ def limits_of(limits_file, scene=None):
     # is misspelled or left out would switch its measure off without a word.
     unknown = sorted(set(limits) - set(DIRECTION))
     missing = [name for name, _ in LIMITED if name not in limits]
-    if unknown or missing:
+    empty = [name for name, _ in LIMITED if name in limits
+             and (isinstance(limits[name], bool) or not isinstance(limits[name], (int, float)))]
+    if unknown or missing or empty:
         where = f"the limits of the scene {scene}" if own else "the allowance"
         raise PictureError(f"{where} in the limits file: "
                            + "; ".join(part for part in (f"unknown measure(s) {', '.join(unknown)}" if unknown else "",
-                                                         f"no limit for {', '.join(missing)}" if missing else "") if part))
+                                                         f"no limit for {', '.join(missing)}" if missing else "",
+                                                         f"no number for {', '.join(empty)}" if empty else "") if part))
     return limits_file["method"], limits, own is not None
 
 

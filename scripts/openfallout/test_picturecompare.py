@@ -308,6 +308,18 @@ class CompareFolders(unittest.TestCase):
         self.assertEqual(results["fo3-post"]["verdict"], "MISSING")
         self.assertIn("candidate", " ".join(results["fo3-post"]["reasons"]))
 
+    def test_the_results_say_which_scenes_were_held_still_on_both_sides(self):
+        make_side(self.reference, "nv-busy", textured(64, 48))
+        make_side(self.candidate, "nv-busy", textured(64, 48))
+        make_side(self.reference, "nv-water", textured(64, 48))
+        make_side(self.candidate, "nv-water", textured(64, 48), verdict="FAIL")
+        make_side(self.reference, "nv-post", textured(64, 48))
+        make_side(self.candidate, "nv-post", textured(64, 48), settings="[Video]\nantialiasing = 4\n")
+        self.compare()
+        results = self.results()
+        self.assertEqual({scene: row["valid"] for scene, row in results.items()},
+                         {"nv-busy": True, "nv-water": False, "nv-post": False})
+
     def test_a_failed_round_or_other_settings_make_a_scene_not_comparable(self):
         make_side(self.reference, "nv-busy", textured(64, 48))
         make_side(self.candidate, "nv-busy", textured(64, 48), verdict="FAIL")
@@ -377,6 +389,13 @@ class CompareFolders(unittest.TestCase):
         self.assertIn("| nv-busy | MISSING |", (self.out / "summary.md").read_text())
         self.assertEqual(quietly(picturecompare.report_status, rows, self.out), 1)
 
+    def test_a_limit_without_a_number_is_refused(self):
+        # null for every measure would check nothing: black against white would pass
+        make_side(self.reference, "nv-busy", textured(64, 48))
+        make_side(self.candidate, "nv-busy", changed(textured(64, 48), lambda x, y, c: (0, 0, 0)))
+        self.limits.write_text(json.dumps(dict(LIMITS, scenes={"nv-busy": {name: None for name in LIMITS["allowance"]}})))
+        self.assertEqual(self.compare(), 2)
+
     def test_a_limit_with_a_name_the_comparison_does_not_know_is_refused(self):
         # a scene's own limits take the place of the allowance: a misspelled name would switch that measure off
         make_side(self.reference, "nv-busy", textured(64, 48))
@@ -410,11 +429,32 @@ class Limits(unittest.TestCase):
         self.limits = self.tmp / "limits.json"
         self.limits.write_text(json.dumps(LIMITS))
 
-    def noise(self, name, measures, noise=True):
+    def noise(self, name, measures, noise=True, method=None, valid=True):
         path = self.tmp / name
-        path.write_text(json.dumps({"noise": noise, "scenes": [
-            {"scene": scene, "verdict": "PASS", "measures": values} for scene, values in measures.items()]}))
+        path.write_text(json.dumps({"noise": noise, "method": method or LIMITS["method"], "scenes": [
+            {"scene": scene, "verdict": "PASS", "valid": valid, "measures": values} for scene, values in measures.items()]}))
         return path
+
+    def test_noise_measured_by_another_method_is_refused(self):
+        # bad pixels counted with another tolerance, or windows of another size, are other numbers
+        quiet = {name: (1.0 if name.endswith("ssim") else 0.0) for name in LIMITS["allowance"]}
+        other = self.noise("a.json", {"nv-busy": quiet}, method=dict(LIMITS["method"], pixel_tolerance=0))
+        code = quietly(picturecompare.main, ["limits", str(other), "--limits", str(self.limits), "--write"])
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(self.limits.read_text()), LIMITS)
+
+    def test_a_run_that_was_not_held_still_is_left_out_of_the_noise_floor(self):
+        # a failed round or other settings: its measures say nothing about what one build varies by
+        quiet = {name: (1.0 if name.endswith("ssim") else 0.0) for name in LIMITS["allowance"]}
+        good = self.noise("a.json", {"nv-busy": dict(quiet, worst_tile_bad=0.2)})
+        bad = self.noise("b.json", {"nv-busy": dict(quiet, worst_tile_bad=0.9)}, valid=False)
+        code = quietly(picturecompare.main, ["limits", str(good), str(bad), "--limits", str(self.limits), "--write"])
+        self.assertEqual(code, 0)
+        written = json.loads(self.limits.read_text())
+        self.assertEqual(written["noise_floor"]["nv-busy"]["runs"], 1)
+        self.assertEqual(written["noise_floor"]["nv-busy"]["worst"]["worst_tile_bad"], 0.2)
+        only_bad = quietly(picturecompare.main, ["limits", str(bad), "--limits", str(self.limits)])
+        self.assertEqual(only_bad, 2)
 
     def test_the_recorded_limits_are_complete(self):
         self.assertEqual(set(LIMITS["allowance"]), {name for name, _ in picturediff.LIMITED})
