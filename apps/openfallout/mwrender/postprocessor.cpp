@@ -616,7 +616,8 @@ namespace OFRender
             if (technique->getHDR())
                 mHDR = true;
 
-            if (technique->getNormals())
+            // The Metal build has no post-processing: its main frame buffer takes no normals (RGB16F) either
+            if (technique->getNormals() && SceneUtil::GLDialect::sHasPostProcessing)
                 mNormals = true;
 
             if (technique->getLights())
