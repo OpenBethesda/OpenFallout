@@ -82,6 +82,11 @@ class SceneList(unittest.TestCase):
                 self.assertTrue(all(isinstance(value, str) for value in section.values()), scene["name"])
         self.assertNotRegex(json.dumps(SCENES), r"[A-Za-z]:\\\\|/Users/|/home/|\.(dds|nif|kf|wav|mp3|ogg)\b")
 
+    def test_the_documentation_names_every_scene(self):
+        page = (HERE.parents[1] / "docs" / "openfallout" / "picture-comparison.md").read_text(encoding="utf-8")
+        for scene in SCENES["scenes"]:
+            self.assertIn(f"| `{scene['name']}` |", page, scene["name"])
+
     def test_every_scene_runs_with_lossless_pictures(self):
         self.assertEqual(SCENES["settings"]["General"]["screenshot format"], "png")
 
