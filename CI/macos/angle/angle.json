@@ -1,0 +1,50 @@
+{
+  "about": "The ANGLE the project builds (CI/macos/angle/build_angle.py), publishes as a release asset and downloads in CI (CI/angle_asset.py). docs/openfallout/angle.md says how to change it.",
+  "angle": {
+    "repository": "https://chromium.googlesource.com/angle/angle.git",
+    "branch": "chromium/8127",
+    "commit": "1f6526a566c27c7c33aa73a78517450a4a2a1714"
+  },
+  "depot_tools": {
+    "repository": "https://chromium.googlesource.com/chromium/tools/depot_tools.git",
+    "commit": "ec77017fb3e090ff02bffb9c6980ebcdd3006ddc"
+  },
+  "gn_args": [
+    "is_debug=false",
+    "target_cpu=\"arm64\"",
+    "is_component_build=false",
+    "angle_enable_metal=true",
+    "angle_enable_gl=false",
+    "angle_enable_vulkan=false",
+    "angle_enable_swiftshader=false",
+    "angle_enable_wgpu=false",
+    "angle_enable_null=false",
+    "angle_build_tests=false",
+    "use_siso=false",
+    "mac_deployment_target=\"26.0\"",
+    "mac_min_system_version=\"26.0\""
+  ],
+  "targets": [
+    "libEGL",
+    "libGLESv2"
+  ],
+  "release": {
+    "repository": "OpenBethesda/OpenFallout",
+    "tag": "angle-chromium-8127-1f6526a566c2-r1",
+    "asset": "angle-chromium-8127-1f6526a566c2-macos-arm64.tar.gz",
+    "sha256": "616898ffa17624b1324ad3dff68acdfc76b5a14a91a40b9e47b2550f985ee563"
+  },
+  "files": {
+    "lib/libEGL.dylib": {
+      "sha256": "fa2e62fefa46a899da791084405357a7afac0473c58108133cb22b8cf83d7473",
+      "sha256_without_signature": "8d347a51b85f5734fc8a0a4794179135c240ef158aed76441bb2cb70daf9011a"
+    },
+    "lib/libGLESv2.dylib": {
+      "sha256": "346222bcfd33a6d1e427f6d34c2c46ef40ec1143a9c3ae7ebdf09c8856db4be8",
+      "sha256_without_signature": "0d980aa3834ea83f29a220b0544edd8065dad9373acac11f0933b0c5e437e307"
+    },
+    "NOTICES": {
+      "sha256": "a81229d9eda09d4e02f34ed16681d0daa18922aaff3cbf13e457a499838fa241"
+    }
+  }
+}
