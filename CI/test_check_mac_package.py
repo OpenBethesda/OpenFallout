@@ -522,6 +522,8 @@ class FakeTools:
         self.entitlements = {}  # path suffix -> entitlements dict
         self.minos = {}         # path suffix -> the macOS vtool reports (default 26.0)
         self.archs = {}         # path suffix -> what lipo -archs reports (default arm64)
+        self.links = {}         # path suffix -> libraries otool -L lists (default none)
+        self.programs = {}      # path suffix -> (exit status, stdout, stderr) of a program the check runs
 
     def details(self, path):
         info = {"authority": DEVELOPER_ID, "team": TEAM, "flags": "0x10000(runtime)", "timestamp": True}
@@ -565,6 +567,11 @@ class FakeTools:
                    "      sdk 26.1\n")
         elif tool == "lipo":
             out = next((value for suffix, value in self.archs.items() if command[-1].endswith(suffix)), "arm64") + "\n"
+        elif tool == "otool" and verb == "-L":
+            linked = next((value for suffix, value in self.links.items() if command[-1].endswith(suffix)), [])
+            out = f"{command[-1]}:\n" + "".join(f"\t{name} (compatibility version 1.0.0)\n" for name in linked)
+        elif any(tool.endswith(suffix) for suffix in self.programs):
+            status, out, err = next(value for suffix, value in self.programs.items() if tool.endswith(suffix))
         return subprocess.CompletedProcess(command, status, out, err)
 
 
@@ -786,6 +793,149 @@ class ReleaseModeTests(unittest.TestCase):
         status, output = run_check(self.app, "--mode", "local", "--smoke", "skip")
         self.assertIn("SKIP gatekeeper: local mode", output)
         self.assertNotIn("spctl", [call[0] for call in self.tools.calls])
+
+
+PROBE_PASS = ("EGL_VERSION: 1.5 (ANGLE 2.1.1 git hash: 1f6526a566c2)\n"
+              "GL_VERSION: OpenGL ES 3.0 (ANGLE 2.1.1 git hash: 1f6526a566c2)\n"
+              "GL_RENDERER: ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Version 27.2.1 (Build 26B131))\n"
+              "pixel: 64 128 191 255 (expected about 64 128 191 255)\nANGLE probe: PASS\n")
+
+
+class AngleCheckTests(unittest.TestCase):
+    """The ANGLE libraries in the app (--angle bundled), the probe of the early notarized test and the rule against
+    Apple's OpenGL framework, against stand-in tools: runs on any machine."""
+
+    def setUp(self):
+        import angle_asset
+        from test_angle_asset import fake_library
+
+        temporary = tempfile.TemporaryDirectory(prefix="libraries check ")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.tools = FakeTools()
+        patcher = unittest.mock.patch.object(check_mac_package, "run", self.tools)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.app = fake_package(self.root)
+        frameworks = self.app / "Contents/Frameworks"
+        # the published libraries carry the asset's ad hoc signature; the packaged ones a Developer ID signature
+        published = {name: fake_library(code=name.encode() * 16, signature=b"\xfa\xde\x0c\xc0" + bytes(60))
+                     for name in ("libEGL.dylib", "libGLESv2.dylib")}
+        for name, data in published.items():
+            (frameworks / name).write_bytes(
+                fake_library(code=name.encode() * 16, signature=b"\xfa\xde\x0c\xc0" + bytes(9000)))
+        (self.app / "Contents/Resources").mkdir(parents=True)
+        (self.app / "Contents/Resources/ANGLE-NOTICES.txt").write_text("notices\n")
+        files = {f"lib/{name}": {"sha256": "0" * 64, "sha256_without_signature": angle_asset.code_digest(data)}
+                 for name, data in published.items()}
+        files["NOTICES"] = {"sha256": angle_asset.sha256_file(self.app / "Contents/Resources/ANGLE-NOTICES.txt")}
+        version = {"angle": {"commit": "1f6526a566c27c7c33aa73a78517450a4a2a1714"},
+                   "release": {"repository": "OpenBethesda/OpenFallout", "tag": "angle-chromium-8127-1f6526a566c2-r1",
+                               "asset": "angle.tar.gz", "sha256": "0" * 64},
+                   "files": files}
+        self.version_file = self.root / "angle.json"
+        self.version_file.write_text(json.dumps(version))
+
+    def check(self, *args, smoke="skip"):
+        return run_check(self.app, "--mode", "release", "--smoke", smoke, "--team-id", TEAM, "--angle", "bundled",
+                         "--angle-version-file", self.version_file, *args)
+
+    def test_published_libraries_signed_by_the_apps_team_pass(self):
+        status, output = self.check()
+        self.assertIn("PASS angle: libEGL.dylib, libGLESv2.dylib in Contents/Frameworks are the published ones "
+                      "(angle-chromium-8127-1f6526a566c2-r1, compared without their signatures), Developer ID of team "
+                      f"{TEAM}, hardened runtime, secure timestamp; Contents/Resources/ANGLE-NOTICES.txt is the "
+                      "published notices", output)
+
+    def test_todays_opengl_release_does_not_look_for_angle(self):
+        (self.app / "Contents/Frameworks/libEGL.dylib").unlink()
+        _, output = run_check(self.app, "--mode", "release", "--smoke", "skip", "--team-id", TEAM)
+        self.assertNotIn("angle", output.replace("ANGLE", "").lower())
+        self.assertNotIn("opengl", output.lower())
+
+    def test_a_missing_or_different_library_fails_and_is_named(self):
+        (self.app / "Contents/Frameworks/libEGL.dylib").unlink()
+        from test_angle_asset import fake_library
+        (self.app / "Contents/Frameworks/libGLESv2.dylib").write_bytes(
+            fake_library(code=b"rebuilt!" * 16, signature=b"\xfa\xde\x0c\xc0" + bytes(60)))
+        status, output = self.check()
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL angle: Contents/Frameworks/libEGL.dylib is missing", output)
+        self.assertIn("Contents/Frameworks/libGLESv2.dylib is not the published library of "
+                      "angle-chromium-8127-1f6526a566c2-r1", output)
+
+    def test_libraries_signed_by_another_team_or_without_hardened_runtime_or_timestamp_fail(self):
+        self.tools.overrides["libEGL.dylib"] = {"team": "OTHERTEAM1",
+                                                "authority": "Developer ID Application: Other (OTHERTEAM1)"}
+        self.tools.overrides["libGLESv2.dylib"] = {"flags": "0x0(none)", "timestamp": False}
+        status, output = self.check()
+        self.assertEqual(status, 1, output)
+        self.assertIn(f"Contents/Frameworks/libEGL.dylib: Team ID OTHERTEAM1, not the app's {TEAM}", output)
+        self.assertIn("Contents/Frameworks/libGLESv2.dylib: no hardened runtime", output)
+        self.assertIn("Contents/Frameworks/libGLESv2.dylib: no secure timestamp", output)
+
+    def test_missing_or_changed_notices_fail(self):
+        (self.app / "Contents/Resources/ANGLE-NOTICES.txt").write_text("other\n")
+        status, output = self.check()
+        self.assertEqual(status, 1, output)
+        self.assertIn("Contents/Resources/ANGLE-NOTICES.txt is not the published notices", output)
+
+    def test_local_mode_accepts_the_ad_hoc_signature(self):
+        self.tools.overrides[""] = {"authority": "adhoc"}
+        _, output = run_check(self.app, "--mode", "local", "--smoke", "skip", "--angle", "bundled",
+                              "--angle-version-file", self.version_file)
+        self.assertIn("PASS angle: libEGL.dylib, libGLESv2.dylib in Contents/Frameworks are the published ones", output)
+        self.assertIn("signature: ad hoc", output)
+
+    def test_no_binary_may_link_apples_opengl_when_asked(self):
+        _, output = self.check("--forbid-opengl")
+        self.assertIn("PASS no-opengl: none of the 6 Mach-O files links OpenGL.framework", output)
+        self.tools.links["MacOS/openfallout"] = ["/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL"]
+        status, output = self.check("--forbid-opengl")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL no-opengl: Contents/MacOS/openfallout links Apple's OpenGL framework", output)
+
+    def add_probe(self, status, out, err=""):
+        probe = self.app / "Contents/MacOS/openfallout-angle-probe"
+        probe.write_bytes(FAKE_MACHO)
+        self.tools.programs["openfallout-angle-probe"] = (status, out, err)
+        return probe
+
+    def test_the_probe_of_the_test_build_reports_an_opengl_es_3_context_on_metal(self):
+        self.add_probe(0, PROBE_PASS)
+        # the probe runs after the library-validation step, which needs the engine's real links; stand it in
+        with unittest.mock.patch.object(check_mac_package, "check_library_validation", return_value="stand-in"):
+            status, output = self.check(smoke="run")
+        self.assertIn("PASS angle-probe: OpenGL ES 3.0 (ANGLE 2.1.1 git hash: 1f6526a566c2); ANGLE (Apple, ANGLE Metal "
+                      "Renderer: Apple M3 Pro, Version 27.2.1 (Build 26B131)); a GLSL ES 3.00 triangle drawn and read "
+                      "back", output)
+
+    def test_a_machine_without_a_metal_device_skips_the_probe_only_in_auto_mode(self):
+        self.add_probe(2, "ANGLE probe: FAIL: ANGLE's Metal display cannot be initialised (no Metal device?) "
+                          "(EGL error 0x3001)\n")
+        with unittest.mock.patch.object(check_mac_package, "check_library_validation", return_value="stand-in"), \
+                unittest.mock.patch.object(check_mac_package, "check_smoke", return_value="stand-in"):
+            _, output = self.check(smoke="auto")
+            self.assertIn("SKIP angle-probe: this machine has no Metal device", output)
+            status, output = self.check(smoke="run")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL angle-probe: exit status 2: ANGLE probe: FAIL: ANGLE's Metal display cannot be "
+                      "initialised", output)
+
+    def test_a_probe_the_loader_refuses_fails_even_in_auto_mode(self):
+        self.add_probe(-6, "", "dyld[1]: Library not loaded: @rpath/libEGL.dylib\n  Reason: tried: ... different "
+                               "Team IDs\n")
+        with unittest.mock.patch.object(check_mac_package, "check_library_validation", return_value="stand-in"), \
+                unittest.mock.patch.object(check_mac_package, "check_smoke", return_value="stand-in"):
+            status, output = self.check(smoke="auto")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL angle-probe: exit status -6: dyld[1]: Library not loaded: @rpath/libEGL.dylib", output)
+
+    def test_a_build_without_the_probe_skips_its_step(self):
+        with unittest.mock.patch.object(check_mac_package, "check_library_validation", return_value="stand-in"), \
+                unittest.mock.patch.object(check_mac_package, "check_smoke", return_value="stand-in"):
+            _, output = self.check(smoke="run")
+        self.assertIn("SKIP angle-probe: this build has no ANGLE probe", output)
 
 
 if __name__ == "__main__":
