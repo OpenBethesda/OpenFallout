@@ -95,8 +95,11 @@ namespace
     {
         if (usage == Usage::RENDER_BUFFER && !Stereo::getMultiview())
         {
-            osg::ref_ptr<osg::RenderBuffer> attachment
-                = new osg::RenderBuffer(width, height, textureTemplate->getInternalFormat(), samples);
+            GLenum internalFormat = textureTemplate->getInternalFormat();
+            // OpenGL ES makes render buffers only of sized formats, and resolves one only into a texture of its format
+            if constexpr (SceneUtil::GLDialect::sOpenGLES)
+                internalFormat = SceneUtil::getSizedColorFormat(internalFormat);
+            osg::ref_ptr<osg::RenderBuffer> attachment = new osg::RenderBuffer(width, height, internalFormat, samples);
             return osg::FrameBufferAttachment(attachment);
         }
 

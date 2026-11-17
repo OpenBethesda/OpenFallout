@@ -1,4 +1,5 @@
 #include "rtt.hpp"
+#include "gldialect.hpp"
 #include "util.hpp"
 
 #include <osg/Texture2D>
@@ -254,8 +255,10 @@ namespace SceneUtil
             // incorrect formats for the resolve buffers.
             if (mSamples > 1 || mAddMSAAIntermediateTarget)
             {
-                camera->getBufferAttachmentMap()[osg::Camera::COLOR_BUFFER]._internalFormat
-                    = mColorBufferInternalFormat;
+                // (OpenGL ES makes the multisampled render buffer only of a sized format)
+                camera->getBufferAttachmentMap()[osg::Camera::COLOR_BUFFER]._internalFormat = GLDialect::sOpenGLES
+                    ? getSizedColorFormat(mColorBufferInternalFormat)
+                    : mColorBufferInternalFormat;
                 camera->getBufferAttachmentMap()[osg::Camera::COLOR_BUFFER]._mipMapGeneration = mGenerateMipmaps;
                 camera->getBufferAttachmentMap()[osg::Camera::PACKED_DEPTH_STENCIL_BUFFER]._internalFormat
                     = mDepthBufferInternalFormat;

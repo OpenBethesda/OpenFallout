@@ -99,6 +99,21 @@ namespace SceneUtil
         return 3;
     }
 
+    GLenum getSizedColorFormat(GLenum internalFormat)
+    {
+        switch (internalFormat)
+        {
+            case GL_RGB:
+            case 3:
+                return GL_RGB8;
+            case GL_RGBA:
+            case 4:
+                return GL_RGBA8;
+            default:
+                return internalFormat;
+        }
+    }
+
     void getColorFormatSourceFormatAndType(GLenum internalFormat, GLenum& sourceFormat, GLenum& sourceType)
     {
         if (getColorFormatChannelCount(internalFormat) == 4)
