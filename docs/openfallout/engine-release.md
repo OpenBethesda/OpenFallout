@@ -17,6 +17,10 @@ A release made from the tag `openfallout-<version>` holds, as release assets:
 
 and release notes with the lines of [Release notes](#release-notes).
 
+The project's ANGLE build is a release of its own, under a tag `angle-chromium-<branch>-<commit>-r<n>`, published as a
+prerelease. It is not an engine release, and its tag starts no engine release build. From the Metal build on, the
+packaged app inside an engine release carries those ANGLE libraries; see [angle.md](angle.md).
+
 ## The address
 
 GitHub serves the assets of a published release at an address built from the tag and the asset's file name:
