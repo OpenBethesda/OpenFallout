@@ -202,7 +202,10 @@ def compare_folders(reference_dir, candidate_dir, out, limits_doc, scenes_doc, n
             row["verdict"], row["valid"] = "MISSING", False
             rows.append(row)
             continue
-        if reference.settings != candidate.settings:
+        if reference.settings is None or candidate.settings is None:
+            row["valid"] = False
+            row["reasons"].append("config/settings.cfg is missing from one of the runs: the settings cannot be compared")
+        elif reference.settings != candidate.settings:
             row["valid"] = False
             row["reasons"].append("the two runs had other settings (config/settings.cfg of each run): the profiles or the "
                                   "player's own settings differ")

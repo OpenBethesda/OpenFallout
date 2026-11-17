@@ -25,6 +25,7 @@ not a PNG is read with Pillow where it is installed.
 """
 import argparse
 import json
+import math
 import struct
 import sys
 import zlib
@@ -427,13 +428,14 @@ def limits_of(limits_file, scene=None):
     unknown = sorted(set(limits) - set(DIRECTION))
     missing = [name for name, _ in LIMITED if name not in limits]
     empty = [name for name, _ in LIMITED if name in limits
-             and (isinstance(limits[name], bool) or not isinstance(limits[name], (int, float)))]
+             and (isinstance(limits[name], bool) or not isinstance(limits[name], (int, float))
+                  or not math.isfinite(limits[name]))]
     if unknown or missing or empty:
         where = f"the limits of the scene {scene}" if own else "the allowance"
         raise PictureError(f"{where} in the limits file: "
                            + "; ".join(part for part in (f"unknown measure(s) {', '.join(unknown)}" if unknown else "",
                                                          f"no limit for {', '.join(missing)}" if missing else "",
-                                                         f"no number for {', '.join(empty)}" if empty else "") if part))
+                                                         f"no finite number for {', '.join(empty)}" if empty else "") if part))
     return limits_file["method"], limits, own is not None
 
 

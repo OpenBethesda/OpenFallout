@@ -389,6 +389,31 @@ class CompareFolders(unittest.TestCase):
         self.assertIn("| nv-busy | MISSING |", (self.out / "summary.md").read_text())
         self.assertEqual(quietly(picturecompare.report_status, rows, self.out), 1)
 
+    def test_a_run_without_its_settings_file_is_not_a_valid_comparison(self):
+        # the settings of the two runs cannot be shown to be the same
+        make_side(self.reference, "nv-busy", textured(64, 48))
+        run = make_side(self.candidate, "nv-busy", textured(64, 48))
+        (run / "config" / "settings.cfg").unlink()
+        self.assertEqual(self.compare(), 1)
+        row = self.results()["nv-busy"]
+        self.assertFalse(row["valid"])
+        self.assertIn("settings.cfg is missing", "; ".join(row["reasons"]))
+        for side in (self.reference, self.candidate):
+            for settings in side.rglob("settings.cfg"):
+                settings.unlink()
+        self.compare()
+        self.assertFalse(self.results()["nv-busy"]["valid"])
+
+    def test_a_limit_that_is_not_a_finite_number_is_refused(self):
+        # nothing is above or below "not a number": every measure would pass
+        make_side(self.reference, "nv-busy", textured(64, 48))
+        make_side(self.candidate, "nv-busy", changed(textured(64, 48), lambda x, y, c: (0, 0, 0)))
+        for value in ("NaN", "Infinity", "-Infinity"):
+            text = json.dumps(dict(LIMITS, scenes={"nv-busy": {name: 0.5 for name in LIMITS["allowance"]}}))
+            self.limits.write_text(text.replace('"nv-busy": {"bad_share": 0.5', '"nv-busy": {"bad_share": ' + value, 1))
+            self.assertIn(value, self.limits.read_text())
+            self.assertEqual(self.compare(), 2, value)
+
     def test_a_limit_without_a_number_is_refused(self):
         # null for every measure would check nothing: black against white would pass
         make_side(self.reference, "nv-busy", textured(64, 48))

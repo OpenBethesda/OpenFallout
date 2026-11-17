@@ -204,7 +204,7 @@ The limits are in one file, `scripts/openfallout/picture_limits.json`:
 - `noise_floor`: what those runs measured, with the date, the number of runs and the build.
 
 A scene's own limits take the place of the whole allowance. So the limits of a scene, and the allowance, must name
-all six measures and no other name, each with a number. The tool refuses a limits file with a misspelled or missing
+all six measures and no other name, each with a finite number. The tool refuses a limits file with a misspelled or missing
 measure, or one without a number (exit status 2), because such a measure would not be checked.
 
 The limit is set from the first runs, on the OpenGL build, before the Metal build is judged:
