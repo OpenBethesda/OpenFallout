@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
+#include <cstring>
 #include <iomanip>
 #include <sstream>
 #include <utility>
+#include <vector>
 
 #include <osg/FrameBufferObject>
 #include <osg/Image>
@@ -295,6 +298,97 @@ namespace SceneUtil
         if (image.getInternalTextureFormat() == static_cast<GLint>(format))
             image.setInternalTextureFormat(rgb);
         return true;
+    }
+
+    namespace
+    {
+        // Calls f(row, width) for each row of each mipmap of the image
+        template <class F>
+        void forEachRow(osg::Image& image, F&& f)
+        {
+            for (unsigned int level = 0; level < image.getNumMipmapLevels(); ++level)
+            {
+                const int width = std::max(image.s() >> level, 1);
+                const int rows = std::max(image.t() >> level, 1) * std::max(image.r() >> level, 1);
+                const unsigned int rowStep = osg::Image::computeRowWidthInBytes(
+                    width, image.getPixelFormat(), image.getDataType(), image.getPacking());
+                unsigned char* row = image.getMipmapData(level);
+                for (int i = 0; i < rows; ++i, row += rowStep)
+                    f(row, width);
+            }
+        }
+
+        // The 8-bit value of a channel of `bits` bits, rounded as a float would be
+        unsigned char widen(unsigned int value, unsigned int bits)
+        {
+            const unsigned int max = (1u << bits) - 1;
+            return static_cast<unsigned char>((value * 255 + max / 2) / max);
+        }
+
+        // 16-bit BGRA (1-5-5-5 or 4-4-4-4, first channel in the lowest bits) to 8-bit RGBA, every mipmap
+        void widenPackedBgra(osg::Image& image)
+        {
+            const bool fiveBits = image.getDataType() == GL_UNSIGNED_SHORT_1_5_5_5_REV;
+            const unsigned int colourBits = fiveBits ? 5 : 4;
+            const unsigned int alphaBits = fiveBits ? 1 : 4;
+            const unsigned int mask = (1u << colourBits) - 1;
+
+            std::vector<unsigned int> offsets;
+            std::size_t size = 0;
+            for (unsigned int level = 0; level < image.getNumMipmapLevels(); ++level)
+            {
+                if (level > 0)
+                    offsets.push_back(static_cast<unsigned int>(size));
+                size += static_cast<std::size_t>(std::max(image.s() >> level, 1)) * std::max(image.t() >> level, 1)
+                    * std::max(image.r() >> level, 1) * 4;
+            }
+            unsigned char* data = new unsigned char[size];
+            unsigned char* to = data;
+            forEachRow(image, [&](const unsigned char* row, int width) {
+                for (int x = 0; x < width; ++x, to += 4)
+                {
+                    std::uint16_t value;
+                    std::memcpy(&value, row + 2 * x, 2);
+                    to[0] = widen((value >> (2 * colourBits)) & mask, colourBits);
+                    to[1] = widen((value >> colourBits) & mask, colourBits);
+                    to[2] = widen(value & mask, colourBits);
+                    to[3] = widen(value >> (3 * colourBits), alphaBits);
+                }
+            });
+            const GLint internalFormat = image.getInternalTextureFormat();
+            image.setImage(image.s(), image.t(), image.r(), internalFormat, GL_RGBA, GL_UNSIGNED_BYTE, data,
+                osg::Image::USE_NEW_DELETE, 1);
+            image.setMipmapLevels(offsets);
+        }
+    }
+
+    bool toOpenGLESFormat(osg::Image& image)
+    {
+        if (image.isCompressed() || image.data() == nullptr)
+            return false;
+        bool changed = false;
+        if (image.getPixelFormat() == GL_BGRA
+            && (image.getDataType() == GL_UNSIGNED_SHORT_1_5_5_5_REV
+                || image.getDataType() == GL_UNSIGNED_SHORT_4_4_4_4_REV))
+        {
+            widenPackedBgra(image);
+            changed = true;
+        }
+        changed = toRgbOrder(image) || changed;
+
+        const GLint internalFormat = image.getInternalTextureFormat();
+        if (image.getPixelFormat() == GL_RGBA && image.getDataType() == GL_UNSIGNED_BYTE
+            && (internalFormat == GL_RGB || internalFormat == GL_RGB8 || internalFormat == 3))
+        {
+            // Desktop OpenGL drops the fourth byte and samples an alpha of one
+            forEachRow(image, [](unsigned char* row, int width) {
+                for (int x = 0; x < width; ++x)
+                    row[4 * x + 3] = 255;
+            });
+            image.setInternalTextureFormat(internalFormat == GL_RGB8 ? GL_RGBA8 : GL_RGBA);
+            changed = true;
+        }
+        return changed;
     }
 
     GLenum computeUnsizedPixelFormat(GLenum format)

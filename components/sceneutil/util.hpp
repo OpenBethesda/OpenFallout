@@ -126,6 +126,12 @@ namespace SceneUtil
     // ES uploads no BGR or BGRA pixels, so the Metal build does this to images as they load.
     bool toRgbOrder(osg::Image& image);
 
+    // Turns an uncompressed image OpenGL ES 3.0 would refuse to upload into one it takes and samples as desktop OpenGL
+    // samples the original, in place, and says whether it did: BGR and BGRA become RGB and RGBA (toRgbOrder), the
+    // 16-bit BGRA packings (1-5-5-5 and 4-4-4-4) become 8-bit RGBA, and 4-byte pixels under an RGB internal format take
+    // an opaque alpha and an RGBA internal format. The Metal build does this to images as they load.
+    bool toOpenGLESFormat(osg::Image& image);
+
     // Recover the presumed texture type for the given texture unit
     // It may be set as a state attribute or it may come from the used texture's name
     const std::string& getTextureType(const osg::StateSet& stateset, const osg::Texture& texture, unsigned int texUnit);

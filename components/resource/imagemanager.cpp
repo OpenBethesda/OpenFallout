@@ -153,7 +153,7 @@ namespace Resource
 
             image->setFileName(std::string(path.value()));
             if constexpr (!SceneUtil::GLDialect::sUploadsBGR)
-                SceneUtil::toRgbOrder(*image);
+                SceneUtil::toOpenGLESFormat(*image);
             if (!checkSupported(image))
             {
                 static bool uncompress = (getenv("OPENFALLOUT_DECOMPRESS_TEXTURES") != nullptr);
