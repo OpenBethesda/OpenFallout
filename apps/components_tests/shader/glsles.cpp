@@ -132,16 +132,22 @@ namespace
         EXPECT_THAT(converted, HasSubstr("textureProj(a, vec3(1.0)) + vec4(vec2(textureSize(a, 0))"));
     }
 
-    TEST(ShaderGlslEsTest, shadow_lookups_keep_their_vec4_result)
+    // The OpenGL build's shadow maps are fixed-point depth textures, whose comparison clamps the reference depth to
+    // [0, 1]: a surface beyond a shadow map's far plane is lit where nothing in the map is in front of it. ANGLE's
+    // Metal backend keeps a 24-bit depth texture as 32-bit float depth and compares the reference as it is, which
+    // shadows that surface. The lookups clamp it themselves.
+    TEST(ShaderGlslEsTest, shadow_lookups_keep_their_vec4_result_and_clamp_their_reference_depth)
     {
         const GlslEsShader result = fragment(
             "#version 120\nuniform sampler2DShadow s;\n"
             "void main() { gl_FragColor = vec4(shadow2DProj(s, vec4(1.0)).r + shadow2D(s, vec3(1.0)).r); }\n");
         EXPECT_THAT(result.mErrors, IsEmpty());
         EXPECT_THAT(result.mSource,
-            HasSubstr("vec4 shadow2DProj(sampler2DShadow s, vec4 c) { return vec4(textureProj(s, c)); }"));
-        EXPECT_THAT(
-            result.mSource, HasSubstr("vec4 shadow2D(sampler2DShadow s, vec3 c) { return vec4(texture(s, c)); }"));
+            HasSubstr("vec4 shadow2DProj(sampler2DShadow s, vec4 c) { vec3 p = c.xyz / c.w; "
+                      "return vec4(texture(s, vec3(p.xy, clamp(p.z, 0.0, 1.0)))); }"));
+        EXPECT_THAT(result.mSource,
+            HasSubstr("vec4 shadow2D(sampler2DShadow s, vec3 c) { "
+                      "return vec4(texture(s, vec3(c.xy, clamp(c.z, 0.0, 1.0)))); }"));
     }
 
     TEST(ShaderGlslEsTest, every_stage_declares_precision_for_floats_ints_and_samplers)

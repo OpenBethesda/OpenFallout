@@ -76,7 +76,10 @@ namespace Shader
             { "texelFetch2D", "texelFetch" },
         };
 
-        // shadow2D and shadow2DProj return a vec4 in GLSL 1.20; their GLSL ES 3.00 forms return a float
+        // shadow2D and shadow2DProj return a vec4 in GLSL 1.20; their GLSL ES 3.00 forms return a float. They also
+        // clamp the reference depth to [0, 1], as the comparison does on the fixed-point shadow maps of the OpenGL
+        // build: ANGLE's Metal backend keeps a 24-bit depth texture as 32-bit float depth and compares the reference as
+        // it is, so a surface beyond a shadow map's far plane would read as shadowed.
         struct Helper
         {
             std::string_view mName;
@@ -84,9 +87,12 @@ namespace Shader
         };
 
         constexpr std::array sHelpers = {
-            Helper{ "shadow2D", "vec4 shadow2D(sampler2DShadow s, vec3 c) { return vec4(texture(s, c)); }" },
-            Helper{
-                "shadow2DProj", "vec4 shadow2DProj(sampler2DShadow s, vec4 c) { return vec4(textureProj(s, c)); }" },
+            Helper{ "shadow2D",
+                "vec4 shadow2D(sampler2DShadow s, vec3 c) { "
+                "return vec4(texture(s, vec3(c.xy, clamp(c.z, 0.0, 1.0)))); }" },
+            Helper{ "shadow2DProj",
+                "vec4 shadow2DProj(sampler2DShadow s, vec4 c) { vec3 p = c.xyz / c.w; "
+                "return vec4(texture(s, vec3(p.xy, clamp(p.z, 0.0, 1.0)))); }" },
         };
 
         // Built-ins that GLSL ES 3.00 has under the same name
