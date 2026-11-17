@@ -130,7 +130,7 @@ add_component_dir (sceneutil
     detourdebugdraw navmesh agentpath animblendrules shadow mwshadowtechnique recastmesh shadowsbin osgacontroller rtt
     screencapture depth color riggeometryosgaextension extradata unrefqueue lightcommon clearcolor
     cullsafeboundsvisitor keyframe nodecallback templateref textkeymap userdata glextensions fog texmat material
-    smoothnormals loddebug
+    smoothnormals loddebug gldialect
     )
 
 add_component_dir (nif
@@ -431,6 +431,7 @@ add_component_dir (fontloader
 add_component_dir (sdlutil
     desktopconventions
     events
+    graphicscontext
     imagetosurface
     sdlcursormanager
     sdlgraphicswindow

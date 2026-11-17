@@ -172,12 +172,34 @@ set(CMAKE_AUTOGEN_PARALLEL 1)
 set(OPENFALLOUT_RESOURCE_FILES "../Resources/resources")
 
 # Dependencies
-# Force CMake to use the installed version of OpenGL on macOS
-set(_SAVE_CMAKE_FIND_FRAMEWORK ${CMAKE_FIND_FRAMEWORK})
-set(CMAKE_FIND_FRAMEWORK ONLY)
-find_package(OpenGL REQUIRED)
-set(CMAKE_FIND_FRAMEWORK ${_SAVE_CMAKE_FIND_FRAMEWORK})
-unset(_SAVE_CMAKE_FIND_FRAMEWORK)
+# The Metal build draws with OpenGL ES 3.0, which ANGLE's Metal backend turns into Metal; it needs ANGLE and an
+# OpenSceneGraph built for OpenGL ES 3 (OSG_DIR or the front of CMAKE_PREFIX_PATH). Off is the desktop OpenGL build.
+# OPENGL_INCLUDE_DIR and OPENGL_gl_LIBRARY name the graphics library either way and do not link Apple's OpenGL here.
+option(OPENFALLOUT_METAL "Build the Metal renderer: OpenGL ES 3.0 through ANGLE (OPENFALLOUT_ANGLE_ROOT)" OFF)
+if (OPENFALLOUT_METAL)
+    set(OPENFALLOUT_ANGLE_ROOT "" CACHE PATH "ANGLE: lib/libEGL.dylib, lib/libGLESv2.dylib and include/")
+    find_path(ANGLE_INCLUDE_DIR GLES3/gl3.h PATHS "${OPENFALLOUT_ANGLE_ROOT}/include" NO_DEFAULT_PATH)
+    find_library(ANGLE_EGL_LIBRARY EGL PATHS "${OPENFALLOUT_ANGLE_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(ANGLE_GLESV2_LIBRARY GLESv2 PATHS "${OPENFALLOUT_ANGLE_ROOT}/lib" NO_DEFAULT_PATH)
+    if (NOT ANGLE_INCLUDE_DIR OR NOT ANGLE_EGL_LIBRARY OR NOT ANGLE_GLESV2_LIBRARY)
+        message(FATAL_ERROR "OPENFALLOUT_METAL needs ANGLE: OPENFALLOUT_ANGLE_ROOT='${OPENFALLOUT_ANGLE_ROOT}' must hold "
+            "lib/libEGL.dylib, lib/libGLESv2.dylib and include/GLES3/gl3.h")
+    endif()
+    message(STATUS "Metal build: ANGLE ${ANGLE_GLESV2_LIBRARY} ${ANGLE_EGL_LIBRARY}")
+    set(OPENGL_INCLUDE_DIR "${ANGLE_INCLUDE_DIR}")
+    set(OPENGL_gl_LIBRARY "${ANGLE_GLESV2_LIBRARY}" "${ANGLE_EGL_LIBRARY}")
+    add_compile_definitions(OPENFALLOUT_METAL)
+    # A MyGUI built here draws nothing itself (components/myguiplatform does); its OpenGL render system would look for
+    # desktop OpenGL, its dummy one for nothing
+    set(MYGUI_RENDERSYSTEM 1 CACHE STRING "")
+else()
+    # Force CMake to use the installed version of OpenGL on macOS
+    set(_SAVE_CMAKE_FIND_FRAMEWORK ${CMAKE_FIND_FRAMEWORK})
+    set(CMAKE_FIND_FRAMEWORK ONLY)
+    find_package(OpenGL REQUIRED)
+    set(CMAKE_FIND_FRAMEWORK ${_SAVE_CMAKE_FIND_FRAMEWORK})
+    unset(_SAVE_CMAKE_FIND_FRAMEWORK)
+endif()
 
 find_package(LZ4 REQUIRED)
 
@@ -323,6 +345,19 @@ if(OPENFALLOUT_USE_SYSTEM_OSG)
 endif()
 
 include_directories(BEFORE SYSTEM ${OPENSCENEGRAPH_INCLUDE_DIRS})
+
+# Each build needs the OpenSceneGraph of its own profile: GLES3 for the Metal build, a desktop one otherwise.
+foreach (_dir ${OPENSCENEGRAPH_INCLUDE_DIRS})
+    if (EXISTS "${_dir}/osg/GL")
+        file(STRINGS "${_dir}/osg/GL" _osg_gles3 REGEX "^#define OSG_GLES3_AVAILABLE")
+        if (OPENFALLOUT_METAL AND NOT _osg_gles3)
+            message(FATAL_ERROR "OPENFALLOUT_METAL needs an OpenSceneGraph built with OPENGL_PROFILE=GLES3, not ${_dir}")
+        elseif (NOT OPENFALLOUT_METAL AND _osg_gles3)
+            message(FATAL_ERROR "The OpenGL build needs a desktop OpenSceneGraph; ${_dir} is built for OpenGL ES 3")
+        endif()
+        break()
+    endif()
+endforeach()
 
 if(OSG_STATIC)
     if(NOT COLLADA_DOM_VERSION_MAJOR)
