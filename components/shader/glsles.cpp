@@ -561,8 +561,10 @@ namespace Shader
 
         // Removes #version and #extension lines (keeping the line, so that line numbers stay right) and the uniform
         // initialisers GLSL ES does not allow. Comments are blanked first; an initialiser counts only in text the
-        // preprocessor keeps. skipped says, line by line, whether the preprocessor is known to skip the line.
-        void convertLines(std::string_view original, GlslEsShader& result, std::string& out, std::vector<bool>& skipped)
+        // preprocessor keeps. skipped says, line by line, whether the preprocessor is known to skip the line, and kept
+        // whether it is known to keep it.
+        void convertLines(std::string_view original, GlslEsShader& result, std::string& out, std::vector<bool>& skipped,
+            std::vector<bool>& kept)
         {
             static const std::regex version(R"(^\s*#\s*version\s+(\d+).*$)");
             static const std::regex extension(R"(^\s*#\s*extension\b.*$)");
@@ -591,6 +593,7 @@ namespace Shader
                 const std::string line(source.substr(pos, end - pos));
                 const std::string_view text = original.substr(pos, end - pos);
                 skipped.push_back(branches.active() == Branches::Active::No);
+                kept.push_back(branches.active() == Branches::Active::Yes);
                 std::smatch match;
                 // Every uniform the line declares, in each of its statements. The compiler never sees a declaration
                 // the preprocessor skips.
@@ -1104,8 +1107,8 @@ namespace Shader
         // again or undefined further down makes the conversion fail rather than give another value. Lines the
         // preprocessor is known to skip are left as they are; main is the one of the lines it may keep, or each of them
         // where the converter cannot tell.
-        std::string moveGlobalInitialisers(
-            const std::string& source, GlslEsShader& result, Uses& uses, const std::vector<bool>& skipped)
+        std::string moveGlobalInitialisers(const std::string& source, GlslEsShader& result, Uses& uses,
+            const std::vector<bool>& skipped, const std::vector<bool>& kept)
         {
             // The first group is the declaration without its initialiser, an array's size included
             static const std::regex global(R"(^(\s*(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))"
@@ -1125,6 +1128,7 @@ namespace Shader
             std::vector<std::pair<std::size_t, std::size_t>> mainBodies;
             const std::vector<std::string_view> sourceLines = splitLines(source);
             const auto isSkipped = [&](std::size_t index) { return index < skipped.size() && skipped[index]; };
+            const auto isKept = [&](std::size_t index) { return index < kept.size() && kept[index]; };
 
             // Where each macro is defined or undefined, line by line
             std::map<std::string, std::vector<std::size_t>, std::less<>> macroChanges;
@@ -1138,7 +1142,6 @@ namespace Shader
             };
 
             Macros macros;
-            int branchDepth = 0;
             for (std::size_t index = 0; index < sourceLines.size(); ++index)
             {
                 const std::string_view line = sourceLines[index];
@@ -1155,16 +1158,14 @@ namespace Shader
                     const bool continued = !line.empty() && line.back() == '\\';
                     if (!inDirective)
                     {
-                        static const std::regex conditional(R"(^\s*#\s*(if|ifdef|ifndef|endif)\b.*$)");
-                        std::match_results<std::string_view::const_iterator> match;
-                        if (std::regex_match(line.begin(), line.end(), match, conditional))
-                            branchDepth += match[1].str() == "endif" ? -1 : 1;
-                        else if (const std::optional<MacroDirective> directive = readMacroDirective(line);
+                        // A macro defined in a branch the preprocessor surely takes is as known as one outside any
+                        // branch; in a branch decided only when compiling, its value is not known
+                        if (const std::optional<MacroDirective> directive = readMacroDirective(line);
                             directive && !isSkipped(index))
                         {
                             if (directive->mDefine)
                                 macros[directive->mName] = Macro{ directive->mValue,
-                                    !directive->mTakesArguments && !continued && branchDepth == 0 };
+                                    !directive->mTakesArguments && !continued && isKept(index) };
                             else
                                 macros.erase(directive->mName);
                         }
@@ -1295,7 +1296,8 @@ namespace Shader
         std::string lines;
         lines.reserve(source.size());
         std::vector<bool> skipped;
-        convertLines(source, result, lines, skipped);
+        std::vector<bool> kept;
+        convertLines(source, result, lines, skipped, kept);
 
         Uses uses;
         std::string body = convertNames(lines, stage, uses, skipped);
@@ -1303,7 +1305,7 @@ namespace Shader
             result.mErrors.push_back(name + " has no GLSL ES 3.00 equivalent");
         if (uses.mDynamicFragData)
             result.mErrors.push_back("gl_FragData is indexed by something other than a number");
-        body = moveGlobalInitialisers(body, result, uses, skipped);
+        body = moveGlobalInitialisers(body, result, uses, skipped, kept);
         if (uses.mClipVertex)
         {
             body = renameWord(body, "main", sShaderMain);

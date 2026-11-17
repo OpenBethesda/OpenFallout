@@ -628,6 +628,33 @@ namespace
         EXPECT_THAT(body(result.mSource), HasSubstr("\nfloat x = SCALE;\n"));
     }
 
+    // A macro defined in a branch the preprocessor surely takes is as constant as one outside any branch. In a branch
+    // decided only when compiling its value is not known: the initialiser moves, and a later change is an error.
+    TEST(ShaderGlslEsTest, a_constant_macro_from_a_branch_surely_taken_keeps_the_initialiser_where_it_is)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "#if 1\n"
+            "#define SCALE 2.0\n"
+            "#endif\n"
+            "float x = SCALE;\n"
+            "#undef SCALE\n"
+            "void main() { gl_FragColor = vec4(x); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, Not(HasSubstr("of_initialiseGlobals")));
+        EXPECT_THAT(body(result.mSource), HasSubstr("\nfloat x = SCALE;\n"));
+
+        EXPECT_THAT(fragment("#version 120\n"
+                             "#ifdef GL_EXT_some_extension\n"
+                             "#define SCALE 2.0\n"
+                             "#endif\n"
+                             "float x = SCALE;\n"
+                             "#undef SCALE\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+    }
+
     TEST(ShaderGlslEsTest, macros_that_name_each_other_are_not_followed_for_ever)
     {
         const GlslEsShader result = fragment(
