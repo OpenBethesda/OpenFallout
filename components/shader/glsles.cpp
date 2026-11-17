@@ -1048,17 +1048,23 @@ namespace Shader
             return names;
         }
 
-        // The names of a text and, through the text of each macro defined at that line, the names those macros name (to
-        // the depth isConstantExpression follows): what a moved initialiser takes the meaning of at its new place
+        // Every text each macro was given up to a line, in whichever branch: a branch decided only when compiling may
+        // leave a macro with any of them
+        using MacroTexts = std::map<std::string, std::vector<std::string>, std::less<>>;
+
+        // The names of a text and, through every text of each macro defined up to that line, the names those macros
+        // name (to the depth isConstantExpression follows): what a moved initialiser takes the meaning of at its new
+        // place
         void collectNames(
-            std::string_view value, const Macros& macros, std::set<std::string, std::less<>>& names, int depth = 0)
+            std::string_view value, const MacroTexts& texts, std::set<std::string, std::less<>>& names, int depth = 0)
         {
             for (const std::string& name : namesIn(value))
             {
                 const bool added = names.insert(name).second;
-                const auto macro = macros.find(name);
-                if (added && macro != macros.end() && depth < 16)
-                    collectNames(macro->second.mValue, macros, names, depth + 1);
+                const auto macro = texts.find(name);
+                if (added && macro != texts.end() && depth < 16)
+                    for (const std::string& text : macro->second)
+                        collectNames(text, texts, names, depth + 1);
             }
         }
 
@@ -1142,6 +1148,7 @@ namespace Shader
             };
 
             Macros macros;
+            MacroTexts macroTexts;
             for (std::size_t index = 0; index < sourceLines.size(); ++index)
             {
                 const std::string_view line = sourceLines[index];
@@ -1164,8 +1171,11 @@ namespace Shader
                             directive && !isSkipped(index))
                         {
                             if (directive->mDefine)
+                            {
                                 macros[directive->mName] = Macro{ directive->mValue,
                                     !directive->mTakesArguments && !continued && isKept(index) };
+                                macroTexts[directive->mName].push_back(directive->mValue);
+                            }
                             else
                                 macros.erase(directive->mName);
                         }
@@ -1190,7 +1200,7 @@ namespace Shader
                     && !isConstantExpression(match[3].str(), constants, macros))
                 {
                     std::set<std::string, std::less<>> names;
-                    collectNames(match[3].str(), macros, names);
+                    collectNames(match[3].str(), macroTexts, names);
                     for (const std::string& name : names)
                         if (changedAfter(name, index))
                             result.mErrors.push_back(std::format(

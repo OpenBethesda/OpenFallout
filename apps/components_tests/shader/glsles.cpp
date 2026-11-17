@@ -715,6 +715,20 @@ namespace
                              "void main() { gl_FragColor = vec4(x); }\n")
                         .mErrors,
             Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        // A branch decided only when compiling may give a macro either text: each is followed
+        EXPECT_THAT(fragment("#version 120\n"
+                             "#define SCALE 2.0\n"
+                             "#if defined(GL_EXT_gpu_shader4)\n"
+                             "#define FACTOR SCALE\n"
+                             "#else\n"
+                             "#define FACTOR 1.0\n"
+                             "#endif\n"
+                             "uniform float u;\n"
+                             "float x = u * FACTOR;\n"
+                             "#undef SCALE\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
         // A macro that keeps its value moves with the initialiser as before
         const GlslEsShader kept = fragment(
             "#version 120\n"
