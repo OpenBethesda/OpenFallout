@@ -568,6 +568,22 @@ namespace OFSound
         EXPECT_EQ(box.latest()->mTime, start + 60s + 50ms);
     }
 
+    TEST(OFSoundHeadSampleBoxTest, a_long_silence_does_not_make_a_late_sample_fresh)
+    {
+        HeadSampleBox box;
+        const Clock::time_point start = Clock::time_point{} + 50s;
+        box.publishMeasured(yawLeft(10), 100.0, start);
+        const std::uint32_t first = box.latest()->mConnection;
+        // ten minutes of nothing, then a sample that is 600 ms old: the silence is no reason to believe it younger
+        box.publishMeasured(yawLeft(40), 700.0, start + 600s + 600ms);
+        EXPECT_GT((start + 600s + 600ms) - box.latest()->mTime, sHeadSampleStale);
+        // the fresh sample that follows is a new connection, so straight ahead is taken from it and not from the old
+        // one
+        box.publishMeasured(yawLeft(10), 700.7, start + 600s + 700ms);
+        EXPECT_EQ(box.latest()->mTime, start + 600s + 700ms);
+        EXPECT_GT(box.latest()->mConnection, first);
+    }
+
     TEST(OFSoundHeadSampleBoxTest, a_new_connection_learns_the_sources_clock_again)
     {
         HeadSampleBox box;

@@ -147,8 +147,11 @@ namespace OFSound
         const HeadRotation& attitude, double sourceSeconds, HeadClock::time_point arrival)
     {
         // Two clocks never run exactly alike. The learnt difference may grow by this much of the time that passed, so
-        // that a source whose clock runs a little slow does not make every sample look older and older.
+        // that a source whose clock runs a little slow does not make every sample look older and older. Only time in
+        // which samples kept arriving counts: a silence says nothing about the clocks, and a sample that comes late
+        // after one must not be believed younger for it.
         constexpr double sDriftAllowed = 1e-3;
+        const double longestCounted = std::chrono::duration<double>(sHeadSampleStale).count();
         // Below this an age is the jitter of the delivery, not an age
         constexpr double sSmallestAge = 1e-3;
 
@@ -162,7 +165,7 @@ namespace OFSound
                 mClockDifference = difference;
             else
             {
-                const double passed = std::max(0.0, arrivalSeconds - mClockDifferenceAt);
+                const double passed = std::clamp(arrivalSeconds - mClockDifferenceAt, 0.0, longestCounted);
                 mClockDifference = std::min(difference, *mClockDifference + sDriftAllowed * passed);
             }
             mClockDifferenceAt = arrivalSeconds;
