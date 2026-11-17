@@ -118,6 +118,32 @@ namespace Shader
         constexpr std::array sSamplerTypes = { "sampler2D", "sampler3D", "samplerCube", "sampler2DShadow",
             "sampler2DArray", "sampler2DArrayShadow", "samplerCubeShadow" };
 
+        // Names GLSL 1.20 leaves free and GLSL ES 3.00 reserves. Each becomes of_<name>.
+        const std::set<std::string_view> sReservedNames = { "active", "atomic_uint", "coherent", "common", "filter",
+            "partition", "patch", "resource", "sample", "subroutine", "superp" };
+
+        // A uniform is set by its name from outside the shader, so it cannot be renamed; nor can it be called
+        // texture, the name of the GLSL ES 3.00 function the GLSL 1.20 texture functions become.
+        bool isUnusableUniformName(std::string_view name)
+        {
+            return sReservedNames.contains(name) || name == "texture";
+        }
+
+        // What a constant expression may name besides numbers and constants: constructors and the built-in
+        // functions other than the texture functions
+        const std::set<std::string_view> sConstantExpressionNames = { "true", "false", "bool", "int", "uint", "float",
+            "vec2", "vec3", "vec4", "bvec2", "bvec3", "bvec4", "ivec2", "ivec3", "ivec4", "uvec2", "uvec3", "uvec4",
+            "mat2", "mat3", "mat4", "mat2x2", "mat2x3", "mat2x4", "mat3x2", "mat3x3", "mat3x4", "mat4x2", "mat4x3",
+            "mat4x4", "radians", "degrees", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh",
+            "asinh", "acosh", "atanh", "pow", "exp", "log", "exp2", "log2", "sqrt", "inversesqrt", "abs", "sign",
+            "floor", "trunc", "round", "roundEven", "ceil", "fract", "mod", "min", "max", "clamp", "mix", "step",
+            "smoothstep", "length", "distance", "dot", "cross", "normalize", "faceforward", "reflect", "refract",
+            "matrixCompMult", "outerProduct", "transpose", "determinant", "inverse", "lessThan", "lessThanEqual",
+            "greaterThan", "greaterThanEqual", "equal", "notEqual", "any", "all", "not" };
+
+        constexpr std::string_view sGlobalInitialiserMacro = "OF_GLOBAL_INIT_";
+        constexpr std::string_view sInitialiseGlobals = "of_initialiseGlobals";
+
         constexpr std::string_view sClipVertex = "of_ClipVertex";
         constexpr std::string_view sFragData = "of_FragData";
         // The shader's own main, when a main of the converter's runs after it
@@ -499,6 +525,8 @@ namespace Shader
             static const std::regex initialiser(
                 R"(^(\s*uniform\s+([A-Za-z_]\w*)\s+([A-Za-z_]\w*))\s*=\s*([^;]*);(.*)$)");
             static const std::regex anyInitialiser(R"(^\s*uniform\b[^;]*=)");
+            static const std::regex uniformName(
+                R"(^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))");
 
             const std::string code = blankComments(original);
             const std::string_view source = code;
@@ -517,6 +545,9 @@ namespace Shader
                 const std::string_view text = original.substr(pos, end - pos);
                 skipped.push_back(branches.active() == Branches::Active::No);
                 std::smatch match;
+                if (std::regex_search(line, match, uniformName) && isUnusableUniformName(match[1].str()))
+                    result.mErrors.push_back(
+                        std::format("uniform {} has a name GLSL ES 3.00 keeps for itself", match[1].str()));
                 if (std::regex_match(line, match, version))
                 {
                     const int number = Misc::StringUtils::toNumeric<int>(match[1].str(), 0);
@@ -573,6 +604,7 @@ namespace Shader
             int mFragData = -1;
             bool mDynamicFragData = false;
             bool mClipVertex = false;
+            bool mGlobalInitialisers = false;
         };
 
         // Whether the line that starts at pos is a #define
@@ -660,6 +692,12 @@ namespace Shader
                 if (word == "varying")
                 {
                     out += isVertex ? "out" : "in";
+                    continue;
+                }
+                if (sReservedNames.contains(word))
+                {
+                    out += "of_";
+                    out += word;
                     continue;
                 }
                 if (const auto it = sTextureFunctions.find(word); it != sTextureFunctions.end())
@@ -770,6 +808,8 @@ namespace Shader
             for (const Helper& helper : sHelpers)
                 if (uses.mHelpers.contains(helper.mName))
                     out += std::string(helper.mDefinition) + "\n";
+            if (uses.mGlobalInitialisers)
+                out += std::format("void {}();\n", sInitialiseGlobals);
             out += "#line 1 0\n";
             return out;
         }
@@ -841,6 +881,160 @@ namespace Shader
             return lines;
         }
 
+        // Whether an initialiser names nothing but numbers, constants, constructors and built-in functions
+        bool isConstantExpression(std::string_view value, const std::set<std::string, std::less<>>& constants)
+        {
+            std::size_t i = 0;
+            while (i < value.size())
+            {
+                const char c = value[i];
+                if (std::isdigit(static_cast<unsigned char>(c))
+                    || (c == '.' && i + 1 < value.size() && std::isdigit(static_cast<unsigned char>(value[i + 1]))))
+                {
+                    while (i < value.size() && (isIdentifierPart(value[i]) || value[i] == '.'))
+                        ++i;
+                    continue;
+                }
+                if (!isIdentifierStart(c))
+                {
+                    ++i;
+                    continue;
+                }
+                std::size_t end = i + 1;
+                while (end < value.size() && isIdentifierPart(value[end]))
+                    ++end;
+                const std::string_view word = value.substr(i, end - i);
+                std::size_t before = i;
+                while (before > 0 && (value[before - 1] == ' ' || value[before - 1] == '\t'))
+                    --before;
+                const bool field = before > 0 && value[before - 1] == '.';
+                if (!field && !sConstantExpressionNames.contains(word) && !constants.contains(word))
+                    return false;
+                i = end;
+            }
+            return true;
+        }
+
+        bool hasTopLevelComma(std::string_view value)
+        {
+            int depth = 0;
+            for (char c : value)
+            {
+                if (c == '(' || c == '[')
+                    ++depth;
+                else if (c == ')' || c == ']')
+                    --depth;
+                else if (c == ',' && depth == 0)
+                    return true;
+            }
+            return false;
+        }
+
+        // GLSL 1.20 lets a global variable start from a uniform or another variable; GLSL ES 3.00 takes only a
+        // constant expression there. Such an initialiser moves into a function that main calls before anything else,
+        // which is when it ran before. The function goes at the end, after every declaration, a linked shader's
+        // folded in after main included. The declaration stays where it was and defines a macro, so that the function
+        // assigns only the variables whose declarations the preprocessor kept. #line directives keep line numbers.
+        // A declaration of several variables, or one that runs over several lines, is left alone.
+        std::string moveGlobalInitialisers(const std::string& source, GlslEsShader& result, Uses& uses)
+        {
+            static const std::regex global(R"(^(\s*(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))"
+                                           R"((?:\s*\[[^\]]*\])?)\s*=\s*([^;{}]*?)\s*;\s*$)");
+            static const std::regex constant(
+                R"(^\s*const\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))");
+
+            std::set<std::string, std::less<>> constants;
+            std::string initialisers;
+            int moved = 0;
+            std::vector<std::string> lines;
+            int lineNumber = 1;
+            int sourceNumber = 0;
+            int depth = 0;
+            bool awaitingMain = false;
+            bool inDirective = false;
+            std::optional<std::pair<std::size_t, std::size_t>> mainBody;
+            for (std::string_view line : splitLines(source))
+            {
+                if (const std::optional<LineDirective> directive = readLineDirective(line))
+                {
+                    lineNumber = directive->mLine;
+                    sourceNumber = directive->mSource.value_or(sourceNumber);
+                    lines.emplace_back(line);
+                    continue;
+                }
+                const std::size_t first = line.find_first_not_of(" \t");
+                if (inDirective || (first != std::string_view::npos && line[first] == '#'))
+                {
+                    inDirective = !line.empty() && line.back() == '\\';
+                    lines.emplace_back(line);
+                    ++lineNumber;
+                    continue;
+                }
+
+                const std::string text(line);
+                std::smatch match;
+                if (depth == 0 && std::regex_search(text, match, constant))
+                    constants.insert(match[1].str());
+                else if (depth == 0 && std::regex_match(text, match, global) && !hasTopLevelComma(match[3].str())
+                    && !isConstantExpression(match[3].str(), constants))
+                {
+                    lines.push_back(std::format("{};\n#define {}{}\n#line {} {}", match[1].str(),
+                        sGlobalInitialiserMacro, moved, lineNumber + 1, sourceNumber));
+                    initialisers += std::format("#ifdef {}{}\n#line {} {}\n    {} = {};\n#endif\n",
+                        sGlobalInitialiserMacro, moved, lineNumber, sourceNumber, match[2].str(), match[3].str());
+                    ++moved;
+                    ++lineNumber;
+                    continue;
+                }
+
+                for (std::size_t i = 0; i < line.size(); ++i)
+                {
+                    const char c = line[i];
+                    if (isIdentifierStart(c) && (i == 0 || !isIdentifierPart(line[i - 1])))
+                    {
+                        std::size_t end = i + 1;
+                        while (end < line.size() && isIdentifierPart(line[end]))
+                            ++end;
+                        if (depth == 0 && line.substr(i, end - i) == "main")
+                            awaitingMain = true;
+                        i = end - 1;
+                    }
+                    else if (c == ';' && depth == 0)
+                        awaitingMain = false;
+                    else if (c == '{')
+                    {
+                        if (depth == 0 && awaitingMain && !mainBody)
+                            mainBody = std::make_pair(lines.size(), i + 1);
+                        awaitingMain = false;
+                        ++depth;
+                    }
+                    else if (c == '}')
+                        --depth;
+                }
+                lines.push_back(text);
+                ++lineNumber;
+            }
+
+            if (moved == 0)
+                return source;
+            if (!mainBody)
+            {
+                result.mErrors.push_back("a global initialiser that is not constant, and no main to run it from");
+                return source;
+            }
+            uses.mGlobalInitialisers = true;
+            lines[mainBody->first].insert(mainBody->second, std::format("{}();", sInitialiseGlobals));
+            std::string out;
+            out.reserve(source.size() + initialisers.size() + 256);
+            for (const std::string& line : lines)
+            {
+                out += line;
+                out += '\n';
+            }
+            out += std::format("void {}()\n{{\n{}}}\n", sInitialiseGlobals, initialisers);
+            return out;
+        }
+
         // Moves every #line source number of a linked shader up by an offset, and starts it on its own number
         std::string renumberSources(std::string_view text, int offset)
         {
@@ -889,6 +1083,7 @@ namespace Shader
             result.mErrors.push_back(name + " has no GLSL ES 3.00 equivalent");
         if (uses.mDynamicFragData)
             result.mErrors.push_back("gl_FragData is indexed by something other than a number");
+        body = moveGlobalInitialisers(body, result, uses);
         if (uses.mClipVertex)
         {
             body = renameWord(body, "main", sShaderMain);

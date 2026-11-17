@@ -203,10 +203,13 @@ namespace
         {
         }
 
+        // As the OpenGL build compiles a technique (these tests read what the parser makes of the file, and some of the
+        // files ask for desktop GLSL 3.30)
         void compile(const std::string& name)
         {
             mTechnique = std::make_unique<Technique>(
                 *mVFS.get(), mImageManager, Technique::makeFileName(name), name, 1, 1, true, true);
+            mTechnique->setConvertToGlslEs(false);
             mTechnique->compile();
         }
 
@@ -329,8 +332,10 @@ namespace
             for (const auto& shader : shaders)
             {
                 EXPECT_THAT(shader->getShaderSource(), StartsWith("#version 300 es\n")) << pass->getName();
-                EXPECT_THAT(shader->getShaderSource(), Not(HasSubstr("gl_FragColor")));
                 EXPECT_THAT(shader->getShaderSource(), Not(HasSubstr("texture2D")));
+                // the vertex stage keeps the header's #define of it, which it never expands
+                if (shader->getType() == osg::Shader::FRAGMENT)
+                    EXPECT_THAT(shader->getShaderSource(), Not(HasSubstr("gl_FragColor")));
             }
         }
     }

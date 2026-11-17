@@ -381,6 +381,105 @@ namespace
             Contains(HasSubstr("gl_FragColor")));
     }
 
+    // GLSL 1.20 lets a global variable start from a uniform; GLSL ES 3.00 takes only constant initialisers there
+    TEST(ShaderGlslEsTest, global_initialisers_that_read_uniforms_move_to_the_start_of_main)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float time = fract(t);\n"
+            "const float k = 2.0;\n"
+            "vec2 v = vec2(1.0);\n"
+            "float twice = time * k;\n"
+            "void main() { gl_FragColor = vec4(twice); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, HasSubstr("\nvoid of_initialiseGlobals();\n#line 1 0\n"));
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nfloat time;\n#define OF_GLOBAL_INIT_0\n#line 4 0\n"));
+        EXPECT_THAT(text, HasSubstr("\nconst float k = 2.0;\nvec2 v = vec2(1.0);\n"));
+        EXPECT_THAT(text, HasSubstr("\nfloat twice;\n#define OF_GLOBAL_INIT_1\n#line 7 0\n"));
+        EXPECT_THAT(text, HasSubstr("void main() {of_initialiseGlobals(); of_FragData[0] = vec4(twice); }\n"));
+        EXPECT_THAT(text,
+            HasSubstr("void of_initialiseGlobals()\n{\n#ifdef OF_GLOBAL_INIT_0\n#line 3 0\n    time = fract(t);\n"
+                      "#endif\n#ifdef OF_GLOBAL_INIT_1\n#line 6 0\n    twice = time * k;\n#endif\n}\n"));
+    }
+
+    TEST(ShaderGlslEsTest, a_global_initialiser_moved_to_main_keeps_its_preprocessor_branch)
+    {
+        const GlslEsShader result = vertex(
+            "#version 120\n"
+            "uniform float t;\n"
+            "#if A\n"
+            "float x = t;\n"
+            "#else\n"
+            "float x = 2.0 * t;\n"
+            "#endif\n"
+            "void main()\n"
+            "{\n"
+            "    gl_Position = vec4(x);\n"
+            "}\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text,
+            HasSubstr("#if A\nfloat x;\n#define OF_GLOBAL_INIT_0\n#line 5 0\n#else\nfloat x;\n"
+                      "#define OF_GLOBAL_INIT_1\n#line 7 0\n#endif\n"));
+        EXPECT_THAT(text, HasSubstr("void main()\n{of_initialiseGlobals();\n    gl_Position"));
+        EXPECT_THAT(text,
+            HasSubstr("#ifdef OF_GLOBAL_INIT_0\n#line 4 0\n    x = t;\n#endif\n#ifdef OF_GLOBAL_INIT_1\n"
+                      "#line 6 0\n    x = 2.0 * t;\n#endif\n"));
+    }
+
+    // A linked shader is folded in after main, and so are its globals
+    TEST(ShaderGlslEsTest, a_global_initialiser_after_main_is_moved_too)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "float level();\n"
+            "void main() { gl_FragColor = vec4(level()); }\n"
+            "#line 1 100\n"
+            "uniform float t;\n"
+            "float stored = t;\n"
+            "float level() { return stored; }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nfloat stored;\n#define OF_GLOBAL_INIT_0\n#line 3 100\n"));
+        EXPECT_THAT(text, HasSubstr("#ifdef OF_GLOBAL_INIT_0\n#line 2 100\n    stored = t;\n#endif\n"));
+        EXPECT_LT(text.find("float level() {"), text.find("void of_initialiseGlobals()\n{"));
+    }
+
+    TEST(ShaderGlslEsTest, shaders_with_constant_globals_only_are_left_as_they_are)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\nconst float k = 2.0;\nfloat a = k * 2.0, b = 1.0;\nvec3 c = vec3(sin(k));\n"
+            "void main() { gl_FragColor = vec4(c, a + b); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, Not(HasSubstr("of_initialiseGlobals")));
+        EXPECT_THAT(result.mSource, HasSubstr("\nfloat a = k * 2.0, b = 1.0;\nvec3 c = vec3(sin(k));\n"));
+    }
+
+    TEST(ShaderGlslEsTest, names_glsl_es_reserves_are_renamed)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform sampler2D tex;\n"
+            "vec3 filter(vec3 sample) { return sample * 2.0; }\n"
+            "void main() { vec3 sample = texture2D(tex, vec2(0.0)).rgb; gl_FragColor = vec4(filter(sample), 1.0); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("vec3 of_filter(vec3 of_sample) { return of_sample * 2.0; }"));
+        EXPECT_THAT(text, HasSubstr("vec3 of_sample = texture(tex, vec2(0.0)).rgb;"));
+        EXPECT_THAT(text, HasSubstr("vec4(of_filter(of_sample), 1.0)"));
+    }
+
+    // A uniform is set by its name from outside the shader: renaming it would lose its value
+    TEST(ShaderGlslEsTest, a_uniform_with_a_name_glsl_es_reserves_is_an_error)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\nuniform sampler2D texture;\nvoid main() { gl_FragColor = texture2D(texture, vec2(0.0)); "
+            "}\n");
+        EXPECT_THAT(result.mErrors, Contains(HasSubstr("texture")));
+    }
+
     TEST(ShaderGlslEsTest, multiview_view_index_keeps_its_name)
     {
         const GlslEsShader result = fragment(
