@@ -220,7 +220,8 @@ class CompareFolders(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.reference, self.candidate, self.out = self.tmp / "reference", self.tmp / "candidate", self.tmp / "report"
         self.limits = self.tmp / "limits.json"
-        self.limits.write_text(json.dumps(LIMITS))
+        # the limits before any were set from runs: every scene is judged by the allowance
+        self.limits.write_text(json.dumps(dict(LIMITS, scenes={}, noise_floor={})))
 
     def compare(self, *extra):
         return quietly(picturecompare.main, ["compare", str(self.reference), str(self.candidate), "--out", str(self.out),

@@ -197,7 +197,61 @@ The limit is set from the first runs, on the OpenGL build, before the Metal buil
 3. `limits <run 1>/report/results.json <run 2>/report/results.json --write --build "<commit> OpenGL"` records each scene's
    limits: for each measure, the worst value of the noise runs plus the margin, but never inside the allowance. A quiet
    scene keeps the allowance; a noisy one gets more room, by as much as it was seen to vary.
-4. Commit the limits file. Its `noise_floor` says what was measured and when.
+4. Commit the limits file. Its `noise_floor` says what was measured and when (`runs` there is the number of comparisons
+   of two runs).
+
+Separate passes of one build, one round per scene, can be compared in the same way: `compare <pass 1> <pass 2> --noise`
+for each pair, then `limits` with the `results.json` of each comparison.
+
+### The first limits
+
+The first limits were set on 16 November 2026 from three hidden passes of every scene on the OpenGL build of commit
+`ca474d90a4` (engine release 0.1.1), compared pair by pair with `compare --noise`. Nine scenes have three comparisons;
+`fo3-busy`, `nv-water`, `fo3-water` and `fo3-shadows` have one, because the first pass was made before those scenes were
+changed (the two water scenes drowned the player, `fo3-busy` looked at a wall, `fo3-shadows` had the player's arm in the
+picture). The worst values seen:
+
+| scene | `worst_tile_bad` | `mean_shift` | `worst_tile_shift` | `ssim` | `worst_tile_ssim` | largest pixel difference |
+|---|---|---|---|---|---|---|
+| `nv-interior` | 0 | 0.0002 | 0.14 | 1.0000 | 0.9986 | 9 |
+| `nv-exterior` | 0 | 0.022 | 1.78 | 0.9999 | 0.9977 | 8 |
+| `nv-busy` | 0.0078 | 0.0004 | 0.48 | 0.9999 | 0.9818 | 79 |
+| `fo3-interior` | 0 | 0 | 0 | 1 | 1 | 0 |
+| `fo3-exterior` | 0 | 0 | 0 | 1 | 1 | 0 |
+| `fo3-busy` | 0.0010 | 0 | 0.02 | 1.0000 | 0.9979 | 26 |
+| `nv-shadows` | 0.0020 | 0.0014 | 1.13 | 0.9999 | 0.9739 | 60 |
+| `fo3-shadows` | 0 | 0 | 0 | 1 | 1 | 0 |
+| `nv-water` | 0.0010 | 0.0001 | 0.07 | 0.9998 | 0.9968 | 32 |
+| `fo3-water` | 0 | 0.0002 | 0.06 | 0.9996 | 0.9980 | 7 |
+| `nv-post` | 0 | 0.010 | 0.85 | 0.9994 | 0.9935 | 7 |
+| `fo3-post` | 0.0020 | 0.0002 | 0.08 | 0.9996 | 0.9949 | 54 |
+
+`bad_share` was below 0.0003 everywhere. The build varies very little between two runs: three scenes came out the same to
+the last bit in every comparison, and the rest differ in a few pixels of a few windows. The noisiest values with the margin (`nv-exterior`'s worst window shift, 1.78 x 1.5 + 3 = 5.7 levels;
+`nv-shadows`' worst window structure, 1 - (0.026 x 1.5 + 0.03) = 0.93) are still well inside the allowance, so every
+scene's limits are the allowance. What a scene is held to is therefore what two renderers may differ by, not what one
+build varies by: the first run of the Metal build is the test of the allowance, and a scene's limit is raised only as
+"After the first run of the Metal build" says below.
+
+The allowance was also tried on real pictures of the noise passes with faults put in by hand (a busy exterior and an
+interior):
+
+| change to the picture | busy exterior | interior |
+|---|---|---|
+| noise of up to 2 levels on every pixel | PASS | PASS |
+| a slight blur (0.5 pixel) | FLAG (`worst_tile_bad` 0.14) | PASS |
+| a blur of 1 pixel, or the whole picture moved by 1 pixel | FLAG | FLAG |
+| 3 levels brighter, in all channels or in red only | FLAG (`mean_shift` 3) | FLAG |
+| a 300 x 200 region 20 % darker (a missing light or shadow) | FLAG | FLAG |
+| the top half 25 % brighter (blown-out lighting) | FLAG | FLAG |
+| the texture of a 40 x 40 square replaced by its mean colour | FLAG (`worst_tile_ssim` 0.08) | PASS (a dark, low-contrast door: 0.85) |
+| a 12 x 12 square replaced by its neighbour | PASS | PASS |
+
+So a colour shift of 3 levels, a missing light or shadow, blown-out lighting and a wrong texture with contrast are caught;
+a small change where the picture is dark and flat, or where the replacement looks like what was there, is not. Post-
+processing that is not drawn at all shows as a colour shift: matched against the exterior scene of the same place (the
+camera is 8 degrees higher), the post-processing scenes are brighter by about 5.6 levels (Fallout 3) and 2.5 levels (New
+Vegas) in their brightest channel, so such a build would be flagged, in New Vegas only just.
 
 After the first run of the Metal build the owner looks at every flag. A flag that is a fault of the Metal build stays a
 flag until the fault is fixed. A flag that the owner judges a legitimate difference of renderers (for example texture
