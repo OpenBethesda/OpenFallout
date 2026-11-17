@@ -1360,7 +1360,16 @@ namespace OFSound
 
         mTimePassed += duration;
         if (mTimePassed < sMinUpdateInterval)
+        {
+            // Between updates only head tracking sets anything, and only while headphones deliver: the listener's
+            // direction follows the head every frame. With the setting off this sets nothing (turnedListener gives
+            // none), as before.
+            if (mHeadTracker != nullptr)
+                if (const std::optional<ListenerAxes> turned
+                    = mHeadTracker->turnedListener(mListenerDir, mListenerUp, HeadClock::now()))
+                    mOutput->updateListenerDirection(turned->mForward, turned->mUp);
             return;
+        }
         duration = mTimePassed;
         mTimePassed = 0.0f;
 
