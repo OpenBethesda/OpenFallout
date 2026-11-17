@@ -23,6 +23,7 @@ GAME_KEYS = {
     "LSSupportsGameMode": True,
     "NSHighResolutionCapable": True,
     "LSMinimumSystemVersion": "26.0",
+    "NSMotionUsageDescription": "Reads headphone motion for head tracking.",
 }
 
 
@@ -161,6 +162,16 @@ class PackageCheckTests(unittest.TestCase):
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL info.plist: OpenFallout.app: LSMinimumSystemVersion is '14.8', expected '26.0'", output)
         self.assertIn("Contents/Helpers/OpenFallout Engine.app: LSMinimumSystemVersion is None, expected '26.0'", output)
+
+    def test_a_property_list_without_the_motion_usage_description_fails(self):
+        # macOS stops the engine when head tracking starts headphone motion without it
+        engine_keys = dict(GAME_KEYS)
+        del engine_keys["NSMotionUsageDescription"]
+        app = StandIn(self.root, game_keys=dict(GAME_KEYS, NSMotionUsageDescription=" "), engine_keys=engine_keys).app
+        status, output = run_check(app, "--smoke", "skip")
+        self.assertEqual(status, 1, output)
+        self.assertIn("OpenFallout.app: NSMotionUsageDescription is ' ', expected a sentence", output)
+        self.assertIn("OpenFallout Engine.app: NSMotionUsageDescription is None, expected a sentence", output)
 
     def test_carbon_key_and_wrong_category_fail(self):
         app = StandIn(self.root, game_keys=dict(GAME_KEYS, LSRequiresCarbon=True,

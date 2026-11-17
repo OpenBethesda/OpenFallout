@@ -18,7 +18,8 @@ PATH is OpenFallout-*.dmg or OpenFallout.app. The steps run in this order and ea
                image, `spctl --assess --type execute` accepts the app, and `stapler validate` finds a ticket on both
   info.plist   the app and its engine app declare Game Mode, the role-playing-games category, high resolution and
                macOS 26.0 as LSMinimumSystemVersion (so macOS refuses an older system), and neither carries the Carbon
-               key
+               key; both say what headphone motion is read for (NSMotionUsageDescription: macOS stops an app that
+               starts head tracking without it)
   platform     the programs of the app and of its engine app (Contents/MacOS) are arm64 only and built for exactly
                macOS 26.0, the supported minimum; every other Mach-O file has arm64 and is built for no newer macOS
   openal       the engine links the OpenAL Soft that is in the bundle, not the system's OpenAL framework
@@ -420,6 +421,9 @@ def check_info_plists(app):
                             f"expected {CATEGORY!r}")
         if keys.get("NSHighResolutionCapable") is not True:
             problems.append(f"{name}: NSHighResolutionCapable is {keys.get('NSHighResolutionCapable')!r}, expected true")
+        motion = keys.get("NSMotionUsageDescription")
+        if not (isinstance(motion, str) and motion.strip()):
+            problems.append(f"{name}: NSMotionUsageDescription is {motion!r}, expected a sentence")
         minimum = keys.get("LSMinimumSystemVersion")
         if not (isinstance(minimum, str) and engine_release.MACOS.fullmatch(minimum)
                 and engine_release.same_macos(minimum, MINIMUM_MACOS)):

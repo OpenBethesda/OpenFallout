@@ -368,6 +368,11 @@ class MacInfoPlistTests(unittest.TestCase):
         self.assertEqual(plist.get("CFBundleShortVersionString"), "0.1.0")
         self.assertNotIn("LSRequiresCarbon", plist)
 
+    def test_both_plists_say_what_headphone_motion_is_for(self):
+        # macOS stops an app that starts headphone motion without this key (head-tracked sound)
+        for template in ("openfallout-Info.plist.in", "openfallout-engine-Info.plist.in"):
+            self.assertIn("head tracking", self.render(template).get("NSMotionUsageDescription", ""), template)
+
     def test_both_plists_take_the_minimum_macos_from_the_deployment_target(self):
         # the shell reads LSMinimumSystemVersion of the nested engine app; both apps refuse older systems
         for template in ("openfallout-Info.plist.in", "openfallout-engine-Info.plist.in"):
