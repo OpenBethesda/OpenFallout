@@ -119,8 +119,12 @@ set(USED_OSG_PLUGINS dummy)
 
     @unittest.skipUnless(ON_MAC, "needs clang and Apple's binary tools (macOS)")
     def test_installed_libraries_are_the_published_bytes_and_the_engine_finds_them(self):
-        """A stand-in engine linked to @rpath/libGLESv2.dylib, as the Metal build's is: fixup_bundle copies and rewrites
-        its own copy, then the published file replaces it, byte for byte, and the engine still loads it."""
+        """A stand-in engine linked to @rpath/libEGL.dylib and @rpath/libGLESv2.dylib with the absolute run path of the
+        build machine, as the Metal build's is: the app is installed as a copy of the build folder, so
+        CMAKE_INSTALL_RPATH_USE_LINK_PATH never reaches it; fixup_bundle copies and rewrites its own copy of each library
+        and deletes every run path, then the published files replace the copies, byte for byte. The engine then loads
+        them from the app, and the file it finds them in (what components/sdlutil/graphicscontext.cpp gives SDL) is
+        the copy already loaded, not a second one."""
         tools = self.root / "tools"
         tools.mkdir()
 
@@ -146,8 +150,21 @@ set(USED_OSG_PLUGINS dummy)
         macos = self.build / "OpenFallout.app/Contents/MacOS"
         macos.mkdir(parents=True, exist_ok=True)
         compile_c(macos / "openfallout-launcher", "int main(void) { return 0; }\n")
-        compile_c(macos / "openfallout", "int gles_answer(void);\nint main(void) { return gles_answer(); }\n",
-                  "-L" + str(self.angle / "lib"), "-lGLESv2", "-Wl,-rpath," + str(self.angle / "lib"))
+        compile_c(macos / "openfallout", """#include <dlfcn.h>
+#include <stdio.h>
+int egl_answer(void);
+int gles_answer(void);
+int main(void)
+{
+    Dl_info info;
+    if (dladdr((const void*)&egl_answer, &info) == 0 || info.dli_fname == NULL)
+        return 1;
+    printf("EGL from %s\\n", info.dli_fname);
+    if (dlopen(info.dli_fname, RTLD_NOLOAD) == NULL)
+        return 2;
+    return egl_answer() == 42 ? gles_answer() : 3;
+}
+""", "-L" + str(self.angle / "lib"), "-lEGL", "-lGLESv2", "-Wl,-rpath," + str(self.angle / "lib"))
         prefix = self.root / "installed"
         result = subprocess.run(["cmake", "--install", str(self.build), "--prefix", str(prefix)], text=True,
                                 capture_output=True)
@@ -160,12 +177,22 @@ set(USED_OSG_PLUGINS dummy)
         links = subprocess.run(["otool", "-L", app / "Contents/MacOS/openfallout"], capture_output=True,
                                text=True).stdout
         self.assertIn("@executable_path/../Frameworks/libGLESv2.dylib", links)
+        self.assertIn("@executable_path/../Frameworks/libEGL.dylib", links)
+        self.assertNotIn("@rpath/", links)
+        # no run path and no other load command names a folder of the build machine
+        commands = subprocess.run(["otool", "-l", app / "Contents/MacOS/openfallout"], capture_output=True,
+                                  text=True).stdout.split("\n", 1)[1]  # past otool's line naming the file
+        self.assertNotIn("LC_RPATH", commands)
+        self.assertNotIn(str(self.root), commands)
+        self.assertNotIn(str(self.root.resolve()), commands)
         # the ANGLE root is gone: the engine can only find the copy in the app
         shutil.rmtree(self.angle)
         engine = subprocess.run([app / "Contents/MacOS/openfallout"], capture_output=True, text=True,
                                 env={**os.environ, "DYLD_PRINT_LIBRARIES": "1"})
-        self.assertEqual(engine.returncode, 42, engine.stderr)
+        self.assertEqual(engine.returncode, 42, engine.stdout + engine.stderr)
         self.assertIn("/installed/OpenFallout.app/Contents/Frameworks/libGLESv2.dylib", engine.stderr)
+        self.assertIn("/installed/OpenFallout.app/Contents/Frameworks/libEGL.dylib", engine.stderr)
+        self.assertRegex(engine.stdout, r"EGL from .*/installed/OpenFallout\.app/Contents/(MacOS/\.\./)?Frameworks/libEGL\.dylib")
 
 
 if __name__ == "__main__":

@@ -449,6 +449,8 @@ add_subdirectory(files/)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 
+# Read by install(TARGETS) only; the Mac app is installed as a copy of the build folder and fixup_bundle deletes its run
+# paths (cmake/OpenFalloutAngle.cmake)
 SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Other files
