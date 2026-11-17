@@ -1,0 +1,107 @@
+Why this patch is needed
+------------------------
+OpenSceneGraph builds and installs all its libraries (osgManipulator, osgPresentation, osgTerrain, osgUI, osgVolume,
+osgWidget and the others). The engine uses only some of them (USED_OSG_COMPONENTS in the root CMakeLists.txt). The list
+variable OSG_SKIP_LIBRARIES (default empty, so nothing changes without it) names library folders that are neither built
+nor installed; their serializer plugins (src/osgWrappers/serializers) are skipped with them, because those link the
+library. The build script derives the list from the engine's own component list, so the two cannot drift apart.
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index a85c572..f16d0af 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -6,6 +6,10 @@ IF(MSVC80 OR MSVC90)
+   OPTION(OSG_MSVC_GENERATE_PLUGINS_AND_WRAPPERS_MANIFESTS "Generate or not manifests files under VS8 for dynamically loaded dlls" ON)
+ ENDIF()
+ 
++# OSG_SKIP_LIBRARIES: a list of library folders (osgTerrain, osgUI, ...) that are neither built nor installed, together
++# with their serializers (osgWrappers/serializers). osg, osgDB and OpenThreads cannot be skipped.
++SET(OSG_SKIP_LIBRARIES "" CACHE STRING "Libraries that are not built")
++
+ #the old construct SUBDIRS( was substituted by ADD_SUBDIRECTORY that is to be preferred according on CMake docs.
+ FOREACH( mylibfolder
+         OpenThreads
+@@ -30,7 +34,10 @@ FOREACH( mylibfolder
+         osgPlugins
+     )
+ 
+-    ADD_SUBDIRECTORY(${mylibfolder})
++    LIST(FIND OSG_SKIP_LIBRARIES ${mylibfolder} OSG_SKIP_INDEX)
++    IF(OSG_SKIP_INDEX EQUAL -1)
++        ADD_SUBDIRECTORY(${mylibfolder})
++    ENDIF()
+ 
+ ENDFOREACH()
+ 
+diff --git a/src/osgWrappers/serializers/CMakeLists.txt b/src/osgWrappers/serializers/CMakeLists.txt
+index 22d49e3..3735cff 100644
+--- a/src/osgWrappers/serializers/CMakeLists.txt
++++ b/src/osgWrappers/serializers/CMakeLists.txt
+@@ -46,16 +46,55 @@ SET(TARGET_COMMON_LIBRARIES
+ )
+ 
+ ADD_SUBDIRECTORY(osg)
+-ADD_SUBDIRECTORY(osgUtil)
+-ADD_SUBDIRECTORY(osgAnimation)
+-ADD_SUBDIRECTORY(osgFX)
+-ADD_SUBDIRECTORY(osgManipulator)
+-ADD_SUBDIRECTORY(osgParticle)
+-ADD_SUBDIRECTORY(osgSim)
+-ADD_SUBDIRECTORY(osgShadow)
+-ADD_SUBDIRECTORY(osgGA)
+-ADD_SUBDIRECTORY(osgTerrain)
+-ADD_SUBDIRECTORY(osgText)
+-ADD_SUBDIRECTORY(osgVolume)
+-ADD_SUBDIRECTORY(osgViewer)
+-ADD_SUBDIRECTORY(osgUI)
++LIST(FIND OSG_SKIP_LIBRARIES osgUtil OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgUtil)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgAnimation OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgAnimation)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgFX OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgFX)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgManipulator OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgManipulator)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgParticle OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgParticle)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgSim OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgSim)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgShadow OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgShadow)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgGA OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgGA)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgTerrain OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgTerrain)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgText OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgText)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgVolume OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgVolume)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgViewer OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgViewer)
++ENDIF()
++LIST(FIND OSG_SKIP_LIBRARIES osgUI OSG_SKIP_INDEX)
++IF(OSG_SKIP_INDEX EQUAL -1)
++    ADD_SUBDIRECTORY(osgUI)
++ENDIF()
