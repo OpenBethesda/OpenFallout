@@ -55,6 +55,7 @@
 #include <components/sceneutil/depth.hpp>
 #include <components/sceneutil/extradata.hpp>
 #include <components/sceneutil/fog.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/keyframe.hpp>
 #include <components/sceneutil/material.hpp>
 #include <components/sceneutil/morphgeometry.hpp>
@@ -63,6 +64,7 @@
 #include <components/sceneutil/texmat.hpp>
 #include <components/sceneutil/texturetype.hpp>
 #include <components/sceneutil/userdata.hpp>
+#include <components/sceneutil/util.hpp>
 #include <components/sceneutil/visitor.hpp>
 
 #include "autotransform.hpp"
@@ -2363,6 +2365,10 @@ namespace NifOsg
             }
 
             image->setMipmapLevels(mipmapOffsets);
+
+            // OpenGL ES uploads no BGR or BGRA pixels: the picture gets the layout the image manager gives its own
+            if constexpr (!SceneUtil::GLDialect::sUploadsBGR)
+                SceneUtil::toOpenGLESFormat(*image);
 
             return image;
         }

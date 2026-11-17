@@ -5,9 +5,11 @@
 #include <components/nif/extra.hpp>
 #include <components/nif/node.hpp>
 #include <components/nif/property.hpp>
+#include <components/nif/texture.hpp>
 #include <components/nifosg/nifloader.hpp>
 #include <components/resource/bgsmfilemanager.hpp>
 #include <components/resource/imagemanager.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/keyframe.hpp>
 #include <components/sceneutil/serialize.hpp>
 #include <components/sceneutil/userdata.hpp>
@@ -18,6 +20,7 @@
 
 #include <osg/AlphaFunc>
 #include <osg/Geometry>
+#include <osg/Texture2D>
 #include <osgDB/Registry>
 
 #include <array>
@@ -418,6 +421,75 @@ osg::Group {
         const osg::ref_ptr<osg::Node> result = Loader::load(file, &mImageManager, &mMaterialManager);
 
         EXPECT_EQ(alphaTestOf(*result), nullptr);
+    }
+
+    const osg::Image* firstTextureImageOf(const osg::Node& root)
+    {
+        struct FindImage : osg::NodeVisitor
+        {
+            FindImage()
+                : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
+            {
+            }
+            void apply(osg::Node& node) override
+            {
+                if (mFound == nullptr && node.getStateSet() != nullptr)
+                    if (const osg::Texture2D* texture = dynamic_cast<const osg::Texture2D*>(
+                            node.getStateSet()->getTextureAttribute(0, osg::StateAttribute::TEXTURE)))
+                        mFound = texture->getImage();
+                traverse(node);
+            }
+            const osg::Image* mFound = nullptr;
+        } find;
+        const_cast<osg::Node&>(root).accept(find);
+        return find.mFound;
+    }
+
+    // A picture kept inside a model file reaches the graphics card in a layout the build's graphics library takes, as
+    // the pictures of the image manager do: OpenGL ES (the Metal build) uploads no BGR pixels, so there they are RGB
+    TEST_F(NifOsgLoaderTest, givesThePixelsInsideAModelALayoutTheGraphicsLibraryTakes)
+    {
+        Nif::NiPixelData pixels;
+        pixels.mRecordType = Nif::RC_NiPixelData;
+        pixels.mPixelFormat.mFormat = Nif::NiPixelFormat::Format::BGR;
+        pixels.mMipmaps = { { 2, 1, 0 } };
+        pixels.mData = { 30, 20, 10, 60, 50, 40 };
+        Nif::NiSourceTexture source;
+        init(source);
+        source.mRecordType = Nif::RC_NiSourceTexture;
+        source.mExternal = 0;
+        source.mData = Nif::NiPixelDataPtr(&pixels);
+        Nif::NiTexturingProperty property;
+        init(property);
+        property.mRecordType = Nif::RC_NiTexturingProperty;
+        Nif::NiTexturingProperty::Texture base{};
+        base.mEnabled = true;
+        base.mSourceTexture = Nif::NiSourceTexturePtr(&source);
+        base.mClamp = 3;
+        property.mTextures.push_back(base);
+        Nif::NiAVObject node;
+        init(node);
+        node.mProperties.push_back(Nif::RecordPtrT<Nif::NiProperty>(&property));
+        Nif::NIFFile file(testNif);
+        file.mRoots.push_back(&node);
+
+        const osg::ref_ptr<osg::Node> result = Loader::load(file, &mImageManager, &mMaterialManager);
+
+        const osg::Image* image = firstTextureImageOf(*result);
+        ASSERT_NE(image, nullptr);
+        ASSERT_EQ(image->s(), 2);
+        const std::vector<unsigned char> uploaded(image->data(), image->data() + 6);
+        if constexpr (SceneUtil::GLDialect::sUploadsBGR)
+        {
+            EXPECT_EQ(image->getPixelFormat(), static_cast<GLenum>(GL_BGR));
+            EXPECT_EQ(uploaded, (std::vector<unsigned char>{ 30, 20, 10, 60, 50, 40 }));
+        }
+        else
+        {
+            EXPECT_EQ(image->getPixelFormat(), static_cast<GLenum>(GL_RGB));
+            EXPECT_EQ(image->getInternalTextureFormat(), static_cast<GLint>(GL_RGB));
+            EXPECT_EQ(uploaded, (std::vector<unsigned char>{ 10, 20, 30, 40, 50, 60 }));
+        }
     }
 
     std::string formatOsgNodeForBSShaderProperty(std::string_view shaderPrefix)
