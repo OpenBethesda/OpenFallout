@@ -561,11 +561,15 @@ def check_no_opengl(app):
     machos = sorted(path for path in app.rglob("*") if is_macho(path))
     system_rpaths = sorted({rpath for path in machos for rpath in rpaths(path) if rpath.startswith("/")})
 
+    def is_apples(path):
+        # normalised first: "/Applications/../System/Library/Frameworks", a "./" part or a doubled slash is the same
+        # folder to the loader, and must not hide the framework from a prefix test
+        return os.path.normpath(path).startswith(OPENGL_FRAMEWORK.rstrip("/") + "/")
+
     def loads_opengl(name):
         if name.startswith("@rpath/"):
-            return any(f"{rpath.rstrip('/')}/{name[len('@rpath/'):]}".startswith(OPENGL_FRAMEWORK)
-                       for rpath in system_rpaths)
-        return name.startswith(OPENGL_FRAMEWORK)
+            return any(is_apples(f"{rpath.rstrip('/')}/{name[len('@rpath/'):]}") for rpath in system_rpaths)
+        return name.startswith("/") and is_apples(name)
 
     linking = [relative(path, app) for path in machos if any(loads_opengl(name) for name in linked_libraries(path))]
     if linking:

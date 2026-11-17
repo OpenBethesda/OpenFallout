@@ -1,8 +1,11 @@
 #include "screenshotmanager.hpp"
 
+#include <algorithm>
 #include <condition_variable>
 #include <mutex>
 
+#include <components/sceneutil/gldialect.hpp>
+#include <components/sceneutil/screencapture.hpp>
 #include <components/stereo/multiview.hpp>
 #include <components/stereo/stereomanager.hpp>
 
@@ -79,7 +82,15 @@ namespace OFRender
             int width = screenW - leftPadding * 2;
             int height = screenH - topPadding * 2;
 
-            mImage->readPixels(leftPadding, topPadding, width, height, GL_RGB, GL_UNSIGNED_BYTE);
+            if constexpr (SceneUtil::GLDialect::sReadsBackRGB)
+                mImage->readPixels(leftPadding, topPadding, width, height, GL_RGB, GL_UNSIGNED_BYTE);
+            else
+            {
+                mImage->readPixels(leftPadding, topPadding, width, height, GL_RGBA, GL_UNSIGNED_BYTE);
+                const osg::ref_ptr<const osg::Image> rgb = SceneUtil::withoutAlpha(*mImage);
+                mImage->allocateImage(width, height, 1, GL_RGB, GL_UNSIGNED_BYTE);
+                std::copy(rgb->data(), rgb->data() + rgb->getTotalSizeInBytes(), mImage->data());
+            }
             mImage->scaleImage(mWidth, mHeight, 1);
         }
 

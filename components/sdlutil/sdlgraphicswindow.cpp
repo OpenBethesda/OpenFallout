@@ -2,6 +2,8 @@
 
 #include <SDL_video.h>
 
+#include "graphicscontext.hpp"
+
 namespace SDLUtil
 {
 
@@ -106,6 +108,7 @@ namespace SDLUtil
             return;
         }
 
+        initGraphicsContext();
         setSwapInterval(mVSyncMode);
 
         // Update traits with what we've actually been given

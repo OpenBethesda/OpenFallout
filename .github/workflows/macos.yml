@@ -47,6 +47,13 @@ jobs:
     # The environment's own rules (which branches and tags may use it, who must approve) decide whether this job gets
     # the signing secrets; a tag or branch outside those rules cannot read them whatever its copy of the scripts says.
     environment: ${{ inputs.signing-environment }}
+    env:
+      # ANGLE (CI/angle_asset.py fetch) and OpenSceneGraph for OpenGL ES 3 (CI/macos/before_install_osg.sh) live in one
+      # folder each, named here once. The manual ANGLE test run (bundle-angle) and the Metal build read the same
+      # ANGLE folder, so the asset is fetched at most once per job. These are the defaults of CI/before_script.macos.sh
+      # and CI/macos/before_install_osg.sh; the steps below pass them anyway.
+      ANGLE_ROOT_PATH: /tmp/openfallout-angle
+      OSG_GLES3_PREFIX: /tmp/openfallout-osg-gles3
     steps:
     - uses: actions/checkout@v7
     - run: echo "CMAKE_BUILD_TYPE=${{ inputs.build-type }}" >> "$GITHUB_ENV"
@@ -54,6 +61,13 @@ jobs:
     # The unit tests and their coverage run on the build of branches and pull requests. A release tag skips them: it is made from a commit whose branch run already tested it, and a second report for the same commit
     # would be counted twice by Codecov.
     - run: echo "UNIT_TESTS=true" >> "$GITHUB_ENV"
+      if: ${{ inputs.build-type != 'Release' }}
+
+    # The Metal build (spec "Mac Native", milestone two; docs/openfallout/osg-gles3.md) is a second build configuration
+    # beside the OpenGL one until it passes its checks. Its steps are one block, "Metal build: ...", near the end of
+    # the job, and every one of them reads this switch: a release tag run (release.yml, build-type Release) never
+    # builds it, so nothing in it can touch a release. The packaged app above is always the OpenGL build.
+    - run: echo "METAL_BUILD=true" >> "$GITHUB_ENV"
       if: ${{ inputs.build-type != 'Release' }}
 
     # The manifest comes from the main branch of openmw-deps, so its digest has to be part of the cache key.
@@ -118,15 +132,17 @@ jobs:
     - name: Restore unchanged source timestamps
       run: python3 CI/build_cache.py restore
 
-    # The ANGLE release asset named in CI/macos/angle/angle.json, verified against its recorded digests; never built here
+    # The ANGLE release asset named in CI/macos/angle/angle.json, verified against its recorded digests; never built
+    # here. Only the manual ANGLE test run needs it this early (it packages the libraries); the Metal build fetches it
+    # later, from the same folder, unless this step already did.
     - name: Fetch the ANGLE libraries
       if: ${{ inputs.bundle-angle }}
-      run: python3 CI/angle_asset.py fetch "$RUNNER_TEMP/angle"
+      run: python3 CI/angle_asset.py fetch "$ANGLE_ROOT_PATH"
 
     - name: Configure
       env:
         BUNDLE_ANGLE: ${{ inputs.bundle-angle && 'yes' || '' }}
-      run: CI/before_script.macos.sh -C -k ${BUNDLE_ANGLE:+-A "$RUNNER_TEMP/angle"}
+      run: CI/before_script.macos.sh -C -k ${BUNDLE_ANGLE:+-A "$ANGLE_ROOT_PATH"}
     - name: Build
       id: build
       run: CI/macos/build.sh all
@@ -404,11 +420,93 @@ jobs:
         plugins: noop
         fail_ci_if_error: true
 
-    # After both build trees: the stored cache holds objects of the package build and, where it ran, the unit-test build.
+    # The Metal build: the engine and the two unit-test suites against ANGLE and an OpenSceneGraph built for OpenGL ES 3
+    # (Debug, no coverage, never packaged, never part of a release). One block, after every step that makes, checks,
+    # uploads or reports the packaged app, so that a Metal failure fails the job but never hides or delays what exists.
+    # Each step runs when the OpenGL build compiled and the Metal step before it worked (a failed or cancelled step
+    # skips the rest), and only where METAL_BUILD is set (not on a release tag). The ANGLE asset must exist: the
+    # release named in CI/macos/angle/angle.json has to be published before this block can pass.
+    # Nothing here is cached except the small OpenSceneGraph install: the build folder is not (docs/openfallout/ci-cache.md).
+    - name: 'Metal build: fingerprint OpenSceneGraph for OpenGL ES 3'
+      id: metal-key
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.build.outcome == 'success' }}
+      run: |
+        clang --version > "$RUNNER_TEMP/clang-version.txt"
+        key="$(python3 CI/macos/osg/osg_gles3.py key --input CI/macos/angle/angle.json --input "$RUNNER_TEMP/openmw-manifest.txt" --input CI/macos/before_install_osg.sh --input "$RUNNER_TEMP/clang-version.txt")"
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+
+    - name: 'Metal build: restore OpenSceneGraph for OpenGL ES 3'
+      id: metal-osg-cache
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-key.outcome == 'success' }}
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ env.OSG_GLES3_PREFIX }}
+        key: macos-osg-gles3-macos-26-${{ runner.arch }}-${{ steps.metal-key.outputs.key }}
+
+    # The manual ANGLE test run fetched the asset before the OpenGL configure step, into this folder; CI/angle_asset.py
+    # refuses a folder that is not empty, so it is not fetched twice.
+    - name: 'Metal build: fetch the ANGLE libraries'
+      id: metal-angle
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-key.outcome == 'success' }}
+      run: |
+        if [ -f "$ANGLE_ROOT_PATH/lib/libGLESv2.dylib" ]; then
+          echo "The ANGLE asset is already in $ANGLE_ROOT_PATH"
+        else
+          python3 CI/angle_asset.py fetch "$ANGLE_ROOT_PATH"
+        fi
+
+    # Only when the cache above missed: an input of the key changed (CI/macos/osg/, the ANGLE record, the engine's
+    # OpenSceneGraph lists or the dependency manifest).
+    - name: 'Metal build: build OpenSceneGraph for OpenGL ES 3'
+      id: metal-osg-build
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-osg-cache.outputs.cache-hit != 'true' && steps.metal-angle.outcome == 'success' }}
+      run: CI/macos/before_install_osg.sh
+
+    # Saved at once, not at the end of the job: a later failure must not throw the build away. A pull request run saves
+    # it too (it is 19 MB).
+    - name: 'Metal build: keep OpenSceneGraph for OpenGL ES 3'
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-osg-build.outcome == 'success' }}
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ env.OSG_GLES3_PREFIX }}
+        key: ${{ steps.metal-osg-cache.outputs.cache-primary-key }}
+
+    - name: 'Metal build: configure'
+      id: metal-configure
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-angle.outcome == 'success' && (steps.metal-osg-cache.outputs.cache-hit == 'true' || steps.metal-osg-build.outcome == 'success') }}
+      run: CI/before_script.macos.sh -C -k -M -a "$ANGLE_ROOT_PATH" -o "$OSG_GLES3_PREFIX"
+
+    # The job's ccache serves this tree too; its own build folder is not stored. The statistics before and after, and
+    # the free disk space, are what the first runs measure.
+    - name: 'Metal build: compile'
+      id: metal-build
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-configure.outcome == 'success' }}
+      env:
+        BUILD_DIR: build-metal
+      run: |
+        ccache --show-stats
+        df -h /System/Volumes/Data
+        CI/macos/build.sh openfallout components-tests openfallout-tests
+        ccache --show-stats
+        df -h /System/Volumes/Data
+
+    # Pass or fail only: the results of this tree are not uploaded. The same test sources already report from the
+    # OpenGL unit-test tree, and a second report would count every test twice in Codecov's Test Analytics
+    # (docs/openfallout/ci-reporting.md).
+    - name: 'Metal build: run components tests'
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-build.outcome == 'success' }}
+      run: build-metal/OpenFallout.app/Contents/MacOS/components-tests
+
+    - name: 'Metal build: run OpenFallout tests'
+      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-build.outcome == 'success' }}
+      run: build-metal/OpenFallout.app/Contents/MacOS/openfallout-tests
+
+    # After every tree: the stored cache holds the objects of the package build and, where they ran, of the unit-test
+    # build and the Metal build.
     - name: Limit stored compiler cache
       if: always() && steps.compiler-cache.outcome == 'success'
       run: |
-        ccache --max-size=${{ env.UNIT_TESTS == 'true' && '768M' || '384M' }}
+        ccache --max-size=${{ env.METAL_BUILD == 'true' && '1000M' || '384M' }}
         ccache --cleanup
 
     - name: Create prerelease

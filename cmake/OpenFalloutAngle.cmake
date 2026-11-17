@@ -10,8 +10,10 @@
 # The top-level CMakeLists.txt includes this file AFTER the Apple bundling block on purpose: install rules run in the
 # order they are declared, and fixup_bundle rewrites the install name and deletes the rpaths of every library it finds
 # in the bundle. Copied in after it, the libraries keep their bytes and their @rpath install names. In the Metal build,
-# fixup_bundle has by then pointed the engine's reference to @executable_path/../Frameworks/libGLESv2.dylib, the file
-# copied here.
+# fixup_bundle has by then pointed the engine's references to @executable_path/../Frameworks/libEGL.dylib and
+# libGLESv2.dylib, the files copied here, and deleted the engine's run paths: the app is installed as a copy of the build
+# folder (install(DIRECTORY)), so the build's absolute run paths reach the package only to be deleted there, and
+# CMAKE_INSTALL_RPATH_USE_LINK_PATH, which only install(TARGETS) reads, plays no part. CI/test_angle_bundle.py checks it.
 #
 # OPENFALLOUT_BUNDLE_ANGLE also builds and packages openfallout-angle-probe in Contents/MacOS: a small program that
 # proves inside the signed app that the libraries load and that ANGLE's Metal backend gives an OpenGL ES 3.0 context

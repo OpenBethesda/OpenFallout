@@ -63,6 +63,19 @@ class ClassificationTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(changed_paths.needs_build(modified(path)))
 
+    def test_the_files_of_the_metal_build_count_as_code(self):
+        """A change to the OpenSceneGraph recipe, the ANGLE record, the CMake modules or the shaders changes what the
+        Metal build compiles or links, so it is never a documentation-only change, whatever sits beside it."""
+        for path in ("CI/macos/osg/build_osg_gles3.sh", "CI/macos/osg/osg_version.sh",
+                     "CI/macos/osg/patches/0005-example.patch", "CI/macos/before_install_osg.sh",
+                     "CI/macos/angle/angle.json", "CI/macos/angle/build_angle.py", "CI/angle_asset.py",
+                     "cmake/FindOpenGLES3.cmake", "cmake/OpenFalloutMacros.cmake",
+                     "files/shaders/compatibility/bs/default.frag", "files/shaders/lib/core/fragment.glsl"):
+            with self.subTest(path=path):
+                for status in ("A", "M", "D"):
+                    self.assertTrue(changed_paths.needs_build([(status, path)]))
+                self.assertTrue(changed_paths.needs_build(modified("docs/openfallout/angle.md", path)))
+
     def test_removing_an_installed_file_builds(self):
         self.assertTrue(changed_paths.needs_build([("D", "README.md")]))
         self.assertTrue(changed_paths.needs_build([("T", "CHANGELOG.md")]))

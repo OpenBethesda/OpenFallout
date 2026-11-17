@@ -24,6 +24,10 @@ namespace SceneUtil
     std::filesystem::path writeScreenshotToFile(
         const std::filesystem::path& screenshotPath, const std::string& screenshotFormat, const osg::Image& image);
 
+    // The picture without its alpha channel: an RGB copy of an 8-bit RGBA picture, any other picture as it is. The
+    // frame buffer's alpha is not part of what the game shows, and OpenGL ES reads the frame buffer back only as RGBA.
+    osg::ref_ptr<const osg::Image> withoutAlpha(const osg::Image& image);
+
     class WriteScreenshotToFileOperation : public osgViewer::ScreenCaptureHandler::CaptureOperation
     {
     public:

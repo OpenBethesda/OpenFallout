@@ -63,11 +63,14 @@ file(GLOB UNITTEST_SRC_FILES
     settings/testvalues.cpp
 
     sdlutil/testdesktopconventions.cpp
+    sdlutil/testgraphicscontext.cpp
 
+    shader/glsles.cpp
     shader/parsedefines.cpp
     shader/parsefors.cpp
     shader/parselinks.cpp
     shader/shadermanager.cpp
+    shader/shadermanagerglsles.cpp
 
     sqlite3/db.cpp
     sqlite3/request.cpp
@@ -335,9 +338,12 @@ file(GLOB UNITTEST_SRC_FILES
     vfs/testarchiveorder.cpp
     vfs/testpathutil.cpp
 
+    sceneutil/color.cpp
     sceneutil/osgacontroller.cpp
     sceneutil/smoothnormals.cpp
     sceneutil/loddebug.cpp
+    sceneutil/rgborder.cpp
+    sceneutil/screencapture.cpp
     sceneutil/userdata.cpp
 
     bgsm/testfile.cpp

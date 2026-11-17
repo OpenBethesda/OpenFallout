@@ -286,6 +286,8 @@ namespace OFRender
         dummyTexture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
         dummyTexture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
         dummyTexture->setInternalFormat(GL_DEPTH_COMPONENT);
+        dummyTexture->setSourceFormat(GL_DEPTH_COMPONENT);
+        dummyTexture->setSourceType(GL_UNSIGNED_INT);
         dummyTexture->setTextureSize(1, 1);
         dummyTexture->setShadowComparison(true);
         dummyTexture->setShadowCompareFunc(osg::Texture::ShadowCompareFunc::ALWAYS);

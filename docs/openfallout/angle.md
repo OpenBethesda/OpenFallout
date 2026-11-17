@@ -98,6 +98,13 @@ checks every file against `SHA256SUMS` and the libraries and the notices against
 `FAIL angle: ...` and leaves `DEST` empty. It never rebuilds ANGLE. `DEST` is then the `-DOPENFALLOUT_ANGLE_ROOT` of the
 Metal build. `CI/angle_asset.py digest <library>` prints the two digests of a library.
 
+The Mac job fetches the asset at most once per run, into `/tmp/openfallout-angle`. The manual test run (below) fetches
+it before the OpenGL configure step, because it packages the libraries; the Metal build fetches it later, in its own
+block of steps, unless that folder already holds it. Neither changes the folder after the fetch (CMake copies the
+libraries into the app, it does not rewrite them), so one fetch serves both. The release named in `angle.json` has to be
+published before the Metal block can pass; until then its fetch step fails with the address it could not read (or the
+digest that does not match), and the steps after it do not run. A release tag run does not build the Metal tree.
+
 ## In the packaged app, and how it is signed
 
 `cmake/OpenFalloutAngle.cmake` puts the two libraries, unchanged, into `OpenFallout.app/Contents/Frameworks` and the
@@ -142,7 +149,8 @@ It is signed like the engine, with the app's entitlements, and is never part of 
 **The run that makes the image.** Run the workflow "Build and test" (`push.yml`) by hand on the default branch with
 `bundle-angle` ticked. It is the only run that both signs and notarizes (the `macos-release` environment) and bundles
 ANGLE: it downloads and verifies the asset (`Fetch the ANGLE libraries`), configures with
-`CI/before_script.macos.sh -A <folder>`, and checks the image with `--angle bundled` in release mode. The image is the
+`CI/before_script.macos.sh -A <folder>`, and checks the image with `--angle bundled` in release mode. The same run then
+builds and tests the Metal build from the same folder, after the image is stored. The image is the
 job's `openfallout-macos-dmg-arm64-<commit>` artifact; no release is made. Every other build passes
 `-DOPENFALLOUT_BUNDLE_ANGLE=OFF` explicitly, and the run stores no build tree for later runs, so the test build cannot
 leak into a release. The asset must be published first.

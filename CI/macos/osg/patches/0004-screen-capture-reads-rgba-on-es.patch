@@ -1,0 +1,24 @@
+Why this patch is needed
+------------------------
+The engine takes its screenshots through osgViewer's ScreenCaptureHandler (components/sceneutil/screencapture.cpp), and
+the picture-comparison tool depends on them. For a window without an alpha channel the handler reads the frame back
+with glReadPixels in the format GL_RGB. OpenGL ES, and so ANGLE, promises only GL_RGBA with unsigned bytes: a GL_RGB
+read-back fails with an error and returns no picture. In an OpenGL ES profile the handler now asks for GL_RGBA. A build
+for desktop OpenGL is unchanged.
+diff --git a/src/osgViewer/ScreenCaptureHandler.cpp b/src/osgViewer/ScreenCaptureHandler.cpp
+index b02753b..6c699ee 100644
+--- a/src/osgViewer/ScreenCaptureHandler.cpp
++++ b/src/osgViewer/ScreenCaptureHandler.cpp
+@@ -156,7 +156,12 @@ WindowCaptureCallback::ContextData::ContextData(osg::GraphicsContext* gc, Mode m
+         else
+         {
+             OSG_NOTIFY(level)<<"ScreenCaptureHandler: Selected GL_RGB read back format"<<std::endl;
++#if defined(OSG_GLES1_AVAILABLE) || defined(OSG_GLES2_AVAILABLE) || defined(OSG_GLES3_AVAILABLE)
++            // OpenGL ES promises glReadPixels only in RGBA with an unsigned byte type
++            _pixelFormat = GL_RGBA;
++#else
+             _pixelFormat = GL_RGB;
++#endif
+         }
+     }
+ 

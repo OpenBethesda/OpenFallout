@@ -37,6 +37,24 @@ Every run of the Mac job for a branch or pull request runs them. A release tag
 already tested it, and a second upload for the same commit would be counted
 twice by Codecov.
 
+## The Metal build's tests
+
+The same job builds a third tree, `build-metal` (the Metal build, see
+[Two build configurations](architecture.md#two-build-configurations)), and runs
+the same two test suites in it, from the repository root. They are not
+instrumented and their results are **not uploaded**: the steps are pass or fail
+and the log has the details. The reasons: the test sources are the same, so a
+second coverage report would count every line twice, and a second set of test
+results would give every test case two series in Test Analytics, with the
+failure rate and flakiness history of one build mixed into the other's. The
+coverage and the test history stay those of the desktop OpenGL build. If the
+suites of the two builds ever differ (a test that only the Metal build runs),
+that test needs its own report and its own flag, not a shared one.
+
+These steps come after every upload, in one block named "Metal build: ...", so a
+failure there fails the job but never hides a report. A release tag does not run
+them.
+
 ## How coverage is measured
 
 `BUILD_WITH_CODE_COVERAGE` instruments the targets through

@@ -1,0 +1,65 @@
+Why this patch is needed
+------------------------
+On a Mac, OpenSceneGraph reads png, jpeg, tga and the other common picture formats with its ImageIO plugin
+(Apple's picture decoder) and maps those file extensions to it. The desktop OpenGL build of the engine
+(the dependency set from the openmw-deps project) reads them with the plugins that use libpng and libjpeg instead.
+The engine's own list of packaged plugins (USED_OSG_PLUGINS in the root CMakeLists.txt) also names the
+png, jpeg and tga plugins and not ImageIO.
+
+So that both builds decode every picture with the same code, and so that the Metal build links no Apple picture
+library, this patch makes a Mac build find libpng and libjpeg, drops the extension aliases that point at ImageIO and
+stops building the ImageIO plugin. It is the same change the openmw-deps project makes for its Mac build (its patch
+named macos-dedicated-image-plugin), written again here.
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a03a9e2..2735c24 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -832,6 +832,8 @@ IF(NOT (ANDROID AND OSG_FIND_3RD_PARTY_DEPS))
+         ENDIF()
+ 
+     ELSE()
++        FIND_PACKAGE(JPEG)
++        FIND_PACKAGE(PNG)
+         FIND_PACKAGE(TIFF)
+         FIND_PACKAGE(QuickTime)
+         FIND_PACKAGE(QTKit)
+diff --git a/src/osgDB/Registry.cpp b/src/osgDB/Registry.cpp
+index c47439b..5b73a82 100644
+--- a/src/osgDB/Registry.cpp
++++ b/src/osgDB/Registry.cpp
+@@ -320,19 +320,6 @@ Registry::Registry()
+ 
+     addFileExtensionAlias("js", "V8");
+ 
+-#if defined(DARWIN_IMAGEIO)
+-    addFileExtensionAlias("jpg",  "imageio");
+-    addFileExtensionAlias("jpe",  "imageio");
+-    addFileExtensionAlias("jpeg", "imageio");
+-    addFileExtensionAlias("tif",  "imageio");
+-    addFileExtensionAlias("tiff", "imageio");
+-    addFileExtensionAlias("gif",  "imageio");
+-    addFileExtensionAlias("png",  "imageio");
+-    addFileExtensionAlias("psd",  "imageio");
+-    addFileExtensionAlias("tga",  "imageio");
+-
+-#endif
+-
+ #if defined(USE_QTKIT)
+     addFileExtensionAlias("mov",  "QTKit");
+     addFileExtensionAlias("mp4",  "QTKit");
+diff --git a/src/osgPlugins/CMakeLists.txt b/src/osgPlugins/CMakeLists.txt
+index 15afe51..5a77512 100644
+--- a/src/osgPlugins/CMakeLists.txt
++++ b/src/osgPlugins/CMakeLists.txt
+@@ -225,10 +225,6 @@ ENDIF()
+ #    ADD_SUBDIRECTORY(OpenAL)
+ # ENDIF()
+ 
+-IF(APPLE AND NOT ANDROID)
+-    ADD_PLUGIN_DIRECTORY(imageio)
+-ENDIF()
+-
+ IF(AV_FOUNDATION_FOUND)
+     ADD_PLUGIN_DIRECTORY(avfoundation)
+ ENDIF()

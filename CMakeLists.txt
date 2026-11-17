@@ -172,12 +172,60 @@ set(CMAKE_AUTOGEN_PARALLEL 1)
 set(OPENFALLOUT_RESOURCE_FILES "../Resources/resources")
 
 # Dependencies
-# Force CMake to use the installed version of OpenGL on macOS
-set(_SAVE_CMAKE_FIND_FRAMEWORK ${CMAKE_FIND_FRAMEWORK})
-set(CMAKE_FIND_FRAMEWORK ONLY)
-find_package(OpenGL REQUIRED)
-set(CMAKE_FIND_FRAMEWORK ${_SAVE_CMAKE_FIND_FRAMEWORK})
-unset(_SAVE_CMAKE_FIND_FRAMEWORK)
+# The Metal build draws with OpenGL ES 3.0, which ANGLE's Metal backend turns into Metal; it needs ANGLE and an
+# OpenSceneGraph built for OpenGL ES 3 (OSG_DIR or the front of CMAKE_PREFIX_PATH). Off is the desktop OpenGL build.
+# OPENGL_INCLUDE_DIR and OPENGL_gl_LIBRARY name the graphics library either way and do not link Apple's OpenGL here.
+option(OPENFALLOUT_METAL "Build the Metal renderer: OpenGL ES 3.0 through ANGLE (OPENFALLOUT_ANGLE_ROOT)" OFF)
+if (OPENFALLOUT_METAL)
+    set(OPENFALLOUT_ANGLE_ROOT "" CACHE PATH "ANGLE: lib/libEGL.dylib, lib/libGLESv2.dylib and include/")
+    # find_path and find_library keep what they found: a new root looks again (CI/test_angle_root.py)
+    if (NOT "${OPENFALLOUT_ANGLE_ROOT}" STREQUAL "${OPENFALLOUT_ANGLE_ROOT_SEARCHED}")
+        unset(ANGLE_INCLUDE_DIR CACHE)
+        unset(ANGLE_EGL_LIBRARY CACHE)
+        unset(ANGLE_GLESV2_LIBRARY CACHE)
+        set(OPENFALLOUT_ANGLE_ROOT_SEARCHED "${OPENFALLOUT_ANGLE_ROOT}" CACHE INTERNAL "")
+    endif()
+    find_path(ANGLE_INCLUDE_DIR GLES3/gl3.h PATHS "${OPENFALLOUT_ANGLE_ROOT}/include" NO_DEFAULT_PATH)
+    find_library(ANGLE_EGL_LIBRARY EGL PATHS "${OPENFALLOUT_ANGLE_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(ANGLE_GLESV2_LIBRARY GLESv2 PATHS "${OPENFALLOUT_ANGLE_ROOT}/lib" NO_DEFAULT_PATH)
+    if (NOT ANGLE_INCLUDE_DIR OR NOT ANGLE_EGL_LIBRARY OR NOT ANGLE_GLESV2_LIBRARY)
+        message(FATAL_ERROR "OPENFALLOUT_METAL needs ANGLE: OPENFALLOUT_ANGLE_ROOT='${OPENFALLOUT_ANGLE_ROOT}' must hold "
+            "lib/libEGL.dylib, lib/libGLESv2.dylib and include/GLES3/gl3.h")
+    endif()
+    message(STATUS "Metal build: ANGLE ${ANGLE_GLESV2_LIBRARY} ${ANGLE_EGL_LIBRARY}")
+    set(OPENGL_INCLUDE_DIR "${ANGLE_INCLUDE_DIR}")
+    set(OPENGL_gl_LIBRARY "${ANGLE_GLESV2_LIBRARY}" "${ANGLE_EGL_LIBRARY}")
+    add_compile_definitions(OPENFALLOUT_METAL)
+else()
+    # Force CMake to use the installed version of OpenGL on macOS
+    set(_SAVE_CMAKE_FIND_FRAMEWORK ${CMAKE_FIND_FRAMEWORK})
+    set(CMAKE_FIND_FRAMEWORK ONLY)
+    find_package(OpenGL REQUIRED)
+    set(CMAKE_FIND_FRAMEWORK ${_SAVE_CMAKE_FIND_FRAMEWORK})
+    unset(_SAVE_CMAKE_FIND_FRAMEWORK)
+endif()
+
+# MyGUI render system
+# A MyGUI built here (extern/) draws nothing itself: components/myguiplatform does. In the Metal build its OpenGL render
+# system (4, the default extern/ gives) would look for desktop OpenGL, so it takes the dummy one (1). The value follows
+# OPENFALLOUT_METAL on every configure of a build folder: the value the OpenGL build had, also one a person set, comes
+# back when the option goes off, unless a new one is given at that time (CI/test_mygui_render_system.py).
+if (OPENFALLOUT_METAL)
+    if (NOT DEFINED CACHE{OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL})
+        set(OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL "${MYGUI_RENDERSYSTEM}" CACHE INTERNAL "")
+    endif()
+    set(MYGUI_RENDERSYSTEM 1 CACHE STRING "" FORCE)
+elseif (DEFINED CACHE{OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL})
+    if (MYGUI_RENDERSYSTEM STREQUAL "1")
+        if (OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL STREQUAL "")
+            unset(MYGUI_RENDERSYSTEM CACHE)
+        else()
+            set(MYGUI_RENDERSYSTEM "${OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL}" CACHE STRING "" FORCE)
+        endif()
+    endif()
+    unset(OPENFALLOUT_MYGUI_RENDERSYSTEM_OPENGL CACHE)
+endif()
+# End of MyGUI render system
 
 find_package(LZ4 REQUIRED)
 
@@ -324,6 +372,19 @@ endif()
 
 include_directories(BEFORE SYSTEM ${OPENSCENEGRAPH_INCLUDE_DIRS})
 
+# Each build needs the OpenSceneGraph of its own profile: GLES3 for the Metal build, a desktop one otherwise.
+foreach (_dir ${OPENSCENEGRAPH_INCLUDE_DIRS})
+    if (EXISTS "${_dir}/osg/GL")
+        file(STRINGS "${_dir}/osg/GL" _osg_gles3 REGEX "^#define OSG_GLES3_AVAILABLE")
+        if (OPENFALLOUT_METAL AND NOT _osg_gles3)
+            message(FATAL_ERROR "OPENFALLOUT_METAL needs an OpenSceneGraph built with OPENGL_PROFILE=GLES3, not ${_dir}")
+        elseif (NOT OPENFALLOUT_METAL AND _osg_gles3)
+            message(FATAL_ERROR "The OpenGL build needs a desktop OpenSceneGraph; ${_dir} is built for OpenGL ES 3")
+        endif()
+        break()
+    endif()
+endforeach()
+
 if(OSG_STATIC)
     if(NOT COLLADA_DOM_VERSION_MAJOR)
         set(COLLADA_DOM_VERSION_MAJOR 2)
@@ -382,6 +443,25 @@ include_directories(
     ${SOL_CONFIG_DIR}
     ${ICU_INCLUDE_DIRS}
 )
+# Metal include order
+if (OPENFALLOUT_METAL)
+    # A dependency set may keep a desktop OpenSceneGraph in the one folder of all its headers, which the call above has
+    # just put in front. The compiler must read the headers of the OpenSceneGraph for OpenGL ES 3 first, and the check
+    # below stops the configure step if any folder in front of them holds another OpenSceneGraph.
+    include_directories(BEFORE SYSTEM ${OPENSCENEGRAPH_INCLUDE_DIRS})
+    get_property(_include_dirs DIRECTORY PROPERTY INCLUDE_DIRECTORIES)
+    foreach (_dir ${_include_dirs})
+        if (EXISTS "${_dir}/osg/GL")
+            file(STRINGS "${_dir}/osg/GL" _osg_gles3 REGEX "^#define OSG_GLES3_AVAILABLE")
+            if (NOT _osg_gles3)
+                message(FATAL_ERROR "OPENFALLOUT_METAL: the compiler would read the desktop OpenSceneGraph headers in "
+                                    "${_dir} before the ones built with OPENGL_PROFILE=GLES3")
+            endif()
+            break()
+        endif()
+    endforeach()
+endif()
+# End of Metal include order
 include_directories(".")
 
 if(MYGUI_STATIC)
@@ -414,6 +494,8 @@ add_subdirectory(files/)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 
+# Read by install(TARGETS) only; the Mac app is installed as a copy of the build folder and fixup_bundle deletes its run
+# paths (cmake/OpenFalloutAngle.cmake)
 SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Other files

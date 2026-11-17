@@ -23,6 +23,7 @@
 #include <components/vfs/registerarchives.hpp>
 
 #include <components/sdlutil/desktopconventions.hpp>
+#include <components/sdlutil/graphicscontext.hpp>
 #include <components/sdlutil/imagetosurface.hpp>
 #include <components/sdlutil/sdlgraphicswindow.hpp>
 
@@ -34,6 +35,7 @@
 
 #include <components/stereo/stereomanager.hpp>
 
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/glextensions.hpp>
 #include <components/sceneutil/workqueue.hpp>
 
@@ -415,6 +417,7 @@ OF::Engine::Engine(Files::ConfigurationManager& configurationManager)
     SDL_SetHint(SDL_HINT_MAC_OPENGL_ASYNC_DISPATCH, "1");
     SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0"); // We use only gamepads
     SDLUtil::applyDesktopHints();
+    SDLUtil::selectGraphicsLibraries();
 
     Uint32 flags
         = SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK | SDL_INIT_SENSOR;
@@ -571,6 +574,7 @@ void OF::Engine::createWindow()
 
     SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, Settings::video().mMinimizeOnFocusLoss ? "1" : "0");
 
+    SDLUtil::requestGraphicsContext();
     checkSDLError(SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8));
     checkSDLError(SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8));
     checkSDLError(SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8));
@@ -660,7 +664,9 @@ void OF::Engine::createWindow()
         if (traits->depth < 24)
             Log(Debug::Warning) << "Warning: Framebuffer only has " << traits->depth << " bits of depth precision.";
 
-        traits->alpha = 0; // set to 0 to stop ScreenCaptureHandler reading the alpha channel
+        // 0 stops ScreenCaptureHandler reading the alpha channel. OpenGL ES reads back only RGBA, so the Metal build
+        // reads it and the screenshot writer drops it (SceneUtil::withoutAlpha).
+        traits->alpha = SceneUtil::GLDialect::sReadsBackRGB ? 0 : 8;
     }
 
     osg::ref_ptr<osg::Camera> camera = mViewer->getCamera();

@@ -5,7 +5,9 @@
 
 #include <components/debug/debuglog.hpp>
 #include <components/misc/pathhelpers.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/glextensions.hpp>
+#include <components/sceneutil/util.hpp>
 #include <components/vfs/manager.hpp>
 #include <components/vfs/pathutil.hpp>
 
@@ -150,6 +152,8 @@ namespace Resource
             osg::ref_ptr<osg::Image> image = result.getImage();
 
             image->setFileName(std::string(path.value()));
+            if constexpr (!SceneUtil::GLDialect::sUploadsBGR)
+                SceneUtil::toOpenGLESFormat(*image);
             if (!checkSupported(image))
             {
                 static bool uncompress = (getenv("OPENFALLOUT_DECOMPRESS_TEXTURES") != nullptr);

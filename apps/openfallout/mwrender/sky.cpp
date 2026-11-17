@@ -1,5 +1,6 @@
 #include "sky.hpp"
 
+#include <osg/ClipPlane>
 #include <osg/Depth>
 #include <osg/PositionAttitudeTransform>
 #include <osg/Texture2D>

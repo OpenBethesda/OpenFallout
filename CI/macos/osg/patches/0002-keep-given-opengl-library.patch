@@ -1,0 +1,27 @@
+Why this patch is needed
+------------------------
+On a Mac the OpenSceneGraph build always forgets OPENGL_gl_LIBRARY and OPENGL_INCLUDE_DIR and then looks for Apple's
+OpenGL framework. The Metal build must link ANGLE's OpenGL ES library (libGLESv2) and use ANGLE's headers, so those two
+values given on the command line have to survive.
+
+The new option OSG_KEEP_OPENGL_LIBRARY (default OFF, so nothing changes without it) skips the two UNSET lines.
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 2735c24..a24627c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -248,8 +248,13 @@ IF(APPLE)
+         # Note that without this check, libosg would use Cocoa/OpenGL but
+         # libosgViewer would use X11/OpenGL, which causes compatibility
+         # issues for applications using OSG.
+-        UNSET(OPENGL_gl_LIBRARY CACHE)
+-        UNSET(OPENGL_INCLUDE_DIR CACHE)
++        # OSG_KEEP_OPENGL_LIBRARY: the caller names an OpenGL ES library (ANGLE's) and its headers on the command line
++        # and they are used as given. Without it, this folder only finds Apple's OpenGL framework.
++        OPTION(OSG_KEEP_OPENGL_LIBRARY "Keep OPENGL_gl_LIBRARY and OPENGL_INCLUDE_DIR as given on the command line (Apple)" OFF)
++        IF(NOT OSG_KEEP_OPENGL_LIBRARY)
++            UNSET(OPENGL_gl_LIBRARY CACHE)
++            UNSET(OPENGL_INCLUDE_DIR CACHE)
++        ENDIF()
+         IF(OSG_WINDOWING_SYSTEM STREQUAL "X11")
+           FIND_PACKAGE(X11)
+           IF(NOT X11_FOUND)

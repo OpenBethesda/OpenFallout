@@ -1,6 +1,5 @@
 #include "postprocessor.hpp"
 
-#include <SDL_opengl_glext.h>
 #include <algorithm>
 #include <chrono>
 #include <thread>
@@ -18,6 +17,8 @@
 #include <components/resource/scenemanager.hpp>
 #include <components/sceneutil/color.hpp>
 #include <components/sceneutil/depth.hpp>
+#include <components/sceneutil/gldialect.hpp>
+#include <components/sceneutil/glextconstants.hpp>
 #include <components/sceneutil/nodecallback.hpp>
 #include <components/settings/values.hpp>
 #include <components/shader/shadermanager.hpp>
@@ -228,6 +229,8 @@ namespace OFRender
 
         if (mUsePostProcessing)
             enable();
+        else if constexpr (!SceneUtil::GLDialect::sHasPostProcessing)
+            Log(Debug::Info) << "Post-processing is not available in the Metal build yet";
     }
 
     void PostProcessor::setupTransparentBin(const Water* water)
@@ -279,6 +282,12 @@ namespace OFRender
 
     void PostProcessor::enable()
     {
+        if constexpr (!SceneUtil::GLDialect::sHasPostProcessing)
+        {
+            Log(Debug::Warning) << "Post-processing is not available in the Metal build yet and stays off";
+            mUsePostProcessing = false;
+            return;
+        }
         mReload = true;
         mUsePostProcessing = true;
     }
@@ -607,7 +616,8 @@ namespace OFRender
             if (technique->getHDR())
                 mHDR = true;
 
-            if (technique->getNormals())
+            // The Metal build has no post-processing: its main frame buffer takes no normals (RGB16F) either
+            if (technique->getNormals() && SceneUtil::GLDialect::sHasPostProcessing)
                 mNormals = true;
 
             if (technique->getLights())

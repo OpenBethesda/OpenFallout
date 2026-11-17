@@ -8,8 +8,8 @@ the one Mac job ([macos.yml](../../.github/workflows/macos.yml), called by
 [release.yml](../../.github/workflows/release.yml)) do that. The related
 test-report behavior is described in [CI reporting](ci-reporting.md).
 
-The Mac job runs on one runner image, `macos-26` (Apple Silicon), and keeps two
-build trees. `build` is the packaged app; its cache key starts with
+The Mac job runs on one runner image, `macos-26` (Apple Silicon), and builds
+three trees; it caches the first two. `build` is the packaged app; its cache key starts with
 `build-macos-v1-` and its fingerprint mode is the image name and build type
 (`macos-26-RelWithDebInfo`). `build-tests` is the instrumented unit-test tree (Debug without `-g`,
 coverage, only the two test suites; about 1.8 GB before compression, against
@@ -17,10 +17,28 @@ about 8 GB with debug information); its key starts with `build-macos-coverage-v1
 is `macos-26-coverage`, and the job passes `--build-dir
 build-tests` to `restore` and `snapshot`. The two never share a cache entry, so
 ordinary objects are never restored into an instrumented build. Both trees use
-the job's one ccache, which is limited to 768 MB when it is stored after a run
-that built the test tree and to 384 MB otherwise. Only `master` runs save
-either tree, and a release-tag run, which does not build the test tree, saves
-only `build`.
+the job's one ccache. Only `master` runs save either tree, and a release-tag
+run, which does not build the test tree, saves only `build`.
+
+`build-metal` is the Metal build (`CI/before_script.macos.sh -M`: Debug, `-O0`,
+no coverage, the engine and the two test suites). It is never packaged and its
+folder is **not** cached: it would double the space the test tree takes in the
+10 GB budget, and the ccache already gives most of the saving (the rest is
+linking). It uses the job's ccache. Nearly every file of this tree is compiled with
+`-DOPENFALLOUT_METAL`, so its objects are their own entries in the ccache: the
+first run on `master` after the change fills them, and later runs hit them.
+A release-tag run does not build it. If the first warm run of this tree takes
+more than ten minutes, the fix is a cache of `build-metal` on `master` only,
+with the same three steps as `build-tests` and the key start
+`build-macos-metal-v1-`.
+
+The ccache is limited to 1,000 MB when it is stored after a run that built the
+Metal tree (every run but a release tag) and to 384 MB otherwise. The Metal build
+also has a small cache of its own: the OpenSceneGraph for OpenGL ES 3 it needs
+(about 19 MB). Its key is the output of `CI/macos/osg/osg_gles3.py key`, not
+`CI/build_cache.py`; see [OpenSceneGraph for OpenGL ES 3](osg-gles3.md). It is
+saved as soon as it is built, by any run, so that a later failure does not lose
+it.
 
 ## Working directory and cache identity
 

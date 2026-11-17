@@ -5,13 +5,21 @@ USE_CCACHE=""
 KEEP=""
 USE_WERROR=""
 TEST_TREE=""
+METAL_TREE=""
 BUILD_DIR="build"
 DEPENDENCIES_ROOT_PATH="/tmp/openmw-deps"
 BUNDLE_ANGLE_ROOT=""
+# The Metal build (-M): ANGLE (CI/angle_asset.py fetch puts it here) and OpenSceneGraph built for OpenGL ES 3
+# (CI/macos/before_install_osg.sh puts it here)
+ANGLE_ROOT_PATH="/tmp/openfallout-angle"
+OSG_GLES3_PREFIX="/tmp/openfallout-osg-gles3"
+
+# before the build folder becomes the working directory
+HERE="$(cd "$(dirname "$0")" && pwd)"
 
 source ./CI/macos/deps_versions.sh
 
-while getopts VCkETd:A: ARG
+while getopts VCkETMd:a:o:A: ARG
 do
     case $ARG in
 	V )
@@ -30,6 +38,18 @@ do
 	    TEST_TREE=true
 	    BUILD_DIR="build-tests" ;;
 
+	M )
+	    METAL_TREE=true
+	    BUILD_DIR="build-metal" ;;
+
+        a )
+            ANGLE_ROOT_PATH="$OPTARG"
+            ;;
+
+        o )
+            OSG_GLES3_PREFIX="$OPTARG"
+            ;;
+
         d )
             DEPENDENCIES_ROOT_PATH="$OPTARG"
             ;;
@@ -39,7 +59,7 @@ do
 
 	* )
 	    cat <<EOF
-Usage: $0 [-VCkETd]
+Usage: $0 [-VCkETMdaoA]
 Options:
 	-C
 		Use ccache.
@@ -57,11 +77,24 @@ Options:
 	-A <dir>
 		The early notarized test of ANGLE (docs/openfallout/angle.md): package the ANGLE
 		libraries unpacked in <dir> and the ANGLE probe into the OpenGL app. Never for a release.
+	-M
+		Configure the Metal tree in build-metal instead: the Metal build of the engine (OpenGL ES 3
+		through ANGLE), Debug without coverage, the engine and the two test suites, no tools. It is
+		never packaged. It cannot be combined with -T.
+	-a <dir>
+		ANGLE's folder for -M (lib/libEGL.dylib, lib/libGLESv2.dylib, include/), default /tmp/openfallout-angle.
+	-o <dir>
+		The OpenSceneGraph for OpenGL ES 3 for -M (CI/macos/osg/build_osg_gles3.sh), default /tmp/openfallout-osg-gles3.
 EOF
 	    exit 1
 	    ;;
     esac
 done
+
+if [[ -n $TEST_TREE && -n $METAL_TREE ]]; then
+    echo "-M and -T cannot be combined: the coverage tree is the desktop OpenGL build" >&2
+    exit 1
+fi
 
 if [[ -z $KEEP ]]; then
     if [[ -n $VERBOSE && -d "$BUILD_DIR" ]]; then
@@ -109,11 +142,50 @@ if [[ -n $TEST_TREE ]]; then
     )
 fi
 
+# The Metal tree builds what the done test needs and nothing else: the engine and the two test suites (Debug, -O0, no
+# coverage: the coverage report stays the desktop OpenGL build's). The tools do not touch the graphics library.
+if [[ -n $METAL_TREE ]]; then
+    CMAKE_BUILD_TYPE=Debug
+    BUILD_OPTS+=(
+        -D CMAKE_C_FLAGS_DEBUG=-O0
+        -D CMAKE_CXX_FLAGS_DEBUG=-O0
+        -D BUILD_COMPONENTS_TESTS=ON
+        -D BUILD_OPENFALLOUT_TESTS=ON
+        -D BUILD_ESMTOOL=FALSE
+        -D BUILD_BSATOOL=FALSE
+        -D BUILD_ESSIMPORTER=FALSE
+        -D BUILD_NIFTEST=FALSE
+        -D BUILD_NAVMESHTOOL=FALSE
+        -D BUILD_BULLETOBJECTTOOL=FALSE
+    )
+fi
+
 DEPENDENCIES_INSTALLED_PATH="$DEPENDENCIES_ROOT_PATH/installed/$VCPKG_TARGET_TRIPLET"
 QT_PATH=/tmp/Qt/$QT_VER/macos
 
+if [[ -n $METAL_TREE ]]; then
+    # The OpenGL ES 3 OpenSceneGraph comes before the dependency set, which holds the desktop OpenGL one: find_package
+    # takes the first match. The engine's CMake refuses a build whose OpenSceneGraph has the wrong profile.
+    CMAKE_CONF_OPTS+=(
+        -D CMAKE_PREFIX_PATH="$OSG_GLES3_PREFIX;$DEPENDENCIES_INSTALLED_PATH;$QT_PATH"
+        -DOPENFALLOUT_METAL=ON
+        -DOPENFALLOUT_ANGLE_ROOT="$ANGLE_ROOT_PATH"
+        -DOSG_DIR="$OSG_GLES3_PREFIX"
+        -DOPENTHREADS_DIR="$OSG_GLES3_PREFIX"
+    )
+    # The order above does not decide it: the dependency set's toolchain file puts its own folders in front of every
+    # search. So each header folder and library of OpenSceneGraph is named, from the engine's own list.
+    OSG_FIND_OPTIONS="$(python3 "$HERE/macos/osg/osg_gles3.py" find-options --root "$HERE/.." --prefix "$OSG_GLES3_PREFIX")" || exit 1
+    while IFS= read -r option; do
+        CMAKE_CONF_OPTS+=("$option")
+    done <<< "$OSG_FIND_OPTIONS"
+else
+    CMAKE_CONF_OPTS+=(
+        -D CMAKE_PREFIX_PATH="$DEPENDENCIES_INSTALLED_PATH;$QT_PATH"
+    )
+fi
+
 CMAKE_CONF_OPTS+=(
-    -D CMAKE_PREFIX_PATH="$DEPENDENCIES_INSTALLED_PATH;$QT_PATH"
     -DVCPKG_HOST_TRIPLET="$VCPKG_TARGET_TRIPLET"
     -DVCPKG_TARGET_TRIPLET="$VCPKG_TARGET_TRIPLET"
     -DCMAKE_TOOLCHAIN_FILE="$DEPENDENCIES_ROOT_PATH/scripts/buildsystems/vcpkg.cmake"

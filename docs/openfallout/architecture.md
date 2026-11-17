@@ -26,6 +26,10 @@ Save orchestration is in [`apps/openfallout/mwscript/falloutsave.cpp`](../../app
 
 The core (records, scripts, world, gameplay rules) makes no Apple calls. Mac-only code lives at the edges only. A rule check on the Mac job enforces this; see [Core and edges](core-and-edges.md). The first native bridge is [head-tracked sound](head-tracking.md).
 
+## Two build configurations
+
+Until the Metal build has passed its checks the engine has two build configurations. The desktop OpenGL build is the reference and the packaged app. The Metal build (`-DOPENFALLOUT_METAL=ON`) writes OpenGL ES 3.0 and lets ANGLE's Metal backend turn it into Metal. It needs [ANGLE](angle.md) and an [OpenSceneGraph built for OpenGL ES 3](osg-gles3.md). The Mac job builds both and runs the unit tests of both (see the [build cache](ci-cache.md) and [reporting](ci-reporting.md) pages); only the OpenGL build is packaged.
+
 ## How to read evidence
 
 Source shows what is implemented. Unit tests show only the cases they exercise; find them alongside the owning component, including [`apps/components_tests/esm4/`](../../apps/components_tests/esm4/) and [`apps/openfallout_tests/`](../../apps/openfallout_tests/). Automated in-game evidence is recorded separately in the [harness guide](harness.md) and milestone sections of the [roadmap](gap-audit-and-roadmap.md). Manual play is a separate evidence category and should be claimed only where the project documentation records it. Do not infer game-engine parity from source resemblance, unit tests, or automated runs.

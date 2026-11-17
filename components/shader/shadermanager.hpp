@@ -12,6 +12,7 @@
 
 #include <osg/Program>
 #include <osg/Shader>
+#include <osg/Uniform>
 #include <osg/ref_ptr>
 
 namespace osgViewer
@@ -94,9 +95,23 @@ namespace Shader
         void setHotReloadEnabled(bool value);
         void triggerShaderReload();
 
+        /// Whether shaders are converted to GLSL ES 3.00 with their linked library shaders folded in. The Metal build
+        /// always converts and the OpenGL build never does (SceneUtil::GLDialect); tests may choose either.
+        void setConvertToGlslEs(bool value) { mConvertToGlslEs = value; }
+
     private:
+        typedef std::vector<osg::ref_ptr<osg::Uniform>> UniformList;
+
         osg::ref_ptr<osg::Shader> getShaderInternal(std::string templateName, const DefineMap& defines = {},
             std::optional<osg::Shader::Type> type = std::nullopt);
+        // Reads a template and its includes once; end() if it cannot be read
+        std::map<std::string, std::string>::iterator loadTemplate(const std::string& templateName);
+        // Reads a template and its includes from disk; false, leaving source as it is, if it cannot be read
+        bool readTemplate(const std::string& templateName, std::string& source);
+        // Turns the source createSourceFromTemplate gives into the text the graphics library compiles
+        bool finishSource(std::string& source, std::vector<std::string>& linkedShaderNames,
+            const std::string& templateName, osg::Shader::Type type, const DefineMap& defines,
+            UniformList& initialValues);
         void getLinkedShaders(osg::ref_ptr<osg::Shader> shader, const std::vector<std::string>& linkedShaderNames,
             const DefineMap& defines);
         void addLinkedShaders(osg::ref_ptr<osg::Shader> shader, osg::ref_ptr<osg::Program> program);
@@ -120,6 +135,8 @@ namespace Shader
         typedef std::vector<osg::ref_ptr<osg::Shader>> ShaderList;
         typedef std::map<osg::ref_ptr<osg::Shader>, ShaderList> LinkedShadersMap;
         LinkedShadersMap mLinkedShaders;
+
+        bool mConvertToGlslEs;
 
         std::mutex mMutex;
 
@@ -148,6 +165,11 @@ namespace Shader
         const std::string& templateName);
 
     ShaderManager::DefineMap getDefaultDefines();
+
+    /// The uniform values a program made by the ShaderManager sets each time it is linked: those of the uniform
+    /// initialisers the GLSL ES conversion took out of its shaders (GLSL ES has none). They follow the shaders' current
+    /// text, also after a rebuild for new defines or a hot reload. Always empty in the OpenGL build.
+    std::vector<osg::ref_ptr<osg::Uniform>> getInitialValues(const osg::Program& program);
 }
 
 #endif

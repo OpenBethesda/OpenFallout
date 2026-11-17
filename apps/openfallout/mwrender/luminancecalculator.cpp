@@ -26,6 +26,7 @@ namespace OFRender
             buffer.mipmappedSceneLuminanceTex = new osg::Texture2D;
             buffer.mipmappedSceneLuminanceTex->setInternalFormat(GL_R16F);
             buffer.mipmappedSceneLuminanceTex->setSourceFormat(GL_RED);
+            buffer.mipmappedSceneLuminanceTex->setSourceType(GL_HALF_FLOAT);
             buffer.mipmappedSceneLuminanceTex->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
             buffer.mipmappedSceneLuminanceTex->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
             buffer.mipmappedSceneLuminanceTex->setFilter(
@@ -36,6 +37,7 @@ namespace OFRender
             buffer.luminanceTex = new osg::Texture2D;
             buffer.luminanceTex->setInternalFormat(GL_R16F);
             buffer.luminanceTex->setSourceFormat(GL_RED);
+            buffer.luminanceTex->setSourceType(GL_HALF_FLOAT);
             buffer.luminanceTex->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
             buffer.luminanceTex->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
             buffer.luminanceTex->setFilter(osg::Texture2D::MIN_FILTER, osg::Texture2D::NEAREST);

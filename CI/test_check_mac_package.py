@@ -924,6 +924,32 @@ class AngleCheckTests(unittest.TestCase):
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL no-opengl: Contents/MacOS/openfallout links Apple's OpenGL framework", output)
 
+    def test_a_run_path_with_dot_parts_cannot_hide_apples_opengl(self):
+        """/Applications/../System/Library/Frameworks, a ./ part or a doubled slash is still Apple's folder."""
+        self.tools.links["MacOS/openfallout"] = ["@rpath/OpenGL.framework/Versions/A/OpenGL"]
+        for rpath in ("/Applications/../System/Library/Frameworks",
+                      "/System/Library/./Frameworks",
+                      "/System//Library/Frameworks/",
+                      "/System/Library/Frameworks/Foo.framework/..",
+                      "/usr/lib/../../System/Library/Frameworks"):
+            with self.subTest(rpath=rpath):
+                self.tools.rpaths["MacOS/openfallout"] = [rpath]
+                status, output = self.check("--forbid-opengl")
+                self.assertEqual(status, 1, output)
+                self.assertIn("FAIL no-opengl: Contents/MacOS/openfallout links Apple's OpenGL framework", output)
+
+    def test_a_full_name_with_dot_parts_cannot_hide_apples_opengl(self):
+        self.tools.links["MacOS/openfallout"] = ["/System/Library/Frameworks/../Frameworks/OpenGL.framework/OpenGL"]
+        status, output = self.check("--forbid-opengl")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL no-opengl: Contents/MacOS/openfallout links Apple's OpenGL framework", output)
+
+    def test_dot_parts_that_lead_elsewhere_do_not_fail_the_check(self):
+        self.tools.links["MacOS/openfallout"] = ["@rpath/OpenGL.framework/Versions/A/OpenGL"]
+        self.tools.rpaths["MacOS/openfallout"] = ["/System/Library/Frameworks/../PrivateFrameworks"]
+        _, output = self.check("--forbid-opengl")
+        self.assertIn("PASS no-opengl", output)
+
     def test_apples_opengl_reached_through_another_binarys_run_path_is_caught_too(self):
         """A library without a run path of its own inherits the run paths of the program that loads it."""
         self.tools.links["Frameworks/libopenal.1.25.0.dylib"] = ["@rpath/OpenGL.framework/Versions/A/OpenGL"]
