@@ -23,6 +23,7 @@ signature and any later one, and changes with any other byte (code, data, instal
 import argparse
 import gzip
 import hashlib
+import http.client
 import io
 import json
 import os
@@ -62,14 +63,22 @@ def sha256_file(path):
 # --------------------------------------------------------------------------------------------- digest without signature
 
 def code_digest(data):
-    """SHA-256 of a thin 64-bit Mach-O file without its code signature (see the top of this file)."""
+    """SHA-256 of a thin 64-bit Mach-O file without its code signature (see the top of this file). A file that is cut
+    short or damaged is refused like any other file that is not the library: AssetError, never a crash."""
+    try:
+        return _code_digest(data)
+    except struct.error:
+        raise AssetError("the Mach-O file is cut short or damaged") from None
+
+
+def _code_digest(data):
     if len(data) < 32 or struct.unpack_from("<I", data)[0] != MH_MAGIC_64:
         raise AssetError("not a 64-bit Mach-O file (a universal file or another format)")
     magic, cputype, cpusubtype, filetype, ncmds, sizeofcmds, flags, reserved = struct.unpack_from("<IiiIIIII", data)
     commands, offset, signature = [], 32, None
     for _ in range(ncmds):
         cmd, size = struct.unpack_from("<II", data, offset)
-        if size < 8 or offset + size > 32 + sizeofcmds:
+        if size < 8 or offset + size > 32 + sizeofcmds or offset + size > len(data):
             raise AssetError("a load command runs past the header")
         command = bytearray(data[offset:offset + size])
         if cmd == LC_CODE_SIGNATURE:
@@ -84,7 +93,7 @@ def code_digest(data):
     if signature is None:
         raise AssetError("the file has no code signature")
     start, size = signature
-    if start + size != len(data):
+    if start + size != len(data) or start < 32 + sizeofcmds:
         raise AssetError("the code signature is not at the end of the file")
     joined = b"".join(commands)
     header = struct.pack("<IiiIIIII", magic, cputype, cpusubtype, filetype, ncmds - 1, len(joined), flags, reserved)
@@ -208,7 +217,7 @@ def download(url, target, attempts=3):
             with urllib.request.urlopen(url, timeout=120) as response, open(target, "wb") as file:
                 shutil.copyfileobj(response, file)
             return
-        except OSError as error:
+        except (OSError, http.client.HTTPException) as error:  # HTTPException: the connection ended mid-body
             if attempt == attempts or url.startswith("file:"):
                 raise AssetError(f"cannot download {url}: {error}") from None
             time.sleep(5 * attempt)
@@ -222,6 +231,10 @@ def verify_recorded(version, folder):
             problems.append(f"{name} is missing")
             continue
         found = library_digests(path) if name.endswith(".dylib") else {"sha256": sha256_file(path)}
+        # every digest this script can compute must be recorded: a version file that leaves one out checks nothing
+        for kind in found:
+            if not isinstance(recorded.get(kind), str):
+                problems.append(f"{name}: the version file records no {kind}")
         for kind, digest in recorded.items():
             if found.get(kind) != digest:
                 problems.append(f"{name}: {kind} {found.get(kind)} is not the recorded {digest}")

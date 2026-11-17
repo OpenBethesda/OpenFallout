@@ -83,6 +83,8 @@ set(USED_OSG_PLUGINS dummy)
     def test_the_opengl_release_packages_no_angle(self):
         install = self.configure()
         self.assertNotIn("libEGL", install)
+        self.assertNotIn("libGLESv2", install)
+        self.assertNotIn("ANGLE-NOTICES", install)
         self.assertNotIn("angle-probe", install)
 
     def test_the_test_build_needs_the_unpacked_asset(self):
@@ -94,9 +96,10 @@ set(USED_OSG_PLUGINS dummy)
 
     def test_the_libraries_notices_and_probe_are_installed_after_fixup_bundle(self):
         install = self.configure("-DOPENFALLOUT_BUNDLE_ANGLE=ON", f"-DOPENFALLOUT_ANGLE_ROOT={self.angle}")
-        fixup = install.index("fixup_bundle(")
-        frameworks = install.index("/OpenFallout.app/Contents/Frameworks")
-        self.assertGreater(frameworks, fixup)
+        fixup = install.rindex("fixup_bundle(")
+        # the rule that copies the published library, not just any line that names the Frameworks folder
+        self.assertGreater(install.index(f"{self.angle}/lib/libEGL.dylib"), fixup)
+        self.assertGreater(install.index(f"{self.angle}/lib/libGLESv2.dylib"), fixup)
         self.assertIn(f"{self.angle}/lib/libEGL.dylib", install)
         self.assertIn(f"{self.angle}/lib/libGLESv2.dylib", install)
         self.assertIn('RENAME "ANGLE-NOTICES.txt"', install)

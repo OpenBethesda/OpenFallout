@@ -5,8 +5,9 @@
  * prints the EGL and GL strings, compiles a GLSL ES 3.00 program (ANGLE turns it into a Metal library at run time),
  * draws one triangle over the surface and reads one pixel back.
  *
- * The last line is "ANGLE probe: PASS" or "ANGLE probe: FAIL: <why>". Exit status: 0 pass, 2 no Metal display (a
- * machine without a Metal device, such as a hosted CI runner), 3 any later failure.
+ * The last line is "ANGLE probe: PASS" or "ANGLE probe: FAIL: <why>". Exit status: 0 pass, 2 the machine has no Metal
+ * device (a hosted CI runner; the probe asks Metal itself, so nothing ANGLE does can look like this), 3 any failure
+ * on a machine that has one, ANGLE's display not starting among them.
  */
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -20,9 +21,12 @@
 enum
 {
     PASS = 0,
-    NO_DISPLAY = 2,
+    NO_DEVICE = 2,
     FAILED = 3
 };
+
+/* Metal's C entry point (Metal.framework). The probe is plain C: the object it returns is only tested for NULL. */
+extern void* MTLCreateSystemDefaultDevice(void);
 
 static int fail(int status, const char* why)
 {
@@ -58,12 +62,17 @@ static const char* FRAGMENT = "#version 300 es\n"
 
 int main(void)
 {
+    if (MTLCreateSystemDefaultDevice() == NULL)
+    {
+        printf("ANGLE probe: FAIL: this machine has no Metal device\n");
+        return NO_DEVICE;
+    }
     const EGLAttrib displayAttributes[] = { EGL_PLATFORM_ANGLE_TYPE_ANGLE, EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE, EGL_NONE };
     EGLDisplay display
         = eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_ANGLE, (void*)EGL_DEFAULT_DISPLAY, displayAttributes);
     EGLint major = 0, minor = 0;
     if (display == EGL_NO_DISPLAY || !eglInitialize(display, &major, &minor))
-        return fail(NO_DISPLAY, "ANGLE's Metal display cannot be initialised (no Metal device?)");
+        return fail(FAILED, "ANGLE's Metal display cannot be initialised on a machine that has a Metal device");
     printf("EGL_VERSION: %s\n", eglQueryString(display, EGL_VERSION));
     printf("EGL_VENDOR: %s\n", eglQueryString(display, EGL_VENDOR));
 

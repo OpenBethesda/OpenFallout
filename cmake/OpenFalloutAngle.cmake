@@ -51,7 +51,9 @@ if (OPENFALLOUT_BUNDLE_ANGLE)
     add_executable(openfallout-angle-probe "${CMAKE_CURRENT_LIST_DIR}/../CI/macos/angle/angle_probe.c")
     target_include_directories(openfallout-angle-probe PRIVATE "${OPENFALLOUT_ANGLE_ROOT}/include")
     target_link_libraries(openfallout-angle-probe PRIVATE
-        "${OPENFALLOUT_ANGLE_ROOT}/lib/libEGL.dylib" "${OPENFALLOUT_ANGLE_ROOT}/lib/libGLESv2.dylib")
+        "${OPENFALLOUT_ANGLE_ROOT}/lib/libEGL.dylib" "${OPENFALLOUT_ANGLE_ROOT}/lib/libGLESv2.dylib"
+        # the probe asks Metal whether the machine has a device at all; a command line program needs CoreGraphics for that
+        "-framework Metal" "-framework CoreGraphics")
     # Built outside the app folder, so that neither the app's install(DIRECTORY) nor fixup_bundle sees it; installed
     # below with the rpath of the packaged app only.
     set_target_properties(openfallout-angle-probe PROPERTIES

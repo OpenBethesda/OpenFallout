@@ -75,6 +75,12 @@ class LibraryDigestTests(unittest.TestCase):
         with self.assertRaisesRegex(angle_asset.AssetError, "not a 64-bit Mach-O"):
             angle_asset.code_digest(b"#!/bin/sh\n" + bytes(64))
 
+    def test_a_damaged_library_is_refused_and_not_a_crash(self):
+        whole = fake_library(signature=b"\xfa\xde\x0c\xc0" + b"a" * 60)
+        for length in (33, 40, 60, len(whole) // 2):
+            with self.assertRaises(angle_asset.AssetError, msg=length):
+                angle_asset.code_digest(whole[:length])
+
     @unittest.skipUnless(ON_MAC, "needs clang, codesign and install_name_tool (macOS)")
     def test_real_signatures_of_one_library_have_one_digest(self):
         with tempfile.TemporaryDirectory(prefix="angle digest ") as folder:
@@ -185,6 +191,12 @@ class FetchTests(unittest.TestCase):
 
     def test_a_library_that_is_not_the_recorded_one_fails(self):
         self.version["files"]["lib/libEGL.dylib"]["sha256_without_signature"] = "1" * 64
+        with self.assertRaisesRegex(angle_asset.AssetError, "lib/libEGL.dylib"):
+            angle_asset.fetch(self.version, self.root / "angle-root", base_url=self.base)
+        self.assertFalse((self.root / "angle-root").exists())
+
+    def test_a_version_file_without_both_digests_of_a_library_is_refused(self):
+        self.version["files"]["lib/libEGL.dylib"] = {}
         with self.assertRaisesRegex(angle_asset.AssetError, "lib/libEGL.dylib"):
             angle_asset.fetch(self.version, self.root / "angle-root", base_url=self.base)
         self.assertFalse((self.root / "angle-root").exists())

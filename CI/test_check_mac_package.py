@@ -911,16 +911,24 @@ class AngleCheckTests(unittest.TestCase):
                       "back", output)
 
     def test_a_machine_without_a_metal_device_skips_the_probe_only_in_auto_mode(self):
-        self.add_probe(2, "ANGLE probe: FAIL: ANGLE's Metal display cannot be initialised (no Metal device?) "
-                          "(EGL error 0x3001)\n")
+        self.add_probe(2, "ANGLE probe: FAIL: this machine has no Metal device\n")
         with unittest.mock.patch.object(check_mac_package, "check_library_validation", return_value="stand-in"), \
                 unittest.mock.patch.object(check_mac_package, "check_smoke", return_value="stand-in"):
             _, output = self.check(smoke="auto")
             self.assertIn("SKIP angle-probe: this machine has no Metal device", output)
             status, output = self.check(smoke="run")
         self.assertEqual(status, 1, output)
-        self.assertIn("FAIL angle-probe: exit status 2: ANGLE probe: FAIL: ANGLE's Metal display cannot be "
-                      "initialised", output)
+        self.assertIn("FAIL angle-probe: exit status 2: ANGLE probe: FAIL: this machine has no Metal device", output)
+
+    def test_a_display_that_does_not_start_on_a_machine_with_a_metal_device_fails_in_auto_mode_too(self):
+        """Exit status 3: what a hardened runtime that blocked ANGLE's Metal start-up would give. It is never a skip."""
+        self.add_probe(3, "ANGLE probe: FAIL: ANGLE's Metal display cannot be initialised on a machine that has a "
+                          "Metal device (EGL error 0x3001)\n")
+        with unittest.mock.patch.object(check_mac_package, "check_library_validation", return_value="stand-in"), \
+                unittest.mock.patch.object(check_mac_package, "check_smoke", return_value="stand-in"):
+            status, output = self.check(smoke="auto")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL angle-probe: exit status 3", output)
 
     def test_a_probe_the_loader_refuses_fails_even_in_auto_mode(self):
         self.add_probe(-6, "", "dyld[1]: Library not loaded: @rpath/libEGL.dylib\n  Reason: tried: ... different "
