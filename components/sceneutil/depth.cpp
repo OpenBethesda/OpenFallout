@@ -140,7 +140,8 @@ namespace SceneUtil
                 Log(Debug::Info) << "Using reverse-z depth buffer";
             }
             else
-                Log(Debug::Warning) << "GL_ARB_clip_control not supported: disabling reverse-z depth buffer";
+                Log(Debug::Warning) << GLDialect::sClipControlExtension
+                                    << " not supported: disabling reverse-z depth buffer";
         }
         else
             Log(Debug::Info) << "Using standard depth buffer";

@@ -28,6 +28,9 @@ namespace SceneUtil::GLDialect
     // The extension that gives the GL_DEPTH_CLAMP switch (the same number in both)
     inline constexpr const char* sDepthClampExtension = sOpenGLES ? "GL_EXT_depth_clamp" : "GL_ARB_depth_clamp";
 
+    // The extension that gives clip control, which a reversed depth buffer needs
+    inline constexpr const char* sClipControlExtension = sOpenGLES ? "GL_EXT_clip_control" : "GL_ARB_clip_control";
+
     // A camera that draws into a depth texture alone gets a colour buffer from OpenSceneGraph unless it asks for none:
     // a renderbuffer of the unsized GL_RGB format, which desktop OpenGL makes and OpenGL ES refuses (the frame buffer
     // is then incomplete, and OpenSceneGraph falls back to copying, which cannot copy depth). OpenGL ES completes a
