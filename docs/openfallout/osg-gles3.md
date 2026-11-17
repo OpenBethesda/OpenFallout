@@ -95,6 +95,11 @@ packaged app is still the OpenGL build). In order:
 5. Configure `build-metal` (`CI/before_script.macos.sh -C -k -M`), build the engine and the two test suites in it
    with the job's ccache, and run both suites. The results are pass or fail only (see [CI reporting](ci-reporting.md)).
 
+The dependency set of the Mac job holds a desktop OpenSceneGraph, and its toolchain file puts its own folders in front
+of every search. So the configure step does not rely on a search order. `CI/before_script.macos.sh -M` names each
+OpenSceneGraph library and header folder to CMake (`osg_gles3.py find-options`), and the engine's CMake puts the headers
+for OpenGL ES 3 first and stops if a desktop OpenSceneGraph would be read before them.
+
 The ANGLE release named in `CI/macos/angle/angle.json` must be published before this block can pass: until then the
 fetch step fails with the address it could not read, and the steps after it do not run.
 

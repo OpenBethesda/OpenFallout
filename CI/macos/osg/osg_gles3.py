@@ -6,6 +6,7 @@ CMakeLists.txt), so the two cannot drift apart. The cache key covers everything 
 
     osg_gles3.py skip                  the libraries that are not built, separated by ';'
     osg_gles3.py plugin-options        one -DBUILD_OSG_PLUGIN_<NAME>=ON per line
+    osg_gles3.py find-options --prefix DIR   the options that name each OpenSceneGraph library in DIR to the engine's CMake
     osg_gles3.py key [--input FILE]...   the cache key (SHA-256); the inputs are files outside this folder that change
                                          the result: the ANGLE version, the dependency set's manifest
 
@@ -103,6 +104,19 @@ def plugin_options(lists):
     return options
 
 
+def find_options(lists, prefix):
+    """The CMake options that name, one by one, the header folder and the library of OpenSceneGraph, OpenThreads and
+    every component the engine asks for, inside `prefix`. A search order cannot do this: the dependency set's toolchain
+    file puts its own folders, which hold a desktop OpenSceneGraph, in front of every search. Release and Debug get the
+    same library, so a Debug tree does not take the desktop debug library either."""
+    options = []
+    for name in ["osg", "OpenThreads", *lists["components"]]:
+        library = f"{prefix}/lib/lib{name}.dylib"
+        options += [f"-D{name.upper()}_INCLUDE_DIR={prefix}/include", f"-D{name.upper()}_LIBRARY_RELEASE={library}",
+                    f"-D{name.upper()}_LIBRARY_DEBUG={library}"]
+    return options
+
+
 def cache_key(root, inputs):
     """A SHA-256 over what decides the result: the commit, the patches, the build script and this helper, the engine's
     two lists and the files named by the caller: the ANGLE version (the library is built against ANGLE's headers) and
@@ -127,8 +141,9 @@ def cache_key(root, inputs):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("skip", "plugin-options", "key"))
+    parser.add_argument("command", choices=("skip", "plugin-options", "find-options", "key"))
     parser.add_argument("--root", default=".", help="the repository root (default: the current folder)")
+    parser.add_argument("--prefix", help="find-options: the install folder of the OpenSceneGraph for OpenGL ES 3")
     parser.add_argument("--input", action="append", default=[],
                         help="a file outside this folder that changes the result (repeat for more than one)")
     args = parser.parse_args(argv)
@@ -139,6 +154,10 @@ def main(argv=None):
     lists = engine_lists((root / "CMakeLists.txt").read_text())
     if args.command == "skip":
         print(";".join(skipped_libraries(lists)))
+    elif args.command == "find-options":
+        if not args.prefix:
+            parser.error("find-options needs --prefix")
+        print("\n".join(find_options(lists, args.prefix.rstrip("/"))))
     else:
         print("\n".join(plugin_options(lists)))
     return 0

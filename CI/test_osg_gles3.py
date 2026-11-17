@@ -184,6 +184,20 @@ class RecordedVersion(unittest.TestCase):
                 self.assertIn("Why this patch is needed", comment)
                 self.assertGreater(len(comment.split()), 30, "the reason is too short to be one")
 
+    def test_the_find_options_name_every_library_the_engine_asks_for(self):
+        lists = osg.engine_lists(CMAKELISTS)
+        options = osg.find_options(lists, "/prefix")
+        names = {option.split("_INCLUDE_DIR=")[0][2:] for option in options if "_INCLUDE_DIR=" in option}
+        self.assertEqual(names, {"OSG", "OPENTHREADS"} | {name.upper() for name in lists["components"]})
+        for name in names:
+            self.assertIn(f"-D{name}_INCLUDE_DIR=/prefix/include", options)
+            release = [o for o in options if o.startswith(f"-D{name}_LIBRARY_RELEASE=")]
+            debug = [o for o in options if o.startswith(f"-D{name}_LIBRARY_DEBUG=")]
+            self.assertEqual(len(release), 1)
+            # one library for both configurations: a Debug tree must not take the desktop debug library
+            self.assertEqual(release[0].split("=")[1], debug[0].split("=")[1])
+        self.assertIn("-DOSGANIMATION_LIBRARY_RELEASE=/prefix/lib/libosgAnimation.dylib", options)
+
     def test_the_patch_numbers_are_in_order_without_gaps(self):
         numbers = [int(p.name[:4]) for p in sorted((FOLDER / "patches").glob("*.patch"))]
         self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
@@ -297,7 +311,7 @@ class BeforeScript(unittest.TestCase):
         # ANGLE is named only to keep it out of the OpenGL app (the early notarized test switches it on with -A)
         self.assertIn("-DOPENFALLOUT_BUNDLE_ANGLE=OFF", arguments)
         arguments.remove("-DOPENFALLOUT_BUNDLE_ANGLE=OFF")
-        self.assertFalse([a for a in arguments if "METAL" in a or "ANGLE" in a or "OSG_DIR" in a])
+        self.assertFalse([a for a in arguments if "METAL" in a or "ANGLE" in a or "OSG" in a.upper()])
 
     @unittest.skipUnless(shutil.which("bash"), "needs bash")
     def test_the_unit_test_tree_is_unchanged(self):
@@ -319,6 +333,15 @@ class BeforeScript(unittest.TestCase):
         prefix = [a for a in arguments if a.startswith("-DCMAKE_PREFIX_PATH=")]
         self.assertEqual(len(prefix), 1)
         self.assertTrue(prefix[0].startswith("-DCMAKE_PREFIX_PATH=/osg-gles3;/tmp/openmw-deps/"), prefix)
+        # That order alone does not decide it: the dependency set's toolchain file puts its own folders in front of every
+        # search, so CMake found the desktop OpenSceneGraph there (the first run of the Mac job). Each library and header
+        # folder of OpenSceneGraph is therefore given by name, for both configurations.
+        for name in ("OSG", "OPENTHREADS", "OSGDB", "OSGVIEWER", "OSGSHADOW"):
+            self.assertIn(f"-D{name}_INCLUDE_DIR=/osg-gles3/include", arguments)
+        self.assertIn("-DOSG_LIBRARY_RELEASE=/osg-gles3/lib/libosg.dylib", arguments)
+        self.assertIn("-DOSG_LIBRARY_DEBUG=/osg-gles3/lib/libosg.dylib", arguments)
+        self.assertIn("-DOPENTHREADS_LIBRARY_RELEASE=/osg-gles3/lib/libOpenThreads.dylib", arguments)
+        self.assertIn("-DOSGDB_LIBRARY_DEBUG=/osg-gles3/lib/libosgDB.dylib", arguments)
         # the engine and the two test suites, no coverage, no tools
         self.assertIn("-DCMAKE_BUILD_TYPE=Debug", arguments)
         self.assertIn("-DBUILD_OPENFALLOUT_TESTS=ON", arguments)

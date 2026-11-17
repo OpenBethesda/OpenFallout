@@ -14,6 +14,9 @@ BUNDLE_ANGLE_ROOT=""
 ANGLE_ROOT_PATH="/tmp/openfallout-angle"
 OSG_GLES3_PREFIX="/tmp/openfallout-osg-gles3"
 
+# before the build folder becomes the working directory
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
 source ./CI/macos/deps_versions.sh
 
 while getopts VCkETMd:a:o:A: ARG
@@ -170,6 +173,12 @@ if [[ -n $METAL_TREE ]]; then
         -DOSG_DIR="$OSG_GLES3_PREFIX"
         -DOPENTHREADS_DIR="$OSG_GLES3_PREFIX"
     )
+    # The order above does not decide it: the dependency set's toolchain file puts its own folders in front of every
+    # search. So each header folder and library of OpenSceneGraph is named, from the engine's own list.
+    OSG_FIND_OPTIONS="$(python3 "$HERE/macos/osg/osg_gles3.py" find-options --root "$HERE/.." --prefix "$OSG_GLES3_PREFIX")" || exit 1
+    while IFS= read -r option; do
+        CMAKE_CONF_OPTS+=("$option")
+    done <<< "$OSG_FIND_OPTIONS"
 else
     CMAKE_CONF_OPTS+=(
         -D CMAKE_PREFIX_PATH="$DEPENDENCIES_INSTALLED_PATH;$QT_PATH"

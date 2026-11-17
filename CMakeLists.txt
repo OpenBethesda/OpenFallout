@@ -436,6 +436,25 @@ include_directories(
     ${SOL_CONFIG_DIR}
     ${ICU_INCLUDE_DIRS}
 )
+# Metal include order
+if (OPENFALLOUT_METAL)
+    # A dependency set may keep a desktop OpenSceneGraph in the one folder of all its headers, which the call above has
+    # just put in front. The compiler must read the headers of the OpenSceneGraph for OpenGL ES 3 first, and the check
+    # below stops the configure step if any folder in front of them holds another OpenSceneGraph.
+    include_directories(BEFORE SYSTEM ${OPENSCENEGRAPH_INCLUDE_DIRS})
+    get_property(_include_dirs DIRECTORY PROPERTY INCLUDE_DIRECTORIES)
+    foreach (_dir ${_include_dirs})
+        if (EXISTS "${_dir}/osg/GL")
+            file(STRINGS "${_dir}/osg/GL" _osg_gles3 REGEX "^#define OSG_GLES3_AVAILABLE")
+            if (NOT _osg_gles3)
+                message(FATAL_ERROR "OPENFALLOUT_METAL: the compiler would read the desktop OpenSceneGraph headers in "
+                                    "${_dir} before the ones built with OPENGL_PROFILE=GLES3")
+            endif()
+            break()
+        endif()
+    endforeach()
+endif()
+# End of Metal include order
 include_directories(".")
 
 if(MYGUI_STATIC)
