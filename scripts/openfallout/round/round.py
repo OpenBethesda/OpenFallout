@@ -438,6 +438,23 @@ def player_user_data_dir():
     return Path.home() / "Library" / "Application Support" / "openfallout"
 
 
+def shaders_yaml(values):
+    """The text of the engine's `shaders.yaml` for `{technique: {uniform: number or boolean}}`, in order of name. The engine reads the
+    values a player chose for the uniforms of a technique from this file in its configuration folder, whether or not a script may
+    set them. A name or a value that is not plain is refused: nothing is quoted, so it could not be read back as written."""
+    plain = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    lines = ["config:"]
+    for technique, uniforms in sorted(values.items()):
+        if not plain.match(technique) or not uniforms:
+            sys.exit(f"shader_values: {technique!r} is not the name of a technique with values")
+        lines.append(f"  {technique}:")
+        for uniform, value in sorted(uniforms.items()):
+            if not plain.match(uniform) or not isinstance(value, (bool, int, float)):
+                sys.exit(f"shader_values: {technique}.{uniform} = {value!r} is not a name and a number or boolean")
+            lines.append(f"    {uniform}: {str(value).lower() if isinstance(value, bool) else repr(value)}")
+    return "\n".join(lines) + "\n"
+
+
 def prepare_run(profile, config, variant, run_dir, save):
     """Makes the private folders of one start: config (settings), userdata (a copy of the save) and data (the scenario)."""
     for sub in ("config", "userdata/saves", "userdata/data", "data/scripts", "shots"):
@@ -465,6 +482,8 @@ def prepare_run(profile, config, variant, run_dir, save):
     # game's plugins (any plugin that is named stops the engine from choosing the ones the selected game makes active) and a data
     # directory of the other game would be searched too
     (run_dir / "config" / "openfallout.cfg").write_text("replace=config\n", encoding="utf-8")
+    if config.get("shader_values"):
+        (run_dir / "config" / "shaders.yaml").write_text(shaders_yaml(config["shader_values"]), encoding="utf-8")
     if save is not None:
         saves = run_dir / "userdata" / "saves"
         if not config.get("load_save", True):

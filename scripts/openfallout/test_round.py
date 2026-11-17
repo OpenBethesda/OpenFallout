@@ -324,6 +324,29 @@ class Commands(unittest.TestCase):
         self.assertTrue((run / "data" / "scripts" / "roundscenario.lua").exists())
         self.assertEqual(save.read_bytes(), b"x")
 
+    def test_the_values_of_a_technique_are_laid_in_the_shader_settings_of_the_run(self):
+        # the engine reads the values a player chose for the uniforms of a technique from `shaders.yaml` in its configuration folder
+        # (the techniques of the engine have no uniforms that a script may set), so a round that wants values lays that file
+        config = round_runner.load_round(self.round_file, self.Args())
+        config["shader_values"] = {"bloomlinear": {"uThreshold": 0.2, "uStrength": 1}, "adjustments": {"uGamma": 1.6}}
+        run = self.tmp / "run-shaders"
+        round_runner.prepare_run(self.profile, config, config["variants"][0], run, None)
+        self.assertEqual((run / "config" / "shaders.yaml").read_text(),
+                         "config:\n  adjustments:\n    uGamma: 1.6\n  bloomlinear:\n    uStrength: 1\n    uThreshold: 0.2\n")
+        # a round without values lays none: the engine makes an empty one, and the techniques keep their defaults
+        plain = self.tmp / "run-plain"
+        round_runner.prepare_run(self.profile, round_runner.load_round(self.round_file, self.Args()), config["variants"][0], plain, None)
+        self.assertFalse((plain / "config" / "shaders.yaml").exists())
+
+    def test_a_value_that_is_not_a_number_or_a_boolean_is_refused(self):
+        config = round_runner.load_round(self.round_file, self.Args())
+        config["shader_values"] = {"bloomlinear": {"uThreshold": "0.2: x"}}
+        with self.assertRaises(SystemExit):
+            round_runner.prepare_run(self.profile, config, config["variants"][0], self.tmp / "run-bad", None)
+        config["shader_values"] = {"bloom linear": {"uThreshold": 0.2}}
+        with self.assertRaises(SystemExit):
+            round_runner.prepare_run(self.profile, config, config["variants"][0], self.tmp / "run-bad2", None)
+
     def test_the_players_settings_are_the_bottom_layer_of_the_run(self):
         # `replace=config` takes the player's settings.cfg out of the engine's own chain of defaults, so the runner lays it under
         # the settings of the profile, the round and the variant
