@@ -417,6 +417,7 @@ OF::Engine::Engine(Files::ConfigurationManager& configurationManager)
     SDL_SetHint(SDL_HINT_MAC_OPENGL_ASYNC_DISPATCH, "1");
     SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0"); // We use only gamepads
     SDLUtil::applyDesktopHints();
+    SDLUtil::selectGraphicsLibraries();
 
     Uint32 flags
         = SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK | SDL_INIT_SENSOR;

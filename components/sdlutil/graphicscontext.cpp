@@ -31,8 +31,9 @@ namespace SDLUtil
             return info.dli_fname;
         }
 
-        // SDL 2 reads the library names from the environment; sdl2-compat over SDL 3 takes them as hints. Both are set,
-        // and set over anything already there, so that SDL loads the copy of ANGLE the engine is linked to.
+        // SDL 2 reads the library names from the environment and has no hint for them; sdl2-compat over SDL 3 takes
+        // them as hints. Both are set, and set over anything already there, so that SDL loads the copy of ANGLE the
+        // engine is linked to.
         void setLibrary(const char* name, const std::string& path)
         {
             setenv(name, path.c_str(), 1);
@@ -40,21 +41,28 @@ namespace SDLUtil
         }
     }
 
-    void requestGraphicsContext()
+    void selectGraphicsLibraries()
     {
         const std::string egl = loadedFrom(reinterpret_cast<const void*>(&eglGetProcAddress), "libEGL");
         const std::string gles = loadedFrom(reinterpret_cast<const void*>(&glGetString), "libGLESv2");
         setLibrary("SDL_VIDEO_EGL_DRIVER", egl);
         setLibrary("SDL_VIDEO_GL_DRIVER", gles);
-        // The ANGLE the project builds has only the Metal backend; this keeps any other build of it on Metal as well
+        // ANGLE reads only the environment for this. The ANGLE the project builds has only the Metal backend; this
+        // keeps any other build of it on Metal as well.
         setenv("ANGLE_DEFAULT_PLATFORM", "metal", 1);
         SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
+        Log(Debug::Info) << "Graphics: OpenGL ES 3.0 through ANGLE's Metal backend, " << egl << ", " << gles;
+    }
+
+    void requestGraphicsContext()
+    {
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-        Log(Debug::Info) << "Graphics: OpenGL ES 3.0 through ANGLE's Metal backend, " << egl << ", " << gles;
     }
 #else
+    void selectGraphicsLibraries() {}
+
     void requestGraphicsContext() {}
 #endif
 

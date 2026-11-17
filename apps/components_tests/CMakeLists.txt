@@ -63,6 +63,7 @@ file(GLOB UNITTEST_SRC_FILES
     settings/testvalues.cpp
 
     sdlutil/testdesktopconventions.cpp
+    sdlutil/testgraphicscontext.cpp
 
     shader/glsles.cpp
     shader/parsedefines.cpp
