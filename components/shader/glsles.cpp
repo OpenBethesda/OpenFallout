@@ -79,7 +79,9 @@ namespace Shader
         // shadow2D and shadow2DProj return a vec4 in GLSL 1.20; their GLSL ES 3.00 forms return a float. They also
         // clamp the reference depth to [0, 1], as the comparison does on the fixed-point shadow maps of the OpenGL
         // build: ANGLE's Metal backend keeps a 24-bit depth texture as 32-bit float depth and compares the reference as
-        // it is, so a surface beyond a shadow map's far plane would read as shadowed.
+        // it is, so a surface beyond a shadow map's far plane would read as shadowed. This is reported to ANGLE
+        // (https://issues.angleproject.org/issues/586576671); the clamp can go once its Metal backend clamps the
+        // reference itself.
         struct Helper
         {
             std::string_view mName;
