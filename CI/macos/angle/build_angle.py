@@ -116,6 +116,12 @@ def check_checkout(checkout, version):
     head = result.stdout.strip()
     if result.returncode != 0 or head != version["angle"]["commit"]:
         raise BuildError(f"{checkout} is at {head or 'no commit'}, not the recorded {version['angle']['commit']}")
+    # The asset names the recorded commit: sources that differ from it are never built into it. Untracked files (the
+    # build output, the dependencies gclient fetched) are not changes to ANGLE's own sources.
+    changed = output(["git", "-C", checkout, "status", "--porcelain", "--untracked-files=no"]).stdout.splitlines()
+    if changed:
+        names = ", ".join(line[3:] for line in changed[:5])  # a line is two status letters, a space, the path
+        raise BuildError(f"{checkout} has changed files ({names}); the asset is built only from the recorded commit")
     for tool in ("buildtools/mac/gn", "third_party/ninja/ninja"):
         if not (checkout / tool).is_file():
             raise BuildError(f"{checkout} has no {tool}; is it synced (gclient sync)?")

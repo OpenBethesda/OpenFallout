@@ -92,6 +92,27 @@ class CommandTests(unittest.TestCase):
                 build_angle.check_checkout(Path(checkout), self.version)
 
 
+    def test_a_checkout_with_edited_sources_is_refused(self):
+        """The asset names the recorded commit, so it is never built from sources that differ from it."""
+        with tempfile.TemporaryDirectory(prefix="angle checkout ") as checkout:
+            git = ["git", "-C", checkout, "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+            subprocess.run(["git", "init", "-q", checkout], check=True)
+            for tool in ("buildtools/mac/gn", "third_party/ninja/ninja", "src/source.cpp"):
+                (Path(checkout) / tool).parent.mkdir(parents=True, exist_ok=True)
+                (Path(checkout) / tool).write_text("as committed\n")
+            subprocess.run([*git, "add", "."], check=True)
+            subprocess.run([*git, "commit", "-q", "-m", "recorded"], check=True)
+            head = subprocess.run([*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+            version = json.loads(json.dumps(self.version))
+            version["angle"]["commit"] = head
+            (Path(checkout) / "out").mkdir()
+            (Path(checkout) / "out/untracked.o").write_text("build output is not a change\n")
+            build_angle.check_checkout(Path(checkout), version)
+            (Path(checkout) / "src/source.cpp").write_text("edited\n")
+            with self.assertRaisesRegex(build_angle.BuildError, "changed files.*src/source.cpp"):
+                build_angle.check_checkout(Path(checkout), version)
+
+
 class NoticesTests(unittest.TestCase):
     def test_the_linked_sources_come_from_the_libraries_and_their_archives(self):
         sources = build_angle.linked_sources(fake_query, ["libEGL.dylib", "libGLESv2.dylib"])

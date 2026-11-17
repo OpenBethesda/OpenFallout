@@ -552,7 +552,9 @@ def check_angle(app, mode, team_id, version_file):
 def check_no_opengl(app):
     machos = sorted(path for path in app.rglob("*") if is_macho(path))
     linking = [relative(path, app) for path in machos
-               if any(name.startswith(OPENGL_FRAMEWORK) for name in linked_libraries(path))]
+               # resolve(): a name such as @rpath/OpenGL.framework/... loads Apple's framework through a run path
+               if any(str(candidate).startswith(OPENGL_FRAMEWORK)
+                      for name in linked_libraries(path) for candidate in resolve(name, path))]
     if linking:
         raise StepFailed(", ".join(f"{name} links Apple's OpenGL framework" for name in linking))
     return f"none of the {len(machos)} Mach-O files links OpenGL.framework"

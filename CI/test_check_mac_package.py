@@ -523,6 +523,7 @@ class FakeTools:
         self.minos = {}         # path suffix -> the macOS vtool reports (default 26.0)
         self.archs = {}         # path suffix -> what lipo -archs reports (default arm64)
         self.links = {}         # path suffix -> libraries otool -L lists (default none)
+        self.rpaths = {}        # path suffix -> the run paths otool -l lists (default none)
         self.programs = {}      # path suffix -> (exit status, stdout, stderr) of a program the check runs
 
     def details(self, path):
@@ -570,6 +571,11 @@ class FakeTools:
         elif tool == "otool" and verb == "-L":
             linked = next((value for suffix, value in self.links.items() if command[-1].endswith(suffix)), [])
             out = f"{command[-1]}:\n" + "".join(f"\t{name} (compatibility version 1.0.0)\n" for name in linked)
+        elif tool == "otool" and verb == "-l":
+            paths = next((value for suffix, value in self.rpaths.items() if command[-1].endswith(suffix)), [])
+            out = f"{command[-1]}:\n" + "".join(f"Load command {index}\n          cmd LC_RPATH\n      cmdsize 48\n"
+                                                f"         path {path} (offset 12)\n"
+                                                for index, path in enumerate(paths))
         elif any(tool.endswith(suffix) for suffix in self.programs):
             status, out, err = next(value for suffix, value in self.programs.items() if tool.endswith(suffix))
         return subprocess.CompletedProcess(command, status, out, err)
@@ -891,6 +897,18 @@ class AngleCheckTests(unittest.TestCase):
         _, output = self.check("--forbid-opengl")
         self.assertIn("PASS no-opengl: none of the 6 Mach-O files links OpenGL.framework", output)
         self.tools.links["MacOS/openfallout"] = ["/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL"]
+        status, output = self.check("--forbid-opengl")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL no-opengl: Contents/MacOS/openfallout links Apple's OpenGL framework", output)
+
+    def test_apples_opengl_reached_through_a_run_path_is_caught_too(self):
+        """@rpath/OpenGL.framework/... with a run path of /System/Library/Frameworks loads Apple's framework."""
+        self.tools.links["MacOS/openfallout"] = ["@rpath/OpenGL.framework/Versions/A/OpenGL",
+                                                 "@rpath/libGLESv2.dylib"]
+        self.tools.rpaths["MacOS/openfallout"] = ["@executable_path/../Frameworks"]
+        _, output = self.check("--forbid-opengl")
+        self.assertIn("PASS no-opengl", output)
+        self.tools.rpaths["MacOS/openfallout"] = ["@executable_path/../Frameworks", "/System/Library/Frameworks"]
         status, output = self.check("--forbid-opengl")
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL no-opengl: Contents/MacOS/openfallout links Apple's OpenGL framework", output)
