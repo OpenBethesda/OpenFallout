@@ -14,6 +14,9 @@
 #   --jobs         build jobs (default: the number of cores)
 # Result: Apple Silicon only, macOS 26.0 or later, dynamic libraries, no link to Apple's OpenGL framework.
 
+# also when it is started as `bash build_osg_gles3.sh`, where the -e of the first line does not count
+set -e
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 
@@ -45,7 +48,19 @@ mkdir -p "$WORK" "$INSTALL"
 WORK="$(cd "$WORK" && pwd)" INSTALL="$(cd "$INSTALL" && pwd)" ANGLE_ROOT="$(cd "$ANGLE_ROOT" && pwd)"
 START=$SECONDS
 
-# 1. The source: the pinned archive, checked, with the project's patches applied in order
+# 1. What the engine uses, from its own lists. First, so that a list the helper cannot read stops the build before
+# anything is fetched; and read into variables, so that the shell sees the helper fail.
+SKIP="$(python3 "$HERE/osg_gles3.py" skip --root "$REPO")"
+PLUGIN_OPTIONS="$(python3 "$HERE/osg_gles3.py" plugin-options --root "$REPO")"
+declare -a PLUGINS=()
+while IFS= read -r option; do
+    [[ -z "$option" ]] || PLUGINS+=("$option")
+done <<< "$PLUGIN_OPTIONS"
+[[ ${#PLUGINS[@]} -gt 0 ]] || { echo "the engine's plugin list is empty" >&2; exit 1; }
+echo "Libraries not built: ${SKIP:-none}"
+echo "Plugins: ${PLUGINS[*]}"
+
+# 2. The source: the pinned archive, checked, with the project's patches applied in order
 ARCHIVE="$WORK/osg-$OSG_COMMIT.tar.gz"
 if [[ ! -f "$ARCHIVE" ]]; then
     curl --fail --retry 3 -sSL "$OSG_REPOSITORY/archive/$OSG_COMMIT.tar.gz" -o "$ARCHIVE"
@@ -58,13 +73,6 @@ for patch in "$HERE"/patches/*.patch; do
     echo "Applying $(basename "$patch")"
     patch -p1 -N -s -d "$WORK/src" < "$patch"
 done
-
-# 2. What the engine uses, from its own lists
-SKIP="$(python3 "$HERE/osg_gles3.py" skip --root "$REPO")"
-declare -a PLUGINS=()
-while IFS= read -r option; do PLUGINS+=("$option"); done < <(python3 "$HERE/osg_gles3.py" plugin-options --root "$REPO")
-echo "Libraries not built: ${SKIP:-none}"
-echo "Plugins: ${PLUGINS[*]}"
 
 # 3. Configure, build, install. OpenGL ES 3 from ANGLE (libGLESv2, libEGL), no windowing system (the engine's window is
 # SDL's), no applications, only the plugins the engine lists, picture plugins on libpng and libjpeg.
@@ -104,14 +112,24 @@ cmake -S "$WORK/src" -B "$WORK/build" -G "$GENERATOR" \
     "-DOSG_SKIP_LIBRARIES=$SKIP"
 cmake --build "$WORK/build" --target install -j "$JOBS"
 
-# 4. Check the result: nothing may link Apple's OpenGL framework
+# 4. Check the result: the library and every plugin that was asked for are there, and nothing links Apple's OpenGL
+# framework
 BAD=0
+INSTALLED="$(find "$INSTALL/lib" \( -name '*.dylib' -o -name '*.so' \) | sort)"
+for wanted in libosg.dylib libosgDB.dylib libosgViewer.dylib; do
+    grep -q "/$wanted\$" <<< "$INSTALLED" || { echo "FAIL $wanted is not installed" >&2; BAD=1; }
+done
+for option in "${PLUGINS[@]}"; do
+    plugin="${option#-DBUILD_OSG_PLUGIN_}"
+    plugin="osgdb_$(echo "${plugin%=ON}" | tr 'A-Z' 'a-z').so"
+    grep -q "/$plugin\$" <<< "$INSTALLED" || { echo "FAIL the plugin $plugin is not installed" >&2; BAD=1; }
+done
 while IFS= read -r file; do
     if otool -L "$file" 2>/dev/null | grep -q "OpenGL.framework"; then
         echo "FAIL $file links Apple's OpenGL framework" >&2
         BAD=1
     fi
-done < <(find "$INSTALL/lib" -name '*.dylib' -o -name '*.so' | sort)
+done <<< "$INSTALLED"
 [[ $BAD -eq 0 ]] || exit 1
 
 {

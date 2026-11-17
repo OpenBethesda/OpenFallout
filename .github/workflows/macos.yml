@@ -431,7 +431,9 @@ jobs:
       id: metal-key
       if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.build.outcome == 'success' }}
       run: |
-        echo "key=$(python3 CI/macos/osg/osg_gles3.py key --input CI/macos/angle/angle.json --input "$RUNNER_TEMP/openmw-manifest.txt")" >> "$GITHUB_OUTPUT"
+        clang --version > "$RUNNER_TEMP/clang-version.txt"
+        key="$(python3 CI/macos/osg/osg_gles3.py key --input CI/macos/angle/angle.json --input "$RUNNER_TEMP/openmw-manifest.txt" --input CI/macos/before_install_osg.sh --input "$RUNNER_TEMP/clang-version.txt")"
+        echo "key=$key" >> "$GITHUB_OUTPUT"
 
     - name: 'Metal build: restore OpenSceneGraph for OpenGL ES 3'
       id: metal-osg-cache

@@ -168,6 +168,12 @@ class MacWorkflowTest(unittest.TestCase):
         self.assertIn("CI/macos/osg/osg_gles3.py key", key["run"])
         self.assertIn("--input CI/macos/angle/angle.json", key["run"])
         self.assertIn('--input "$RUNNER_TEMP/openmw-manifest.txt"', key["run"])
+        # the script that chooses the build's folders and arguments, and the compiler that builds it
+        self.assertIn("--input CI/macos/before_install_osg.sh", key["run"])
+        self.assertIn('clang --version > "$RUNNER_TEMP/clang-version.txt"', key["run"])
+        self.assertIn('--input "$RUNNER_TEMP/clang-version.txt"', key["run"])
+        # a helper that fails must fail the step, not leave an empty key: `echo "key=$(...)"` would hide it
+        self.assertNotIn('echo "key=$(', key["run"])
         restore = next(step for step in self.metal if step["name"].endswith("restore OpenSceneGraph for OpenGL ES 3"))
         self.assertTrue(restore["uses"].startswith("actions/cache/restore@"))
         self.assertIn("steps.metal-key.outputs.key", restore["fields"]["with"] + restore["text"])

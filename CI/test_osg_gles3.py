@@ -217,6 +217,38 @@ class Scripts(unittest.TestCase):
         for name in ("--angle-root", "--prefix-path", "--work", "--install"):
             self.assertIn(name, result.stdout)
 
+    @unittest.skipUnless(shutil.which("bash"), "needs bash")
+    def test_a_plugin_the_helper_does_not_know_stops_the_build_before_anything_is_fetched(self):
+        # Without this the build went on with no plugin at all, and the install that came out of it was cached.
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            shutil.copytree(FOLDER, work / "repo" / "CI" / "macos" / "osg")
+            text = (ROOT / "CMakeLists.txt").read_text()
+            self.assertIn("osgdb_png", text)
+            (work / "repo" / "CMakeLists.txt").write_text(text.replace("osgdb_png", "osgdb_png osgdb_unheard_of", 1))
+            angle = work / "angle"
+            for name in ("lib/libEGL.dylib", "lib/libGLESv2.dylib", "include/GLES3/gl3.h", "include/EGL/egl.h"):
+                (angle / name).parent.mkdir(parents=True, exist_ok=True)
+                (angle / name).write_text("")
+            stand_ins = work / "bin"
+            stand_ins.mkdir()
+            for name in ("curl", "cmake"):
+                (stand_ins / name).write_text(f'#!/bin/bash\necho "{name} was started" >&2\nexit 1\n')
+                (stand_ins / name).chmod(0o755)
+            result = subprocess.run(
+                ["bash", str(work / "repo" / "CI" / "macos" / "osg" / "build_osg_gles3.sh"), "--angle-root", str(angle),
+                 "--prefix-path", str(work), "--work", str(work / "work"), "--install", str(work / "install")],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                env={**os.environ, "PATH": f"{stand_ins}{os.pathsep}{os.environ['PATH']}"})
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("unknown OpenSceneGraph plugin osgdb_unheard_of", result.stdout)
+            self.assertNotIn("was started", result.stdout)
+
+    def test_the_build_script_checks_that_what_it_was_asked_for_is_installed(self):
+        text = (FOLDER / "build_osg_gles3.sh").read_text()
+        self.assertIn("is not installed", text)
+        self.assertNotIn("< <(python3", text, "a failed helper inside a process substitution is not seen by the shell")
+
 
 class BeforeScript(unittest.TestCase):
     """CI/before_script.macos.sh with a stand-in for cmake that records its arguments."""

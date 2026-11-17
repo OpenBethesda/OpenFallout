@@ -86,7 +86,7 @@ The steps are one block named "Metal build: ..." in `.github/workflows/macos.yml
 or reports the packaged app, so a failure there never hides those results. A release tag run skips the whole block (the
 packaged app is still the OpenGL build). In order:
 
-1. Fingerprint: `python3 CI/macos/osg/osg_gles3.py key --input CI/macos/angle/angle.json --input <dependency manifest>`.
+1. Fingerprint: `python3 CI/macos/osg/osg_gles3.py key` with four `--input` files (see the cache key below).
 2. Restore the install (`/tmp/openfallout-osg-gles3`, 19 MB) from the cache of that key.
 3. Fetch the ANGLE asset into `/tmp/openfallout-angle` (`CI/angle_asset.py fetch`), unless the manual ANGLE test run
    already did: both read the one folder, and the fetch never changes it.
@@ -102,8 +102,10 @@ fetch step fails with the address it could not read, and the steps after it do n
 
 `python3 CI/macos/osg/osg_gles3.py key --input <file>...` prints the SHA-256 that names the cached build. It covers the
 commit file, every patch, the build script, the helper, the engine's two component lists and the files given with
-`--input` (`CI/macos/angle/angle.json`, the ANGLE record, and the dependency set's manifest). A change to any of them builds it again. A change
-to anything else in the repository does not.
+`--input`. The Mac job gives four: `CI/macos/angle/angle.json` (the ANGLE record), the dependency set's manifest,
+`CI/macos/before_install_osg.sh` (it chooses the build's folders and arguments) and the output of `clang --version`
+(a new compiler on the runner builds it again). A change to any of them builds it again. A change to anything else in
+the repository does not.
 
 ## How the version changes
 
