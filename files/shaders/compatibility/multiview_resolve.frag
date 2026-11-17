@@ -11,7 +11,7 @@ void main()
     if(uvz.x > 1.)
     {
         uvz.x -= 1.;
-        uvz.z = 1;
+        uvz.z = 1.0;
     }
 
     gl_FragColor = texture2DArray(lastShader, uvz);
