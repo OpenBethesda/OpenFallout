@@ -83,6 +83,13 @@ namespace OFSound
         /// A new attitude. Dropped when it is not usable (isUsableAttitude) or after a disconnect. Before any connect
         /// or disconnect it counts as a connection. After a gap longer than sHeadSampleStale it counts as a new one.
         void publish(const HeadRotation& attitude, HeadClock::time_point time);
+        /// A new attitude that arrived at `arrival` and that its source measured at `sourceSeconds` on the source's own
+        /// clock, whose zero is not known here. The box learns how the two clocks lie from the samples themselves: the
+        /// sample that arrived soonest after its measurement sets the difference, and a sample that took longer than
+        /// that is as much older. So a sample that waited (a handler that ran late, a process that stood still) is
+        /// handed on with the time of its measurement and is stale when that is long ago. The difference is learnt
+        /// again for each connection.
+        void publishMeasured(const HeadRotation& attitude, double sourceSeconds, HeadClock::time_point arrival);
         /// The latest sample of the current connection
         std::optional<HeadSample> latest() const;
         /// Forget the sample and any disconnect, as before the first call (for a source that starts again)
@@ -101,6 +108,9 @@ namespace OFSound
         Link mLink = Link::Unknown;
         std::uint32_t mConnection = 0;
         std::uint64_t mCount = 0;
+        /// Arrival time minus source time (seconds) of the sample that arrived soonest, and when it was last updated
+        std::optional<double> mClockDifference;
+        double mClockDifferenceAt = 0;
     };
 
     /// Where the head's motion comes from. start, stop and latest are called on the thread that turns the listener

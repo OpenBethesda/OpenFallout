@@ -78,8 +78,6 @@ namespace OFSound
 
         // How often to ask Core Motion again while device motion is not available
         constexpr std::chrono::seconds sRetryInterval{ 3 };
-        // A sample older than this was not measured on the clock the bridge compares it with (see the motion handler)
-        constexpr NSTimeInterval sLongestBelievableAge = 5.0;
 
         class HeadphoneMotion final : public HeadMotionSource
         {
@@ -171,15 +169,9 @@ namespace OFSound
                     if (motion == nil)
                         return;
                     const CMQuaternion q = motion.attitude.quaternion;
-                    // The pose is as old as its measurement, not as its delivery: a handler that ran late must not
-                    // make an old pose look fresh. Core Motion stamps a sample in seconds since the system started,
-                    // the clock of NSProcessInfo's systemUptime. An age outside a plausible range means the two
-                    // clocks do not agree after all; the time of arrival is used then, as the best that is known.
-                    const NSTimeInterval age = NSProcessInfo.processInfo.systemUptime - motion.timestamp;
-                    HeadClock::time_point measured = HeadClock::now();
-                    if (age > 0 && age < sLongestBelievableAge)
-                        measured -= std::chrono::duration_cast<HeadClock::duration>(std::chrono::duration<double>(age));
-                    box->publish(HeadRotation{ q.w, q.x, q.y, q.z }, measured);
+                    // The pose is as old as its measurement, not as its delivery: the box works the age out from
+                    // Core Motion's own time stamp (seconds on a clock whose zero the box learns by itself).
+                    box->publishMeasured(HeadRotation{ q.w, q.x, q.y, q.z }, motion.timestamp, HeadClock::now());
                 };
                 [manager startConnectionStatusUpdates];
                 [manager startDeviceMotionUpdatesToQueue:mQueue withHandler:handler];

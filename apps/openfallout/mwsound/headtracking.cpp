@@ -1,5 +1,6 @@
 #include "headtracking.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include <components/debug/debuglog.hpp>
@@ -123,6 +124,7 @@ namespace OFSound
         mLink = Link::Connected;
         ++mConnection;
         mSample.reset();
+        mClockDifference.reset();
     }
 
     void HeadSampleBox::disconnect()
@@ -130,6 +132,7 @@ namespace OFSound
         std::lock_guard lock(mMutex);
         mLink = Link::Disconnected;
         mSample.reset();
+        mClockDifference.reset();
     }
 
     void HeadSampleBox::reset()
@@ -137,6 +140,38 @@ namespace OFSound
         std::lock_guard lock(mMutex);
         mLink = Link::Unknown;
         mSample.reset();
+        mClockDifference.reset();
+    }
+
+    void HeadSampleBox::publishMeasured(
+        const HeadRotation& attitude, double sourceSeconds, HeadClock::time_point arrival)
+    {
+        // Two clocks never run exactly alike. The learnt difference may grow by this much of the time that passed, so
+        // that a source whose clock runs a little slow does not make every sample look older and older.
+        constexpr double sDriftAllowed = 1e-3;
+        // Below this an age is the jitter of the delivery, not an age
+        constexpr double sSmallestAge = 1e-3;
+
+        const double arrivalSeconds = std::chrono::duration<double>(arrival.time_since_epoch()).count();
+        const double difference = arrivalSeconds - sourceSeconds;
+        double age = 0;
+        if (std::isfinite(difference))
+        {
+            std::lock_guard lock(mMutex);
+            if (!mClockDifference.has_value())
+                mClockDifference = difference;
+            else
+            {
+                const double passed = std::max(0.0, arrivalSeconds - mClockDifferenceAt);
+                mClockDifference = std::min(difference, *mClockDifference + sDriftAllowed * passed);
+            }
+            mClockDifferenceAt = arrivalSeconds;
+            age = difference - *mClockDifference;
+        }
+        HeadClock::time_point measured = arrival;
+        if (age >= sSmallestAge)
+            measured -= std::chrono::duration_cast<HeadClock::duration>(std::chrono::duration<double>(age));
+        publish(attitude, measured);
     }
 
     void HeadSampleBox::publish(const HeadRotation& attitude, HeadClock::time_point time)

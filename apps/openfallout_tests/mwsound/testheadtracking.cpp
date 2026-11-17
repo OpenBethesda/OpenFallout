@@ -535,6 +535,76 @@ namespace OFSound
         EXPECT_EQ(box.latest()->mConnection, first + 1);
     }
 
+    // The source stamps a sample on its own clock, whose zero the engine does not know. 7000 s here: any number works.
+    TEST(OFSoundHeadSampleBoxTest, a_sample_is_as_old_as_its_measurement_whatever_the_sources_clock)
+    {
+        for (const double sourceZero : { 7000.0, -3.5e6, 0.0 })
+        {
+            HeadSampleBox box;
+            const Clock::time_point start = Clock::time_point{} + 50s;
+            // delivered 4 ms after each measurement: these are fresh, at the time they arrived (less nothing)
+            box.publishMeasured(yawLeft(10), sourceZero + 0.000, start + 4ms);
+            box.publishMeasured(yawLeft(11), sourceZero + 0.040, start + 44ms);
+            ASSERT_TRUE(box.latest().has_value());
+            EXPECT_EQ(box.latest()->mTime, start + 44ms) << sourceZero;
+            // measured 40 ms after the last one, but its handler ran 800 ms late: it is 800 ms old, not fresh
+            box.publishMeasured(yawLeft(12), sourceZero + 0.080, start + 884ms);
+            const auto age = (start + 884ms) - box.latest()->mTime;
+            EXPECT_NEAR(std::chrono::duration<double>(age).count(), 0.8, 0.002) << sourceZero;
+            EXPECT_GT(age, sHeadSampleStale);
+        }
+    }
+
+    TEST(OFSoundHeadSampleBoxTest, a_sample_delayed_for_many_seconds_is_old_too)
+    {
+        HeadSampleBox box;
+        const Clock::time_point start = Clock::time_point{} + 50s;
+        box.publishMeasured(yawLeft(10), 100.000, start);
+        // the process stood still for a minute; the sample waiting in the queue is a minute old
+        box.publishMeasured(yawLeft(11), 100.040, start + 60s);
+        EXPECT_GT((start + 60s) - box.latest()->mTime, 59s);
+        // samples measured now are fresh again
+        box.publishMeasured(yawLeft(12), 160.050, start + 60s + 50ms);
+        EXPECT_EQ(box.latest()->mTime, start + 60s + 50ms);
+    }
+
+    TEST(OFSoundHeadSampleBoxTest, a_new_connection_learns_the_sources_clock_again)
+    {
+        HeadSampleBox box;
+        const Clock::time_point start = Clock::time_point{} + 50s;
+        box.connect();
+        box.publishMeasured(yawLeft(10), 100.0, start);
+        box.disconnect();
+        box.connect();
+        // the source's clock stood still while the system slept: the same delivery now looks 30 s "older"
+        box.publishMeasured(yawLeft(11), 100.5, start + 30s + 500ms);
+        ASSERT_TRUE(box.latest().has_value());
+        EXPECT_EQ(box.latest()->mTime, start + 30s + 500ms);
+    }
+
+    TEST(OFSoundHeadSampleBoxTest, clocks_that_run_slightly_apart_do_not_make_samples_old)
+    {
+        HeadSampleBox box;
+        const Clock::time_point start = Clock::time_point{} + 50s;
+        // an hour of samples every 100 ms from a source whose clock runs 200 parts in a million slow
+        Clock::time_point arrival = start;
+        for (int i = 0; i < 36000; ++i)
+        {
+            arrival = start + std::chrono::milliseconds(100 * i);
+            box.publishMeasured(yawLeft(10), 0.1 * i * (1.0 - 200e-6), arrival);
+        }
+        EXPECT_LT(arrival - box.latest()->mTime, 5ms);
+    }
+
+    TEST(OFSoundHeadSampleBoxTest, a_time_that_is_not_a_number_counts_as_the_time_of_arrival)
+    {
+        HeadSampleBox box;
+        const Clock::time_point start = Clock::time_point{} + 50s;
+        box.publishMeasured(yawLeft(10), std::numeric_limits<double>::quiet_NaN(), start);
+        ASSERT_TRUE(box.latest().has_value());
+        EXPECT_EQ(box.latest()->mTime, start);
+    }
+
     TEST(OFSoundHeadSampleBoxTest, an_unusable_attitude_is_dropped)
     {
         EXPECT_TRUE(isUsableAttitude(yawLeft(33)));
