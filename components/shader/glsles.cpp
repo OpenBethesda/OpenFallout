@@ -800,7 +800,8 @@ namespace Shader
         // The main of a vertex shader that wrote gl_ClipVertex: the shader's own main, then each clip distance
         std::string clipDistanceMain()
         {
-            std::string out = std::format("void main()\n{{\n    {}();\n#ifdef {}\n", sShaderMain, sClipDistanceExtension);
+            std::string out
+                = std::format("void main()\n{{\n    {}();\n#ifdef {}\n", sShaderMain, sClipDistanceExtension);
             for (unsigned int i = 0; i < sClipPlaneCount; ++i)
                 out += std::format("    gl_ClipDistance[{}] = dot({}, {});\n", i, sClipVertex, clipPlaneUniformName(i));
             out += "#endif\n}\n";

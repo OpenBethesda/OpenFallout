@@ -49,8 +49,8 @@ namespace SceneUtil
                 GL_TEXTURE_CUBE_MAP_SEAMLESS, GL_LINE_STIPPLE, GL_POLYGON_OFFSET_LINE, GL_POLYGON_OFFSET_POINT };
             for (GLenum mode : desktopModes)
                 state.setModeValidity(mode, false);
-            // A user clip plane is a clip distance in OpenGL ES (GL_CLIP_DISTANCE0 + i is GL_CLIP_PLANE0 + i); the converted
-            // shaders write the first Shader::sClipPlaneCount (components/shader/glsles.hpp)
+            // A user clip plane is a clip distance in OpenGL ES (GL_CLIP_DISTANCE0 + i is GL_CLIP_PLANE0 + i); the
+            // converted shaders write the first Shader::sClipPlaneCount (components/shader/glsles.hpp)
             const bool clipDistances = supported("GL_ANGLE_clip_cull_distance");
             for (GLenum i = 0; i < 8; ++i)
             {
@@ -61,8 +61,8 @@ namespace SceneUtil
             state.setModeValidity(GL_FRAMEBUFFER_SRGB, supported("GL_EXT_sRGB_write_control"));
             state.setModeValidity(GL_MULTISAMPLE_ARB, supported("GL_EXT_multisample_compatibility"));
 
-            // Depth comparison (sampler2DShadow) is core in OpenGL ES 3.0; OpenSceneGraph looks only for GL_ARB_shadow, and
-            // without it never sets a shadow map's comparison mode
+            // Depth comparison (sampler2DShadow) is core in OpenGL ES 3.0; OpenSceneGraph looks only for GL_ARB_shadow,
+            // and without it never sets a shadow map's comparison mode
             extensions.isShadowSupported = true;
 
             // OpenSceneGraph takes "version 1.2 or later" to mean that the texture LOD bias parameter exists

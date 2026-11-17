@@ -44,8 +44,8 @@ namespace Shader
     // OpenGL ES has no user clip planes (glClipPlane read through gl_ClipVertex). A converted vertex shader that writes
     // gl_ClipVertex writes clip distance i (GL_ANGLE_clip_cull_distance) against the eye-space plane in the uniform
     // clipPlaneUniformName(i), for each of the first sClipPlaneCount planes; GL_CLIP_PLANE0 + i, the same number as
-    // GL_CLIP_DISTANCE0 + i, switches it on. The engine uses plane 0 (the water's reflection and refraction) and plane 1
-    // (transparent objects that cross the water surface).
+    // GL_CLIP_DISTANCE0 + i, switches it on. The engine uses plane 0 (the water's reflection) and plane 1 (transparent
+    // objects that cross the water surface).
     inline constexpr unsigned int sClipPlaneCount = 2;
     std::string clipPlaneUniformName(unsigned int index);
 

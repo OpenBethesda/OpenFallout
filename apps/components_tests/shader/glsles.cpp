@@ -314,8 +314,8 @@ namespace
         {
             EXPECT_THAT(result.mSource, HasSubstr("uniform vec4 " + clipPlaneUniformName(i) + ";"));
             EXPECT_THAT(result.mSource,
-                HasSubstr("gl_ClipDistance[" + std::to_string(i) + "] = dot(of_ClipVertex, "
-                    + clipPlaneUniformName(i) + ");"));
+                HasSubstr("gl_ClipDistance[" + std::to_string(i) + "] = dot(of_ClipVertex, " + clipPlaneUniformName(i)
+                    + ");"));
         }
         // The shader's own main runs first; the distances follow from the eye-space position it wrote
         EXPECT_THAT(body(result.mSource), HasSubstr("void of_main() { of_ClipVertex = vec4(1.0);"));

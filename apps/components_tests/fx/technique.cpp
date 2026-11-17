@@ -172,8 +172,8 @@ namespace
         osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet;
         pass.prepareStateSet(stateSet, pass.getName());
         std::vector<osg::ref_ptr<osg::Shader>> shaders;
-        if (const auto* program = dynamic_cast<const osg::Program*>(
-                stateSet->getAttribute(osg::StateAttribute::PROGRAM)))
+        if (const auto* program
+            = dynamic_cast<const osg::Program*>(stateSet->getAttribute(osg::StateAttribute::PROGRAM)))
             for (unsigned int i = 0; i < program->getNumShaders(); ++i)
                 shaders.emplace_back(const_cast<osg::Shader*>(program->getShader(i)));
         return shaders;
@@ -210,8 +210,8 @@ namespace
             mTechnique->compile();
         }
 
-        // As the Metal build compiles a technique: no uniform buffer (OpenGL ES 3.0 reports GLSL ES 3.00, below the 3.30
-        // the buffer path asks for) and the passes converted to GLSL ES 3.00
+        // As the Metal build compiles a technique: no uniform buffer (OpenGL ES 3.0 reports GLSL ES 3.00, below
+        // the 3.30 the buffer path asks for) and the passes converted to GLSL ES 3.00
         void compileForGlslEs(const std::string& name, bool convert = true)
         {
             mTechnique = std::make_unique<Technique>(

@@ -13,9 +13,9 @@
 #include <osg/StateSet>
 
 #include <components/resource/scenemanager.hpp>
-#include <components/shader/glsles.hpp>
 #include <components/sceneutil/lightmanager.hpp>
 #include <components/settings/values.hpp>
+#include <components/shader/glsles.hpp>
 #include <components/stereo/multiview.hpp>
 #include <components/version/version.hpp>
 
