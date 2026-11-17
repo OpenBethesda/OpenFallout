@@ -588,6 +588,33 @@ namespace
             IsEmpty());
     }
 
+    // The name is only known where the macro is used, so it cannot be checked: such a declaration is refused
+    TEST(ShaderGlslEsTest, a_uniform_named_by_a_parameter_of_its_define_is_an_error)
+    {
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(name) uniform float name;\nDECLARE(filter)\n"
+                             "void main() { gl_FragColor = vec4(filter); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr("DECLARE"), HasSubstr("parameter name"))));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(kind, name) \\\n    uniform kind name;\n"
+                             "DECLARE(float, gain)\nvoid main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr("DECLARE"), HasSubstr("parameter name"))));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(part) uniform float fil##part;\nDECLARE(ter)\n"
+                             "void main() { gl_FragColor = vec4(filter); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr("DECLARE"), HasSubstr("##"))));
+        // A parameter that gives the type leaves the name as it is written
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(kind) uniform kind gain;\nDECLARE(float)\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            IsEmpty());
+        // The parameters of a #define do not outlive it
+        EXPECT_THAT(fragment("#version 120\n#define TWICE(gain) (gain * 2.0)\nuniform float gain;\n"
+                             "void main() { gl_FragColor = vec4(TWICE(gain)); }\n")
+                        .mErrors,
+            IsEmpty());
+    }
+
     // The compiler never sees a declaration in a branch the preprocessor skips
     TEST(ShaderGlslEsTest, a_uniform_with_a_reserved_name_in_a_skipped_branch_is_not_an_error)
     {

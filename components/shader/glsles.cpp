@@ -574,7 +574,7 @@ namespace Shader
             static const std::regex uniformStart(
                 R"(^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*(?:\s+|$))");
             static const std::regex directive(R"(^\s*#)");
-            static const std::regex defineStart(R"(^\s*#\s*define\s+[A-Za-z_]\w*(?:\([^)]*\))?)");
+            static const std::regex defineStart(R"(^\s*#\s*define\s+([A-Za-z_]\w*)(?:\(([^)]*)\))?)");
 
             const std::string code = blankComments(original);
             const std::string_view source = code;
@@ -582,6 +582,9 @@ namespace Shader
             std::map<std::string, UniformInitialiser> taken;
             // A uniform declaration that goes on to the next line
             std::optional<DeclaratorScanner> openUniform;
+            // The #define a line belongs to (its first line, or one it is continued on) and that macro's parameters
+            std::string defineName;
+            std::vector<std::string> defineParameters;
 
             std::size_t pos = 0;
             while (pos < source.size())
@@ -601,16 +604,36 @@ namespace Shader
                 // (after the macro's name and parameters); other directives declare nothing.
                 std::smatch define;
                 if (branches.active() == Branches::Active::No)
+                {
                     openUniform.reset();
+                    defineName.clear();
+                    defineParameters.clear();
+                }
                 else if (!std::regex_search(line, directive)
                     || (!openUniform && std::regex_search(line, define, defineStart)))
                 {
+                    if (!define.empty())
+                    {
+                        defineName = define[1].str();
+                        defineParameters.clear();
+                        const std::string parameters = define[2].str();
+                        for (std::size_t i = 0; i < parameters.size(); ++i)
+                            if (isIdentifierStart(parameters[i]))
+                            {
+                                std::size_t stop = i + 1;
+                                while (stop < parameters.size() && isIdentifierPart(parameters[stop]))
+                                    ++stop;
+                                defineParameters.push_back(parameters.substr(i, stop - i));
+                                i = stop - 1;
+                            }
+                    }
                     std::vector<std::string> names;
                     std::size_t at = define.empty() ? 0 : static_cast<std::size_t>(define.length(0));
                     // A line continuation is no part of the declaration
                     std::size_t size = line.size();
                     if (size > 0 && line[size - 1] == '\\')
                         --size;
+                    const bool continued = size != line.size();
                     while (at < size)
                     {
                         std::smatch start;
@@ -638,12 +661,34 @@ namespace Shader
                         }
                     }
                     // A #define ends with its line unless that is continued: so does a declaration in it
-                    if (!define.empty() && size == line.size())
+                    if (!defineName.empty() && !continued)
                         openUniform.reset();
                     for (const std::string& name : names)
-                        if (isUnusableUniformName(name))
+                    {
+                        // A name that the macro's use gives is not known here, so nothing can say whether GLSL ES
+                        // 3.00 keeps it for itself: the declaration is refused rather than renamed without a word
+                        if (std::find(defineParameters.begin(), defineParameters.end(), name) != defineParameters.end())
+                            result.mErrors.push_back(std::format(
+                                "a uniform in #define {} takes its name from the parameter {}: it cannot be checked",
+                                defineName, name));
+                        else if (isUnusableUniformName(name))
                             result.mErrors.push_back(
                                 std::format("uniform {} has a name GLSL ES 3.00 keeps for itself", name));
+                    }
+                    if (!names.empty() && !defineName.empty() && line.find("##") != std::string::npos)
+                        result.mErrors.push_back(
+                            std::format("a uniform in #define {} has a name put together with ##: it cannot be checked",
+                                defineName));
+                    if (!continued)
+                    {
+                        defineName.clear();
+                        defineParameters.clear();
+                    }
+                }
+                else
+                {
+                    defineName.clear();
+                    defineParameters.clear();
                 }
                 if (std::regex_match(line, match, version))
                 {
