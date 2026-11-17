@@ -81,13 +81,22 @@ Wastelands has no scenes of its own: it is drawn by the same renderer from the s
 | `fo3-shadows` | the hard shadow edge of a town's structures on the ground under a low sun (hour 16), every kind of shadow on | `MegatonWorld:-1,-6` |
 | `nv-water` | the water shader with reflection and refraction over a lake | `WastelandNV:13,12`, camera above the water |
 | `fo3-water` | the water shader with reflection and refraction over a river | `Wasteland:20,-17`, camera above the water |
-| `nv-post` | post-processing (`bloomlinear`, `adjustments`) over a bright desert | `WastelandNV:6,15` |
-| `fo3-post` | post-processing (`bloomlinear`, `adjustments`) over land, pylons and sky | `Wasteland:18,24` |
+| `nv-post` | post-processing (`bloomlinear`, `adjustments`) with values far from their defaults, over a bright desert and sky | `WastelandNV:6,15` |
+| `fo3-post` | post-processing (`bloomlinear`, `adjustments`) with values far from their defaults, over land, pylons and sky | `Wasteland:18,24` |
 
 Every scene runs with the common settings of the list: a 1280x720 window at 30 frames a second, PNG screenshots, no
 antialiasing, the default texture filtering, field of view and view distance, and shadows, the water shader and
 post-processing off. A scene turns on what it is for (`settings` of the scene). The exteriors are drawn at 13:00 under
 the game's clear weather (`NVWastelandClear`, `WastelandClear`).
+
+The two post-processing scenes also give values to their techniques (`techniques` of the scene). At their defaults
+`adjustments` changes nothing and `bloomlinear` adds little, so a scene that only turned them on drew a picture that was
+brighter by 2.5 levels (New Vegas) and 5.6 levels (Fallout 3) than the same place without post-processing: no more than
+two renderers may differ by, so it caught nothing. Now `bloomlinear` runs with a threshold of 0.2 (default 0.35), a
+strength of 1.0 (0.25), a radius of 0.6 (0.5) and a sky factor of 1.0 (0.5): a wide, strong glow around everything bright,
+made by the bright pass, two blurs and the final pass (four passes and three render targets). `adjustments` runs with a
+gamma of 1.6 and a contrast of 1.4 (both 1.0): brighter middle tones and more contrast. Both are well inside the limits
+the techniques declare. A build that does not draw them, or draws one pass wrongly, shows at once.
 
 ### Adding a scene
 
@@ -101,7 +110,9 @@ Add an entry to `scenes`:
   looks the way the start put the player), and `pos` ([x, y, z] in game units) for a camera at a fixed place; without
   `pos` the camera is 48 units ahead of the player's eye along `yaw`, or `forward` units (more, when the player's own
   arm or body would be in the picture: its idle pose is not held still);
-- optional `place` (`pos` [x, y] and `onGround`: where the player is put after the start), `hour`, `weather` (`master`,
+- optional `techniques` (`{"technique": {"uniform": number}}`, the values of the uniforms of the post-processing techniques
+  that the scene's `chain` names; they must lie inside the limits the technique declares, and `test_picturecompare.py`
+  checks that), `place` (`pos` [x, y] and `onGround`: where the player is put after the start), `hour`, `weather` (`master`,
   `form` as `0x` and six hexadecimal digits, `editor_id`), `settings` (`{"Section": {"key": "value"}}`), and `ignore` (a
   list of `{"box": [x0, y0, x1, y1], "why": "..."}`, fractions of the picture that are not compared, for something that
   cannot be held still; the reason is shown on the report).
@@ -125,6 +136,7 @@ Two pictures can only be compared when everything except the renderer is the sam
 | the interface over the picture | the engine's head-up display and the crosshair are hidden, and message boxes (the notices of add-ons) are answered before the picture. The Fallout display (health, compass, action points) is a script of its own with no switch and stays in the picture: it is the same in both runs, and it is drawn by the interface renderer, which the Metal build changes too, so comparing it is wanted. In the water scenes it also shows the air meter, because the player stands under water |
 | the player's own body and its idle movements | the camera is in its static mode, ahead of the eye or at a fixed place, far enough ahead that the player's arm is behind it (`fo3-shadows`: 150 units; at 48 units its arm was in the corner of the picture and its idle pose differed between two runs) |
 | water waves, cloud drift, animated textures, particles, animations | the world is paused when the simulation time reaches 60 s: they stop at the same phase on both builds (the two pause times are in the report; they differ by at most one frame, 33 ms at 30 frames a second) |
+| the values of the post-processing techniques | the round puts them in its own `shaders.yaml`, the file where the engine keeps the values a player chose (round key `shader_values`, see the round runner's README). A scenario cannot set them: the engine refuses a script that sets a uniform the technique does not declare `static = false`, and these two do not |
 | loading in progress | the place has 15 real seconds to load before the view is set, and the picture is taken 3 s after the pause; a scene that is not ready by 60 s of simulation time fails its round, and so does one that does not reach it within 150 real seconds: the round says whether something held the world (`held`) or the engine ran too slowly on a busy computer (`slow`) |
 
 What is not held exactly, and why the comparison tolerates it:
@@ -216,7 +228,8 @@ The first limits were set on 16 November 2026 from three hidden passes of every 
 `ca474d90a4` (engine release 0.1.1), compared pair by pair with `compare --noise`. Nine scenes have three comparisons;
 `fo3-busy`, `nv-water`, `fo3-water` and `fo3-shadows` have one, because the first pass was made before those scenes were
 changed (the two water scenes drowned the player, `fo3-busy` looked at a wall, `fo3-shadows` had the player's arm in the
-picture). The worst values seen:
+picture). The two post-processing scenes were changed on 17 November 2026 (they now give values to their techniques, see
+"The scenes"), and their three comparisons were made again, on the same build. The worst values seen:
 
 | scene | `worst_tile_bad` | `mean_shift` | `worst_tile_shift` | `ssim` | `worst_tile_ssim` | largest pixel difference |
 |---|---|---|---|---|---|---|
@@ -230,12 +243,13 @@ picture). The worst values seen:
 | `fo3-shadows` | 0 | 0 | 0 | 1 | 1 | 0 |
 | `nv-water` | 0.0010 | 0.0001 | 0.07 | 0.9998 | 0.9968 | 32 |
 | `fo3-water` | 0 | 0.0002 | 0.06 | 0.9996 | 0.9980 | 7 |
-| `nv-post` | 0 | 0.010 | 0.85 | 0.9994 | 0.9935 | 7 |
-| `fo3-post` | 0.0020 | 0.0002 | 0.08 | 0.9996 | 0.9949 | 54 |
+| `nv-post` | 0 | 0.035 | 1.78 | 0.9966 | 0.9636 | 13 |
+| `fo3-post` | 0.0020 | 0.0007 | 0.19 | 0.9984 | 0.9920 | 50 |
 
 `bad_share` was below 0.0003 everywhere. The build varies very little between two runs: three scenes came out the same to
-the last bit in every comparison, and the rest differ in a few pixels of a few windows. The noisiest values with the margin (`nv-exterior`'s worst window shift, 1.78 x 1.5 + 3 = 5.7 levels;
-`nv-shadows`' worst window structure, 1 - (0.026 x 1.5 + 0.03) = 0.93) are still well inside the allowance, so every
+the last bit in every comparison, and the rest differ in a few pixels of a few windows. The noisiest values with the margin (`nv-exterior`'s and `nv-post`'s worst window shift, 1.78 x 1.5 + 3 = 5.7 levels;
+`nv-post`'s worst window structure, 1 - (0.036 x 1.5 + 0.03) = 0.92, the noisiest of all: the bloom's dithering follows the
+simulation time, which the two pauses reach up to one frame apart) are still well inside the allowance, so every
 scene's limits are the allowance. What a scene is held to is therefore what two renderers may differ by, not what one
 build varies by: the first run of the Metal build is the test of the allowance, and a scene's limit is raised only as
 "After the first run of the Metal build" says below.
@@ -256,9 +270,14 @@ interior):
 
 So a colour shift of 3 levels, a missing light or shadow, blown-out lighting and a wrong texture with contrast are caught;
 a small change where the picture is dark and flat, or where the replacement looks like what was there, is not. Post-
-processing that is not drawn at all shows as a colour shift: matched against the exterior scene of the same place (the
-camera is 8 degrees higher), the post-processing scenes are brighter by about 5.6 levels (Fallout 3) and 2.5 levels (New
-Vegas) in their brightest channel, so such a build would be flagged, in New Vegas only just.
+processing that is not drawn at all shows as a colour shift, and now a large one: the post-processing scenes (measured
+against a plain picture of the same place at the same camera, taken once on the OpenGL build, 17 November 2026) are
+brighter by 38 levels (New Vegas) and 54 levels (Fallout 3) in their brightest channel, with the glow of the bloom
+around bright things and a stronger contrast; 90 % of the pixels differ by more than the tolerance and the worst
+window's structure measure is 0.19. Against the limit of 2 levels that is 19 and 27 times the limit, so a build that
+drew no post-processing, or one pass of it wrongly, is flagged whatever small difference two renderers also have. (Before
+the scenes gave values to their techniques, the same measure was 2.5 and 5.6 levels, matched against the exterior scene
+with the camera 8 degrees higher: only just above the limit in New Vegas.)
 
 After the first run of the Metal build the owner looks at every flag. A flag that is a fault of the Metal build stays a
 flag until the fault is fixed. A flag that the owner judges a legitimate difference of renderers (for example texture

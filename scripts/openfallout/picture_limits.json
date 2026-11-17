@@ -254,29 +254,29 @@
       }
     },
     "nv-post": {
-      "measured": "2026-11-16",
+      "measured": "2026-11-17",
       "runs": 3,
       "build": "ca474d90a4 OpenGL (0.1.1), hidden rounds",
       "worst": {
         "bad_share": 0.0,
         "worst_tile_bad": 0.0,
-        "mean_shift": 0.010298394097222222,
-        "worst_tile_shift": 0.8525390625,
-        "ssim": 0.9993562163999016,
-        "worst_tile_ssim": 0.9934603602119506
+        "mean_shift": 0.035078125,
+        "worst_tile_shift": 1.7763671875,
+        "ssim": 0.9965748087999315,
+        "worst_tile_ssim": 0.9636496026048077
       }
     },
     "fo3-post": {
-      "measured": "2026-11-16",
+      "measured": "2026-11-17",
       "runs": 3,
       "build": "ca474d90a4 OpenGL (0.1.1), hidden rounds",
       "worst": {
-        "bad_share": 9.765625e-06,
+        "bad_share": 8.680555555555556e-06,
         "worst_tile_bad": 0.001953125,
-        "mean_shift": 0.00015516493055555555,
-        "worst_tile_shift": 0.0830078125,
-        "ssim": 0.9995981922971261,
-        "worst_tile_ssim": 0.9948609326612746
+        "mean_shift": 0.0006803385416666667,
+        "worst_tile_shift": 0.1904296875,
+        "ssim": 0.9983812395380403,
+        "worst_tile_ssim": 0.9920174449769753
       }
     }
   }
