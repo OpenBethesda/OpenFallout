@@ -486,8 +486,8 @@ namespace Shader
 
         // Removes #version and #extension lines (keeping the line, so that line numbers stay right) and the uniform
         // initialisers GLSL ES does not allow. Comments are blanked first; an initialiser counts only in text the
-        // preprocessor keeps.
-        void convertLines(std::string_view original, GlslEsShader& result, std::string& out)
+        // preprocessor keeps. skipped says, line by line, whether the preprocessor is known to skip the line.
+        void convertLines(std::string_view original, GlslEsShader& result, std::string& out, std::vector<bool>& skipped)
         {
             static const std::regex version(R"(^\s*#\s*version\s+(\d+).*$)");
             static const std::regex extension(R"(^\s*#\s*extension\b.*$)");
@@ -510,6 +510,7 @@ namespace Shader
                 // Read without comments, written as it was
                 const std::string line(source.substr(pos, end - pos));
                 const std::string_view text = original.substr(pos, end - pos);
+                skipped.push_back(branches.active() == Branches::Active::No);
                 std::smatch match;
                 if (std::regex_match(line, match, version))
                 {
@@ -571,9 +572,11 @@ namespace Shader
 
         // Renames what GLSL ES 3.00 calls differently, word by word. Comments are dropped (their line breaks kept):
         // OpenSceneGraph's own pass over the text would otherwise turn a built-in name in a comment into a second
-        // declaration.
-        std::string convertNames(const std::string& source, osg::Shader::Type stage, Uses& uses)
+        // declaration. A built-in without an equivalent counts only on a line the preprocessor is not known to skip.
+        std::string convertNames(
+            const std::string& source, osg::Shader::Type stage, Uses& uses, const std::vector<bool>& skipped)
         {
+            std::size_t lineNumber = 0;
             const bool isVertex = stage == osg::Shader::VERTEX;
             std::string out;
             out.reserve(source.size() + source.size() / 8);
@@ -592,6 +595,7 @@ namespace Shader
                     if (!line && lineBreaks == 0)
                         out += ' ';
                     out.append(lineBreaks, '\n');
+                    lineNumber += lineBreaks;
                     i = end;
                     continue;
                 }
@@ -607,6 +611,8 @@ namespace Shader
                 }
                 if (!isIdentifierStart(c))
                 {
+                    if (c == '\n')
+                        ++lineNumber;
                     out += c;
                     ++i;
                     continue;
@@ -701,7 +707,7 @@ namespace Shader
                 }
                 else
                 {
-                    if (!sKeptBuiltIns.contains(word))
+                    if (!sKeptBuiltIns.contains(word) && !(lineNumber < skipped.size() && skipped[lineNumber]))
                         uses.mUnknown.insert(std::string(word));
                     out += word;
                 }
@@ -804,10 +810,11 @@ namespace Shader
 
         std::string lines;
         lines.reserve(source.size());
-        convertLines(source, result, lines);
+        std::vector<bool> skipped;
+        convertLines(source, result, lines, skipped);
 
         Uses uses;
-        const std::string body = convertNames(lines, stage, uses);
+        const std::string body = convertNames(lines, stage, uses, skipped);
         for (const std::string& name : uses.mUnknown)
             result.mErrors.push_back(name + " has no GLSL ES 3.00 equivalent");
         if (uses.mDynamicFragData)

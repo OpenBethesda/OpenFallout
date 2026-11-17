@@ -323,6 +323,22 @@ namespace
         EXPECT_THAT(result.mErrors, Contains(HasSubstr("gl_LightSource")));
     }
 
+    TEST(ShaderGlslEsTest, desktop_built_ins_in_a_branch_the_compiler_skips_are_not_errors)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "void main()\n"
+            "{\n"
+            "#if 0\n"
+            "    gl_FragColor = gl_LightSource[0].diffuse;\n"
+            "#else\n"
+            "    gl_FragColor = vec4(1.0);\n"
+            "#endif\n"
+            "}\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(body(result.mSource), HasSubstr("gl_LightSource"));
+    }
+
     TEST(ShaderGlslEsTest, comments_are_dropped_with_their_line_breaks_kept)
     {
         const GlslEsShader result = fragment(
