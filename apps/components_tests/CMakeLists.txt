@@ -50,6 +50,8 @@ file(GLOB UNITTEST_SRC_FILES
     detournavigator/asyncnavmeshupdater.cpp
     detournavigator/testdebug.cpp
 
+    crashcatcher/testcrashframe.cpp
+
     debug/testheadlessrun.cpp
 
     serialization/binaryreader.cpp

@@ -28,10 +28,14 @@
 #include <signal.h>
 
 #include <cassert>
+#include <dlfcn.h>
 #include <libproc.h>
+#include <mach/mach.h>
 #include <sys/sysctl.h>
+#include <sys/ucontext.h>
 
 #include "crashcatcher.hpp"
+#include "crashframe.hpp"
 
 static const char fatal_err[] = "\n\n*** Fatal Error ***\n";
 static const char pipe_err[] = "!!! Failed to create pipe\n";
@@ -49,6 +53,10 @@ static struct
     int signum;
     pid_t pid;
     std::optional<siginfo_t> siginfo;
+    // The crashed thread's name and frames, taken in the crashed process: the crash log has them when no debugger
+    // can be started (a hidden run gives the engine no debugger, and a debugger that attaches can end the process)
+    char thread[64];
+    char frames[6144];
 } crash_info;
 
 namespace
@@ -261,7 +269,62 @@ static size_t safe_write(int fd, const void* buf, size_t len)
     return ret;
 }
 
-static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
+// Reads one word of the crashed process without faulting on a bad address
+static bool readWord(std::uintptr_t address, std::uintptr_t& value)
+{
+    vm_size_t read = 0;
+    return vm_read_overwrite(mach_task_self(), address, sizeof(value), reinterpret_cast<vm_address_t>(&value), &read)
+        == KERN_SUCCESS
+        && read == sizeof(value);
+}
+
+// The program counter, the link register and the return addresses of the frame pointer chain of the crashed thread,
+// each with its image and symbol
+static void recordFrames(void* context)
+{
+    crash_info.thread[0] = '\0';
+    crash_info.frames[0] = '\0';
+    pthread_getname_np(pthread_self(), crash_info.thread, sizeof(crash_info.thread));
+    const auto* ucontext = static_cast<const ucontext_t*>(context);
+    if (ucontext == nullptr || ucontext->uc_mcontext == nullptr)
+        return;
+    std::span<char> out(crash_info.frames, sizeof(crash_info.frames));
+    std::size_t used = 0;
+    const auto add = [&](const char* label, std::uintptr_t address) {
+        // Return addresses carry no pointer authentication in an arm64 (not arm64e) process; keep the address bits only
+        address &= 0x0000ffffffffffffULL;
+        Dl_info info{};
+        const bool known = address != 0 && dladdr(reinterpret_cast<const void*>(address), &info) != 0;
+        used += CrashCatcher::formatFrame(out.subspan(used), label, address, known ? info.dli_fname : nullptr,
+            known ? reinterpret_cast<std::uintptr_t>(info.dli_fbase) : 0, known ? info.dli_sname : nullptr,
+            known ? reinterpret_cast<std::uintptr_t>(info.dli_saddr) : 0);
+    };
+#if defined(__arm64__)
+    const auto& registers = ucontext->uc_mcontext->__ss;
+    add("pc", arm_thread_state64_get_pc(registers));
+    add("lr", arm_thread_state64_get_lr(registers));
+    std::uintptr_t frame = arm_thread_state64_get_fp(registers);
+#else
+    const auto& registers = ucontext->uc_mcontext->__ss;
+    add("pc", registers.__rip);
+    std::uintptr_t frame = registers.__rbp;
+#endif
+    char label[8];
+    for (int index = 0; index < 64 && frame != 0 && frame % sizeof(std::uintptr_t) == 0; ++index)
+    {
+        std::uintptr_t next = 0;
+        std::uintptr_t returnAddress = 0;
+        if (!readWord(frame, next) || !readWord(frame + sizeof(std::uintptr_t), returnAddress) || returnAddress == 0)
+            break;
+        std::snprintf(label, sizeof(label), "#%d", index);
+        add(label, returnAddress);
+        if (next <= frame)
+            break;
+        frame = next;
+    }
+}
+
+static void crash_catcher(int signum, siginfo_t* siginfo, void* context)
 {
     /* Make sure the effective uid is the real uid */
     if (getuid() != geteuid())
@@ -285,6 +348,7 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
         crash_info.siginfo = std::nullopt;
     else
         crash_info.siginfo = *siginfo;
+    recordFrames(context);
 
     const pid_t dbgPid = fork();
     /* Fork off to start a crash handler */
@@ -378,6 +442,10 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
     if (crash_info.siginfo.has_value())
         printf("Address: %p\n", crash_info.siginfo->si_addr);
     fputc('\n', stdout);
+    crash_info.thread[sizeof(crash_info.thread) - 1] = '\0';
+    crash_info.frames[sizeof(crash_info.frames) - 1] = '\0';
+    printf("* Frames of the crashed thread \"%s\" (taken without a debugger)\n%s\n", crash_info.thread,
+        crash_info.frames);
     fflush(stdout);
 
     fflush(stdout);

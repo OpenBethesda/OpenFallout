@@ -458,7 +458,7 @@ copy_resource_file("lua_ui/content.lua" "${OPENFALLOUT_RESOURCES_ROOT}" "resourc
 
 
 add_component_dir (crashcatcher
-    crashcatcher
+    crashcatcher crashframe
 )
 
 add_component_dir(detournavigator
