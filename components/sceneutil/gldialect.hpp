@@ -24,6 +24,9 @@ namespace SceneUtil::GLDialect
     // uniforms and they write clip distances instead (SceneUtil::setEyeSpaceClipPlane).
     inline constexpr bool sHasUserClipPlanes = !sOpenGLES;
 
+    // The extension that gives the GL_DEPTH_CLAMP switch (the same number in both)
+    inline constexpr const char* sDepthClampExtension = sOpenGLES ? "GL_EXT_depth_clamp" : "GL_ARB_depth_clamp";
+
     // OpenGL ES promises only RGBA read-back of the frame buffer, and has no BGR or BGRA upload formats.
     inline constexpr bool sReadsBackRGB = !sOpenGLES;
     inline constexpr bool sUploadsBGR = !sOpenGLES;

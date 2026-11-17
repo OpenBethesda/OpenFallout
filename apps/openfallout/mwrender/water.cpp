@@ -361,7 +361,7 @@ namespace OFRender
         void drawImplementation(osg::RenderInfo& renderInfo, const osg::Drawable* drawable) const override
         {
             static bool supported = osg::isGLExtensionOrVersionSupported(
-                renderInfo.getState()->getContextID(), "GL_ARB_depth_clamp", 3.3f);
+                renderInfo.getState()->getContextID(), SceneUtil::GLDialect::sDepthClampExtension, 3.3f);
             if (!supported)
             {
                 drawable->drawImplementation(renderInfo);
