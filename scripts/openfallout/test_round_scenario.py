@@ -51,12 +51,26 @@ local player = {
     end,
     teleport = function(self, cell, pos, options) teleports[#teleports + 1] = { cell = cell, pos = pos, options = options } end,
 }
+simulation = 0
+paused_tags = {}
+game_time_scale = 30
+commands_run = {}
+commands_answer = true
 package.preload['openfallout.core'] = function()
     return {
         getRealTime = function() return clock end,
+        getSimulationTime = function() return simulation end,
         quit = function() quit_called = true end,
         isWorldPaused = function() return paused end,
         getFormId = function(file, id) return 'FormId:' .. file .. ':' .. id end,
+        worldCommands = {
+            run = function(name, reference, arguments)
+                if name == 'NoSuchCommand' then error('"NoSuchCommand" is not a command of this game') end
+                commands_run[#commands_run + 1] = { name = name, reference = reference, arguments = arguments }
+                return #commands_run
+            end,
+            result = function(id) if commands_answer then return 0 end return nil end,
+        },
     }
 end
 package.preload['openfallout.util'] = function()
@@ -79,6 +93,9 @@ package.preload['openfallout.world'] = function()
         getExteriorCell = function(gx, gy, ref) return { grid = gx .. ',' .. gy, via = ref } end,
         getCellByName = function(name) return { name = name } end,
         getCellById = function(id) return { id = id } end,
+        pause = function(tag) paused_tags[tag or 'paused'] = true end,
+        unpause = function(tag) paused_tags[tag or 'paused'] = nil end,
+        setGameTimeScale = function(scale) game_time_scale = scale end,
         getObjectByFormId = function(id) return { id = id, recordId = 'rec', cell = object_cells[id] or player.cell,
                                                    position = player.position, enabled = true, activateBy = function() end } end,
     }
@@ -331,6 +348,45 @@ class ScenarioPlayer(unittest.TestCase):
         self.assertIn("ROUND\tquest\tmissing\tmissing", lines)
         self.assertTrue(any(line.startswith("ROUND\tobject\tthing\t") and "record=rec" in line for line in lines))
 
+    def test_a_scene_is_held_still_by_pausing_the_world_and_stopping_the_clock(self):
+        self.start("return function(r) r.gameTimeScale(0) r.pause(true) r.log('t=' .. r.simulationTime()) "
+                   "r.pause(false) end")
+        self.lua.execute("simulation = 61.5")
+        self.tick(4)
+        self.assertEqual(self.lua.eval("game_time_scale"), 0)
+        self.assertIsNone(self.lua.eval("paused_tags.round"))
+        lines = self.lines()
+        self.assertIn("ROUND\tgameTimeScale\tok\t0.00", lines)
+        self.assertIn("ROUND\tpause\tok\ton", lines)
+        self.assertIn("ROUND\tnote\tt=61.5", lines)
+        self.assertIn("ROUND\tpause\tok\toff", lines)
+
+    def test_the_scenario_goes_on_while_its_own_pause_holds_the_world(self):
+        # the world is paused by the scenario after it began: the steps after it still run (the engine calls onUpdate with 0)
+        self.start("return function(r) r.pause(true) r.wait(1) r.log('after') end")
+        self.tick(4)
+        self.lua.execute("paused = true")
+        self.tick(2)
+        self.assertIn("ROUND\tnote\tafter", self.lines())
+
+    def test_weather_is_forced_and_held_through_the_script_command(self):
+        self.start("return function(r) r.weather('FormId:0xffc88') r.log('after') end")
+        self.tick(4)
+        self.tick(1)
+        self.assertEqual(self.lua.eval("commands_run[1].name"), "ForceWeather")
+        self.assertEqual(self.lua.eval("commands_run[1].arguments[1]"), "FormId:0xffc88")
+        self.assertEqual(self.lua.eval("commands_run[1].arguments[2]"), 1)
+        lines = self.lines()
+        self.assertIn("ROUND\tweather\tok\tFormId:0xffc88", lines)
+        self.assertIn("ROUND\tnote\tafter", lines)
+
+    def test_a_weather_command_that_never_runs_is_a_failed_step(self):
+        self.start("return function(r) r.weather('FormId:0x1') end")
+        self.lua.execute("commands_answer = false")
+        for _ in range(16):
+            self.tick(1)
+        self.assertTrue(any(line.startswith("ROUND\terror\tweather") for line in self.lines()))
+
     def test_a_quest_stage_that_is_not_applied_is_an_error_line(self):
         self.start("return function(r) r.quest('NoStage', 7) r.quest('Done', 20) r.log('after') end")
         self.tick(4)
@@ -470,9 +526,11 @@ local vector_methods = {
     dot = function(a, b) return a.x * b.x + a.y * b.y + a.z * b.z end,
 }
 vec = function(x, y, z) return setmetatable({ x = x, y = y, z = z }, { __add = function(a, b) return vec(a.x + b.x, a.y + b.y, a.z + b.z) end,
-    __sub = function(a, b) return vec(a.x - b.x, a.y - b.y, a.z - b.z) end, __index = vector_methods }) end
+    __sub = function(a, b) return vec(a.x - b.x, a.y - b.y, a.z - b.z) end,
+    __mul = function(a, k) return vec(a.x * k, a.y * k, a.z * k) end, __index = vector_methods }) end
 function make_actor(x, y, z) return { position = vec(x, y, z), recordId = 'ganger' } end
 yaw, pitch = 0, 0
+camera_mode, static_position, crosshair, hud_visible, ai_enabled = 1, nil, true, true, true
 package.preload['openfallout.core'] = function()
     return { getRealTime = function() return clock end, getRealFrameDuration = function() return 0.0001 end,
              sendGlobalEvent = function(name, data) answers[#answers + 1] = { name = name, data = data } end }
@@ -482,10 +540,15 @@ package.preload['openfallout.self'] = function()
 end
 package.preload['openfallout.camera'] = function()
     return { getPosition = function() return vec(100, 200, 364) end, getYaw = function() return yaw end, getPitch = function() return pitch end,
-             setYaw = function(v) yaw = v end, setPitch = function(v) pitch = v end, getMode = function() return 1 end,
-             setMode = function() end, MODE = { FirstPerson = 1 }, viewportToWorldVector = function() return vec(0, 1, 0) end }
+             setYaw = function(v) yaw = v end, setPitch = function(v) pitch = v end, getMode = function() return camera_mode end,
+             setMode = function(m) camera_mode = m end, MODE = { Static = 0, FirstPerson = 1 },
+             viewportToWorldVector = function() return vec(0, 1, 0) end,
+             setStaticPosition = function(p) static_position = p end, showCrosshair = function(v) crosshair = v end }
 end
-package.preload['openfallout.debug'] = function() return { takeScreenshot = function() takeScreenshot_calls = takeScreenshot_calls + 1 end } end
+package.preload['openfallout.debug'] = function()
+    return { takeScreenshot = function() takeScreenshot_calls = takeScreenshot_calls + 1 end,
+             isAIEnabled = function() return ai_enabled end, toggleAI = function() ai_enabled = not ai_enabled end }
+end
 package.preload['openfallout.nearby'] = function()
     return { COLLISION_TYPE = { HeightMap = 4 }, actors = {},
              castRay = function(from, to, options) return { hit = true, hitPos = vec(from.x, from.y, 55) } end }
@@ -495,7 +558,8 @@ package.preload['openfallout.input'] = function() return { CONTROLLER_BUTTON = {
 package.preload['openfallout.animation'] = function() return { BONE_GROUP = {} } end
 package.preload['openfallout.types'] = function() return { Actor = {} } end
 package.preload['openfallout.interfaces'] = function()
-    return { UI = { getMode = function() return 'none' end }, Controls = { overrideMovementControls = function() end } }
+    return { UI = { getMode = function() return 'none' end, setHudVisibility = function(v) hud_visible = v end },
+             Controls = { overrideMovementControls = function() end } }
 end
 function load_player() return load(player_source)() end
 """
@@ -638,6 +702,39 @@ class PlayerScript(unittest.TestCase):
         result = self.vats_stand_in("{ recordId = 'FormId:0x10243e' }")
         self.assertFalse(result.clear)
         self.assertTrue(any(line.endswith("ray=FormId:0x10243e") for line in self.lines()))
+
+    def test_ai_is_turned_off_and_on_and_says_its_state(self):
+        self.ask("ai", on=False)
+        self.assertFalse(self.lua.eval("ai_enabled"))
+        self.ask("ai", on=False)
+        self.assertFalse(self.lua.eval("ai_enabled"))
+        self.ask("ai", on=True)
+        self.assertTrue(self.lua.eval("ai_enabled"))
+        self.assertEqual(self.lines(), ["ROUND\tai\tfalse", "ROUND\tai\tfalse", "ROUND\tai\ttrue"])
+
+    def test_the_hud_and_the_crosshair_are_hidden_together(self):
+        self.ask("hud", visible=False)
+        self.assertFalse(self.lua.eval("hud_visible"))
+        self.assertFalse(self.lua.eval("crosshair"))
+        self.assertEqual(self.lines(), ["ROUND\thud\tfalse"])
+
+    def test_a_fixed_view_puts_the_camera_at_a_place_or_ahead_of_the_eye(self):
+        import math
+        self.ask("view", pos=self.lua.table_from([1000, 2000, 300]), yaw=math.pi / 2, pitch=0.2, label="v")
+        self.assertEqual(self.lua.eval("camera_mode"), 0)
+        self.assertEqual(self.lua.eval("static_position.x"), 1000)
+        self.assertAlmostEqual(self.lua.eval("yaw"), math.pi / 2)
+        self.assertAlmostEqual(self.lua.eval("pitch"), 0.2)
+        # no place: the eye (100, 200, 364) moved 50 units along the yaw (east), so the player's own body is behind the camera
+        self.ask("view", yaw=math.pi / 2, pitch=0, forward=50)
+        self.assertAlmostEqual(self.lua.eval("static_position.x"), 150)
+        self.assertAlmostEqual(self.lua.eval("static_position.y"), 200)
+        self.assertAlmostEqual(self.lua.eval("static_position.z"), 364)
+        self.assertTrue(self.lines()[0].startswith("ROUND\tview\tv\tpos=1000,2000,300 yaw=1.57 pitch=0.20"), self.lines())
+        # the game's camera turns to its vanity mode when nothing is touched for a while: the static mode is put back
+        self.lua.execute("camera_mode = 1")
+        self.module.engineHandlers.onFrame()
+        self.assertEqual(self.lua.eval("camera_mode"), 0)
 
     def test_unknown_question_is_answered_with_an_error(self):
         self.ask("nonsense")

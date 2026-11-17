@@ -255,8 +255,18 @@ def convert_picture(source, target, width=1280):
     return fallback
 
 
-def collect_shots(userdata, shots_dir, names, width=1280):
-    """Copies the screenshots of the run to `shots_dir` as `<n>-<name>.jpg`: the engine numbers them `screenshotNNN` in the
+def keep_png(source, target):
+    """Copies a whole PNG as the engine wrote it (`"shot_format": "png"`: a picture that a machine compares must not go through a lossy
+    JPEG or a resize). Gives the path written, or None for an unfinished file or one that is not a PNG (the shot is then missing)."""
+    if source.suffix.lower() != ".png" or not picture_is_complete(source):
+        return None
+    shutil.copyfile(source, target)
+    return target
+
+
+def collect_shots(userdata, shots_dir, names, width=1280, keep=None):
+    """Copies the screenshots of the run to `shots_dir` as `<n>-<name>.jpg` (`<n>-<name>.png` as the engine wrote them with
+    `keep="png"`): the engine numbers them `screenshotNNN` in the
     order they were taken, and the scenario logged `shot <name> n=<k>` for each, so the k-th file is the one of the k-th line (one
     write queue thread by default, and `r.shot` waits for its file: the writes cannot swap unless `preload num threads` is above 1 and
     two shots are asked for back to back)."""
@@ -268,6 +278,9 @@ def collect_shots(userdata, shots_dir, names, width=1280):
             written.append((number, name, None))
             continue
         safe = safe_name(name) or "shot"
+        if keep == "png":
+            written.append((number, name, keep_png(files[index], shots_dir / f"{number:02d}-{safe}.png")))
+            continue
         written.append((number, name, convert_picture(files[index], shots_dir / f"{number:02d}-{safe}.jpg", width)))
     return written, max(0, len(files) - len(names))
 
@@ -780,7 +793,8 @@ def run_variant(profile, config, variant, out_dir, save, priority="low", guard=N
     text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
     (run_dir / "openfallout.log").write_text(text, encoding="utf-8")
     lines = round_lines(text)
-    shots, extra = collect_shots(run_dir / "userdata", run_dir / "shots", shot_names(lines), config.get("shot_width", 1280))
+    shots, extra = collect_shots(run_dir / "userdata", run_dir / "shots", shot_names(lines), config.get("shot_width", 1280),
+                                config.get("shot_format"))
     # What an investigation of a stalled window system would want, kept with the run (a Mac: the new crash reports and the log of runningboardd)
     evidence = roundguard.collect_evidence(system, run_dir, began) if system is not None and system.heartbeat else []
     return write_report(run_dir, config, variant, status, seconds, sampler, timed_out, lines, log_problems(text),

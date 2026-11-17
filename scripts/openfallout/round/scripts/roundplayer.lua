@@ -579,6 +579,46 @@ function handlers.messages(args)
     return {}
 end
 
+-- ---- Mac Native M2: a scene held still for a picture that is compared between two builds --------------------------------------
+-- The characters' AI on or off (the state is logged)
+function handlers.ai(args)
+    local want = args.on ~= false
+    if debug.isAIEnabled() ~= want then debug.toggleAI() end
+    log('ai', tostring(debug.isAIEnabled()))
+    return { on = debug.isAIEnabled() }
+end
+
+-- The head-up display and the crosshair, shown or hidden together
+function handlers.hud(args)
+    local visible = args.visible ~= false
+    I.UI.setHudVisibility(visible)
+    camera.showCrosshair(visible)
+    log('hud', tostring(visible))
+    return {}
+end
+
+-- A fixed view: the camera in its static mode at `pos`, or `forward` units ahead of the eye along `yaw`, turned to `yaw` and `pitch`.
+-- The mode is kept (onFrame puts it back if the game changes it). The eye is the one before the first fixed view: a camera in its
+-- static mode is where it was put, not at the eye
+local viewEye = nil
+function handlers.view(args)
+    local yaw, pitch = args.yaw or camera.getYaw(), args.pitch or 0
+    if camera.getMode() ~= camera.MODE.Static or viewEye == nil then viewEye = eyePosition() end
+    local pos
+    if args.pos then
+        pos = util.vector3(args.pos[1], args.pos[2], args.pos[3])
+    else
+        pos = viewEye + util.vector3(math.sin(yaw), math.cos(yaw), 0) * (args.forward or 0)
+    end
+    camera.setMode(camera.MODE.Static, true)
+    wantedMode = camera.MODE.Static
+    camera.setStaticPosition(pos)
+    camera.setYaw(yaw)
+    camera.setPitch(pitch)
+    log('view', tostring(args.label or '-'), string.format('pos=%.0f,%.0f,%.0f yaw=%.2f pitch=%.2f', pos.x, pos.y, pos.z, yaw, pitch))
+    return {}
+end
+
 -- ---- M16 needs: waiting, sleeping, travelling and the needs of the hardcore mode ---------------------------------------------------
 -- The game's clock in hours since the start of its count
 function handlers.clock()

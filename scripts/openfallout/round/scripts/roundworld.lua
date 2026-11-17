@@ -235,6 +235,44 @@ function r.speed(scale)
     return outcome('speed', ok, err, string.format('%.2f', scale))
 end
 
+-- ---- Mac Native M2 additions: holding a scene still for a picture that is compared between two builds -----------------------------
+-- The world paused (`r.pause(true)`) stops the simulation: characters, animations, particles, water and clouds stand where they are,
+-- and the engine goes on drawing them. The scenario goes on as well (the engine calls onUpdate with no time while the world is
+-- paused), so a picture can be taken. `r.pause(false)` lets the world go on.
+function r.pause(on)
+    local ok, err = pcall(function()
+        if on == false then world.unpause('round') else world.pause('round') end
+    end)
+    return outcome('pause', ok, err, on == false and 'off' or 'on')
+end
+
+-- The speed of the game's clock relative to the real one (the global TimeScale; 0 stops the clock, so that the sun stands still)
+function r.gameTimeScale(scale)
+    local ok, err = pcall(function() world.setGameTimeScale(scale) end)
+    return outcome('gameTimeScale', ok, err, string.format('%.2f', scale))
+end
+
+-- The simulation time in seconds: what the water, the clouds, the particles and the animations follow. Two runs that pause at the
+-- same simulation time show them at the same phase (within one frame).
+function r.simulationTime() return core.getSimulationTime() end
+
+-- The weather (a form id as text, "FormId:0x..."), there at once and held over what the region would choose
+-- (`ForceWeather <form> 1`). Waits for the frame that runs the command
+function r.weather(form)
+    local commands = core.worldCommands
+    local ok, id = pcall(function() return commands.run('ForceWeather', nil, { form, 1 }) end)
+    if not ok then return outcome('weather', false, id, tostring(form)) end
+    local done = r.waitFor(function() return commands.result(id) ~= nil end, 10, 'weather')
+    return outcome('weather', done, 'the command was not run within 10 s', tostring(form))
+end
+
+-- The characters' AI on or off (off: they stop where they are and start nothing new), the head-up display and crosshair shown or
+-- hidden, and a fixed view: the camera in its static mode at `pos` ({ x, y, z }) or `forward` units ahead of the player's eye along
+-- `yaw` (so that the player's own body is behind it), turned to `yaw` and `pitch` (radians, pitch positive down)
+function r.ai(on) return ask('ai', { on = on }) end
+function r.hud(visible) return ask('hud', { visible = visible }) end
+function r.view(o) return ask('view', o or {}) end
+
 -- ---- M16 additions: waiting, sleeping, travelling, the needs -------------------------------------------------------------------
 -- The game's clock in hours
 function r.clock() local reply = ask('clock', {}) return reply and reply.hours end

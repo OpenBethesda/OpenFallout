@@ -392,6 +392,22 @@ class Pictures(unittest.TestCase):
         self.assertTrue(written[0][2] is not None and written[0][2].exists())
         self.assertIsNone(written[1][2])
 
+    def test_png_shots_are_kept_as_the_engine_wrote_them(self):
+        # a picture that is compared by machine must not go through a lossy JPEG or a resize
+        userdata = self.tmp / "userdata"
+        (userdata / "screenshots").mkdir(parents=True)
+        tiny_png(userdata / "screenshots" / "screenshot000.png")
+        (userdata / "screenshots" / "screenshot001.png").write_bytes(b"")
+        (userdata / "screenshots" / "screenshot002.jpg").write_bytes(b"\xff\xd8\xff\xe0 and an end\xff\xd9")
+        written, extra = round_runner.collect_shots(userdata, self.tmp / "shots", [(1, "a b"), (2, "b"), (3, "c")],
+                                                    keep="png")
+        self.assertEqual(extra, 0)
+        self.assertEqual(written[0][2], self.tmp / "shots" / "01-a-b.png")
+        self.assertEqual(written[0][2].read_bytes(), (userdata / "screenshots" / "screenshot000.png").read_bytes())
+        # an unfinished file and one in another format are no picture to compare: missing, so the round fails
+        self.assertIsNone(written[1][2])
+        self.assertIsNone(written[2][2])
+
     def test_a_damaged_picture_is_a_missing_shot_where_pillow_reads_it(self):
         try:
             import PIL  # noqa: F401
