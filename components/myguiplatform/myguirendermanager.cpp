@@ -2,6 +2,8 @@
 
 #include <MyGUI_Timer.h>
 
+#include <cstdint>
+
 #include <osg/Drawable>
 #include <osg/Texture2D>
 
@@ -92,10 +94,6 @@ namespace MyGUIPlatform
             state->apply();
 
             state->disableAllVertexArrays();
-            state->setClientActiveTextureUnit(0);
-            glEnableClientState(GL_VERTEX_ARRAY);
-            glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-            glEnableClientState(GL_COLOR_ARRAY);
 
             mReadFrom = (mReadFrom + 1) % sNumBuffers;
             const std::vector<Batch>& vec = mBatchVector[mReadFrom];
@@ -122,23 +120,19 @@ namespace MyGUIPlatform
                 osg::GLBufferObject* bufferobject = state->isVertexBufferObjectSupported()
                     ? vbo->getOrCreateGLBufferObject(state->getContextID())
                     : nullptr;
+                // The vertex arrays go through OpenSceneGraph, which feeds them to the fixed-function client state
+                // (desktop OpenGL) or to the generic vertex attributes its shaders read (OpenGL ES).
+                std::uintptr_t base = 0;
                 if (bufferobject)
-                {
                     state->bindVertexBufferObject(bufferobject);
-
-                    glVertexPointer(3, GL_FLOAT, sizeof(MyGUI::Vertex), reinterpret_cast<char*>(0));
-                    glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(MyGUI::Vertex), reinterpret_cast<char*>(12));
-                    glTexCoordPointer(2, GL_FLOAT, sizeof(MyGUI::Vertex), reinterpret_cast<char*>(16));
-                }
                 else
-                {
-                    glVertexPointer(3, GL_FLOAT, sizeof(MyGUI::Vertex),
-                        reinterpret_cast<const char*>(vbo->getArray(0)->getDataPointer()));
-                    glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(MyGUI::Vertex),
-                        reinterpret_cast<const char*>(vbo->getArray(0)->getDataPointer()) + 12);
-                    glTexCoordPointer(2, GL_FLOAT, sizeof(MyGUI::Vertex),
-                        reinterpret_cast<const char*>(vbo->getArray(0)->getDataPointer()) + 16);
-                }
+                    base = reinterpret_cast<std::uintptr_t>(vbo->getArray(0)->getDataPointer());
+                const auto at = [&](std::uintptr_t offset) { return reinterpret_cast<const GLvoid*>(base + offset); };
+                state->setVertexPointer(3, GL_FLOAT, sizeof(MyGUI::Vertex), at(0));
+                state->setColorPointer(4, GL_UNSIGNED_BYTE, sizeof(MyGUI::Vertex), at(12), GL_TRUE);
+                state->setTexCoordPointer(0, 2, GL_FLOAT, sizeof(MyGUI::Vertex), at(16));
+                state->applyDisablingOfVertexAttributes();
+                state->applyModelViewAndProjectionUniformsIfRequired();
 
                 glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(batch.mVertexCount));
 
@@ -148,10 +142,6 @@ namespace MyGUIPlatform
                     state->apply();
                 }
             }
-
-            glDisableClientState(GL_VERTEX_ARRAY);
-            glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-            glDisableClientState(GL_COLOR_ARRAY);
 
             state->popStateSet();
 
