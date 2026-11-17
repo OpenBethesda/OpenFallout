@@ -70,16 +70,16 @@ Wastelands has no scenes of its own: it is drawn by the same renderer from the s
 |---|---|---|
 | `nv-interior` | an interior: lamps, furniture, walls and floor | `GSDocMitchellHouse` |
 | `nv-exterior` | the open desert by day: land, rocks, plants, sky | `WastelandNV:6,15` |
-| `nv-busy` | a busy exterior: many buildings, objects and characters | `WastelandNV:-18,0` |
+| `nv-busy` | a busy exterior: houses, a store, a truck and poles along a road | `WastelandNV:-18,0` |
 | `fo3-interior` | an interior: the metal rooms and lights of a vault | `Vault101d` |
-| `fo3-exterior` | the open wasteland by day: land, ruins, sky | `Wasteland:18,24` |
+| `fo3-exterior` | the open wasteland by day: land, rocks, bushes, power pylons, sky | `Wasteland:18,24` |
 | `fo3-busy` | a busy exterior: a town of many structures | `MegatonWorld:-1,-6` |
-| `nv-shadows` | shadows of every kind under a low sun (hour 17) | `WastelandNV:-18,0` |
-| `fo3-shadows` | shadows of every kind under a low sun (hour 16) | `MegatonWorld:-1,-6` |
+| `nv-shadows` | the long shadows of a windmill, plants and rocks under a low sun (hour 17), every kind of shadow on | `WastelandNV:-18,0` |
+| `fo3-shadows` | the hard shadow edge of a town's structures on the ground under a low sun (hour 16), every kind of shadow on | `MegatonWorld:-1,-6` |
 | `nv-water` | the water shader with reflection and refraction over a lake | `WastelandNV:13,12`, camera above the water |
 | `fo3-water` | the water shader with reflection and refraction over a river | `Wasteland:20,-17`, camera above the water |
 | `nv-post` | post-processing (`bloomlinear`, `adjustments`) over a bright desert | `WastelandNV:6,15` |
-| `fo3-post` | post-processing (`bloomlinear`, `adjustments`) over ruins and sky | `Wasteland:18,24` |
+| `fo3-post` | post-processing (`bloomlinear`, `adjustments`) over land, pylons and sky | `Wasteland:18,24` |
 
 Every scene runs with the common settings of the list: a 1280x720 window at 30 frames a second, PNG screenshots, no
 antialiasing, the default texture filtering, field of view and view distance, and shadows, the water shader and
