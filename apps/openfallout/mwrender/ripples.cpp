@@ -60,6 +60,7 @@ namespace OFRender
         {
             osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
             texture->setSourceFormat(GL_RGBA);
+            texture->setSourceType(GL_HALF_FLOAT);
             texture->setInternalFormat(GL_RGBA16F);
             texture->setFilter(osg::Texture2D::MIN_FILTER, osg::Texture::LINEAR);
             texture->setFilter(osg::Texture2D::MAG_FILTER, osg::Texture::LINEAR);

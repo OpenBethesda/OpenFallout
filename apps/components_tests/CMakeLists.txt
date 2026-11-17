@@ -337,6 +337,7 @@ file(GLOB UNITTEST_SRC_FILES
     vfs/testarchiveorder.cpp
     vfs/testpathutil.cpp
 
+    sceneutil/color.cpp
     sceneutil/osgacontroller.cpp
     sceneutil/smoothnormals.cpp
     sceneutil/loddebug.cpp

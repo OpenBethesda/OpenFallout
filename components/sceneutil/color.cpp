@@ -101,7 +101,7 @@ namespace SceneUtil
 
     void getColorFormatSourceFormatAndType(GLenum internalFormat, GLenum& sourceFormat, GLenum& sourceType)
     {
-        if (getColorFormatChannelCount(internalFormat == 4))
+        if (getColorFormatChannelCount(internalFormat) == 4)
             sourceFormat = GL_RGBA;
         else
             sourceFormat = GL_RGB;
