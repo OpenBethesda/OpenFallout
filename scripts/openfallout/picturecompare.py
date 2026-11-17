@@ -72,7 +72,7 @@ def merged_settings(*layers):
 def round_of(scene, doc):
     """The round file (a dict) that draws one scene: a new game on the scene's start cell, the common settings with the scene's
     over them, a fixed seed, lossless pictures, and the scenario `<name>.lua` next to it."""
-    return {
+    config = {
         "name": scene["name"],
         "game": scene["game"],
         "start": scene["start"],
@@ -85,6 +85,9 @@ def round_of(scene, doc):
         "extra_args": ["--random-seed", str(doc["random_seed"])],
         "variants": [{"name": "run"}],
     }
+    if scene.get("techniques"):
+        config["shader_values"] = scene["techniques"]
+    return config
 
 
 def lua_literal(value):

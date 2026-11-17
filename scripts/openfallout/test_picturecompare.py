@@ -125,6 +125,35 @@ class Rounds(unittest.TestCase):
         scene["camera"]["forward"] = 150
         self.assertIn("forward = 150,", picturecompare.scenario_of(scene, SCENES))
 
+    def test_a_scene_may_give_values_to_its_techniques(self):
+        scene = {"name": "s", "game": "nv", "start": "x", "camera": {"yaw": 90, "pitch": 8},
+                 "techniques": {"bloomlinear": {"uThreshold": 0.1}}}
+        self.assertEqual(picturecompare.round_of(scene, SCENES)["shader_values"], {"bloomlinear": {"uThreshold": 0.1}})
+        # the engine reads them from the run's shader settings, so the scenario has nothing to do with them
+        self.assertNotIn("uThreshold", picturecompare.scenario_of(scene, SCENES))
+        del scene["techniques"]
+        self.assertNotIn("shader_values", picturecompare.round_of(scene, SCENES))
+
+    def test_a_post_processing_scene_sets_its_techniques_far_from_their_defaults(self):
+        # a scene that only turned the techniques on drew almost the same picture as one without them (about 2.5 and 5.6
+        # levels of mean brightness), so it caught nothing: the chain's techniques get values that change the picture a lot
+        post = [s for s in SCENES["scenes"] if s["kind"] == "post-processing"]
+        self.assertEqual(len(post), 2)
+        for scene in post:
+            chain = scene["settings"]["Post Processing"]["chain"].split(",")
+            self.assertEqual(sorted(scene["techniques"]), sorted(chain), scene["name"])
+            for name, values in scene["techniques"].items():
+                self.assertTrue(values and all(key.startswith("u") for key in values), (scene["name"], name))
+        shaders = HERE.parents[1] / "files" / "data" / "shaders"
+        for scene in post:
+            for name, values in scene["techniques"].items():
+                source = (shaders / f"{name}.omwfx").read_text(encoding="utf-8")
+                for key, value in values.items():
+                    block = re.search(r"uniform_float %s \{(.*?)\}" % key, source, re.S)
+                    self.assertIsNotNone(block, (name, key))
+                    low, high = (float(re.search(r"%s = ([-0-9.]+);" % m, block.group(1)).group(1)) for m in ("min", "max"))
+                    self.assertTrue(low <= value <= high, (name, key, value, "outside the technique's limits"))
+
     def test_a_scene_table_is_written_as_lua(self):
         text = picturecompare.lua_literal({"a": [1, 2.5, -3], "b": "x'y", "c": True, "d": {"e": None}})
         self.assertEqual(text, "{ a = { 1, 2.5, -3 }, b = 'x\\'y', c = true, d = {  } }")

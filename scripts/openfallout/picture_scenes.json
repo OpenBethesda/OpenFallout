@@ -160,7 +160,11 @@
       "hour": 13,
       "weather": { "master": "FalloutNV.esm", "form": "0x0FFC88", "editor_id": "NVWastelandClear" },
       "camera": { "yaw": 0, "pitch": -5 },
-      "settings": { "Post Processing": { "enabled": "true", "chain": "bloomlinear,adjustments" } }
+      "settings": { "Post Processing": { "enabled": "true", "chain": "bloomlinear,adjustments" } },
+      "techniques": {
+        "bloomlinear": { "uThreshold": 0.2, "uStrength": 1.0, "uRadius": 0.6, "uSkyFactor": 1.0 },
+        "adjustments": { "uGamma": 1.6, "uContrast": 1.4 }
+      }
     },
     {
       "name": "fo3-post",
@@ -171,7 +175,11 @@
       "hour": 13,
       "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
       "camera": { "yaw": 0, "pitch": -5 },
-      "settings": { "Post Processing": { "enabled": "true", "chain": "bloomlinear,adjustments" } }
+      "settings": { "Post Processing": { "enabled": "true", "chain": "bloomlinear,adjustments" } },
+      "techniques": {
+        "bloomlinear": { "uThreshold": 0.2, "uStrength": 1.0, "uRadius": 0.6, "uSkyFactor": 1.0 },
+        "adjustments": { "uGamma": 1.6, "uContrast": 1.4 }
+      }
     }
   ]
 }
