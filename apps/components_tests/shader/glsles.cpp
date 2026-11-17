@@ -536,6 +536,41 @@ namespace
             Contains(HasSubstr("uniform filter")));
     }
 
+    TEST(ShaderGlslEsTest, global_initialisers_run_from_the_main_the_preprocessor_keeps)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float x = t;\n"
+            "#if 0\n"
+            "void main() { gl_FragColor = vec4(0.0); }\n"
+            "#else\n"
+            "void main() { gl_FragColor = vec4(x); }\n"
+            "#endif\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("#if 0\nvoid main() { of_FragData[0] = vec4(0.0); }\n"));
+        EXPECT_THAT(text, HasSubstr("#else\nvoid main() {of_initialiseGlobals(); of_FragData[0] = vec4(x); }\n"));
+    }
+
+    // Only one of them is compiled, and the converter cannot tell which
+    TEST(ShaderGlslEsTest, global_initialisers_run_from_each_main_that_may_be_compiled)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float x = t;\n"
+            "#ifdef GL_EXT_some_extension\n"
+            "void main() { gl_FragColor = vec4(1.0); }\n"
+            "#else\n"
+            "void main() { gl_FragColor = vec4(x); }\n"
+            "#endif\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nvoid main() {of_initialiseGlobals(); of_FragData[0] = vec4(1.0); }\n"));
+        EXPECT_THAT(text, HasSubstr("\nvoid main() {of_initialiseGlobals(); of_FragData[0] = vec4(x); }\n"));
+    }
+
     TEST(ShaderGlslEsTest, multiview_view_index_keeps_its_name)
     {
         const GlslEsShader result = fragment(

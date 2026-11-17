@@ -972,7 +972,11 @@ namespace Shader
         // folded in after main included. The declaration stays where it was and defines a macro, so that the function
         // assigns only the variables whose declarations the preprocessor kept. #line directives keep line numbers.
         // A declaration of several variables, or one that runs over several lines, is left alone.
-        std::string moveGlobalInitialisers(const std::string& source, GlslEsShader& result, Uses& uses)
+        //
+        // Lines the preprocessor is known to skip are left as they are; main is the one of the lines it may keep, or
+        // each of them where the converter cannot tell.
+        std::string moveGlobalInitialisers(
+            const std::string& source, GlslEsShader& result, Uses& uses, const std::vector<bool>& skipped)
         {
             static const std::regex global(R"(^(\s*(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))"
                                            R"((?:\s*\[[^\]]*\])?)\s*=\s*([^;{}]*?)\s*;\s*$)");
@@ -988,9 +992,13 @@ namespace Shader
             int depth = 0;
             bool awaitingMain = false;
             bool inDirective = false;
-            std::optional<std::pair<std::size_t, std::size_t>> mainBody;
-            for (std::string_view line : splitLines(source))
+            std::vector<std::pair<std::size_t, std::size_t>> mainBodies;
+            const std::vector<std::string_view> sourceLines = splitLines(source);
+            const auto isSkipped = [&](std::size_t index) { return index < skipped.size() && skipped[index]; };
+
+            for (std::size_t index = 0; index < sourceLines.size(); ++index)
             {
+                const std::string_view line = sourceLines[index];
                 if (const std::optional<LineDirective> directive = readLineDirective(line))
                 {
                     lineNumber = directive->mLine;
@@ -1002,6 +1010,12 @@ namespace Shader
                 if (inDirective || (first != std::string_view::npos && line[first] == '#'))
                 {
                     inDirective = !line.empty() && line.back() == '\\';
+                    lines.emplace_back(line);
+                    ++lineNumber;
+                    continue;
+                }
+                if (isSkipped(index))
+                {
                     lines.emplace_back(line);
                     ++lineNumber;
                     continue;
@@ -1039,8 +1053,8 @@ namespace Shader
                         awaitingMain = false;
                     else if (c == '{')
                     {
-                        if (depth == 0 && awaitingMain && !mainBody)
-                            mainBody = std::make_pair(lines.size(), i + 1);
+                        if (depth == 0 && awaitingMain)
+                            mainBodies.emplace_back(lines.size(), i + 1);
                         awaitingMain = false;
                         ++depth;
                     }
@@ -1053,13 +1067,15 @@ namespace Shader
 
             if (moved == 0)
                 return source;
-            if (!mainBody)
+            if (mainBodies.empty())
             {
                 result.mErrors.push_back("a global initialiser that is not constant, and no main to run it from");
                 return source;
             }
             uses.mGlobalInitialisers = true;
-            lines[mainBody->first].insert(mainBody->second, std::format("{}();", sInitialiseGlobals));
+            // From the last, so that two in one line keep their places
+            for (auto it = mainBodies.rbegin(); it != mainBodies.rend(); ++it)
+                lines[it->first].insert(it->second, std::format("{}();", sInitialiseGlobals));
             std::string out;
             out.reserve(source.size() + initialisers.size() + 256);
             for (const std::string& line : lines)
@@ -1119,7 +1135,7 @@ namespace Shader
             result.mErrors.push_back(name + " has no GLSL ES 3.00 equivalent");
         if (uses.mDynamicFragData)
             result.mErrors.push_back("gl_FragData is indexed by something other than a number");
-        body = moveGlobalInitialisers(body, result, uses);
+        body = moveGlobalInitialisers(body, result, uses, skipped);
         if (uses.mClipVertex)
         {
             body = renameWord(body, "main", sShaderMain);
