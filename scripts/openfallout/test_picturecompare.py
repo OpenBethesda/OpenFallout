@@ -118,6 +118,13 @@ class Rounds(unittest.TestCase):
         scenario = self.tmp / config["scenario"]
         self.assertTrue(scenario.read_text().startswith("local SCENE = {"))
 
+    def test_a_scene_may_put_its_camera_further_ahead_of_the_eye(self):
+        scene = {"name": "s", "camera": {"yaw": 90, "pitch": 8}}
+        self.assertIn("forward = 48,", picturecompare.scenario_of(scene, SCENES))
+        # the player's own arm, whose idle pose is not held still, is then behind the camera
+        scene["camera"]["forward"] = 150
+        self.assertIn("forward = 150,", picturecompare.scenario_of(scene, SCENES))
+
     def test_a_scene_table_is_written_as_lua(self):
         text = picturecompare.lua_literal({"a": [1, 2.5, -3], "b": "x'y", "c": True, "d": {"e": None}})
         self.assertEqual(text, "{ a = { 1, 2.5, -3 }, b = 'x\\'y', c = true, d = {  } }")

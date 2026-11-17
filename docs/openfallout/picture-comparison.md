@@ -96,7 +96,8 @@ Add an entry to `scenes`:
 - `start`: the start cell, an editor id or `<worldspace>:<x>,<y>`;
 - `camera`: `yaw` and `pitch` in degrees (yaw 0 looks north, 90 east; pitch is positive down; without `yaw` the camera
   looks the way the start put the player), and `pos` ([x, y, z] in game units) for a camera at a fixed place; without
-  `pos` the camera is 48 units ahead of the player's eye;
+  `pos` the camera is 48 units ahead of the player's eye along `yaw`, or `forward` units (more, when the player's own
+  arm or body would be in the picture: its idle pose is not held still);
 - optional `place` (`pos` [x, y] and `onGround`: where the player is put after the start), `hour`, `weather` (`master`,
   `form` as `0x` and six hexadecimal digits, `editor_id`), `settings` (`{"Section": {"key": "value"}}`), and `ignore` (a
   list of `{"box": [x0, y0, x1, y1], "why": "..."}`, fractions of the picture that are not compared, for something that
@@ -118,8 +119,8 @@ Two pictures can only be compared when everything except the renderer is the sam
 | the weather | the scene's weather is forced and held over the region's (`ForceWeather <form> 1`) |
 | random choices of the game | the engine is started with `--random-seed 1` |
 | the player getting hurt (a player who stands in water drowns, and the menu the game then opens holds the world) | god mode; a scene whose simulation time stops before its pause time fails its round |
-| the interface over the picture | the engine's head-up display and the crosshair are hidden, and message boxes (the notices of add-ons) are answered before the picture. The Fallout display (health, compass, action points) is a script of its own with no switch and stays in the picture: it is the same in both runs, and it is drawn by the interface renderer, which the Metal build changes too, so comparing it is wanted |
-| the player's own body and its idle movements | the camera is in its static mode, ahead of the eye or at a fixed place |
+| the interface over the picture | the engine's head-up display and the crosshair are hidden, and message boxes (the notices of add-ons) are answered before the picture. The Fallout display (health, compass, action points) is a script of its own with no switch and stays in the picture: it is the same in both runs, and it is drawn by the interface renderer, which the Metal build changes too, so comparing it is wanted. In the water scenes it also shows the air meter, because the player stands under water |
+| the player's own body and its idle movements | the camera is in its static mode, ahead of the eye or at a fixed place, far enough ahead that the player's arm is behind it (`fo3-shadows`: 150 units; at 48 units its arm was in the corner of the picture and its idle pose differed between two runs) |
 | water waves, cloud drift, animated textures, particles, animations | the world is paused when the simulation time reaches 60 s: they stop at the same phase on both builds (the two pause times are in the report; they differ by at most one frame, 33 ms at 30 frames a second) |
 | loading in progress | the place has 15 real seconds to load before the view is set, and the picture is taken 3 s after the pause; a scene that is not ready by 60 s of simulation time fails its round, and so does one that does not reach it within 150 real seconds: the round says whether something held the world (`held`) or the engine ran too slowly on a busy computer (`slow`) |
 

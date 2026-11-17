@@ -116,7 +116,7 @@
       "start": "MegatonWorld:-1,-6",
       "hour": 16,
       "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
-      "camera": { "yaw": 90, "pitch": 8 },
+      "camera": { "yaw": 90, "pitch": 8, "forward": 150 },
       "settings": {
         "Shadows": {
           "enable shadows": "true",
