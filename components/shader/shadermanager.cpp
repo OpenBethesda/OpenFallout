@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <deque>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -22,7 +23,10 @@
 #include <components/misc/pathhelpers.hpp>
 #include <components/misc/strings/algorithm.hpp>
 #include <components/misc/strings/conversion.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/settings/settings.hpp>
+
+#include "glsles.hpp"
 
 namespace
 {
@@ -237,6 +241,17 @@ namespace Shader
                             viewer.stopThreading();
                     }
 
+                    // Every template that includes the file is read again: those of the shaders below, and in the
+                    // Metal build those of the library shaders folded into them
+                    const std::filesystem::path touched(pathShaderToTest);
+                    for (auto it = manager.mShaderTemplates.begin(); it != manager.mShaderTemplates.end();)
+                    {
+                        if (templateIncludedFiles[it->first].contains(touched))
+                            it = manager.mShaderTemplates.erase(it);
+                        else
+                            ++it;
+                    }
+
                     for (const auto& [templateName, shaderDefines] : shaderKeys)
                     {
                         ShaderManager::ShaderMap::iterator shaderIt
@@ -247,37 +262,17 @@ namespace Shader
                             continue;
                         }
 
-                        ShaderManager::TemplateMap::iterator templateIt = manager.mShaderTemplates.find(
-                            templateName); // Can't be Null, if we're here it means the template was added
-                        assert(templateIt != manager.mShaderTemplates.end());
-                        std::string& shaderSource = templateIt->second;
-                        std::set<std::filesystem::path> insertedPaths;
-                        std::filesystem::path path = (std::filesystem::path(manager.mPath) / templateName);
-                        std::ifstream stream;
-                        stream.open(path);
-                        if (stream.fail())
-                        {
-                            Log(Debug::Error)
-                                << "Failed to open " << path << ": " << std::generic_category().message(errno);
-                            continue;
-                        }
-                        std::stringstream buffer;
-                        buffer << stream.rdbuf();
-
-                        // parse includes
-                        int fileNumber = 1;
-                        std::string source = buffer.str();
-                        if (!addLineDirectivesAfterConditionalBlocks(source)
-                            || !parseIncludes(std::filesystem::path(manager.mPath), source, templateName, fileNumber,
-                                {}, insertedPaths))
-                        {
+                        ShaderManager::TemplateMap::iterator templateIt = manager.loadTemplate(templateName);
+                        if (templateIt == manager.mShaderTemplates.end())
                             break;
-                        }
-                        shaderSource = std::move(source);
+                        std::string shaderSource = templateIt->second;
 
                         std::vector<std::string> linkedShaderNames;
+                        ShaderManager::UniformList initialValues;
                         if (!manager.createSourceFromTemplate(
-                                shaderSource, linkedShaderNames, templateName, shaderDefines))
+                                shaderSource, linkedShaderNames, templateName, shaderDefines)
+                            || !manager.finishSource(shaderSource, linkedShaderNames, templateName,
+                                shaderIt->second->getType(), shaderDefines, initialValues))
                         {
                             break;
                         }
@@ -292,6 +287,7 @@ namespace Shader
     };
 
     ShaderManager::ShaderManager()
+        : mConvertToGlslEs(SceneUtil::GLDialect::sConvertsShadersToGlslEs)
     {
         mHotReloadManager = std::make_unique<HotReloadManager>();
     }
@@ -523,46 +519,29 @@ namespace Shader
             templateName = "compatibility/" + templateName;
 
         // read the template if we haven't already
-        TemplateMap::iterator templateIt = mShaderTemplates.find(templateName);
-        std::set<std::filesystem::path> insertedPaths;
-
+        TemplateMap::iterator templateIt = loadTemplate(templateName);
         if (templateIt == mShaderTemplates.end())
-        {
-            std::filesystem::path path = mPath / templateName;
-            std::ifstream stream;
-            stream.open(path);
-            if (stream.fail())
-            {
-                Log(Debug::Error) << "Failed to open shader " << path << ": " << std::generic_category().message(errno);
-                return nullptr;
-            }
-            std::stringstream buffer;
-            buffer << stream.rdbuf();
-
-            // parse includes
-            int fileNumber = 1;
-            std::string source = buffer.str();
-            if (!addLineDirectivesAfterConditionalBlocks(source)
-                || !parseIncludes(mPath, source, templateName, fileNumber, {}, insertedPaths))
-                return nullptr;
-            mHotReloadManager->templateIncludedFiles[templateName] = std::move(insertedPaths);
-            templateIt = mShaderTemplates.insert(std::make_pair(templateName, source)).first;
-        }
+            return nullptr;
 
         ShaderMap::iterator shaderIt = mShaders.find(std::make_pair(templateName, defines));
         if (shaderIt == mShaders.end())
         {
+            const osg::Shader::Type shaderType = type ? *type : getShaderType(templateName);
             std::string shaderSource = templateIt->second;
             std::vector<std::string> linkedShaderNames;
-            if (!createSourceFromTemplate(shaderSource, linkedShaderNames, templateName, defines))
+            UniformList initialValues;
+            if (!createSourceFromTemplate(shaderSource, linkedShaderNames, templateName, defines)
+                || !finishSource(shaderSource, linkedShaderNames, templateName, shaderType, defines, initialValues))
             {
                 // Add to the cache anyway to avoid logging the same error over and over.
                 mShaders.insert(std::make_pair(std::make_pair(templateName, defines), nullptr));
                 return nullptr;
             }
 
-            osg::ref_ptr<osg::Shader> shader(new osg::Shader(type ? *type : getShaderType(templateName)));
+            osg::ref_ptr<osg::Shader> shader(new osg::Shader(shaderType));
             shader->setShaderSource(shaderSource);
+            if (!initialValues.empty())
+                mInitialValues[shader] = std::move(initialValues);
             // Assign a unique prefix to allow the SharedStateManager to compare shaders efficiently.
             // Append shader source filename for debugging.
             static unsigned int counter = 0;
@@ -575,6 +554,91 @@ namespace Shader
             shaderIt = mShaders.insert(std::make_pair(std::make_pair(templateName, defines), shader)).first;
         }
         return shaderIt->second;
+    }
+
+    ShaderManager::TemplateMap::iterator ShaderManager::loadTemplate(const std::string& templateName)
+    {
+        TemplateMap::iterator templateIt = mShaderTemplates.find(templateName);
+        if (templateIt != mShaderTemplates.end())
+            return templateIt;
+
+        std::filesystem::path path = mPath / templateName;
+        std::ifstream stream;
+        stream.open(path);
+        if (stream.fail())
+        {
+            Log(Debug::Error) << "Failed to open shader " << path << ": " << std::generic_category().message(errno);
+            return mShaderTemplates.end();
+        }
+        std::stringstream buffer;
+        buffer << stream.rdbuf();
+
+        // parse includes
+        int fileNumber = 1;
+        std::string source = buffer.str();
+        std::set<std::filesystem::path> insertedPaths;
+        if (!addLineDirectivesAfterConditionalBlocks(source)
+            || !parseIncludes(mPath, source, templateName, fileNumber, {}, insertedPaths))
+            return mShaderTemplates.end();
+        mHotReloadManager->templateIncludedFiles[templateName] = std::move(insertedPaths);
+        return mShaderTemplates.insert(std::make_pair(templateName, std::move(source))).first;
+    }
+
+    bool ShaderManager::finishSource(std::string& source, std::vector<std::string>& linkedShaderNames,
+        const std::string& templateName, osg::Shader::Type type, const DefineMap& defines, UniformList& initialValues)
+    {
+        if (!mConvertToGlslEs)
+            return true;
+
+        // OpenGL ES links one shader object per stage: the library shaders this one links are folded into its text.
+        // Their files count as files of this shader for the hot reload.
+        std::vector<std::string> linkedSources;
+        std::set<std::string> seen{ templateName };
+        std::deque<std::string> todo(linkedShaderNames.begin(), linkedShaderNames.end());
+        linkedShaderNames.clear();
+        while (!todo.empty())
+        {
+            const std::string name = std::move(todo.front());
+            todo.pop_front();
+            if (!seen.insert(name).second)
+                continue;
+            const TemplateMap::iterator templateIt = loadTemplate(name);
+            if (templateIt == mShaderTemplates.end())
+                return false;
+            std::string linkedSource = templateIt->second;
+            std::vector<std::string> moreLinked;
+            if (!createSourceFromTemplate(linkedSource, moreLinked, name, defines))
+                return false;
+            linkedSources.push_back(std::move(linkedSource));
+            todo.insert(todo.end(), moreLinked.begin(), moreLinked.end());
+            const std::set<std::filesystem::path> linkedFiles = mHotReloadManager->templateIncludedFiles[name];
+            mHotReloadManager->templateIncludedFiles[templateName].insert(linkedFiles.begin(), linkedFiles.end());
+        }
+
+        GlslEsShader converted = convertToGlslEs(foldLinkedShaders(source, linkedSources), type);
+        for (const std::string& error : converted.mErrors)
+            Log(Debug::Error) << "Shader " << templateName << " error: cannot be converted to GLSL ES 3.00: " << error;
+        if (!converted.mErrors.empty())
+            return false;
+
+        static std::set<std::pair<std::string, std::string>> reported;
+        for (const std::string& dropped : converted.mDropped)
+            if (reported.emplace(templateName, dropped).second)
+                Log(Debug::Warning) << "Shader " << templateName << " goes without " << dropped
+                                    << ": OpenGL ES 3.0 has no equivalent";
+
+        for (const UniformInitialiser& initialiser : converted.mUniformInitialisers)
+        {
+            if (osg::ref_ptr<osg::Uniform> uniform = makeUniform(initialiser))
+                initialValues.push_back(std::move(uniform));
+            else
+                Log(Debug::Error) << "Shader " << templateName << " error: uniform " << initialiser.mName
+                                  << " loses its initial value " << initialiser.mValue
+                                  << ": the shader manager cannot set a " << initialiser.mType << " to it";
+        }
+
+        source = std::move(converted.mSource);
+        return true;
     }
 
     class SamplerProgram : public osg::Program
@@ -590,12 +654,20 @@ namespace Shader
 
         bool hasSamplers(const ShaderManager::SamplerBindingMap& samplers) const;
 
+        // Uniforms whose shader text gave them an initial value the graphics library could not take (GLSL ES has no
+        // uniform initialisers): set each time the program is linked, before the state set's own values
+        void addInitialValues(const std::vector<osg::ref_ptr<osg::Uniform>>& values)
+        {
+            mInitialValues.insert(mInitialValues.end(), values.begin(), values.end());
+        }
+
         void apply(osg::State& state) const override;
 
         void resizeGLObjectBuffers(unsigned int maxSize) override;
 
     private:
         std::vector<osg::ref_ptr<osg::Uniform>> mSamplers;
+        std::vector<osg::ref_ptr<osg::Uniform>> mInitialValues;
         mutable osg::buffered_value<const PerContextProgram*> mApplied;
     };
 
@@ -619,6 +691,7 @@ namespace Shader
         : SamplerProgram({}, other, copyop)
     {
         mSamplers = other.mSamplers;
+        mInitialValues = other.mInitialValues;
     }
 
     bool SamplerProgram::hasSamplers(const ShaderManager::SamplerBindingMap& samplers) const
@@ -650,6 +723,8 @@ namespace Shader
         if (applied == pcp && !relink)
             return;
 
+        for (const osg::ref_ptr<osg::Uniform>& value : mInitialValues)
+            pcp->apply(*value);
         for (const osg::ref_ptr<osg::Uniform>& sampler : mSamplers)
             pcp->apply(*sampler);
         applied = pcp;
@@ -690,6 +765,9 @@ namespace Shader
             program->addShader(fragmentShader);
             addLinkedShaders(vertexShader, program);
             addLinkedShaders(fragmentShader, program);
+            for (const osg::ref_ptr<osg::Shader>& shader : { vertexShader, fragmentShader })
+                if (const auto values = mInitialValues.find(shader); values != mInitialValues.end())
+                    program->addInitialValues(values->second);
             found = mPrograms.insert(std::make_pair(std::make_pair(vertexShader, fragmentShader), program)).first;
         }
         else
@@ -735,7 +813,10 @@ namespace Shader
                 continue;
             std::string shaderSource = mShaderTemplates[templateId];
             std::vector<std::string> linkedShaderNames;
-            if (!createSourceFromTemplate(shaderSource, linkedShaderNames, templateId, defines))
+            UniformList initialValues;
+            if (!createSourceFromTemplate(shaderSource, linkedShaderNames, templateId, defines)
+                || !finishSource(
+                    shaderSource, linkedShaderNames, templateId, shader->getType(), defines, initialValues))
                 // We just broke the shader and there's no way to force existing objects back to fixed-function mode as
                 // we would when creating the shader. If we put a nullptr in the shader map, we just lose the ability to
                 // put a working one in later.

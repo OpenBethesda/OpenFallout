@@ -12,6 +12,7 @@
 
 #include <osg/Program>
 #include <osg/Shader>
+#include <osg/Uniform>
 #include <osg/ref_ptr>
 
 namespace osgViewer
@@ -94,9 +95,21 @@ namespace Shader
         void setHotReloadEnabled(bool value);
         void triggerShaderReload();
 
+        /// Whether shaders are converted to GLSL ES 3.00 with their linked library shaders folded in. The Metal build
+        /// always converts and the OpenGL build never does (SceneUtil::GLDialect); tests may choose either.
+        void setConvertToGlslEs(bool value) { mConvertToGlslEs = value; }
+
     private:
+        typedef std::vector<osg::ref_ptr<osg::Uniform>> UniformList;
+
         osg::ref_ptr<osg::Shader> getShaderInternal(std::string templateName, const DefineMap& defines = {},
             std::optional<osg::Shader::Type> type = std::nullopt);
+        // Reads a template and its includes once; end() if it cannot be read
+        std::map<std::string, std::string>::iterator loadTemplate(const std::string& templateName);
+        // Turns the source createSourceFromTemplate gives into the text the graphics library compiles
+        bool finishSource(std::string& source, std::vector<std::string>& linkedShaderNames,
+            const std::string& templateName, osg::Shader::Type type, const DefineMap& defines,
+            UniformList& initialValues);
         void getLinkedShaders(osg::ref_ptr<osg::Shader> shader, const std::vector<std::string>& linkedShaderNames,
             const DefineMap& defines);
         void addLinkedShaders(osg::ref_ptr<osg::Shader> shader, osg::ref_ptr<osg::Program> program);
@@ -120,6 +133,12 @@ namespace Shader
         typedef std::vector<osg::ref_ptr<osg::Shader>> ShaderList;
         typedef std::map<osg::ref_ptr<osg::Shader>, ShaderList> LinkedShadersMap;
         LinkedShadersMap mLinkedShaders;
+
+        // Values of uniform initialisers that the GLSL ES conversion took out of a shader; a program sets them itself
+        // each time it is linked, as GLSL does with initialisers
+        std::map<osg::ref_ptr<osg::Shader>, UniformList> mInitialValues;
+
+        bool mConvertToGlslEs;
 
         std::mutex mMutex;
 

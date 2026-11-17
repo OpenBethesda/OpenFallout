@@ -16,7 +16,12 @@ namespace
         ShaderManager mManager;
         ShaderManager::DefineMap mDefines;
 
-        ShaderManagerTest() { mManager.setShaderPath(TestingOpenMW::outputDir()); }
+        // These tests pin the template language. The conversion the Metal build adds has tests of its own below.
+        ShaderManagerTest()
+        {
+            mManager.setShaderPath(TestingOpenMW::outputDir());
+            mManager.setConvertToGlslEs(false);
+        }
 
         template <class F>
         void withShaderFile(const std::string& content, F&& f)

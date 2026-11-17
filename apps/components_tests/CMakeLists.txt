@@ -64,10 +64,12 @@ file(GLOB UNITTEST_SRC_FILES
 
     sdlutil/testdesktopconventions.cpp
 
+    shader/glsles.cpp
     shader/parsedefines.cpp
     shader/parsefors.cpp
     shader/parselinks.cpp
     shader/shadermanager.cpp
+    shader/shadermanagerglsles.cpp
 
     sqlite3/db.cpp
     sqlite3/request.cpp
