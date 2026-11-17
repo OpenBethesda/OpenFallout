@@ -93,10 +93,13 @@ namespace SceneUtil
             // Asked before the log line: OpenSceneGraph logs each question at its INFO level, through the engine's
             // log, and a log line that is being written holds the log's lock (a question inside it never returned)
             const bool depthClamp = supported("GL_EXT_depth_clamp");
+            // The normal buffer of post-processing is RGB16F (apps/openfallout/mwrender/postprocessor.cpp)
+            const bool halfFloatColour = supported("GL_EXT_color_buffer_half_float");
             Log(Debug::Info) << "OpenGL ES: per-draw-buffer switches " << (indexed.empty() ? "missing" : indexed)
                              << ", S3TC textures " << (extensions.isTextureCompressionS3TCSupported ? "yes" : "no")
                              << ", depth clamp " << (depthClamp ? "yes" : "no") << ", clip distances "
-                             << (clipDistances ? "yes" : "no");
+                             << (clipDistances ? "yes" : "no") << ", half-float colour buffers "
+                             << (halfFloatColour ? "yes" : "no");
         }
 #endif
         std::set<osg::observer_ptr<osg::GLExtensions>> sGLExtensions;

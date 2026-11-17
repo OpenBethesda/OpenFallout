@@ -4,6 +4,7 @@
 #include <chrono>
 #include <thread>
 
+#include <osg/GLExtensions>
 #include <osg/Texture1D>
 #include <osg/Texture2D>
 #include <osg/Texture2DArray>
@@ -215,6 +216,19 @@ namespace OFRender
             mNormalsSupported = true;
         else
             Log(Debug::Error) << "'glDisablei' unsupported, pass normals will not be available to shaders.";
+
+        // The normals are drawn into an RGB16F buffer, which OpenGL ES 3.0 draws into only with this extension
+        if constexpr (SceneUtil::GLDialect::sOpenGLES)
+        {
+            const bool halfFloat
+                = osg::isGLExtensionSupported(gc->getState()->getContextID(), "GL_EXT_color_buffer_half_float");
+            if (mNormalsSupported && !halfFloat)
+            {
+                mNormalsSupported = false;
+                Log(Debug::Error) << "GL_EXT_color_buffer_half_float unsupported, pass normals will not be available "
+                                     "to shaders.";
+            }
+        }
 
         mGLSLVersion = static_cast<int>(ext->glslLanguageVersion * 100);
         mUBO = ext->isUniformBufferObjectSupported && mGLSLVersion >= 330;
