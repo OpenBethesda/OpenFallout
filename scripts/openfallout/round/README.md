@@ -199,6 +199,10 @@ way: they refuse only where a round cannot do its work, and warn about the rest.
   behaviour), without the display-sleep power assertion that SDL takes (`SDL_VIDEO_ALLOW_SCREENSAVER=1`, also set by the engine itself
   when it is headless), at 20 frames per second and with the focus asked every 5 s. The report says which policy the engine set
   (`activation policy: accessory set`).
+- **No debugger, crash log kept.** The engine's `PATH` is an empty folder of the run (`<run>/no-programs`) and its `TMPDIR` is
+  `<run>/tmp`: its crash handler starts `gdb` or `lldb` from `PATH`, and a debugger that attaches can put a password box on the screen;
+  the crash log (`openfallout-crash.log`) lands in `<run>/tmp`. The runner starts `taskpolicy` by its full path. A round's or a
+  variant's `env` can set either.
 - **Evidence for next time.** When the computer has a window system to watch, each run keeps in `<run>/diagnostics/` the crash reports
   that appeared during it (WindowServer, `.panic`, reset counters) and the last five minutes of the log of `runningboardd`.
 

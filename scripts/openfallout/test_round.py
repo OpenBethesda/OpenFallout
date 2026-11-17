@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import stat
 import struct
 import sys
@@ -485,6 +486,10 @@ class WholeRun(unittest.TestCase):
         if @DONE@:
             lines.append("[10:00:03.000 I] ROUND\\tdone\\tend")
         (config / "openfallout.log").write_text("\\n".join(lines) + "\\n")
+        if os.environ.get("ROUND_TEST_SEEN"):
+            import json, shutil
+            (config / "seen.json").write_text(json.dumps({"debuggers": [shutil.which("gdb"), shutil.which("lldb")],
+                                                          "tmpdir": os.environ.get("TMPDIR", "")}))
         if @LINGER@:
             # the engine stays up after its scenario, as it does while it waits out the delay before it quits
             import time
@@ -532,6 +537,14 @@ class WholeRun(unittest.TestCase):
         tmp, code = self.run_round(0, variants=[{"name": "one"}])
         (run,) = runs_of(tmp)
         self.assertEqual(json.loads((run / "one" / "report.json").read_text())["shader_values"], {})
+
+    def test_a_whole_run_starts_the_engine_without_a_debugger_and_with_its_own_temporary_folder(self):
+        tmp, code = self.run_round(0, linger=0, variants=[{"name": "one", "env": {"ROUND_TEST_SEEN": "1"}}])
+        self.assertEqual(code, 0)
+        (run,) = runs_of(tmp)
+        seen = json.loads((run / "one" / "config" / "seen.json").read_text())
+        self.assertEqual(seen["debuggers"], [None, None])
+        self.assertTrue(Path(seen["tmpdir"]).resolve().is_relative_to((run / "one").resolve()))
 
     def test_a_crash_after_the_scenario_ended_is_a_note(self):
         tmp, code = self.run_round(3)
@@ -954,6 +967,27 @@ class GuardedRun(unittest.TestCase):
                          "foreground")
         self.assertEqual(round_runner.DEFAULT_SETTINGS["Video"]["framerate limit"], "20")
         self.assertEqual(round_runner.FOCUS_INTERVAL, 5.0)
+
+    def test_the_engine_finds_no_debugger_and_keeps_its_temporary_files_in_the_run(self):
+        # the crash handler starts gdb or lldb from PATH (a debugger that attaches can ask for a password on the screen), and
+        # writes its crash log to TMPDIR
+        run_dir = Path(tempfile.mkdtemp(prefix="round-env-"))
+        env = round_runner.engine_environment({}, True, run_dir)
+        for debugger in ("gdb", "lldb"):
+            self.assertIsNone(shutil.which(debugger, path=env["PATH"]))
+        self.assertTrue(Path(env["TMPDIR"]).is_dir())
+        self.assertTrue(Path(env["TMPDIR"]).resolve().is_relative_to(run_dir.resolve()))
+        # the round or the variant has the last word
+        self.assertEqual(round_runner.engine_environment({"PATH": "/x", "TMPDIR": "/y"}, True, run_dir)["PATH"], "/x")
+        self.assertEqual(round_runner.engine_environment({"PATH": "/x", "TMPDIR": "/y"}, True, run_dir)["TMPDIR"], "/y")
+
+    def test_the_priority_command_is_found_without_the_engines_path(self):
+        with mock.patch.object(round_runner, "IS_MAC", True), \
+                mock.patch.object(round_runner.shutil, "which", return_value="/usr/sbin/taskpolicy"):
+            self.assertEqual(round_runner.priority_prefix("low"), ["/usr/sbin/taskpolicy", "-b"])
+        with mock.patch.object(round_runner, "IS_MAC", False), \
+                mock.patch.object(round_runner.shutil, "which", return_value="/usr/bin/nice"):
+            self.assertEqual(round_runner.priority_prefix("low"), ["/usr/bin/nice", "-n", "10"])
 
     def test_the_policy_of_the_log_and_the_text_of_the_pid(self):
         self.assertEqual(round_runner.headless_policy("a\n[10:00:00.100 I] Headless: activation policy accessory set\n"), "accessory set")
