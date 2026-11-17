@@ -75,7 +75,8 @@ set(USED_OSG_PLUGINS dummy)
         result = subprocess.run(["cmake", "-S", str(self.source), "-B", str(self.build), "-DBUILD_OPENFALLOUT=ON",
                                  f"-DBUILD_LAUNCHER={'ON' if launcher else 'OFF'}", "-DUSE_QT=OFF", *arguments],
                                 text=True, capture_output=True)
-        self.output = result.stdout + result.stderr
+        # CMake breaks a long message into lines where it likes (it depends on the length of the temporary path)
+        self.output = " ".join((result.stdout + result.stderr).split())
         self.assertEqual(result.returncode != 0, expect_failure, self.output)
         install = self.build / "cmake_install.cmake"
         return install.read_text() if install.exists() else ""
