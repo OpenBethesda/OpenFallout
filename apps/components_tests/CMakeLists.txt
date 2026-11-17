@@ -53,6 +53,7 @@ file(GLOB UNITTEST_SRC_FILES
     crashcatcher/testcrashframe.cpp
 
     debug/testheadlessrun.cpp
+    debug/testosgnotifythreads.cpp
 
     serialization/binaryreader.cpp
     serialization/binarywriter.cpp

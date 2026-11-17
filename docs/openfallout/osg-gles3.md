@@ -51,6 +51,7 @@ They are applied in number order to the unpacked source.
 | `0003-skip-unused-libraries` | The new list `OSG_SKIP_LIBRARIES` names libraries that are not built or installed (with their serializers). |
 | `0004-screen-capture-reads-rgba-on-es` | The screenshot handler reads the frame back as `GL_RGB`, which OpenGL ES refuses. In an OpenGL ES profile it reads `GL_RGBA`. The engine's screenshots, and the picture comparison, use this handler. |
 | `0005-multisample-resolve-of-numbered-colour-buffers-on-es` | With antialiasing on, a render stage resolves numbered colour buffers with `glDrawBuffer`, which OpenGL ES lacks, so an OpenGL ES profile left them out and the scene drew black. In an OpenGL ES 3 profile it uses `glReadBuffer` and `glDrawBuffers`. |
+| `0006-log-stream-per-thread` | OpenSceneGraph's log is one stream that every thread shares, without a lock: lines of threads writing at once are mixed and the program can crash. The Metal build writes many lines from the draw thread (states that OpenGL ES lacks), so every thread now gets a stream of its own; the handler is the same. |
 
 Every change to OpenSceneGraph that the Metal build needs goes here as a numbered patch with its reason. A change
 that is not needed is not made.
