@@ -255,8 +255,18 @@ def convert_picture(source, target, width=1280):
     return fallback
 
 
-def collect_shots(userdata, shots_dir, names, width=1280):
-    """Copies the screenshots of the run to `shots_dir` as `<n>-<name>.jpg`: the engine numbers them `screenshotNNN` in the
+def keep_png(source, target):
+    """Copies a whole PNG as the engine wrote it (`"shot_format": "png"`: a picture that a machine compares must not go through a lossy
+    JPEG or a resize). Gives the path written, or None for an unfinished file or one that is not a PNG (the shot is then missing)."""
+    if source.suffix.lower() != ".png" or not picture_is_complete(source):
+        return None
+    shutil.copyfile(source, target)
+    return target
+
+
+def collect_shots(userdata, shots_dir, names, width=1280, keep=None):
+    """Copies the screenshots of the run to `shots_dir` as `<n>-<name>.jpg` (`<n>-<name>.png` as the engine wrote them with
+    `keep="png"`): the engine numbers them `screenshotNNN` in the
     order they were taken, and the scenario logged `shot <name> n=<k>` for each, so the k-th file is the one of the k-th line (one
     write queue thread by default, and `r.shot` waits for its file: the writes cannot swap unless `preload num threads` is above 1 and
     two shots are asked for back to back)."""
@@ -268,6 +278,9 @@ def collect_shots(userdata, shots_dir, names, width=1280):
             written.append((number, name, None))
             continue
         safe = safe_name(name) or "shot"
+        if keep == "png":
+            written.append((number, name, keep_png(files[index], shots_dir / f"{number:02d}-{safe}.png")))
+            continue
         written.append((number, name, convert_picture(files[index], shots_dir / f"{number:02d}-{safe}.jpg", width)))
     return written, max(0, len(files) - len(names))
 
@@ -425,6 +438,23 @@ def player_user_data_dir():
     return Path.home() / "Library" / "Application Support" / "openfallout"
 
 
+def shaders_yaml(values):
+    """The text of the engine's `shaders.yaml` for `{technique: {uniform: number or boolean}}`, in order of name. The engine reads the
+    values a player chose for the uniforms of a technique from this file in its configuration folder, whether or not a script may
+    set them. A name or a value that is not plain is refused: nothing is quoted, so it could not be read back as written."""
+    plain = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    lines = ["config:"]
+    for technique, uniforms in sorted(values.items()):
+        if not plain.match(technique) or not uniforms:
+            sys.exit(f"shader_values: {technique!r} is not the name of a technique with values")
+        lines.append(f"  {technique}:")
+        for uniform, value in sorted(uniforms.items()):
+            if not plain.match(uniform) or not isinstance(value, (bool, int, float)):
+                sys.exit(f"shader_values: {technique}.{uniform} = {value!r} is not a name and a number or boolean")
+            lines.append(f"    {uniform}: {str(value).lower() if isinstance(value, bool) else repr(value)}")
+    return "\n".join(lines) + "\n"
+
+
 def prepare_run(profile, config, variant, run_dir, save):
     """Makes the private folders of one start: config (settings), userdata (a copy of the save) and data (the scenario)."""
     for sub in ("config", "userdata/saves", "userdata/data", "data/scripts", "shots"):
@@ -452,6 +482,8 @@ def prepare_run(profile, config, variant, run_dir, save):
     # game's plugins (any plugin that is named stops the engine from choosing the ones the selected game makes active) and a data
     # directory of the other game would be searched too
     (run_dir / "config" / "openfallout.cfg").write_text("replace=config\n", encoding="utf-8")
+    if config.get("shader_values"):
+        (run_dir / "config" / "shaders.yaml").write_text(shaders_yaml(config["shader_values"]), encoding="utf-8")
     if save is not None:
         saves = run_dir / "userdata" / "saves"
         if not config.get("load_save", True):
@@ -725,6 +757,7 @@ def write_report(run_dir, config, variant, status, seconds, sampler, timed_out, 
               "warnings": levels["W"], "errors": levels["E"], "scenario_errors": errors, "missing_shots": missing,
               "content_not_loaded": not_loaded, "content_not_loaded_serious": serious, "expectations_failed": failed,
               "guard_tripped": guard_reason, "window_server": window_server, "headless_policy": policy, "evidence": list(evidence),
+              "shader_values": config.get("shader_values") or {},
               "shots": [{"n": n, "name": shot, "file": str(path) if path else None} for n, shot, path in shots],
               "round_lines": lines, "command": command}
     (run_dir / "report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
@@ -780,7 +813,8 @@ def run_variant(profile, config, variant, out_dir, save, priority="low", guard=N
     text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
     (run_dir / "openfallout.log").write_text(text, encoding="utf-8")
     lines = round_lines(text)
-    shots, extra = collect_shots(run_dir / "userdata", run_dir / "shots", shot_names(lines), config.get("shot_width", 1280))
+    shots, extra = collect_shots(run_dir / "userdata", run_dir / "shots", shot_names(lines), config.get("shot_width", 1280),
+                                config.get("shot_format"))
     # What an investigation of a stalled window system would want, kept with the run (a Mac: the new crash reports and the log of runningboardd)
     evidence = roundguard.collect_evidence(system, run_dir, began) if system is not None and system.heartbeat else []
     return write_report(run_dir, config, variant, status, seconds, sampler, timed_out, lines, log_problems(text),

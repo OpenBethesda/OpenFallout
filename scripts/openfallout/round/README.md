@@ -32,7 +32,8 @@ scripts/openfallout/round/round.py preflight                                what
 4. Stops the engine when `limit` seconds are over, then writes `report.md` and `report.json` (the verdict, exit status, the `ROUND`
    lines of the log, the first ten distinct warnings and errors with their counts, the focus count) and copies the screenshots
    to `shots/<n>-<name>.jpg` (JPEG, quality 85; the engine numbers its files in the order they were taken and the scenario says
-   which is which). A `summary.md` in the folder of the round has one row for each variant.
+   which is which; with `"shot_format": "png"` they are kept as the engine wrote them). A `summary.md` in the folder of the round has
+   one row for each variant.
 
 The report holds numbers, record ids and the names the scenario gave, never a text of the game.
 
@@ -59,6 +60,8 @@ round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas fol
 | `settings` | `{"Section": {"key": "value"}}` for every variant, for example `{"Terrain": {"game lod": "true"}}` |
 | `resolution`, `framerate` | the size of the window (so of the screenshot) and the frame rate limit (defaults 1280x720 and 20) |
 | `limit` | seconds after which the engine is stopped (300) |
+| `shot_format` | `"png"`: the screenshots are kept as the engine wrote them (`shots/<n>-<name>.png`, no JPEG, no resize), for pictures that a machine compares; a screenshot that is not a whole PNG is then missing (so the round needs `[General] screenshot format = png`) |
+| `shader_values` | `{"technique": {"uniform": number or boolean}}`: the values of the uniforms of post-processing techniques, laid in the run's own `shaders.yaml` (where the engine reads the values a player chose; the engine's techniques have no uniform that a script may set, so a scenario cannot do it). The technique still has to be turned on, by `[Post Processing] chain`. The run's `report.json` records the values (the engine writes the file again in its own words when it quits). Used by the picture comparison |
 | `variants` | a list of `{"name", "settings"}`: one engine start each, one after the other (never two engines at a time; `--parallel` above 1 is ignored), `--variant name` only that one; a variant can also have its own `env`, `extra_args` and expectations (below) |
 | `extra_args` | more arguments for the engine (a variant's come after the round's) |
 | `expect_exit` | the engine ends by itself with this exit status; the scenario then need not run (a refused start save: `--missing-content=refuse` ends with 4) |
@@ -94,6 +97,8 @@ as well.
 | `r.fire(label[, target])`, `r.shoot{ shots, interval, target, shotName }`, `r.aimAt(object, label[, up])`, `r.use(on)` | the player shoots (at what the camera ray hits, or at `target`), turns the camera at an object |
 | `r.move{ forward, side, run, sneak, seconds }`, `r.crouch(on)`, `r.mode(label)`, `r.status(label)`, `r.hp()` | walk, run or sneak for some seconds, crouch, the stance and the sneak meter's word, the player's health |
 | `r.fight(actor, target[, label])`, `r.peace(actor)`, `r.state(label, actor)`, `r.track({{label, actor}...}, every)`, `r.untrack()` | start or end a fight of the engine (the player is `0x14`, as in the games), say what an actor is doing, sample the animation groups that play on actors now and then |
+| `r.pause(on)`, `r.gameTimeScale(scale)`, `r.simulationTime()`, `r.weather(form)` | hold a scene still: the world paused (the simulation stops, the engine goes on drawing, and the scenario goes on), the speed of the game's clock (0 stops the sun), the simulation time that water, clouds, particles and animations follow, a weather (`"FormId:0x..."`) there at once and held over the region's (`ForceWeather <form> 1`) |
+| `r.ai(on)`, `r.hud(visible)`, `r.view{ pos, yaw, pitch, forward, label }` | the characters' AI off or on, the head-up display and crosshair hidden or shown, a fixed view: the camera in its static mode at `pos` or `forward` units ahead of the player's eye along `yaw`, turned to `yaw` and `pitch` (radians). Used by the picture comparison (`docs/openfallout/picture-comparison.md`) |
 | `r.vatsInfo(label[, actor])`, `r.vats([button])`, `r.messages(label)` | V.A.T.S.: its state, whether an actor can be a target and whether the ray to its head is clear (`clear` in the answer), open it or press its pad buttons, the notices the HUD gave |
 
 `scenarios/m14_fight.lua` (`rounds/m14-fight.json`) is the survey of moving and fighting in New Vegas (first and third person, a fight with two

@@ -324,6 +324,29 @@ class Commands(unittest.TestCase):
         self.assertTrue((run / "data" / "scripts" / "roundscenario.lua").exists())
         self.assertEqual(save.read_bytes(), b"x")
 
+    def test_the_values_of_a_technique_are_laid_in_the_shader_settings_of_the_run(self):
+        # the engine reads the values a player chose for the uniforms of a technique from `shaders.yaml` in its configuration folder
+        # (the techniques of the engine have no uniforms that a script may set), so a round that wants values lays that file
+        config = round_runner.load_round(self.round_file, self.Args())
+        config["shader_values"] = {"bloomlinear": {"uThreshold": 0.2, "uStrength": 1}, "adjustments": {"uGamma": 1.6}}
+        run = self.tmp / "run-shaders"
+        round_runner.prepare_run(self.profile, config, config["variants"][0], run, None)
+        self.assertEqual((run / "config" / "shaders.yaml").read_text(),
+                         "config:\n  adjustments:\n    uGamma: 1.6\n  bloomlinear:\n    uStrength: 1\n    uThreshold: 0.2\n")
+        # a round without values lays none: the engine makes an empty one, and the techniques keep their defaults
+        plain = self.tmp / "run-plain"
+        round_runner.prepare_run(self.profile, round_runner.load_round(self.round_file, self.Args()), config["variants"][0], plain, None)
+        self.assertFalse((plain / "config" / "shaders.yaml").exists())
+
+    def test_a_value_that_is_not_a_number_or_a_boolean_is_refused(self):
+        config = round_runner.load_round(self.round_file, self.Args())
+        config["shader_values"] = {"bloomlinear": {"uThreshold": "0.2: x"}}
+        with self.assertRaises(SystemExit):
+            round_runner.prepare_run(self.profile, config, config["variants"][0], self.tmp / "run-bad", None)
+        config["shader_values"] = {"bloom linear": {"uThreshold": 0.2}}
+        with self.assertRaises(SystemExit):
+            round_runner.prepare_run(self.profile, config, config["variants"][0], self.tmp / "run-bad2", None)
+
     def test_the_players_settings_are_the_bottom_layer_of_the_run(self):
         # `replace=config` takes the player's settings.cfg out of the engine's own chain of defaults, so the runner lays it under
         # the settings of the profile, the round and the variant
@@ -391,6 +414,22 @@ class Pictures(unittest.TestCase):
         self.assertEqual(extra, 0)
         self.assertTrue(written[0][2] is not None and written[0][2].exists())
         self.assertIsNone(written[1][2])
+
+    def test_png_shots_are_kept_as_the_engine_wrote_them(self):
+        # a picture that is compared by machine must not go through a lossy JPEG or a resize
+        userdata = self.tmp / "userdata"
+        (userdata / "screenshots").mkdir(parents=True)
+        tiny_png(userdata / "screenshots" / "screenshot000.png")
+        (userdata / "screenshots" / "screenshot001.png").write_bytes(b"")
+        (userdata / "screenshots" / "screenshot002.jpg").write_bytes(b"\xff\xd8\xff\xe0 and an end\xff\xd9")
+        written, extra = round_runner.collect_shots(userdata, self.tmp / "shots", [(1, "a b"), (2, "b"), (3, "c")],
+                                                    keep="png")
+        self.assertEqual(extra, 0)
+        self.assertEqual(written[0][2], self.tmp / "shots" / "01-a-b.png")
+        self.assertEqual(written[0][2].read_bytes(), (userdata / "screenshots" / "screenshot000.png").read_bytes())
+        # an unfinished file and one in another format are no picture to compare: missing, so the round fails
+        self.assertIsNone(written[1][2])
+        self.assertIsNone(written[2][2])
 
     def test_a_damaged_picture_is_a_missing_shot_where_pillow_reads_it(self):
         try:
@@ -481,6 +520,18 @@ class WholeRun(unittest.TestCase):
         self.assertIn("one", (run / "summary.md").read_text())
         self.assertIn("two", (run / "summary.md").read_text())
         self.assertTrue((run / "two" / "report.md").read_text().startswith("# Round fake / two: PASS"))
+
+    def test_the_report_says_which_technique_values_the_round_laid(self):
+        # the engine writes `shaders.yaml` again in its own words when it quits, so the report is where a later comparison of
+        # two runs can read what each was given
+        values = {"bloomlinear": {"uThreshold": 0.2}}
+        tmp, code = self.run_round(0, round_extra={"shader_values": values}, variants=[{"name": "one"}])
+        self.assertEqual(code, 0)
+        (run,) = runs_of(tmp)
+        self.assertEqual(json.loads((run / "one" / "report.json").read_text())["shader_values"], values)
+        tmp, code = self.run_round(0, variants=[{"name": "one"}])
+        (run,) = runs_of(tmp)
+        self.assertEqual(json.loads((run / "one" / "report.json").read_text())["shader_values"], {})
 
     def test_a_crash_after_the_scenario_ended_is_a_note(self):
         tmp, code = self.run_round(3)
