@@ -449,6 +449,45 @@ namespace
         EXPECT_THAT(text, HasSubstr("#ifdef OF_GLOBAL_INIT_0\n#line 3 0\n    steps = float[2](t, 1.0);\n#endif\n"));
     }
 
+    // Without its initialiser such an array has no size: the size is written out where the initialiser says it, and
+    // the line is left as it is where it does not
+    TEST(ShaderGlslEsTest, a_global_array_sized_by_its_initialiser_is_never_left_without_a_size)
+    {
+        const GlslEsShader sized = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float steps[] = float[2](t, 1.0);\n"
+            "void main() { gl_FragColor = vec4(steps[0]); }\n");
+        EXPECT_THAT(sized.mErrors, IsEmpty());
+        EXPECT_THAT(body(sized.mSource), HasSubstr("\nfloat steps[2];\n#define OF_GLOBAL_INIT_0\n#line 4 0\n"));
+        EXPECT_THAT(body(sized.mSource), HasSubstr("    steps = float[2](t, 1.0);\n"));
+
+        const GlslEsShader unsized = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float steps[] = float[](t, 1.0);\n"
+            "void main() { gl_FragColor = vec4(steps[0]); }\n");
+        EXPECT_THAT(body(unsized.mSource), HasSubstr("\nfloat steps[] = float[](t, 1.0);\n"));
+        EXPECT_THAT(unsized.mSource, Not(HasSubstr("of_initialiseGlobals")));
+    }
+
+    // A structure's constructor over constants is a constant expression
+    TEST(ShaderGlslEsTest, a_global_built_from_a_structure_of_constants_stays_where_it_is)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "struct Step { float size; };\n"
+            "Step steps[] = Step[2](Step(1.0), Step(2.0));\n"
+            "uniform float t;\n"
+            "Step moving = Step(t);\n"
+            "void main() { gl_FragColor = vec4(steps[0].size + moving.size); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nStep steps[] = Step[2](Step(1.0), Step(2.0));\n"));
+        EXPECT_THAT(text, HasSubstr("\nStep moving;\n#define OF_GLOBAL_INIT_0\n"));
+        EXPECT_THAT(text, HasSubstr("    moving = Step(t);\n"));
+    }
+
     TEST(ShaderGlslEsTest, a_global_initialiser_moved_to_main_keeps_its_preprocessor_branch)
     {
         const GlslEsShader result = vertex(

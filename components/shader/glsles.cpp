@@ -1143,6 +1143,22 @@ namespace Shader
             return MacroDirective{ match[2].str(), match[1].str() == "define", match[3].matched, match[4].str() };
         }
 
+        // The declaration a moved initialiser leaves behind. An array that takes its size from its initialiser has
+        // none without it: the size is written out where the initialiser's constructor says it, and where it does not
+        // there is no such declaration (the line is then left as it is).
+        std::optional<std::string> declarationWithoutInitialiser(
+            const std::string& declaration, const std::string& value)
+        {
+            static const std::regex unsized(R"(\[\s*\]\s*$)");
+            static const std::regex sizedConstructor(R"(^[A-Za-z_]\w*\s*\[\s*(\d+)\s*\])");
+            if (!std::regex_search(declaration, unsized))
+                return declaration;
+            std::smatch size;
+            if (!std::regex_search(value, size, sizedConstructor))
+                return std::nullopt;
+            return std::regex_replace(declaration, unsized, "[" + size[1].str() + "]");
+        }
+
         bool hasTopLevelComma(std::string_view value)
         {
             int depth = 0;
@@ -1263,10 +1279,16 @@ namespace Shader
 
                 const std::string text(line);
                 std::smatch match;
+                // A structure's constructor is as constant as what it is given, like the built-in constructors
+                static const std::regex structure(R"(^\s*struct\s+([A-Za-z_]\w*))");
+                std::optional<std::string> declaration;
                 if (depth == 0 && std::regex_search(text, match, constant))
                     constants.insert(match[1].str());
+                else if (depth == 0 && std::regex_search(text, match, structure))
+                    constants.insert(match[1].str());
                 else if (depth == 0 && std::regex_match(text, match, global) && !hasTopLevelComma(match[3].str())
-                    && !isConstantExpression(match[3].str(), constants, macros))
+                    && !isConstantExpression(match[3].str(), constants, macros)
+                    && (declaration = declarationWithoutInitialiser(match[1].str(), match[3].str())))
                 {
                     std::set<std::string, std::less<>> names;
                     collectNames(match[3].str(), macroTexts, names);
@@ -1276,8 +1298,8 @@ namespace Shader
                                 "global {} starts from {}, which is defined again or undefined further down: its "
                                 "initialiser cannot move to main",
                                 match[2].str(), name));
-                    lines.push_back(std::format("{};\n#define {}{}\n#line {} {}", match[1].str(),
-                        sGlobalInitialiserMacro, moved, lineNumber + 1, sourceNumber));
+                    lines.push_back(std::format("{};\n#define {}{}\n#line {} {}", *declaration, sGlobalInitialiserMacro,
+                        moved, lineNumber + 1, sourceNumber));
                     initialisers += std::format("#ifdef {}{}\n#line {} {}\n    {} = {};\n#endif\n",
                         sGlobalInitialiserMacro, moved, lineNumber, sourceNumber, match[2].str(), match[3].str());
                     ++moved;
