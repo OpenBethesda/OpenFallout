@@ -29,6 +29,8 @@
 #include <sstream>
 #include <vector>
 
+#include <components/shader/glsles.hpp>
+
 #include "gldialect.hpp"
 #include "glextensions.hpp"
 #include "shadowsbin.hpp"
@@ -92,14 +94,17 @@ static const char fragmentShaderSource_withBaseTexture_twoShadowMaps[] =
         "} \n";
 #endif
 
-std::string debugVertexShaderSource = "void main(void){gl_Position = gl_Vertex; gl_TexCoord[0]=gl_MultiTexCoord0;}";
+// Written so that the Metal build can convert them to GLSL ES 3.00 (see makeDebugShader): a varying of their own in place
+// of gl_TexCoord, and a sampler not named "texture", which GLSL ES 3.00 has as a function
+std::string debugVertexShaderSource = "varying vec2 debugUV; void main(void){gl_Position = gl_Vertex; debugUV = gl_MultiTexCoord0.xy;}";
 std::string debugFragmentShaderSource =
-        "uniform sampler2D texture;                                              \n"
+        "uniform sampler2D debugTexture;                                         \n"
+        "varying vec2 debugUV;                                                   \n"
         "                                                                        \n"
         "void main(void)                                                         \n"
         "{                                                                       \n"
 #if 1
-        "    float f = texture2D(texture, gl_TexCoord[0].xy).r;                  \n"
+        "    float f = texture2D(debugTexture, debugUV).r;                       \n"
         "                                                                        \n"
         "    f = 256.0 * f;                                                      \n"
         "    float fC = floor( f ) / 256.0;                                      \n"
@@ -126,9 +131,22 @@ std::string debugFragmentShaderSource =
         "                                                                        \n"
         "    gl_FragColor =  vec4( fS + fH * color, 1 );                         \n"
 #else
-        "    gl_FragColor = texture2D(texture, gl_TexCoord[0].xy);               \n"
+        "    gl_FragColor = texture2D(debugTexture, debugUV);                    \n"
 #endif
         "}                                                                       \n";
+
+// The shaders of the debug display, in the dialect of the build
+osg::ref_ptr<osg::Shader> makeDebugShader(osg::Shader::Type type, const std::string& source)
+{
+    if constexpr (GLDialect::sConvertsShadersToGlslEs)
+    {
+        const Shader::GlslEsShader converted = Shader::convertToGlslEs(source, type);
+        for (const std::string& error : converted.mErrors)
+            OSG_WARN << "Shadow debug display shader cannot be converted to GLSL ES 3.00: " << error << std::endl;
+        return new osg::Shader(type, converted.mSource);
+    }
+    return new osg::Shader(type, source);
+}
 
 std::string debugFrustumVertexShaderSource = "varying float depth; uniform mat4 transform; void main(void){gl_Position = transform * gl_Vertex; depth = gl_Position.z / gl_Position.w;}";
 std::string debugFrustumFragmentShaderSource =
@@ -3349,15 +3367,15 @@ protected:
 
 SceneUtil::MWShadowTechnique::DebugHUD::DebugHUD(int numberOfShadowMapsPerLight) : mDebugProgram(new osg::Program)
 {
-    osg::ref_ptr<osg::Shader> vertexShader = new osg::Shader(osg::Shader::VERTEX, debugVertexShaderSource);
+    osg::ref_ptr<osg::Shader> vertexShader = makeDebugShader(osg::Shader::VERTEX, debugVertexShaderSource);
     mDebugProgram->addShader(vertexShader);
-    osg::ref_ptr<osg::Shader> fragmentShader = new osg::Shader(osg::Shader::FRAGMENT, debugFragmentShaderSource);
+    osg::ref_ptr<osg::Shader> fragmentShader = makeDebugShader(osg::Shader::FRAGMENT, debugFragmentShaderSource);
     mDebugProgram->addShader(fragmentShader);
 
     osg::ref_ptr<osg::Program> frustumProgram = new osg::Program;
-    vertexShader = new osg::Shader(osg::Shader::VERTEX, debugFrustumVertexShaderSource);
+    vertexShader = makeDebugShader(osg::Shader::VERTEX, debugFrustumVertexShaderSource);
     frustumProgram->addShader(vertexShader);
-    fragmentShader = new osg::Shader(osg::Shader::FRAGMENT, debugFrustumFragmentShaderSource);
+    fragmentShader = makeDebugShader(osg::Shader::FRAGMENT, debugFrustumFragmentShaderSource);
     frustumProgram->addShader(fragmentShader);
 
     for (auto& frustumGeometry : mFrustumGeometries)
@@ -3451,7 +3469,7 @@ void SceneUtil::MWShadowTechnique::DebugHUD::addAnotherShadowMap()
     mDebugCameras[shadowMapNumber]->addChild(mDebugGeometry[shadowMapNumber]);
     osg::ref_ptr<osg::StateSet> stateSet = mDebugGeometry[shadowMapNumber]->getOrCreateStateSet();
     stateSet->setAttributeAndModes(mDebugProgram, osg::StateAttribute::ON);
-    osg::ref_ptr<osg::Uniform> textureUniform = new osg::Uniform("texture", sDebugTextureUnit);
+    osg::ref_ptr<osg::Uniform> textureUniform = new osg::Uniform("debugTexture", sDebugTextureUnit);
     //textureUniform->setType(osg::Uniform::SAMPLER_2D);
     stateSet->addUniform(textureUniform.get());
 
