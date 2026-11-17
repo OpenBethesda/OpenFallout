@@ -733,9 +733,13 @@ namespace Shader
                 }
                 else if (const auto attribute = std::find_if(sAttributes.begin(), sAttributes.end(),
                              [&](const BuiltIn& builtIn) { return builtIn.mDesktopName == word; });
-                    isVertex && attribute != sAttributes.end())
+                    (isVertex || inDefine) && attribute != sAttributes.end())
                 {
-                    uses.mAttributes.insert(attribute->mName);
+                    // In a #define of the fragment stage it is never expanded, and is only renamed: OpenSceneGraph,
+                    // which renames these names in every stage as it compiles, would declare a vertex input for it in
+                    // front of the default precision
+                    if (isVertex)
+                        uses.mAttributes.insert(attribute->mName);
                     out += attribute->mName;
                 }
                 else if (!isVertex && word == "gl_FragColor")

@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include <osg/Program>
+#include <osg/State>
 #include <osg/StateSet>
 
 #include <components/files/configurationmanager.hpp>
@@ -167,6 +168,19 @@ namespace
     using namespace Fx;
 
     // The shaders of each pass of a compiled technique, as the post-processor gives them to the graphics library
+    // The engine's copy of OpenSceneGraph runs its renaming of built-ins over every stage as it compiles it
+    // (State::convertVertexShaderSourceToOsgBuiltIns, with the attribute aliases and matrix uniforms of OpenGL ES 3).
+    // A converted text must give it nothing to rename: the declarations it would add go before the default precision.
+    bool openSceneGraphLeavesAlone(const std::string& source)
+    {
+        osg::ref_ptr<osg::State> state = new osg::State;
+        state->setUseVertexAttributeAliasing(true);
+        state->setUseModelViewAndProjectionUniforms(true);
+        std::string text = source;
+        state->convertVertexShaderSourceToOsgBuiltIns(text);
+        return text == source;
+    }
+
     std::vector<osg::ref_ptr<osg::Shader>> passShaders(Pass& pass)
     {
         osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet;
@@ -395,6 +409,7 @@ namespace
                 for (const auto& shader : passShaders(*pass))
                 {
                     EXPECT_THAT(shader->getShaderSource(), StartsWith("#version 300 es\n")) << name;
+                    EXPECT_TRUE(openSceneGraphLeavesAlone(shader->getShaderSource())) << name << " " << pass->getName();
                     if (dump)
                         std::ofstream(std::filesystem::path(dump)
                             / ("fx_" + name + "_" + pass->getName()

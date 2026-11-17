@@ -351,7 +351,10 @@ namespace
             body(result.mSource), HasSubstr("if (gl_FrontFacing) of_FragData[0] = gl_FragCoord; gl_FragDepth = 0.0;"));
     }
 
-    // A post-processing pass shares one header between its stages, with lines like these that only one stage expands
+    // A post-processing pass shares one header between its stages, with lines like these that only one stage expands.
+    // A vertex attribute there takes the vertex stage's name in both stages: OpenSceneGraph's own pass over the text
+    // (which the engine's copy runs on every stage) would otherwise declare a vertex input for it in a fragment shader,
+    // before the default precision, which GLSL ES refuses
     TEST(ShaderGlslEsTest, a_define_naming_a_built_in_of_the_other_stage_is_left_alone)
     {
         const GlslEsShader vertexResult = vertex(
@@ -369,8 +372,9 @@ namespace
         EXPECT_THAT(fragmentResult.mErrors, IsEmpty());
         EXPECT_THAT(fragmentResult.mSource, HasSubstr("#define omw_FragColor of_FragData[0]\n"));
         EXPECT_THAT(fragmentResult.mSource, HasSubstr("layout(location = 0) out vec4 of_FragData[1];"));
-        EXPECT_THAT(fragmentResult.mSource, HasSubstr("#define omw_Vertex gl_Vertex\n"));
-        EXPECT_THAT(fragmentResult.mSource, Not(HasSubstr("osg_Vertex")));
+        EXPECT_THAT(fragmentResult.mSource, HasSubstr("#define omw_Vertex osg_Vertex\n"));
+        EXPECT_THAT(fragmentResult.mSource, Not(HasSubstr("gl_Vertex")));
+        EXPECT_THAT(fragmentResult.mSource, Not(HasSubstr("in vec4 osg_Vertex")));
     }
 
     TEST(ShaderGlslEsTest, a_built_in_of_the_other_stage_outside_a_define_is_an_error)
