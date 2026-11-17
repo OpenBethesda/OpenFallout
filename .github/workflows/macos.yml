@@ -13,6 +13,12 @@ on:
           build.
         default: ""
         type: string
+      bundle-angle:
+        description: >-
+          The early notarized test of ANGLE (docs/openfallout/angle.md): download the published ANGLE asset, package
+          its libraries and the ANGLE probe into the OpenGL app and check them. Never for a release.
+        default: false
+        type: boolean
     # Release signing (CI/macos/release_signing.py, docs/openfallout/mac-release.md). All optional: without them, and
     # on pull requests, the package is the ad hoc build and notarization is skipped.
     secrets:
@@ -112,8 +118,15 @@ jobs:
     - name: Restore unchanged source timestamps
       run: python3 CI/build_cache.py restore
 
+    # The ANGLE release asset named in CI/macos/angle/angle.json, verified against its recorded digests; never built here
+    - name: Fetch the ANGLE libraries
+      if: ${{ inputs.bundle-angle }}
+      run: python3 CI/angle_asset.py fetch "$RUNNER_TEMP/angle"
+
     - name: Configure
-      run: CI/before_script.macos.sh -C -k
+      env:
+        BUNDLE_ANGLE: ${{ inputs.bundle-angle && 'yes' || '' }}
+      run: CI/before_script.macos.sh -C -k ${BUNDLE_ANGLE:+-A "$RUNNER_TEMP/angle"}
     - name: Build
       id: build
       run: CI/macos/build.sh all
@@ -122,7 +135,7 @@ jobs:
       run: python3 CI/build_cache.py snapshot
 
     - name: Save incremental build
-      if: steps.build-cache.outputs.cache-hit != 'true' && (inputs.build-type == 'Release' || github.ref == 'refs/heads/master')
+      if: steps.build-cache.outputs.cache-hit != 'true' && !inputs.bundle-angle && (inputs.build-type == 'Release' || github.ref == 'refs/heads/master')
       uses: actions/cache/save@v6
       with:
         path: |
@@ -200,6 +213,7 @@ jobs:
     - name: Check the packaged app
       env:
         CHECK_MODE: ${{ steps.signing.outputs.mode == 'release' && 'release' || 'local' }}
+        ANGLE_CHECK: ${{ inputs.bundle-angle && 'bundled' || 'none' }}
       run: |
         set -- build/OpenFallout-*.dmg
         if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
@@ -207,7 +221,7 @@ jobs:
           exit 1
         fi
         python3 CI/check_mac_package.py "$1" --mode "$CHECK_MODE" --smoke auto --work "$RUNNER_TEMP/package-check" \
-          --notes "$RUNNER_TEMP/release-notes.md"
+          --notes "$RUNNER_TEMP/release-notes.md" --angle "$ANGLE_CHECK"
 
     # The engine release (docs/openfallout/engine-release.md), on an `openfallout-*` tag build. The statement the shell reads is written from the checked
     # disk image; the job fails when the statement, the property lists, the CMake version, the tag and the binaries

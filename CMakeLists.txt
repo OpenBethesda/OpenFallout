@@ -631,6 +631,7 @@ if (BUILD_LAUNCHER AND BUILD_OPENFALLOUT)
     include(CPack)
     # End of Apple bundling
 endif()
+include(OpenFalloutAngle) # after the Apple bundling block: its install rules must run after fixup_bundle
 
 # what is necessary to build documentation
 if ( BUILD_DOCS )

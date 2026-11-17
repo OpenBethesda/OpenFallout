@@ -3,6 +3,7 @@
 
     CI/check_mac_package.py PATH [--mode local|release] [--team-id ID] [--smoke run|auto|skip]
                             [--expect-jit on|off|any] [--work DIR] [--notes FILE]
+                            [--angle none|bundled] [--forbid-opengl]
 
 PATH is OpenFallout-*.dmg or OpenFallout.app. The steps run in this order and each prints PASS, FAIL or SKIP:
 
@@ -22,6 +23,14 @@ PATH is OpenFallout-*.dmg or OpenFallout.app. The steps run in this order and ea
   platform     the programs of the app and of its engine app (Contents/MacOS) are arm64 only and built for exactly
                macOS 26.0, the supported minimum; every other Mach-O file has arm64 and is built for no newer macOS
   openal       the engine links the OpenAL Soft that is in the bundle, not the system's OpenAL framework
+  angle        only with --angle bundled (the Metal build, and the OpenGL test build with OPENFALLOUT_BUNDLE_ANGLE):
+               Contents/Frameworks holds libEGL.dylib and libGLESv2.dylib and they are the published ones (their
+               digest without the code signature is the one CI/macos/angle/angle.json records, so a new signature does
+               not change it, any other byte does); in release mode each is signed by a Developer ID Application
+               identity of the app's team, with the hardened runtime and a secure timestamp; and
+               Contents/Resources/ANGLE-NOTICES.txt is the published notices file (docs/openfallout/angle.md)
+  no-opengl    only with --forbid-opengl (for after the desktop OpenGL path is deleted): no Mach-O file in the app
+               links Apple's OpenGL framework
   library-validation  when the engine has the hardened runtime, every Mach-O file in the app has its Team ID (or
                the engine's entitlements turn library validation off, which release mode refuses); otherwise the loader would refuse the bundled
                libraries and the game would crash at start, so the smoke step is not started
@@ -31,6 +40,11 @@ PATH is OpenFallout-*.dmg or OpenFallout.app. The steps run in this order and ea
                mprotect build under the hardened runtime without allow-unsigned-executable-memory is killed at its
                first compiled trace: "Code Signature Invalid"). It fails on a crash, and on "off" when --expect-jit is on;
                the smoke step is then not started. See docs/openfallout/mac-luajit.md.
+  angle-probe  only with --angle bundled, and skipped when the app has no probe (only the OPENFALLOUT_BUNDLE_ANGLE
+               test build packages Contents/MacOS/openfallout-angle-probe): the probe is run from the app and must
+               get an OpenGL ES 3.0 context from ANGLE's Metal backend, draw and read back a pixel. --smoke skip skips
+               it; --smoke auto reports a machine without a Metal device as skipped, but a probe the loader refuses
+               fails everywhere
   smoke        the engine app is started through scripts/openfallout/mac_launch.py on the synthetic Fallout plugin, with
                a hidden window (--headless, SDL_MAC_BACKGROUND_APP=1), OPENFALLOUT_LUAJIT_PROBE=1 (the engine's LuaJIT
                probe and its log line) and its own --config/--user-data folders; it passes
@@ -63,6 +77,7 @@ import subprocess
 import sys
 import tempfile
 
+import angle_asset
 import engine_release
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -471,6 +486,116 @@ def check_openal(app):
     raise StepFailed(f"{ENGINE} links {openal[0]}, which is not a file inside the bundle")
 
 
+# -------------------------------------------------------------------------------------------------------------- angle
+
+ANGLE_LIBRARIES = ("libEGL.dylib", "libGLESv2.dylib")
+ANGLE_NOTICES = Path("Contents/Resources/ANGLE-NOTICES.txt")
+ANGLE_PROBE = Path("Contents/MacOS/openfallout-angle-probe")
+OPENGL_FRAMEWORK = "/System/Library/Frameworks/OpenGL.framework/"
+PROBE_SECONDS = 60
+
+
+def check_angle(app, mode, team_id, version_file):
+    """The ANGLE libraries in the app are the published ones (compared without their signatures) and, in release mode,
+    signed like the rest of the app; the notices file is the published one."""
+    try:
+        version = angle_asset.load_version(version_file)
+    except (OSError, ValueError, angle_asset.AssetError) as error:
+        raise StepFailed(f"cannot read the recorded ANGLE version ({error})")
+    tag, recorded = version["release"]["tag"], version.get("files", {})
+    expected_team = team_id or signing_details(app)[1]
+    problems = []
+    for name in ANGLE_LIBRARIES:
+        library = app / "Contents/Frameworks" / name
+        shown = relative(library, app)
+        if not library.is_file():
+            problems.append(f"{shown} is missing")
+            continue
+        wanted = recorded.get(f"lib/{name}", {}).get("sha256_without_signature")
+        try:
+            found = angle_asset.code_digest(library.read_bytes())
+        except angle_asset.AssetError as error:
+            problems.append(f"{shown}: {error}")
+            continue
+        if not wanted:
+            problems.append(f"{version_file} records no digest for lib/{name}")
+        elif found != wanted:
+            problems.append(f"{shown} is not the published library of {tag}: its digest without signature is {found}, "
+                            f"the recorded one {wanted}")
+        if run(["codesign", "--verify", "--strict", library]).returncode != 0:
+            problems.append(f"{shown}: not validly signed")
+        if mode == "release":
+            details = run(["codesign", "--display", "--verbose=2", library]).stderr
+            authority = re.search(r"^Authority=(.*)$", details, re.MULTILINE)
+            if not authority or not authority.group(1).startswith("Developer ID Application:"):
+                problems.append(f"{shown}: not signed by a Developer ID Application identity")
+            hardened, team = signing_details(library)
+            if team != expected_team:
+                problems.append(f"{shown}: Team ID {team}, not the app's {expected_team}")
+            if not hardened:
+                problems.append(f"{shown}: no hardened runtime")
+            if not re.search(r"^Timestamp=", details, re.MULTILINE):
+                problems.append(f"{shown}: no secure timestamp")
+    notices = app / ANGLE_NOTICES
+    if not notices.is_file():
+        problems.append(f"{ANGLE_NOTICES} is missing")
+    elif angle_asset.sha256_file(notices) != recorded.get(angle_asset.NOTICES, {}).get("sha256"):
+        problems.append(f"{ANGLE_NOTICES} is not the published notices of {tag}")
+    if problems:
+        raise StepFailed("; ".join(problems))
+    signed = (f"Developer ID of team {expected_team}, hardened runtime, secure timestamp" if mode == "release"
+              else f"signature: {signature_kind(app / 'Contents/Frameworks' / ANGLE_LIBRARIES[0])}")
+    return (f"{', '.join(ANGLE_LIBRARIES)} in Contents/Frameworks are the published ones ({tag}, compared without "
+            f"their signatures), {signed}; {ANGLE_NOTICES} is the published notices")
+
+
+def check_no_opengl(app):
+    """No Mach-O file of the app may load Apple's OpenGL framework, by its full name or through a run path. A library
+    without a run path of its own inherits those of the program that loaded it, and which program that is cannot be
+    read from the files, so an @rpath name is tried against the run paths of every Mach-O file in the app: stricter
+    than the loader, never laxer."""
+    machos = sorted(path for path in app.rglob("*") if is_macho(path))
+    system_rpaths = sorted({rpath for path in machos for rpath in rpaths(path) if rpath.startswith("/")})
+
+    def loads_opengl(name):
+        if name.startswith("@rpath/"):
+            return any(f"{rpath.rstrip('/')}/{name[len('@rpath/'):]}".startswith(OPENGL_FRAMEWORK)
+                       for rpath in system_rpaths)
+        return name.startswith(OPENGL_FRAMEWORK)
+
+    linking = [relative(path, app) for path in machos if any(loads_opengl(name) for name in linked_libraries(path))]
+    if linking:
+        raise StepFailed(", ".join(f"{name} links Apple's OpenGL framework" for name in linking))
+    return f"none of the {len(machos)} Mach-O files links OpenGL.framework"
+
+
+def check_angle_probe(app, smoke):
+    probe = app / ANGLE_PROBE
+    if not probe.is_file():
+        raise SmokeSkipped("this build has no ANGLE probe (only the OPENFALLOUT_BUNDLE_ANGLE test build packages one)")
+    try:
+        result = run([probe], timeout=PROBE_SECONDS)
+    except subprocess.TimeoutExpired:
+        raise StepFailed(f"the ANGLE probe was still running after {PROBE_SECONDS} s") from None
+    found = dict(re.findall(r"^(GL_VERSION|GL_RENDERER): (.*)$", result.stdout, re.MULTILINE))
+    if result.returncode == 0 and "ANGLE probe: PASS" in result.stdout:
+        return (f"{found.get('GL_VERSION', '?')}; {found.get('GL_RENDERER', '?')}; a GLSL ES 3.00 triangle drawn and "
+                f"read back")
+    lines = [line.strip() for line in (result.stdout + result.stderr).splitlines() if line.strip()]
+    said = " ".join(line for line in lines if "FAIL" in line or line.startswith("dyld") or "Reason:" in line)
+    if result.returncode == 2 and smoke == "auto":
+        raise SmokeSkipped(f"this machine has no Metal device ({said}); run `CI/check_mac_package.py <package> --angle "
+                           f"bundled --smoke run` on a Mac with a GPU")
+    raise StepFailed(f"exit status {result.returncode}: {said or ' '.join(lines[-2:]) or 'no output'}")
+
+
+def report_angle_probe(app, smoke):
+    try:
+        return report("angle-probe", check_angle_probe, app, smoke)
+    except SmokeSkipped as why:
+        return skip("angle-probe", str(why))
+
+
 # -------------------------------------------------------------------------------------------------------------- smoke
 
 LAUNCHER = ROOT / "scripts/openfallout/mac_launch.py"
@@ -656,8 +781,20 @@ def check_app(app, options, dmg_ok=True, dmg=None):
     results.append(report("info.plist", check_info_plists, app))
     results.append(report("platform", check_platform, app))
     results.append(report("openal", check_openal, app))
+    if options.angle == "bundled":
+        results.append(report("angle", check_angle, app, options.mode, options.team_id, options.angle_version_file))
+    if options.forbid_opengl:
+        results.append(report("no-opengl", check_no_opengl, app))
     loadable = report("library-validation", check_library_validation, app, options.mode)
     results.append(loadable)
+    if options.angle == "bundled":
+        if options.smoke == "skip":
+            results.append(skip("angle-probe", "--smoke skip"))
+        elif not loadable:
+            results.append(False)
+            fail("angle-probe", "not started, the libraries could not be loaded (see library-validation)")
+        else:
+            results.append(report_angle_probe(app, options.smoke))
     jit_ok = report("luajit", check_luajit, app, options.expect_jit)
     results.append(jit_ok)
     if options.smoke == "skip":
@@ -753,6 +890,15 @@ def main(argv=None):
                         help="append a release-notes line to this file: the package, the result, the smoke run's "
                              "renderer, the image's SHA-256, and the macOS version and chip it was checked on")
     parser.add_argument("--work", type=Path, help="folder for the smoke run's files (kept); default: a temporary one")
+    parser.add_argument("--angle", choices=["none", "bundled"], default="none",
+                        help="bundled: the app must hold the published ANGLE libraries, signed like the app, and the "
+                             "ANGLE notices; the probe of the test build is run (default none: today's OpenGL "
+                             "release)")
+    parser.add_argument("--angle-version-file", type=Path, default=angle_asset.VERSION_FILE,
+                        help="the recorded ANGLE version and digests (default CI/macos/angle/angle.json)")
+    parser.add_argument("--forbid-opengl", action="store_true",
+                        help="fail if any Mach-O file in the app links Apple's OpenGL framework (after the desktop "
+                             "OpenGL path is deleted)")
     options = parser.parse_args(argv)
     RESULTS.clear()
     RENDERER_SEEN.clear()

@@ -110,6 +110,15 @@ To check the credentials locally before the first tag: `xcrun notarytool history
 file must carry. See [playing.md](playing.md) for the steps of the check and [mac-luajit.md](mac-luajit.md) for the
 JIT entitlement.
 
+## ANGLE in the app (milestone two)
+
+The Metal build's app also carries the project's own ANGLE libraries in `Contents/Frameworks`. Packaging copies them
+unchanged from the published ANGLE release asset, and the signing step above signs each one like every other library:
+the Developer ID, the hardened runtime, a secure timestamp, before the app. `CI/check_mac_package.py --angle bundled`
+checks that they are the published ones and are signed by the app's team; `--forbid-opengl` is for after the desktop
+OpenGL path is deleted. Today's OpenGL release carries no ANGLE. A manual run of `push.yml` on the default branch with
+`bundle-angle` makes the one signed and notarized test image with ANGLE inside. See [angle.md](angle.md).
+
 ## Engine releases
 
 What a release needs beyond signing and notarization (a machine-readable statement with the version, tag, source commit,
