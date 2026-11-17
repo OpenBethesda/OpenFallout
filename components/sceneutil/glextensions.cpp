@@ -95,8 +95,8 @@ namespace SceneUtil
             const bool depthClamp = supported("GL_EXT_depth_clamp");
             Log(Debug::Info) << "OpenGL ES: per-draw-buffer switches " << (indexed.empty() ? "missing" : indexed)
                              << ", S3TC textures " << (extensions.isTextureCompressionS3TCSupported ? "yes" : "no")
-                             << ", depth clamp " << (depthClamp ? "yes" : "no")
-                             << ", clip distances " << (clipDistances ? "yes" : "no");
+                             << ", depth clamp " << (depthClamp ? "yes" : "no") << ", clip distances "
+                             << (clipDistances ? "yes" : "no");
         }
 #endif
         std::set<osg::observer_ptr<osg::GLExtensions>> sGLExtensions;

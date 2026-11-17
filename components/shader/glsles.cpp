@@ -621,8 +621,8 @@ namespace Shader
         // OpenSceneGraph's own pass over the text would otherwise turn a built-in name in a comment into a second
         // declaration. A built-in without an equivalent counts only on a line the preprocessor is not known to skip. A
         // #define body is text until the macro is used, and a header that both stages share (that of a post-processing
-        // pass) names built-ins of the other stage there: such a name is left alone, and the GLSL ES compiler reports it
-        // if the macro is ever used.
+        // pass) names built-ins of the other stage there: such a name is left alone, and the GLSL ES compiler reports
+        // it if the macro is ever used.
         std::string convertNames(
             const std::string& source, osg::Shader::Type stage, Uses& uses, const std::vector<bool>& skipped)
         {

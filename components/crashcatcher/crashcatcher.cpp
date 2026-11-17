@@ -444,8 +444,8 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* context)
     fputc('\n', stdout);
     crash_info.thread[sizeof(crash_info.thread) - 1] = '\0';
     crash_info.frames[sizeof(crash_info.frames) - 1] = '\0';
-    printf("* Frames of the crashed thread \"%s\" (taken without a debugger)\n%s\n", crash_info.thread,
-        crash_info.frames);
+    printf(
+        "* Frames of the crashed thread \"%s\" (taken without a debugger)\n%s\n", crash_info.thread, crash_info.frames);
     fflush(stdout);
 
     fflush(stdout);
