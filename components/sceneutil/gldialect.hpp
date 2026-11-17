@@ -34,6 +34,11 @@ namespace SceneUtil::GLDialect
     inline constexpr bool sReadsBackRGB = !sOpenGLES;
     inline constexpr bool sUploadsBGR = !sOpenGLES;
 
+    // Post-processing techniques (.omwfx) carry their own shaders in desktop GLSL 1.20 or 3.30, which are not yet
+    // turned into GLSL ES 3.00 as the engine's own shaders are; until they are, the Metal build keeps post-processing
+    // off at run time.
+    inline constexpr bool sHasPostProcessing = !sOpenGLES;
+
     // Object labels (glObjectLabel) are OpenGL ES 3.2; ANGLE's Metal backend stops at 3.0.
     inline constexpr bool sHasObjectLabels = !sOpenGLES;
 

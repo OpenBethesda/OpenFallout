@@ -34,11 +34,13 @@ either expressed or implied, of the FreeBSD Project.
 
 #include <cstdlib>
 #include <memory>
+#include <string>
 
 #include <components/debug/debuglog.hpp>
+#include <components/sceneutil/gldialect.hpp>
 
 // OpenGL constants not provided by OSG:
-#include <SDL_opengl_glext.h>
+#include <components/sceneutil/glextconstants.hpp>
 
 namespace Debug
 {
@@ -148,10 +150,14 @@ namespace Debug
 
         if (osg::isGLExtensionSupported(contextID, "GL_KHR_debug"))
         {
-            osg::setGLExtensionFuncPtr(glDebugMessageCallback, "glDebugMessageCallback");
-            osg::setGLExtensionFuncPtr(glDebugMessageControl, "glDebugMessageControl");
-            osg::setGLExtensionFuncPtr(PushDebugGroup::sInstance->glPushDebugGroup, "glPushDebugGroup");
-            osg::setGLExtensionFuncPtr(PushDebugGroup::sInstance->glPopDebugGroup, "glPopDebugGroup");
+            // OpenGL ES 3.0 has these only under KHR_debug's own names
+            const std::string suffix = SceneUtil::GLDialect::sDebugFunctionSuffix;
+            osg::setGLExtensionFuncPtr(glDebugMessageCallback, ("glDebugMessageCallback" + suffix).c_str());
+            osg::setGLExtensionFuncPtr(glDebugMessageControl, ("glDebugMessageControl" + suffix).c_str());
+            osg::setGLExtensionFuncPtr(
+                PushDebugGroup::sInstance->glPushDebugGroup, ("glPushDebugGroup" + suffix).c_str());
+            osg::setGLExtensionFuncPtr(
+                PushDebugGroup::sInstance->glPopDebugGroup, ("glPopDebugGroup" + suffix).c_str());
         }
         else if (osg::isGLExtensionSupported(contextID, "GL_ARB_debug_output"))
         {
