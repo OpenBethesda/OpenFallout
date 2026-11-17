@@ -20,16 +20,6 @@ namespace SceneUtil::GLDialect
     // and folds the separately linked library shaders into each shader (OpenGL ES links one shader object per stage).
     inline constexpr bool sConvertsShadersToGlslEs = sOpenGLES;
 
-    // Fixed-function switches (GL_NORMALIZE, user clip planes, alpha test, light model, texture environment...) exist
-    // only in desktop OpenGL. The shaders do that work in both builds.
-    inline constexpr bool sHasFixedFunction = !sOpenGLES;
-
-    // glPolygonMode (wireframe) exists only in desktop OpenGL.
-    inline constexpr bool sHasPolygonMode = !sOpenGLES;
-
-    // The texture parameter GL_TEXTURE_LOD_BIAS exists only in desktop OpenGL.
-    inline constexpr bool sHasTextureLodBias = !sOpenGLES;
-
     // OpenGL ES promises only RGBA read-back of the frame buffer, and has no BGR or BGRA upload formats.
     inline constexpr bool sReadsBackRGB = !sOpenGLES;
     inline constexpr bool sUploadsBGR = !sOpenGLES;
@@ -39,12 +29,9 @@ namespace SceneUtil::GLDialect
     // off at run time.
     inline constexpr bool sHasPostProcessing = !sOpenGLES;
 
-    // Object labels (glObjectLabel) are OpenGL ES 3.2; ANGLE's Metal backend stops at 3.0.
-    inline constexpr bool sHasObjectLabels = !sOpenGLES;
-
-    // Suffix of the per-draw-buffer switches (glEnablei, glColorMaski...) and of the KHR_debug calls: OpenGL ES 3.0 has
-    // them only as extension functions.
-    inline constexpr const char* sIndexedFunctionSuffix = sOpenGLES ? "OES" : "";
+    // Suffix of the KHR_debug calls: OpenGL ES 3.0 has them only as extension functions. (The fixed-function switches,
+    // texture LOD bias, per-draw-buffer switches and object labels OpenGL ES 3.0 lacks are dealt with once, when the
+    // context starts: see components/sceneutil/glextensions.cpp.)
     inline constexpr const char* sDebugFunctionSuffix = sOpenGLES ? "KHR" : "";
 }
 
