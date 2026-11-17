@@ -352,6 +352,7 @@ bool Launcher::SettingsPage::loadSettings()
             }
         }
         loadSettingBool(Settings::sound().mCameraListener, *cameraListenerCheckBox);
+        loadSettingBool(Settings::sound().mHeadTracking, *headTrackingCheckBox);
         dopplerSpinBox->setValue(Settings::sound().mDopplerFactor);
     }
 
@@ -632,6 +633,7 @@ void Launcher::SettingsPage::saveSettings()
 
         const bool cCameraListener = cameraListenerCheckBox->checkState() != Qt::Unchecked;
         Settings::sound().mCameraListener.set(cCameraListener);
+        saveSettingBool(*headTrackingCheckBox, Settings::sound().mHeadTracking);
 
         Settings::sound().mDopplerFactor.set(dopplerSpinBox->value());
     }
