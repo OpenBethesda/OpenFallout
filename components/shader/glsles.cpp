@@ -586,8 +586,12 @@ namespace Shader
                     const bool line = source[i + 1] == '/';
                     std::size_t end = line ? source.find('\n', i) : source.find("*/", i + 2);
                     end = end == std::string::npos ? source.size() : (line ? end : end + 2);
-                    out.append(
-                        static_cast<std::size_t>(std::count(source.begin() + i, source.begin() + end, '\n')), '\n');
+                    const auto lineBreaks
+                        = static_cast<std::size_t>(std::count(source.begin() + i, source.begin() + end, '\n'));
+                    // A comment on one line stands for a space, which keeps the words around it apart
+                    if (!line && lineBreaks == 0)
+                        out += ' ';
+                    out.append(lineBreaks, '\n');
                     i = end;
                     continue;
                 }

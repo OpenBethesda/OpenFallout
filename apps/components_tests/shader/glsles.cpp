@@ -332,6 +332,14 @@ namespace
         EXPECT_THAT(result.mSource, Not(HasSubstr("of_FragData")));
     }
 
+    // A comment between two words stands for a space, as in GLSL
+    TEST(ShaderGlslEsTest, a_comment_between_two_words_keeps_them_apart)
+    {
+        const GlslEsShader result = fragment("#version 120\nuniform float/* explanation */gain;\nvoid main() { }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(body(result.mSource), HasSubstr("uniform float gain;"));
+    }
+
     TEST(ShaderGlslEsTest, shaders_written_for_a_newer_glsl_are_errors)
     {
         const GlslEsShader result = vertex("#version 430 compatibility\nvoid main() { }\n");
