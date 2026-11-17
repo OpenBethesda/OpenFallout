@@ -111,6 +111,7 @@ namespace OFSound
 
         void updateListener(const osg::Vec3f& pos, const osg::Vec3f& atdir, const osg::Vec3f& updir,
             const osg::Vec3f& vel, Environment env) override;
+        void updateListenerDirection(const osg::Vec3f& atdir, const osg::Vec3f& updir) override;
 
         void pauseSounds(int types) override;
         void resumeSounds(int types) override;

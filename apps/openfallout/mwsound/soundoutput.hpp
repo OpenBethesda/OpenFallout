@@ -64,6 +64,8 @@ namespace OFSound
         virtual void updateListener(const osg::Vec3f& pos, const osg::Vec3f& atdir, const osg::Vec3f& updir,
             const osg::Vec3f& vel, Environment env)
             = 0;
+        /// Only the listener's direction and up (head tracking sets them every frame, between updates)
+        virtual void updateListenerDirection(const osg::Vec3f& atdir, const osg::Vec3f& updir) = 0;
 
         virtual void pauseSounds(int types) = 0;
         virtual void resumeSounds(int types) = 0;

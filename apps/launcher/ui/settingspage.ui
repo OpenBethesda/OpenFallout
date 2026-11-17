@@ -1089,6 +1089,16 @@
            </property>
           </widget>
          </item>
+         <item row="5" column="0">
+          <widget class="QCheckBox" name="headTrackingCheckBox">
+           <property name="toolTip">
+            <string>Headphones that report motion turn the sound with your head, so that sounds stay in place in the world. Set HRTF to On.</string>
+           </property>
+           <property name="text">
+            <string>Head Tracking</string>
+           </property>
+          </widget>
+         </item>
          <item row="3" column="0">
           <widget class="QLabel" name="dopplerLabel">
            <property name="toolTip">

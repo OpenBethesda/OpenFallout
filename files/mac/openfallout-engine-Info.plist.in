@@ -30,5 +30,7 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMotionUsageDescription</key>
+	<string>OpenFallout reads the motion of your headphones only when you turn on head tracking, to keep game sounds in place when you turn your head. The motion is not stored or sent anywhere.</string>
 </dict>
 </plist>

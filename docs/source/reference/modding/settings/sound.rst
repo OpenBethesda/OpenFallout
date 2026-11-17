@@ -160,6 +160,20 @@ Sound Settings
    False is vanilla Morrowind behaviour.
 
 .. omw-setting::
+   :title: head tracking
+   :type: boolean
+   :range: true, false
+   :default: false
+   :location: :bdg-success:`Launcher > Settings > Audio`
+
+   When true, headphones that report motion turn the sound listener with the player's head,
+   so that a sound stays where it is in the world when the head turns. Mac only.
+   It is heard only when HRTF is on: set hrtf enable to 1.
+   Straight ahead is the pose of the head when tracking starts or the headphones connect.
+   macOS may ask for permission to read the headphones' motion the first time.
+   See docs/openfallout/head-tracking.md.
+
+.. omw-setting::
    :title: doppler factor
    :type: float32
    :range: 0.0 (disabled), 1.0 (maximum strength)

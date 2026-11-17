@@ -24,7 +24,7 @@ Save orchestration is in [`apps/openfallout/mwscript/falloutsave.cpp`](../../app
 
 ## Core and edges
 
-The core (records, scripts, world, gameplay rules) makes no Apple calls. Mac-only code lives at the edges only. A rule check on the Mac job enforces this; see [Core and edges](core-and-edges.md).
+The core (records, scripts, world, gameplay rules) makes no Apple calls. Mac-only code lives at the edges only. A rule check on the Mac job enforces this; see [Core and edges](core-and-edges.md). The first native bridge is [head-tracked sound](head-tracking.md).
 
 ## How to read evidence
 

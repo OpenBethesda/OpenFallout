@@ -108,6 +108,12 @@ class CoreEdgesTest(unittest.TestCase):
         self.write("apps/openfallout/main.cpp", 'const char* n = "NSApplication";\n')
         self.assertEqual(self.violations(), [])
 
+    def test_the_head_tracking_bridge_is_a_listed_edge(self):
+        bridge = "apps/openfallout/mwsound/headphonemotion.mm"
+        self.write(bridge, "#import <CoreMotion/CoreMotion.h>\n#import <Foundation/Foundation.h>\n")
+        self.assertEqual(self.violations(), [])
+        self.assertIn(bridge, [prefix for prefix, reason in check_core_edges.EDGES])
+
     def test_a_file_beside_an_edge_is_still_core(self):
         self.write("components/misc/other.cpp", "#ifdef __APPLE__\n#endif\n")
         self.assertEqual(len(self.violations()), 1)

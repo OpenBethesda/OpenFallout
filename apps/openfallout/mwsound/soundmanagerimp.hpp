@@ -45,6 +45,7 @@ namespace OFSound
     class Sound;
     class Stream;
     class HeadCache;
+    class HeadTracker;
     class WarmQueue;
 
     using SoundPtr = Misc::ObjectPtr<Sound>;
@@ -103,6 +104,9 @@ namespace OFSound
         osg::Vec3f mListenerDir;
         osg::Vec3f mListenerUp;
         osg::Vec3f mListenerVel;
+
+        /// Turns the listener with the head when the setting "head tracking" is on (headtracking.hpp)
+        std::unique_ptr<HeadTracker> mHeadTracker;
 
         int mPausedSoundTypes[BlockerType::MaxCount] = {};
 
@@ -163,6 +167,7 @@ namespace OFSound
             PlayMode mode, float offset, const FalloutScript::SoundData* curve = nullptr, bool flat = false);
 
         void updateSounds(float duration);
+        void setHeadTracking(bool enabled);
         void updateRegionSound(float duration);
         void warmCellSounds();
         void enqueueWarmSound(const ESM::RefId& soundId);

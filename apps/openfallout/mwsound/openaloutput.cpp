@@ -1505,6 +1505,15 @@ namespace OFSound
         mListenerEnv = env;
     }
 
+    void OpenALOutput::updateListenerDirection(const osg::Vec3f& atdir, const osg::Vec3f& updir)
+    {
+        if (!mContext)
+            return;
+        ALfloat orient[6] = { atdir.x(), atdir.y(), atdir.z(), updir.x(), updir.y(), updir.z() };
+        alListenerfv(AL_ORIENTATION, orient);
+        getALError();
+    }
+
     void OpenALOutput::pauseSounds(int types)
     {
         std::vector<ALuint> sources;

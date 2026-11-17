@@ -44,6 +44,7 @@ EDGES = (
     ("apps/openfallout/mwinput/", "input: keys, pointer and controller"),
     ("apps/openfallout_tests/mwinput/", "tests of the input edge"),
     ("apps/openfallout/mwsound/", "sound: the OpenAL Soft seam"),
+    ("apps/openfallout/mwsound/headphonemotion.mm", "native bridge: Core Motion headphone motion"),
     ("apps/openfallout/mwrender/", "drawing: the OpenGL path (the Metal renderer goes here too)"),
     # packaging, native bridges, start-up
     ("apps/openfallout/macos/", "packaging: the nested engine app and its start-up shim"),
