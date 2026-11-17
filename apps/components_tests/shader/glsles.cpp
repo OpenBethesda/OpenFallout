@@ -377,6 +377,28 @@ namespace
         EXPECT_THAT(fragmentResult.mSource, Not(HasSubstr("in vec4 osg_Vertex")));
     }
 
+    // A comment is one space to the preprocessor, even one over several lines: the #define goes on after it
+    TEST(ShaderGlslEsTest, a_define_goes_on_past_a_comment_over_several_lines)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "#define omw_Position(x) \\\n"
+            "    /* a comment\n"
+            "       on two lines */ \\\n"
+            "    (x + gl_Vertex)\n"
+            "void main() { gl_FragColor = vec4(1.0); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, Not(HasSubstr("in vec4 osg_Vertex")));
+        // The comment's line breaks are kept (the line numbers stay right), each continuing the #define
+        const std::size_t start = result.mSource.find("#define omw_Position(x)");
+        const std::size_t last = result.mSource.find("(x + osg_Vertex)\n");
+        ASSERT_NE(start, std::string::npos);
+        ASSERT_NE(last, std::string::npos);
+        const std::string defineLines = result.mSource.substr(start, last - start);
+        EXPECT_EQ(count(defineLines, "\n"), 3u);
+        EXPECT_EQ(count(defineLines, "\\\n"), 3u);
+    }
+
     TEST(ShaderGlslEsTest, a_built_in_of_the_other_stage_outside_a_define_is_an_error)
     {
         EXPECT_THAT(fragment("#version 120\nvoid main() { gl_FragColor = gl_Vertex; }\n").mErrors,

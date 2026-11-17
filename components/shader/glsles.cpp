@@ -645,10 +645,11 @@ namespace Shader
                     // A comment on one line stands for a space, which keeps the words around it apart
                     if (!line && lineBreaks == 0)
                         out += ' ';
-                    out.append(lineBreaks, '\n');
+                    // A comment over several lines is one space too, so a #define goes on after it: its line breaks
+                    // are kept for the line numbers, and continue the #define
+                    for (std::size_t n = 0; n < lineBreaks; ++n)
+                        out += inDefine ? " \\\n" : "\n";
                     lineNumber += lineBreaks;
-                    if (lineBreaks > 0)
-                        inDefine = false;
                     i = end;
                     continue;
                 }
