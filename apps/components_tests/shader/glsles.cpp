@@ -522,6 +522,20 @@ namespace
             IsEmpty());
     }
 
+    // The compiler never sees a declaration in a branch the preprocessor skips
+    TEST(ShaderGlslEsTest, a_uniform_with_a_reserved_name_in_a_skipped_branch_is_not_an_error)
+    {
+        EXPECT_THAT(fragment("#version 120\n#if 0\nuniform sampler2D texture;\n#endif\nuniform sampler2D tex;\n"
+                             "void main() { gl_FragColor = texture2D(tex, vec2(0.0)); }\n")
+                        .mErrors,
+            IsEmpty());
+        // In a branch the converter cannot decide it may be compiled
+        EXPECT_THAT(fragment("#version 120\n#ifdef GL_EXT_some_extension\nuniform float filter;\n#endif\n"
+                             "void main() { gl_FragColor = vec4(0.0); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+    }
+
     TEST(ShaderGlslEsTest, multiview_view_index_keeps_its_name)
     {
         const GlslEsShader result = fragment(

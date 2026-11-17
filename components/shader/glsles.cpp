@@ -573,7 +573,8 @@ namespace Shader
                 const std::string_view text = original.substr(pos, end - pos);
                 skipped.push_back(branches.active() == Branches::Active::No);
                 std::smatch match;
-                if (std::regex_search(line, match, uniformDeclarators))
+                // The compiler never sees a declaration the preprocessor skips
+                if (branches.active() != Branches::Active::No && std::regex_search(line, match, uniformDeclarators))
                     for (const std::string& name : declaratorNames(match[1].str()))
                         if (isUnusableUniformName(name))
                             result.mErrors.push_back(
