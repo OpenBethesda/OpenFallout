@@ -638,6 +638,35 @@ namespace
                              "void main() { gl_FragColor = vec4(x); }\n")
                         .mErrors,
             Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        // A macro reached through the text of another one counts too, whether it changes later or is first defined
+        // later
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define B 1.0\n"
+                             "#define A (B * u)\n"
+                             "float x = A;\n"
+                             "#undef B\n"
+                             "#define B 2.0\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("B"))));
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define A (B * u)\n"
+                             "float x = A;\n"
+                             "#define B 2.0\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("B"))));
+        EXPECT_THAT(fragment("#version 120\n"
+                             "#define SCALE 2.0\n"
+                             "#define FACTOR SCALE\n"
+                             "uniform float u;\n"
+                             "float x = u * FACTOR;\n"
+                             "#undef SCALE\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
         // A macro that keeps its value moves with the initialiser as before
         const GlslEsShader kept = fragment(
             "#version 120\n"

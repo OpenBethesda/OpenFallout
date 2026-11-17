@@ -1002,6 +1002,20 @@ namespace Shader
             return names;
         }
 
+        // The names of a text and, through the text of each macro defined at that line, the names those macros name (to
+        // the depth isConstantExpression follows): what a moved initialiser takes the meaning of at its new place
+        void collectNames(
+            std::string_view value, const Macros& macros, std::set<std::string, std::less<>>& names, int depth = 0)
+        {
+            for (const std::string& name : namesIn(value))
+            {
+                const bool added = names.insert(name).second;
+                const auto macro = macros.find(name);
+                if (added && macro != macros.end() && depth < 16)
+                    collectNames(macro->second.mValue, macros, names, depth + 1);
+            }
+        }
+
         // A #define or #undef line: the macro's name, and for an object-like #define its text
         struct MacroDirective
         {
@@ -1131,7 +1145,9 @@ namespace Shader
                 else if (depth == 0 && std::regex_match(text, match, global) && !hasTopLevelComma(match[3].str())
                     && !isConstantExpression(match[3].str(), constants, macros))
                 {
-                    for (const std::string& name : namesIn(match[3].str()))
+                    std::set<std::string, std::less<>> names;
+                    collectNames(match[3].str(), macros, names);
+                    for (const std::string& name : names)
                         if (changedAfter(name, index))
                             result.mErrors.push_back(std::format(
                                 "global {} starts from {}, which is defined again or undefined further down: its "
