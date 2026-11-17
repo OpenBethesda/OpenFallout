@@ -190,9 +190,16 @@ class Result:
         self.difference, self.width, self.height = difference, width, height
 
 
+def _same_size(reference, candidate):
+    if (reference.width, reference.height) != (candidate.width, candidate.height):
+        raise PictureError(f"the pictures differ in size ({reference.width}x{reference.height} and "
+                           f"{candidate.width}x{candidate.height})")
+
+
 def ignore_regions(reference, candidate, boxes):
     """A copy of the candidate with the reference's pixels in each box ([x0, y0, x1, y1] as fractions of the picture), so that
     what cannot be held still there (and only that) is not compared."""
+    _same_size(reference, candidate)
     rows = [bytearray(row) for row in candidate.rows]
     for x0, y0, x1, y1 in boxes:
         left, right = int(x0 * candidate.width), int(round(x1 * candidate.width))
@@ -215,9 +222,7 @@ def _starts(count, size, step):
 def measure(reference, candidate, method):
     """The measures of two pictures of the same size. `method`: `pixel_tolerance` (levels), `tile` (the side of a window, pixels),
     `block` (the side of a block of the structural similarity, pixels)."""
-    if (reference.width, reference.height) != (candidate.width, candidate.height):
-        raise PictureError(f"the pictures differ in size ({reference.width}x{reference.height} and "
-                           f"{candidate.width}x{candidate.height})")
+    _same_size(reference, candidate)
     width, height = reference.width, reference.height
     tolerance, block = int(method["pixel_tolerance"]), int(method["block"])
     across, down = (width + block - 1) // block, (height + block - 1) // block
@@ -414,7 +419,17 @@ def limits_of(limits_file, scene=None):
     """(method, the limits of the scene, whether they were set from runs) from the contents of picture_limits.json: a scene's own
     limits once they have been set from runs, the allowance before that."""
     own = (limits_file.get("scenes") or {}).get(scene) if scene else None
-    return limits_file["method"], dict(own or limits_file["allowance"]), own is not None
+    limits = dict(own or limits_file["allowance"])
+    # A scene's own limits take the place of the whole allowance, and a limit that is not given is not checked: a name that
+    # is misspelled or left out would switch its measure off without a word.
+    unknown = sorted(set(limits) - set(DIRECTION))
+    missing = [name for name, _ in LIMITED if name not in limits]
+    if unknown or missing:
+        where = f"the limits of the scene {scene}" if own else "the allowance"
+        raise PictureError(f"{where} in the limits file: "
+                           + "; ".join(part for part in (f"unknown measure(s) {', '.join(unknown)}" if unknown else "",
+                                                         f"no limit for {', '.join(missing)}" if missing else "") if part))
+    return limits_file["method"], limits, own is not None
 
 
 def main(argv=None):
@@ -425,8 +440,8 @@ def main(argv=None):
     parser.add_argument("--scene", help="the scene whose limits apply (the allowance otherwise)")
     parser.add_argument("--difference", help="write the difference picture here (PNG)")
     args = parser.parse_args(argv)
-    method, limits, measured = limits_of(json.loads(Path(args.limits).read_text(encoding="utf-8")), args.scene)
     try:
+        method, limits, measured = limits_of(json.loads(Path(args.limits).read_text(encoding="utf-8")), args.scene)
         result = measure(load_picture(args.reference), candidate := load_picture(args.candidate), method)
     except PictureError as error:
         print(f"cannot compare: {error}", file=sys.stderr)

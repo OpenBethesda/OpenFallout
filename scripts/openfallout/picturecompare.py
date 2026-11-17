@@ -132,11 +132,11 @@ class Shot:
         self.run = report_path.parent
         self.report = report
         self.verdict = report.get("verdict")
+        # The picture in this folder comes first: the report records where the picture was when the round ran, and a folder
+        # that was copied or moved must be judged by its own pictures, not by the ones at the old place.
         recorded = Path(entry["file"]) if entry.get("file") else None
-        # a folder that was moved still has its pictures under shots/
-        if recorded is not None and not recorded.is_file():
-            recorded = self.run / "shots" / recorded.name
-        self.picture = recorded if recorded is not None and recorded.is_file() else None
+        own = self.run / "shots" / recorded.name if recorded is not None else None
+        self.picture = next((path for path in (own, recorded) if path is not None and path.is_file()), None)
         settings = self.run / "config" / "settings.cfg"
         self.settings = settings.read_text(encoding="utf-8", errors="replace") if settings.is_file() else None
         self.simulation = None
@@ -165,12 +165,16 @@ def find_shots(folder):
     return found
 
 
-def compare_folders(reference_dir, candidate_dir, out, limits_doc, scenes_doc, noise=False, all_pages=False):
-    """Compares the pictures of two folders of results and writes the report into `out`. Gives the rows of the scenes."""
+def compare_folders(reference_dir, candidate_dir, out, limits_doc, scenes_doc, noise=False, all_pages=False, expected=()):
+    """Compares the pictures of two folders of results and writes the report into `out`. Gives the rows of the scenes.
+    `expected`: the scenes that were run; one of them with no result in either folder is a row too (MISSING), so that a scene
+    whose rounds left nothing behind cannot drop out of the report."""
     references, candidates = find_shots(reference_dir), find_shots(candidate_dir)
     order = [scene["name"] for scene in scenes_doc["scenes"]]
-    keys = sorted(set(references) | set(candidates), key=lambda key: (order.index(key.split("/")[0])
-                                                                      if key.split("/")[0] in order else len(order), key))
+    found = set(references) | set(candidates)
+    absent = {name for name in expected if not any(key.split("/")[0] == name for key in found)}
+    keys = sorted(found | absent, key=lambda key: (order.index(key.split("/")[0])
+                                                   if key.split("/")[0] in order else len(order), key))
     by_name = {scene["name"]: scene for scene in scenes_doc["scenes"]}
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -339,7 +343,7 @@ def run_rounds(args, reference_profile, candidate_profile, noise):
             if stopped:
                 break
     rows = compare_folders(folder / "reference", folder / "candidate", folder / "report", limits_doc, scenes_doc, noise,
-                           args.all_pages)
+                           args.all_pages, expected=[scene["name"] for scene in scenes])
     status = report_status(rows, folder / "report")
     if stopped:
         print(f"STOPPED: {stopped}; the scenes after it were not run", file=sys.stderr)
@@ -425,7 +429,14 @@ def main(argv=None):
     sp.add_argument("--write", action="store_true", help="record the proposed limits and the noise floor in the limits file")
     sp.add_argument("--build", help="what was measured (commit and renderer), recorded with the noise floor")
     args = parser.parse_args(argv)
+    try:
+        return command(args)
+    except picturediff.PictureError as error:  # a limits file the comparison refuses
+        print(f"cannot compare: {error}", file=sys.stderr)
+        return 2
 
+
+def command(args):
     if args.command == "scenes":
         for scene in load_json(args.scenes)["scenes"]:
             print(f"{scene['name']:14} {scene['kind']:16} --start {scene['start']:20} {scene['for']}")

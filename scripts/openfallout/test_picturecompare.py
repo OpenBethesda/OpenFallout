@@ -307,6 +307,49 @@ class CompareFolders(unittest.TestCase):
         self.assertEqual(self.compare(), 0)
         self.assertTrue(self.results()["nv-busy"]["limits_from_runs"])
 
+    def test_a_copied_results_folder_is_judged_by_its_own_pictures(self):
+        # report.json records where the picture was when the round ran. A folder that was copied (or moved while the first
+        # one still exists) must be judged by the pictures in it, not by the ones it was copied from.
+        reference = textured(64, 48)
+        make_side(self.reference, "nv-exterior", reference)
+        first = self.tmp / "first"
+        run = make_side(first, "nv-exterior", reference)
+        shutil.copytree(first, self.candidate)
+        copy = self.candidate / run.relative_to(first) / "shots" / "01-nv-exterior.png"
+        picturediff.write_png(copy, changed(reference, lambda x, y, c: (0, 0, 0)))
+        self.assertEqual(self.compare(), 1)
+        self.assertEqual(self.results()["nv-exterior"]["verdict"], "FLAG")
+
+    def test_a_scene_that_was_expected_and_has_no_result_on_either_side_is_missing(self):
+        make_side(self.reference, "nv-interior", textured(64, 48))
+        make_side(self.candidate, "nv-interior", textured(64, 48))
+        rows = picturecompare.compare_folders(self.reference, self.candidate, self.out, json.loads(self.limits.read_text()),
+                                              SCENES, expected=["nv-interior", "nv-busy"])
+        verdicts = {row["scene"]: row["verdict"] for row in rows}
+        self.assertEqual(verdicts, {"nv-interior": "PASS", "nv-busy": "MISSING"})
+        self.assertIn("| nv-busy | MISSING |", (self.out / "summary.md").read_text())
+        self.assertEqual(quietly(picturecompare.report_status, rows, self.out), 1)
+
+    def test_a_limit_with_a_name_the_comparison_does_not_know_is_refused(self):
+        # a scene's own limits take the place of the allowance: a misspelled name would switch that measure off
+        make_side(self.reference, "nv-busy", textured(64, 48))
+        make_side(self.candidate, "nv-busy", textured(64, 48))
+        own = dict(LIMITS["allowance"])
+        own["mean_shft"] = own.pop("mean_shift")
+        self.limits.write_text(json.dumps(dict(LIMITS, scenes={"nv-busy": own})))
+        self.assertEqual(self.compare(), 2)
+
+    def test_an_ignored_region_of_pictures_of_two_sizes_is_missing_not_a_crash(self):
+        scenes = json.loads(json.dumps(SCENES))
+        next(scene for scene in scenes["scenes"] if scene["name"] == "nv-busy")["ignore"] = [
+            {"box": [0.0, 0.0, 1.0, 1.0], "why": "a test"}]
+        make_side(self.reference, "nv-busy", textured(64, 48))
+        make_side(self.candidate, "nv-busy", textured(64, 80))
+        rows = picturecompare.compare_folders(self.reference, self.candidate, self.out, json.loads(self.limits.read_text()),
+                                              scenes)
+        self.assertEqual([row["verdict"] for row in rows], ["MISSING"])
+        self.assertIn("differ in size", "; ".join(rows[0]["reasons"]))
+
     def test_nothing_to_compare_is_an_error(self):
         self.reference.mkdir()
         self.candidate.mkdir()
@@ -431,6 +474,18 @@ class WholeRun(unittest.TestCase):
         self.assertTrue((folder / "report" / "nv-busy.html").exists())
         self.assertTrue((folder / "rounds" / "nv-busy.lua").exists())
         self.assertFalse(json.loads((folder / "report" / "results.json").read_text())["noise"])
+
+    def test_a_scene_whose_rounds_left_no_report_on_either_build_is_missing_and_the_run_fails(self):
+        # the stand-in engine does not know this start cell and dies: no picture, and here no report either
+        runner = self.tmp / "noreport.py"
+        runner.write_text("import sys\nsys.exit(1)\n")
+        code = quietly(picturecompare.main, ["run", "--reference", str(self.tmp / "reference.json"), "--candidate",
+                                             str(self.tmp / "candidate.json"), "--scene", "nv-interior",
+                                             "--out", str(self.tmp / "results"), "--runner", f"{sys.executable} {runner}"])
+        self.assertEqual(code, 1)
+        (folder,) = (self.tmp / "results").iterdir()
+        results = {row["scene"]: row for row in json.loads((folder / "report" / "results.json").read_text())["scenes"]}
+        self.assertEqual(results["nv-interior"]["verdict"], "MISSING")
 
     def test_a_build_against_itself_gives_the_noise_floor(self):
         code = quietly(picturecompare.main, ["noise", "--profile", str(self.tmp / "candidate.json"), "--scene", "nv-busy",

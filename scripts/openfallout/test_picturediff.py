@@ -220,6 +220,19 @@ class Verdict(unittest.TestCase):
     def test_a_limit_that_is_not_given_is_not_checked(self):
         self.assertEqual(picturediff.verdict({"bad_share": 1.0}, {}), ("PASS", []))
 
+    def test_the_limits_of_a_scene_must_name_every_measure_and_no_other(self):
+        file = {"method": {}, "allowance": dict(ALLOWANCE), "scenes": {"whole": dict(ALLOWANCE)}}
+        self.assertEqual(picturediff.limits_of(file, "whole"), ({}, ALLOWANCE, True))
+        self.assertEqual(picturediff.limits_of(file, "other"), ({}, ALLOWANCE, False))
+        misspelled = dict(ALLOWANCE)
+        misspelled["ssim_"] = misspelled.pop("ssim")
+        for scenes in ({"bad": misspelled}, {"bad": {"ssim": 0.9}}):
+            with self.assertRaises(picturediff.PictureError) as raised:
+                picturediff.limits_of(dict(file, scenes=scenes), "bad")
+            self.assertIn("ssim", str(raised.exception))
+        with self.assertRaises(picturediff.PictureError):
+            picturediff.limits_of(dict(file, allowance=misspelled), "other")
+
 
 class ProposedLimits(unittest.TestCase):
     MARGIN = {"factor": 1.5, "pad": {"bad_share": 0.002, "worst_tile_bad": 0.02, "mean_shift": 0.5, "worst_tile_shift": 3.0,

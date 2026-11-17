@@ -58,7 +58,10 @@ The verdicts:
 - **FLAG**: a measure is beyond its limit, or the scene was not held still on one side (its round failed: the round's
   `report.md` says why), or the two runs had other settings. The owner looks at the page and decides whether the
   difference is a fault of the candidate or a legitimate difference of renderers (see "After a flag").
-- **MISSING**: one side has no picture (the engine did not start, crashed, or the round failed before the picture).
+- **MISSING**: one side has no picture (the engine did not start, crashed, or the round failed before the picture). A
+  scene that was run and left no result on either side is MISSING too: it cannot drop out of the report.
+
+A folder of results is judged by the pictures inside it. It can be copied or moved and compared again.
 
 ## The scenes
 
@@ -186,6 +189,10 @@ The limits are in one file, `scripts/openfallout/picture_limits.json`:
 - `margin`: how far above its noise floor a scene's limit sits (the worst value x 1.5 plus a pad for each measure);
 - `scenes`: the limits of each scene, set from runs;
 - `noise_floor`: what those runs measured, with the date, the number of runs and the build.
+
+A scene's own limits take the place of the whole allowance. So the limits of a scene, and the allowance, must name
+all six measures and no other name. The tool refuses a limits file with a misspelled or missing measure (exit
+status 2), because such a measure would not be checked.
 
 The limit is set from the first runs, on the OpenGL build, before the Metal build is judged:
 
