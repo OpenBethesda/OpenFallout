@@ -1,6 +1,8 @@
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/util.hpp>
 
 #include <osg/Image>
+#include <osg/Texture2D>
 
 #include <algorithm>
 #include <cstdint>
@@ -260,5 +262,30 @@ namespace
         depth->allocateImage(1, 1, 1, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT);
         EXPECT_FALSE(SceneUtil::toOpenGLESFormat(*depth));
         EXPECT_EQ(depth->getInternalTextureFormat(), static_cast<GLint>(GL_DEPTH_COMPONENT));
+    }
+
+    // A depth texture read as a number (the rain and snow occluder's) is NEAREST-filtered in the Metal build, where a
+    // filtered one would read 0 everywhere; the OpenGL build keeps the filter asked for
+    TEST(SceneUtilDepthTextureFilterTest, a_depth_texture_read_without_comparison_gets_a_filter_the_build_samples)
+    {
+        osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
+        texture->setInternalFormat(GL_DEPTH_COMPONENT24);
+        SceneUtil::setDepthTextureFilter(*texture, osg::Texture::LINEAR);
+
+        const osg::Texture::FilterMode expected
+            = SceneUtil::GLDialect::sOpenGLES ? osg::Texture::NEAREST : osg::Texture::LINEAR;
+        EXPECT_EQ(texture->getFilter(osg::Texture::MIN_FILTER), expected);
+        EXPECT_EQ(texture->getFilter(osg::Texture::MAG_FILTER), expected);
+    }
+
+    TEST(SceneUtilDepthTextureFilterTest, a_comparing_depth_texture_keeps_the_filter_asked_for)
+    {
+        osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
+        texture->setInternalFormat(GL_DEPTH_COMPONENT24);
+        texture->setShadowComparison(true);
+        SceneUtil::setDepthTextureFilter(*texture, osg::Texture::LINEAR);
+
+        EXPECT_EQ(texture->getFilter(osg::Texture::MIN_FILTER), osg::Texture::LINEAR);
+        EXPECT_EQ(texture->getFilter(osg::Texture::MAG_FILTER), osg::Texture::LINEAR);
     }
 }

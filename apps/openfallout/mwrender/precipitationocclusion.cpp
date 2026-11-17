@@ -100,8 +100,7 @@ namespace OFRender
         mDepthTexture->setSourceType(GL_UNSIGNED_INT);
         mDepthTexture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_BORDER);
         mDepthTexture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_BORDER);
-        mDepthTexture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
-        mDepthTexture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
+        SceneUtil::setDepthTextureFilter(*mDepthTexture, osg::Texture::LINEAR);
         mDepthTexture->setBorderColor(
             SceneUtil::AutoDepth::isReversed() ? osg::Vec4(0, 0, 0, 0) : osg::Vec4(1, 1, 1, 1));
 

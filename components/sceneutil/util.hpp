@@ -134,6 +134,11 @@ namespace SceneUtil
     // images as they load and to images made in code.
     bool toOpenGLESFormat(osg::Image& image);
 
+    // Sets both filters of a depth texture. A depth texture read as a number (no comparison) is filtered as asked in
+    // desktop OpenGL; OpenGL ES 3.0 takes such a texture as incomplete unless it is NEAREST-filtered (every read then
+    // gives 0), so the Metal build gives it NEAREST. A comparing depth texture keeps the filter asked for in both.
+    void setDepthTextureFilter(osg::Texture& texture, osg::Texture::FilterMode filter);
+
     // Recover the presumed texture type for the given texture unit
     // It may be set as a state attribute or it may come from the used texture's name
     const std::string& getTextureType(const osg::StateSet& stateset, const osg::Texture& texture, unsigned int texUnit);

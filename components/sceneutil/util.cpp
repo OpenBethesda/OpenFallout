@@ -22,6 +22,8 @@
 #include <components/sceneutil/texturetype.hpp>
 #include <components/vfs/pathutil.hpp>
 
+#include "gldialect.hpp"
+
 namespace SceneUtil
 {
     namespace
@@ -394,6 +396,14 @@ namespace SceneUtil
             }
             return changed;
         }
+    }
+
+    void setDepthTextureFilter(osg::Texture& texture, osg::Texture::FilterMode filter)
+    {
+        if (GLDialect::sOpenGLES && !texture.getShadowComparison())
+            filter = osg::Texture::NEAREST;
+        texture.setFilter(osg::Texture::MIN_FILTER, filter);
+        texture.setFilter(osg::Texture::MAG_FILTER, filter);
     }
 
     bool toOpenGLESFormat(osg::Image& image)
