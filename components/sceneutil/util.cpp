@@ -277,6 +277,26 @@ namespace SceneUtil
         mOperationQueue->add(operation);
     }
 
+    bool mipmapsFit(const osg::Image& image, std::size_t dataSize)
+    {
+        for (unsigned int level = 0; level < image.getNumMipmapLevels(); ++level)
+        {
+            const int width = std::max(image.s() >> level, 1);
+            const int rows = std::max(image.t() >> level, 1) * std::max(image.r() >> level, 1);
+            const int rowLength = image.getRowLength() != 0 ? image.getRowLength() : width;
+            const std::size_t size = image.isCompressed()
+                ? osg::Image::computeImageSizeInBytes(std::max(image.s() >> level, 1), std::max(image.t() >> level, 1),
+                      std::max(image.r() >> level, 1), image.getPixelFormat(), image.getDataType(), image.getPacking())
+                : static_cast<std::size_t>(osg::Image::computeRowWidthInBytes(
+                      rowLength, image.getPixelFormat(), image.getDataType(), image.getPacking()))
+                    * rows;
+            const std::size_t offset = image.getMipmapOffset(level);
+            if (offset > dataSize || size > dataSize - offset)
+                return false;
+        }
+        return true;
+    }
+
     bool toRgbOrder(osg::Image& image)
     {
         const GLenum format = image.getPixelFormat();

@@ -122,6 +122,11 @@ namespace SceneUtil
     // Unlike osg::Image::computePixelFormat, this also covers compressed formats
     GLenum computeUnsizedPixelFormat(GLenum format);
 
+    // Whether every level of an image, at the size that follows from the first level's and at its stored offset, lies
+    // inside the first `dataSize` bytes of the image's data: what the graphics library and the conversions below read
+    // and write. An image made with sizes and offsets from a file must be checked against what was allocated.
+    bool mipmapsFit(const osg::Image& image, std::size_t dataSize);
+
     // Turns an 8-bit BGR or BGRA image, every mipmap of it, into RGB or RGBA in place, and says whether it did. OpenGL
     // ES uploads no BGR or BGRA pixels, so the Metal build does this to images as they load.
     bool toRgbOrder(osg::Image& image);

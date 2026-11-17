@@ -2318,6 +2318,7 @@ namespace NifOsg
 
             osg::ref_ptr<osg::Image> image(new osg::Image);
             const std::vector<unsigned char>& pixels = pixelData->mData;
+            std::size_t dataSize = pixels.size();
             switch (niPixelFormat.mFormat)
             {
                 case NiPixelFormat::Format::RGB:
@@ -2356,6 +2357,7 @@ namespace NifOsg
                     }
                     for (unsigned int& offset : mipmapOffsets)
                         offset *= numChannels;
+                    dataSize *= numChannels;
                     image->setImage(width, height, 1, pixelformat, pixelformat, GL_UNSIGNED_BYTE, data,
                         osg::Image::USE_NEW_DELETE, packing);
                     break;
@@ -2365,6 +2367,14 @@ namespace NifOsg
             }
 
             image->setMipmapLevels(mipmapOffsets);
+            // The graphics library and the conversion below take each level at the size that follows from the first
+            // level's, at its stored offset. A chain that does not fit the data at those sizes is not used.
+            if (!SceneUtil::mipmapsFit(*image, dataSize))
+            {
+                Log(Debug::Warning) << "Internal texture's mipmaps in " << mFilename
+                                    << " do not fit its data, using the first level only";
+                image->setMipmapLevels({});
+            }
 
             // OpenGL ES uploads no BGR or BGRA pixels: the picture gets the layout the image manager gives its own
             if constexpr (!SceneUtil::GLDialect::sUploadsBGR)

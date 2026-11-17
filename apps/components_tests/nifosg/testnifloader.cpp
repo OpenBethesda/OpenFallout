@@ -492,6 +492,44 @@ osg::Group {
         }
     }
 
+    // A model file's mipmaps are drawn and converted with the sizes that follow from the first level's: a chain whose
+    // levels at those sizes do not fit in the file's pixel data is not used, so nothing reads or writes past it
+    TEST_F(NifOsgLoaderTest, dropsMipmapsThatDoNotFitThePixelsOfTheModel)
+    {
+        Nif::NiPixelData pixels;
+        pixels.mRecordType = Nif::RC_NiPixelData;
+        pixels.mPixelFormat.mFormat = Nif::NiPixelFormat::Format::BGR;
+        // The second level says 1x1 at byte 48 and fits; at the 2x2 that follows from 4x4 it would reach byte 60
+        pixels.mMipmaps = { { 4, 4, 0 }, { 1, 1, 48 } };
+        pixels.mData.assign(51, 7);
+        Nif::NiSourceTexture source;
+        init(source);
+        source.mRecordType = Nif::RC_NiSourceTexture;
+        source.mExternal = 0;
+        source.mData = Nif::NiPixelDataPtr(&pixels);
+        Nif::NiTexturingProperty property;
+        init(property);
+        property.mRecordType = Nif::RC_NiTexturingProperty;
+        Nif::NiTexturingProperty::Texture base{};
+        base.mEnabled = true;
+        base.mSourceTexture = Nif::NiSourceTexturePtr(&source);
+        base.mClamp = 3;
+        property.mTextures.push_back(base);
+        Nif::NiAVObject node;
+        init(node);
+        node.mProperties.push_back(Nif::RecordPtrT<Nif::NiProperty>(&property));
+        Nif::NIFFile file(testNif);
+        file.mRoots.push_back(&node);
+
+        const osg::ref_ptr<osg::Node> result = Loader::load(file, &mImageManager, &mMaterialManager);
+
+        const osg::Image* image = firstTextureImageOf(*result);
+        ASSERT_NE(image, nullptr);
+        EXPECT_EQ(image->s(), 4);
+        EXPECT_EQ(image->t(), 4);
+        EXPECT_EQ(image->getNumMipmapLevels(), 1u);
+    }
+
     std::string formatOsgNodeForBSShaderProperty(std::string_view shaderPrefix)
     {
         std::ostringstream oss;
