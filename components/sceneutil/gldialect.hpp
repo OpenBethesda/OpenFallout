@@ -28,6 +28,13 @@ namespace SceneUtil::GLDialect
     // The extension that gives the GL_DEPTH_CLAMP switch (the same number in both)
     inline constexpr const char* sDepthClampExtension = sOpenGLES ? "GL_EXT_depth_clamp" : "GL_ARB_depth_clamp";
 
+    // A camera that draws into a depth texture alone gets a colour buffer from OpenSceneGraph unless it asks for none:
+    // a renderbuffer of the unsized GL_RGB format, which desktop OpenGL makes and OpenGL ES refuses (the frame buffer
+    // is then incomplete, and OpenSceneGraph falls back to copying, which cannot copy depth). OpenGL ES completes a
+    // frame buffer with a depth attachment alone, so the Metal build's depth-only cameras (shadow maps, the
+    // precipitation occluder) ask for no implicit attachment.
+    inline constexpr bool sDepthOnlyCamerasGetColourBuffer = !sOpenGLES;
+
     // OpenGL ES promises only RGBA read-back of the frame buffer, and has no BGR or BGRA upload formats.
     inline constexpr bool sReadsBackRGB = !sOpenGLES;
     inline constexpr bool sUploadsBGR = !sOpenGLES;

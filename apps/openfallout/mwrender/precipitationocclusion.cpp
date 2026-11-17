@@ -8,6 +8,7 @@
 #include <components/resource/resourcesystem.hpp>
 #include <components/resource/scenemanager.hpp>
 #include <components/sceneutil/depth.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/positionattitudetransform.hpp>
 #include <components/sceneutil/util.hpp>
 #include <components/settings/values.hpp>
@@ -113,6 +114,8 @@ namespace OFRender
         mCamera->setCullMask(Mask_Scene | Mask_Object | Mask_Static);
         mCamera->setViewport(0, 0, rttSize, rttSize);
         mCamera->attach(osg::Camera::DEPTH_BUFFER, mDepthTexture);
+        if constexpr (!SceneUtil::GLDialect::sDepthOnlyCamerasGetColourBuffer)
+            mCamera->setImplicitBufferAttachmentMask(0, 0);
         mCamera->addChild(mSceneNode);
         mCamera->setSmallFeatureCullingPixelSize(
             Settings::shaders().mWeatherParticleOcclusionSmallFeatureCullingPixelSize);

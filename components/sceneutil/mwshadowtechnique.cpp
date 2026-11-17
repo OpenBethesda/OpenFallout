@@ -644,6 +644,8 @@ MWShadowTechnique::ShadowData::ShadowData(MWShadowTechnique::ViewDependentData* 
         // attach the texture and use it as the color buffer.
         _camera->attach(osg::Camera::DEPTH_BUFFER, _texture.get());
         //_camera->attach(osg::Camera::COLOR_BUFFER, _texture.get());
+        if constexpr (!GLDialect::sDepthOnlyCamerasGetColourBuffer)
+            _camera->setImplicitBufferAttachmentMask(0, 0);
     }
 }
 
