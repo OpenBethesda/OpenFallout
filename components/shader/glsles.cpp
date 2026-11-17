@@ -111,6 +111,8 @@ namespace Shader
             "gl_MaxDrawBuffers",
             "gl_MinProgramTexelOffset",
             "gl_MaxProgramTexelOffset",
+            // GL_OVR_multiview has it under the same name in GLSL ES
+            "gl_ViewID_OVR",
         };
 
         constexpr std::array sSamplerTypes = { "sampler2D", "sampler3D", "samplerCube", "sampler2DShadow",
@@ -573,9 +575,22 @@ namespace Shader
             bool mClipVertex = false;
         };
 
+        // Whether the line that starts at pos is a #define
+        bool isDefineLine(const std::string& source, std::size_t pos)
+        {
+            std::size_t p = source.find_first_not_of(" \t", pos);
+            if (p == std::string::npos || source[p] != '#')
+                return false;
+            p = source.find_first_not_of(" \t", p + 1);
+            return p != std::string::npos && source.compare(p, 6, "define") == 0;
+        }
+
         // Renames what GLSL ES 3.00 calls differently, word by word. Comments are dropped (their line breaks kept):
         // OpenSceneGraph's own pass over the text would otherwise turn a built-in name in a comment into a second
-        // declaration. A built-in without an equivalent counts only on a line the preprocessor is not known to skip.
+        // declaration. A built-in without an equivalent counts only on a line the preprocessor is not known to skip. A
+        // #define body is text until the macro is used, and a header that both stages share (that of a post-processing
+        // pass) names built-ins of the other stage there: such a name is left alone, and the GLSL ES compiler reports it
+        // if the macro is ever used.
         std::string convertNames(
             const std::string& source, osg::Shader::Type stage, Uses& uses, const std::vector<bool>& skipped)
         {
@@ -584,6 +599,7 @@ namespace Shader
             std::string out;
             out.reserve(source.size() + source.size() / 8);
             std::size_t i = 0;
+            bool inDefine = isDefineLine(source, 0);
             while (i < source.size())
             {
                 const char c = source[i];
@@ -599,7 +615,18 @@ namespace Shader
                         out += ' ';
                     out.append(lineBreaks, '\n');
                     lineNumber += lineBreaks;
+                    if (lineBreaks > 0)
+                        inDefine = false;
                     i = end;
+                    continue;
+                }
+                if (c == '\n')
+                {
+                    const bool continued = i > 0 && source[i - 1] == '\\';
+                    inDefine = (inDefine && continued) || isDefineLine(source, i + 1);
+                    ++lineNumber;
+                    out += c;
+                    ++i;
                     continue;
                 }
                 if (std::isdigit(static_cast<unsigned char>(c))
@@ -614,8 +641,6 @@ namespace Shader
                 }
                 if (!isIdentifierStart(c))
                 {
-                    if (c == '\n')
-                        ++lineNumber;
                     out += c;
                     ++i;
                     continue;
@@ -710,7 +735,8 @@ namespace Shader
                 }
                 else
                 {
-                    if (!sKeptBuiltIns.contains(word) && !(lineNumber < skipped.size() && skipped[lineNumber]))
+                    if (!sKeptBuiltIns.contains(word) && !inDefine
+                        && !(lineNumber < skipped.size() && skipped[lineNumber]))
                         uses.mUnknown.insert(std::string(word));
                     out += word;
                 }

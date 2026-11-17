@@ -351,6 +351,44 @@ namespace
             body(result.mSource), HasSubstr("if (gl_FrontFacing) of_FragData[0] = gl_FragCoord; gl_FragDepth = 0.0;"));
     }
 
+    // A post-processing pass shares one header between its stages, with lines like these that only one stage expands
+    TEST(ShaderGlslEsTest, a_define_naming_a_built_in_of_the_other_stage_is_left_alone)
+    {
+        const GlslEsShader vertexResult = vertex(
+            "#version 120\n#define omw_FragColor gl_FragColor\n#define omw_Vertex gl_Vertex\n"
+            "void main() { gl_Position = omw_Vertex; }\n");
+        EXPECT_THAT(vertexResult.mErrors, IsEmpty());
+        EXPECT_THAT(vertexResult.mSource, HasSubstr("#define omw_FragColor gl_FragColor\n"));
+        EXPECT_THAT(vertexResult.mSource, HasSubstr("#define omw_Vertex osg_Vertex\n"));
+        EXPECT_THAT(vertexResult.mSource, HasSubstr("in vec4 osg_Vertex;"));
+        EXPECT_THAT(vertexResult.mSource, Not(HasSubstr("of_FragData")));
+
+        const GlslEsShader fragmentResult = fragment(
+            "#version 120\n#define omw_FragColor gl_FragColor\n#define omw_Vertex gl_Vertex\n"
+            "void main() { omw_FragColor = vec4(1.0); }\n");
+        EXPECT_THAT(fragmentResult.mErrors, IsEmpty());
+        EXPECT_THAT(fragmentResult.mSource, HasSubstr("#define omw_FragColor of_FragData[0]\n"));
+        EXPECT_THAT(fragmentResult.mSource, HasSubstr("layout(location = 0) out vec4 of_FragData[1];"));
+        EXPECT_THAT(fragmentResult.mSource, HasSubstr("#define omw_Vertex gl_Vertex\n"));
+        EXPECT_THAT(fragmentResult.mSource, Not(HasSubstr("osg_Vertex")));
+    }
+
+    TEST(ShaderGlslEsTest, a_built_in_of_the_other_stage_outside_a_define_is_an_error)
+    {
+        EXPECT_THAT(fragment("#version 120\nvoid main() { gl_FragColor = gl_Vertex; }\n").mErrors,
+            Contains(HasSubstr("gl_Vertex")));
+        EXPECT_THAT(vertex("#version 120\nvoid main() { gl_FragColor = vec4(1.0); }\n").mErrors,
+            Contains(HasSubstr("gl_FragColor")));
+    }
+
+    TEST(ShaderGlslEsTest, multiview_view_index_keeps_its_name)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n#if OMW_MULTIVIEW\nint view() { return int(gl_ViewID_OVR); }\n#endif\nvoid main() { }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(body(result.mSource), HasSubstr("int(gl_ViewID_OVR)"));
+    }
+
     TEST(ShaderGlslEsTest, desktop_built_ins_without_an_equivalent_are_errors)
     {
         const GlslEsShader result

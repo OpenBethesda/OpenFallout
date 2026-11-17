@@ -18,6 +18,7 @@ namespace SceneUtil::GLDialect
 
     // Shader text is written in GLSL 1.20; OpenGL ES 3.0 compiles only GLSL ES 3.00, so the shader manager converts it
     // and folds the separately linked library shaders into each shader (OpenGL ES links one shader object per stage).
+    // The passes of post-processing techniques (.omwfx) are converted the same way when they are compiled.
     inline constexpr bool sConvertsShadersToGlslEs = sOpenGLES;
 
     // OpenGL ES has no user clip planes (glClipPlane, gl_ClipVertex). The Metal build gives the shaders the planes as
@@ -30,11 +31,6 @@ namespace SceneUtil::GLDialect
     // OpenGL ES promises only RGBA read-back of the frame buffer, and has no BGR or BGRA upload formats.
     inline constexpr bool sReadsBackRGB = !sOpenGLES;
     inline constexpr bool sUploadsBGR = !sOpenGLES;
-
-    // Post-processing techniques (.omwfx) carry their own shaders in desktop GLSL 1.20 or 3.30, which are not yet
-    // turned into GLSL ES 3.00 as the engine's own shaders are; until they are, the Metal build keeps post-processing
-    // off at run time.
-    inline constexpr bool sHasPostProcessing = !sOpenGLES;
 
     // Suffix of the KHR_debug calls: OpenGL ES 3.0 has them only as extension functions. (The fixed-function switches,
     // texture LOD bias, per-draw-buffer switches and object labels OpenGL ES 3.0 lacks are dealt with once, when the

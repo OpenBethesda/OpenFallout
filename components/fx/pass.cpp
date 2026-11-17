@@ -1,6 +1,7 @@
 #include "pass.hpp"
 
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 
@@ -12,6 +13,7 @@
 #include <osg/StateSet>
 
 #include <components/resource/scenemanager.hpp>
+#include <components/shader/glsles.hpp>
 #include <components/sceneutil/lightmanager.hpp>
 #include <components/settings/values.hpp>
 #include <components/stereo/multiview.hpp>
@@ -370,14 +372,40 @@ float omw_EstimateFogCoverageFromUV(vec2 uv)
 
             mVertex->setName(mName);
             mFragment->setName(mName);
+
+            if (technique.getConvertToGlslEs())
+            {
+                convertToGlslEs(*mVertex);
+                convertToGlslEs(*mFragment);
+            }
         }
         else if (mType == Type::Compute)
         {
             mCompute->setShaderSource(getPassHeader(technique, preamble).append(mCompute->getShaderSource()));
             mCompute->setName(mName);
+
+            if (technique.getConvertToGlslEs())
+                convertToGlslEs(*mCompute);
         }
 
         mCompiled = true;
+    }
+
+    void Pass::convertToGlslEs(osg::Shader& shader) const
+    {
+        Shader::GlslEsShader converted = Shader::convertToGlslEs(shader.getShaderSource(), shader.getType());
+        // A technique's own shader text could give a uniform an initial value, which GLSL ES does not allow; none of
+        // the techniques the engine ships does, and the value would be lost, so it is refused like any other error
+        for (const Shader::UniformInitialiser& initialiser : converted.mUniformInitialisers)
+            converted.mErrors.push_back("uniform " + initialiser.mName + " has an initial value");
+        if (!converted.mErrors.empty())
+        {
+            std::string message = "pass '" + mName + "' cannot be converted to GLSL ES 3.00:";
+            for (const std::string& error : converted.mErrors)
+                message += " " + error + ";";
+            throw std::runtime_error(message);
+        }
+        shader.setShaderSource(converted.mSource);
     }
 
 }

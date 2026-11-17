@@ -1,7 +1,16 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
+#include <osg/Program>
+#include <osg/StateSet>
+
 #include <components/files/configurationmanager.hpp>
+#include <components/fx/pass.hpp>
 #include <components/fx/technique.hpp>
 #include <components/resource/imagemanager.hpp>
 #include <components/settings/settings.hpp>
@@ -140,8 +149,35 @@ namespace
     technique { passes = main; }
 )" };
 
+    constexpr VFS::Path::NormalizedView notConvertiblePath("shaders/not_convertible.omwfx");
+
+    TestingOpenMW::VFSTestFile notConvertible{ R"(
+    fragment main {
+        omw_In vec2 omw_TexCoord;
+
+        void main()
+        {
+            omw_FragColor = gl_LightSource[0].diffuse;
+        }
+    }
+    technique { passes = main; }
+)" };
+
     using namespace testing;
     using namespace Fx;
+
+    // The shaders of each pass of a compiled technique, as the post-processor gives them to the graphics library
+    std::vector<osg::ref_ptr<osg::Shader>> passShaders(Pass& pass)
+    {
+        osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet;
+        pass.prepareStateSet(stateSet, pass.getName());
+        std::vector<osg::ref_ptr<osg::Shader>> shaders;
+        if (const auto* program = dynamic_cast<const osg::Program*>(
+                stateSet->getAttribute(osg::StateAttribute::PROGRAM)))
+            for (unsigned int i = 0; i < program->getNumShaders(); ++i)
+                shaders.emplace_back(const_cast<osg::Shader*>(program->getShader(i)));
+        return shaders;
+    }
 
     struct TechniqueTest : Test
     {
@@ -161,6 +197,7 @@ namespace
                 { invalidNumberUnsignedLongPath, &invalidNumberUnsignedLong },
                 { invalidNumberHexFloatPath, &invalidNumberHexFloat },
                 { invalidNumberDoublePath, &invalidNumberDouble },
+                { notConvertiblePath, &notConvertible },
             }))
             , mImageManager(mVFS.get(), 0)
         {
@@ -170,6 +207,16 @@ namespace
         {
             mTechnique = std::make_unique<Technique>(
                 *mVFS.get(), mImageManager, Technique::makeFileName(name), name, 1, 1, true, true);
+            mTechnique->compile();
+        }
+
+        // As the Metal build compiles a technique: no uniform buffer (OpenGL ES 3.0 reports GLSL ES 3.00, below the 3.30
+        // the buffer path asks for) and the passes converted to GLSL ES 3.00
+        void compileForGlslEs(const std::string& name, bool convert = true)
+        {
+            mTechnique = std::make_unique<Technique>(
+                *mVFS.get(), mImageManager, Technique::makeFileName(name), name, 1, 1, false, true);
+            mTechnique->setConvertToGlslEs(convert);
             mTechnique->compile();
         }
 
@@ -268,5 +315,87 @@ namespace
     {
         expectFailure("invalid_number_ulong", "number out of range");
         expectFailure("invalid_number_double", "number out of range");
+    }
+
+    TEST_F(TechniqueTest, passes_are_glsl_es_300_when_the_build_converts_shaders)
+    {
+        compileForGlslEs("rendertarget_properties");
+        ASSERT_TRUE(mTechnique->isValid()) << mTechnique->getLastError();
+        ASSERT_EQ(mTechnique->getPasses().size(), 2);
+        for (const auto& pass : mTechnique->getPasses())
+        {
+            const auto shaders = passShaders(*pass);
+            ASSERT_EQ(shaders.size(), 2);
+            for (const auto& shader : shaders)
+            {
+                EXPECT_THAT(shader->getShaderSource(), StartsWith("#version 300 es\n")) << pass->getName();
+                EXPECT_THAT(shader->getShaderSource(), Not(HasSubstr("gl_FragColor")));
+                EXPECT_THAT(shader->getShaderSource(), Not(HasSubstr("texture2D")));
+            }
+        }
+    }
+
+    TEST_F(TechniqueTest, passes_stay_glsl_120_when_the_build_does_not_convert_shaders)
+    {
+        compileForGlslEs("rendertarget_properties", false);
+        ASSERT_TRUE(mTechnique->isValid()) << mTechnique->getLastError();
+        for (const auto& pass : mTechnique->getPasses())
+            for (const auto& shader : passShaders(*pass))
+            {
+                EXPECT_THAT(shader->getShaderSource(), HasSubstr("#version 120"));
+                EXPECT_THAT(shader->getShaderSource(), Not(HasSubstr("#version 300 es")));
+            }
+    }
+
+    TEST_F(TechniqueTest, a_pass_that_cannot_be_converted_fails_its_technique)
+    {
+        compileForGlslEs("not_convertible");
+        EXPECT_FALSE(mTechnique->isValid());
+        EXPECT_EQ(mTechnique->getStatus(), Technique::Status::Parse_Error);
+        EXPECT_THAT(mTechnique->getLastError(), HasSubstr("GLSL ES 3.00"));
+        EXPECT_THAT(mTechnique->getLastError(), HasSubstr("gl_LightSource"));
+    }
+
+    // Every post-processing technique the engine ships compiles to GLSL ES 3.00 passes the way the Metal build makes
+    // them. With OPENFALLOUT_GLSL_ES_DUMP=<folder> the passes are written there, for a compile check against ANGLE.
+    TEST(TechniqueGlslEsCorpusTest, every_technique_the_engine_ships_converts)
+    {
+        const std::filesystem::path root
+            = std::filesystem::path(OPENFALLOUT_PROJECT_SOURCE_DIR) / "files" / "data" / "shaders";
+        std::vector<std::unique_ptr<TestingOpenMW::VFSTestFile>> files;
+        std::vector<std::string> names;
+        VFS::FileMap map;
+        for (const auto& entry : std::filesystem::directory_iterator(root))
+        {
+            if (entry.path().extension().string() != "." + std::string(Technique::sExt))
+                continue;
+            std::ifstream stream(entry.path());
+            std::stringstream text;
+            text << stream.rdbuf();
+            files.push_back(std::make_unique<TestingOpenMW::VFSTestFile>(text.str()));
+            names.push_back(entry.path().stem().string());
+            map.emplace(Technique::makeFileName(names.back()), files.back().get());
+        }
+        ASSERT_FALSE(names.empty());
+        const std::unique_ptr<VFS::Manager> vfs = TestingOpenMW::createTestVFS(std::move(map));
+        Resource::ImageManager imageManager(vfs.get(), 0);
+        const char* dump = std::getenv("OPENFALLOUT_GLSL_ES_DUMP");
+
+        for (const std::string& name : names)
+        {
+            Technique technique(*vfs, imageManager, Technique::makeFileName(name), name, 1280, 720, false, true);
+            technique.setConvertToGlslEs(true);
+            EXPECT_TRUE(technique.compile()) << name << ": " << technique.getLastError();
+            for (const auto& pass : technique.getPasses())
+                for (const auto& shader : passShaders(*pass))
+                {
+                    EXPECT_THAT(shader->getShaderSource(), StartsWith("#version 300 es\n")) << name;
+                    if (dump)
+                        std::ofstream(std::filesystem::path(dump)
+                            / ("fx_" + name + "_" + pass->getName()
+                                + (shader->getType() == osg::Shader::VERTEX ? ".vert" : ".frag")))
+                            << shader->getShaderSource();
+                }
+        }
     }
 }
