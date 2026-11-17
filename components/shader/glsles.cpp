@@ -119,15 +119,384 @@ namespace Shader
         constexpr std::string_view sClipVertex = "of_ClipVertex";
         constexpr std::string_view sFragData = "of_FragData";
 
+        // The text with every comment turned into spaces, line breaks kept
+        std::string blankComments(std::string_view source)
+        {
+            std::string out(source);
+            std::size_t i = 0;
+            while (i + 1 < out.size())
+            {
+                if (out[i] != '/' || (out[i + 1] != '/' && out[i + 1] != '*'))
+                {
+                    ++i;
+                    continue;
+                }
+                const bool line = out[i + 1] == '/';
+                std::size_t end = line ? out.find('\n', i) : out.find("*/", i + 2);
+                end = end == std::string::npos ? out.size() : (line ? end : end + 2);
+                for (; i < end; ++i)
+                    if (out[i] != '\n')
+                        out[i] = ' ';
+            }
+            return out;
+        }
+
+        // Which lines the GLSL preprocessor keeps, as far as the text alone decides it. The template defines are
+        // already written in, so most conditions are numbers; a condition on something only the graphics library
+        // knows (an extension macro, for example) leaves its lines undecided.
+        class Branches
+        {
+        public:
+            enum class Active
+            {
+                No,
+                Yes,
+                Unknown,
+            };
+
+            // Reads one line; true if it was a conditional or #define/#undef directive
+            bool read(std::string_view line)
+            {
+                static const std::regex directive(R"(^\s*#\s*(\w+)\s*(.*?)\s*$)");
+                std::match_results<std::string_view::const_iterator> match;
+                if (!std::regex_match(line.begin(), line.end(), match, directive))
+                    return false;
+                const std::string keyword = match[1].str();
+                const std::string rest = match[2].str();
+                if (keyword == "if" || keyword == "ifdef" || keyword == "ifndef")
+                {
+                    Active condition = Active::Unknown;
+                    if (keyword == "if")
+                        condition = evaluate(rest);
+                    else
+                    {
+                        condition = isDefined(rest);
+                        if (keyword == "ifndef")
+                            condition = negate(condition);
+                    }
+                    mStack.push_back({ active(), condition, condition });
+                    return true;
+                }
+                if (keyword == "elif" || keyword == "else")
+                {
+                    if (mStack.empty())
+                        return true;
+                    Group& group = mStack.back();
+                    const Active previous = group.mTaken;
+                    Active condition = keyword == "else" ? Active::Yes : evaluate(rest);
+                    // The branch is taken if no earlier branch was and this condition holds
+                    group.mCurrent = both(negate(previous), condition);
+                    group.mTaken = either(previous, condition);
+                    return true;
+                }
+                if (keyword == "endif")
+                {
+                    if (!mStack.empty())
+                        mStack.pop_back();
+                    return true;
+                }
+                if (keyword == "define" || keyword == "undef")
+                {
+                    const Active here = active();
+                    static const std::regex name(R"(^([A-Za-z_]\w*)(\()?\s*(.*)$)");
+                    std::smatch nameMatch;
+                    if (here == Active::No || !std::regex_match(rest, nameMatch, name))
+                        return true;
+                    Macro& macro = mMacros[nameMatch[1].str()];
+                    if (here == Active::Unknown || nameMatch[2].matched)
+                        macro = { Active::Unknown, "" };
+                    else if (keyword == "define")
+                        macro = { Active::Yes, nameMatch[3].str() };
+                    else
+                        macro = { Active::No, "" };
+                    return true;
+                }
+                return false;
+            }
+
+            Active active() const
+            {
+                Active result = Active::Yes;
+                for (const Group& group : mStack)
+                    result = both(result, both(group.mOuter, group.mCurrent));
+                return result;
+            }
+
+        private:
+            struct Group
+            {
+                Active mOuter;
+                Active mCurrent;
+                Active mTaken;
+            };
+
+            struct Macro
+            {
+                Active mDefined = Active::No;
+                std::string mValue;
+            };
+
+            static Active negate(Active value)
+            {
+                return value == Active::Unknown ? value : (value == Active::Yes ? Active::No : Active::Yes);
+            }
+
+            static Active both(Active a, Active b)
+            {
+                if (a == Active::No || b == Active::No)
+                    return Active::No;
+                return a == Active::Yes && b == Active::Yes ? Active::Yes : Active::Unknown;
+            }
+
+            static Active either(Active a, Active b)
+            {
+                if (a == Active::Yes || b == Active::Yes)
+                    return Active::Yes;
+                return a == Active::No && b == Active::No ? Active::No : Active::Unknown;
+            }
+
+            Active isDefined(std::string_view name) const
+            {
+                const std::string key(name);
+                if (const auto it = mMacros.find(key); it != mMacros.end())
+                    return it->second.mDefined;
+                // The converted text is GLSL ES 3.00
+                if (key == "GL_ES" || key == "__VERSION__" || key == "__LINE__" || key == "__FILE__"
+                    || key == "GL_FRAGMENT_PRECISION_HIGH")
+                    return Active::Yes;
+                if (key.starts_with("GL_") || key.starts_with("__"))
+                    return Active::Unknown;
+                return Active::No;
+            }
+
+            Active evaluate(const std::string& expression) const
+            {
+                Expression parser{ *this, expression, 0, 0 };
+                const std::optional<long long> value = parser.parse();
+                if (!value)
+                    return Active::Unknown;
+                return *value != 0 ? Active::Yes : Active::No;
+            }
+
+            // An integer #if expression: numbers, defined, macros with a number as value, the C operators.
+            // std::nullopt for anything else.
+            struct Expression
+            {
+                const Branches& mBranches;
+                std::string mText;
+                std::size_t mPos;
+                int mDepth;
+
+                void skipSpace()
+                {
+                    while (mPos < mText.size() && std::isspace(static_cast<unsigned char>(mText[mPos])))
+                        ++mPos;
+                }
+
+                bool take(std::string_view token)
+                {
+                    skipSpace();
+                    if (mText.compare(mPos, token.size(), token) != 0)
+                        return false;
+                    // "<" must not take the first half of "<<" or "<=", and so on
+                    if (token.size() == 1 && mPos + 1 < mText.size())
+                    {
+                        const char next = mText[mPos + 1];
+                        if ((token == "<" || token == ">") && (next == token[0] || next == '='))
+                            return false;
+                        if ((token == "&" || token == "|") && next == token[0])
+                            return false;
+                        if ((token == "!" || token == "=") && next == '=')
+                            return false;
+                    }
+                    mPos += token.size();
+                    return true;
+                }
+
+                std::optional<long long> parse()
+                {
+                    std::optional<long long> value = binary(0);
+                    skipSpace();
+                    if (mPos != mText.size())
+                        return std::nullopt;
+                    return value;
+                }
+
+                std::optional<long long> binary(int level)
+                {
+                    static const std::array<std::vector<std::string_view>, 10> levels = { {
+                        { "||" },
+                        { "&&" },
+                        { "|" },
+                        { "^" },
+                        { "&" },
+                        { "==", "!=" },
+                        { "<=", ">=", "<", ">" },
+                        { "<<", ">>" },
+                        { "+", "-" },
+                        { "*", "/", "%" },
+                    } };
+                    if (level == static_cast<int>(levels.size()))
+                        return unary();
+                    std::optional<long long> left = binary(level + 1);
+                    while (left)
+                    {
+                        std::string_view op;
+                        for (std::string_view candidate : levels[level])
+                            if (take(candidate))
+                            {
+                                op = candidate;
+                                break;
+                            }
+                        if (op.empty())
+                            return left;
+                        const std::optional<long long> right = binary(level + 1);
+                        if (!right)
+                            return std::nullopt;
+                        const long long a = *left;
+                        const long long b = *right;
+                        if ((op == "/" || op == "%") && b == 0)
+                            return std::nullopt;
+                        if (op == "||")
+                            left = a || b;
+                        else if (op == "&&")
+                            left = a && b;
+                        else if (op == "|")
+                            left = a | b;
+                        else if (op == "^")
+                            left = a ^ b;
+                        else if (op == "&")
+                            left = a & b;
+                        else if (op == "==")
+                            left = a == b;
+                        else if (op == "!=")
+                            left = a != b;
+                        else if (op == "<=")
+                            left = a <= b;
+                        else if (op == ">=")
+                            left = a >= b;
+                        else if (op == "<")
+                            left = a < b;
+                        else if (op == ">")
+                            left = a > b;
+                        else if (op == "<<")
+                            left = (b < 0 || b > 62) ? std::optional<long long>() : a << b;
+                        else if (op == ">>")
+                            left = (b < 0 || b > 62) ? std::optional<long long>() : a >> b;
+                        else if (op == "+")
+                            left = a + b;
+                        else if (op == "-")
+                            left = a - b;
+                        else if (op == "*")
+                            left = a * b;
+                        else if (op == "/")
+                            left = a / b;
+                        else
+                            left = a % b;
+                    }
+                    return left;
+                }
+
+                std::optional<long long> unary()
+                {
+                    if (take("!"))
+                    {
+                        const std::optional<long long> value = unary();
+                        return value ? std::optional<long long>(!*value) : std::nullopt;
+                    }
+                    if (take("-"))
+                    {
+                        const std::optional<long long> value = unary();
+                        return value ? std::optional<long long>(-*value) : std::nullopt;
+                    }
+                    if (take("+"))
+                        return unary();
+                    if (take("~"))
+                    {
+                        const std::optional<long long> value = unary();
+                        return value ? std::optional<long long>(~*value) : std::nullopt;
+                    }
+                    if (take("("))
+                    {
+                        const std::optional<long long> value = binary(0);
+                        if (!take(")"))
+                            return std::nullopt;
+                        return value;
+                    }
+                    skipSpace();
+                    if (mPos >= mText.size())
+                        return std::nullopt;
+                    if (std::isdigit(static_cast<unsigned char>(mText[mPos])))
+                    {
+                        std::size_t end = mPos;
+                        while (end < mText.size() && isIdentifierPart(mText[end]))
+                            ++end;
+                        std::string digits = mText.substr(mPos, end - mPos);
+                        mPos = end;
+                        while (!digits.empty() && (digits.back() == 'u' || digits.back() == 'U'))
+                            digits.pop_back();
+                        // Octal and hexadecimal numbers are left undecided
+                        if (digits.empty() || (digits.size() > 1 && digits.front() == '0')
+                            || !std::all_of(digits.begin(), digits.end(),
+                                [](char d) { return std::isdigit(static_cast<unsigned char>(d)); }))
+                            return std::nullopt;
+                        return Misc::StringUtils::toNumeric<long long>(digits, 0);
+                    }
+                    if (!isIdentifierStart(mText[mPos]))
+                        return std::nullopt;
+                    std::size_t end = mPos;
+                    while (end < mText.size() && isIdentifierPart(mText[end]))
+                        ++end;
+                    const std::string word = mText.substr(mPos, end - mPos);
+                    mPos = end;
+                    if (word == "defined")
+                    {
+                        const bool parenthesis = take("(");
+                        skipSpace();
+                        std::size_t nameEnd = mPos;
+                        while (nameEnd < mText.size() && isIdentifierPart(mText[nameEnd]))
+                            ++nameEnd;
+                        const std::string name = mText.substr(mPos, nameEnd - mPos);
+                        mPos = nameEnd;
+                        if (name.empty() || (parenthesis && !take(")")))
+                            return std::nullopt;
+                        const Active defined = mBranches.isDefined(name);
+                        if (defined == Active::Unknown)
+                            return std::nullopt;
+                        return defined == Active::Yes ? 1 : 0;
+                    }
+                    if (word == "__VERSION__")
+                        return 300;
+                    if (word == "GL_ES" || word == "GL_FRAGMENT_PRECISION_HIGH")
+                        return 1;
+                    // A macro the text defines with a value; GLSL has no value for an undefined name
+                    const auto it = mBranches.mMacros.find(word);
+                    if (it == mBranches.mMacros.end() || it->second.mDefined != Active::Yes || mDepth > 16)
+                        return std::nullopt;
+                    Expression inner{ mBranches, it->second.mValue, 0, mDepth + 1 };
+                    return inner.parse();
+                }
+            };
+
+            std::vector<Group> mStack;
+            std::map<std::string, Macro> mMacros;
+        };
+
         // Removes #version and #extension lines (keeping the line, so that line numbers stay right) and the uniform
-        // initialisers GLSL ES does not allow.
-        void convertLines(std::string_view source, GlslEsShader& result, std::string& out)
+        // initialisers GLSL ES does not allow. Comments are blanked first; an initialiser counts only in text the
+        // preprocessor keeps.
+        void convertLines(std::string_view original, GlslEsShader& result, std::string& out)
         {
             static const std::regex version(R"(^\s*#\s*version\s+(\d+).*$)");
             static const std::regex extension(R"(^\s*#\s*extension\b.*$)");
             static const std::regex initialiser(
                 R"(^(\s*uniform\s+([A-Za-z_]\w*)\s+([A-Za-z_]\w*))\s*=\s*([^;]*);(.*)$)");
             static const std::regex anyInitialiser(R"(^\s*uniform\b[^;]*=)");
+
+            const std::string code = blankComments(original);
+            const std::string_view source = code;
+            Branches branches;
+            std::map<std::string, UniformInitialiser> taken;
 
             std::size_t pos = 0;
             while (pos < source.size())
@@ -136,7 +505,9 @@ namespace Shader
                 const bool lastLine = end == std::string_view::npos;
                 if (lastLine)
                     end = source.size();
+                // Read without comments, written as it was
                 const std::string line(source.substr(pos, end - pos));
+                const std::string_view text = original.substr(pos, end - pos);
                 std::smatch match;
                 if (std::regex_match(line, match, version))
                 {
@@ -148,16 +519,36 @@ namespace Shader
                 else if (std::regex_match(line, extension))
                 {
                 }
+                else if (branches.read(line))
+                    out += text;
+                else if (branches.active() == Branches::Active::No)
+                    // The compiler skips these lines; an initialiser here is not this shader's
+                    out += text;
+                else if (branches.active() == Branches::Active::Unknown && std::regex_search(line, anyInitialiser))
+                {
+                    result.mErrors.push_back(
+                        "uniform initialiser in a preprocessor branch that is decided only when compiling: "
+                        + std::string(text));
+                    out += text;
+                }
                 else if (std::regex_match(line, match, initialiser))
                 {
-                    result.mUniformInitialisers.push_back({ match[2].str(), match[3].str(), match[4].str() });
-                    out += match[1].str() + ";" + match[5].str();
+                    UniformInitialiser value{ match[2].str(), match[3].str(), match[4].str() };
+                    while (!value.mValue.empty() && std::isspace(static_cast<unsigned char>(value.mValue.back())))
+                        value.mValue.pop_back();
+                    if (const auto [it, added] = taken.emplace(value.mName, value); added)
+                        result.mUniformInitialisers.push_back(std::move(value));
+                    else if (it->second.mType != value.mType || it->second.mValue != value.mValue)
+                        result.mErrors.push_back(std::format("uniform {} is given two initial values: {} {} and {} {}",
+                            value.mName, it->second.mType, it->second.mValue, value.mType, value.mValue));
+                    out += match[1].str() + ";";
+                    out += text.substr(static_cast<std::size_t>(match.position(5)));
                 }
                 else
                 {
                     if (std::regex_search(line, anyInitialiser))
-                        result.mErrors.push_back("uniform initialiser not understood: " + line);
-                    out += line;
+                        result.mErrors.push_back("uniform initialiser not understood: " + std::string(text));
+                    out += text;
                 }
                 if (!lastLine)
                     out += '\n';

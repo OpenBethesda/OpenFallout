@@ -30,6 +30,26 @@
 
 namespace
 {
+    // The values of the uniform initialisers the GLSL ES conversion took out of a shader ride on the shader itself, so
+    // that a shader rebuilt for new defines or by a hot reload brings its new values to every program that has it
+    struct InitialValues : osg::Referenced
+    {
+        std::vector<osg::ref_ptr<osg::Uniform>> mValues;
+    };
+
+    void setInitialValues(osg::Shader& shader, std::vector<osg::ref_ptr<osg::Uniform>>&& values)
+    {
+        if (values.empty())
+        {
+            if (shader.getUserData() != nullptr)
+                shader.setUserData(nullptr);
+            return;
+        }
+        osg::ref_ptr<InitialValues> data = new InitialValues;
+        data->mValues = std::move(values);
+        shader.setUserData(data.get());
+    }
+
     osg::Shader::Type getShaderType(const std::string& templateName)
     {
         std::string_view ext = Misc::getFileExtension(templateName);
@@ -288,6 +308,7 @@ namespace Shader
                             break;
                         }
                         shaderIt->second->setShaderSource(shaderSource);
+                        setInitialValues(*shaderIt->second, std::move(initialValues));
                     }
                 }
             }
@@ -551,8 +572,7 @@ namespace Shader
 
             osg::ref_ptr<osg::Shader> shader(new osg::Shader(shaderType));
             shader->setShaderSource(shaderSource);
-            if (!initialValues.empty())
-                mInitialValues[shader] = std::move(initialValues);
+            setInitialValues(*shader, std::move(initialValues));
             // Assign a unique prefix to allow the SharedStateManager to compare shaders efficiently.
             // Append shader source filename for debugging.
             static unsigned int counter = 0;
@@ -661,6 +681,15 @@ namespace Shader
         return true;
     }
 
+    std::vector<osg::ref_ptr<osg::Uniform>> getInitialValues(const osg::Program& program)
+    {
+        std::vector<osg::ref_ptr<osg::Uniform>> values;
+        for (unsigned int i = 0; i < program.getNumShaders(); ++i)
+            if (const auto* data = dynamic_cast<const InitialValues*>(program.getShader(i)->getUserData()))
+                values.insert(values.end(), data->mValues.begin(), data->mValues.end());
+        return values;
+    }
+
     class SamplerProgram : public osg::Program
     {
     public:
@@ -674,20 +703,12 @@ namespace Shader
 
         bool hasSamplers(const ShaderManager::SamplerBindingMap& samplers) const;
 
-        // Uniforms whose shader text gave them an initial value the graphics library could not take (GLSL ES has no
-        // uniform initialisers): set each time the program is linked, before the state set's own values
-        void addInitialValues(const std::vector<osg::ref_ptr<osg::Uniform>>& values)
-        {
-            mInitialValues.insert(mInitialValues.end(), values.begin(), values.end());
-        }
-
         void apply(osg::State& state) const override;
 
         void resizeGLObjectBuffers(unsigned int maxSize) override;
 
     private:
         std::vector<osg::ref_ptr<osg::Uniform>> mSamplers;
-        std::vector<osg::ref_ptr<osg::Uniform>> mInitialValues;
         mutable osg::buffered_value<const PerContextProgram*> mApplied;
     };
 
@@ -711,7 +732,6 @@ namespace Shader
         : SamplerProgram({}, other, copyop)
     {
         mSamplers = other.mSamplers;
-        mInitialValues = other.mInitialValues;
     }
 
     bool SamplerProgram::hasSamplers(const ShaderManager::SamplerBindingMap& samplers) const
@@ -743,7 +763,8 @@ namespace Shader
         if (applied == pcp && !relink)
             return;
 
-        for (const osg::ref_ptr<osg::Uniform>& value : mInitialValues)
+        // Set before the state set's own values, as GLSL does with initialisers
+        for (const osg::ref_ptr<osg::Uniform>& value : getInitialValues(*this))
             pcp->apply(*value);
         for (const osg::ref_ptr<osg::Uniform>& sampler : mSamplers)
             pcp->apply(*sampler);
@@ -785,9 +806,6 @@ namespace Shader
             program->addShader(fragmentShader);
             addLinkedShaders(vertexShader, program);
             addLinkedShaders(fragmentShader, program);
-            for (const osg::ref_ptr<osg::Shader>& shader : { vertexShader, fragmentShader })
-                if (const auto values = mInitialValues.find(shader); values != mInitialValues.end())
-                    program->addInitialValues(values->second);
             found = mPrograms.insert(std::make_pair(std::make_pair(vertexShader, fragmentShader), program)).first;
         }
         else
@@ -848,6 +866,7 @@ namespace Shader
                 // put a working one in later.
                 continue;
             shader->setShaderSource(shaderSource);
+            setInitialValues(*shader, std::move(initialValues));
 
             getLinkedShaders(shader, linkedShaderNames, defines);
         }

@@ -136,10 +136,6 @@ namespace Shader
         typedef std::map<osg::ref_ptr<osg::Shader>, ShaderList> LinkedShadersMap;
         LinkedShadersMap mLinkedShaders;
 
-        // Values of uniform initialisers that the GLSL ES conversion took out of a shader; a program sets them itself
-        // each time it is linked, as GLSL does with initialisers
-        std::map<osg::ref_ptr<osg::Shader>, UniformList> mInitialValues;
-
         bool mConvertToGlslEs;
 
         std::mutex mMutex;
@@ -169,6 +165,11 @@ namespace Shader
         const std::string& templateName);
 
     ShaderManager::DefineMap getDefaultDefines();
+
+    /// The uniform values a program made by the ShaderManager sets each time it is linked: those of the uniform
+    /// initialisers the GLSL ES conversion took out of its shaders (GLSL ES has none). They follow the shaders' current
+    /// text, also after a rebuild for new defines or a hot reload. Always empty in the OpenGL build.
+    std::vector<osg::ref_ptr<osg::Uniform>> getInitialValues(const osg::Program& program);
 }
 
 #endif

@@ -77,6 +77,68 @@ namespace
         EXPECT_THAT(shader->getShaderSource(), HasSubstr("float foo() { return 2.5; }"));
     }
 
+    // GLSL ES has no uniform initialisers: the program sets the values the conversion took out when it is linked
+    float initialValue(const osg::Program& program, const std::string& name)
+    {
+        float value = -1;
+        for (const osg::ref_ptr<osg::Uniform>& uniform : getInitialValues(program))
+            if (uniform->getName() == name)
+                EXPECT_TRUE(uniform->get(value));
+        return value;
+    }
+
+    TEST_F(ShaderManagerGlslEsTest, a_program_sets_the_initial_values_of_its_shaders)
+    {
+        const std::string vertex = write(
+            "main.vert", "#version 120\nuniform float fade = 0.5;\nvoid main() { gl_Position = gl_Vertex * fade; }\n");
+        const std::string fragment = write(
+            "main.frag", "#version 120\nuniform float alpha = 0.25;\nvoid main() { gl_FragColor = vec4(alpha); }\n");
+        const osg::ref_ptr<osg::Program> program
+            = mManager.getProgram(mManager.getShader(vertex, {}, osg::Shader::VERTEX),
+                mManager.getShader(fragment, {}, osg::Shader::FRAGMENT));
+        ASSERT_TRUE(program);
+        EXPECT_EQ(initialValue(*program, "fade"), 0.5f);
+        EXPECT_EQ(initialValue(*program, "alpha"), 0.25f);
+    }
+
+    TEST_F(ShaderManagerGlslEsTest, a_shader_rebuilt_for_new_defines_brings_its_new_initial_values)
+    {
+        ShaderManager::DefineMap globalDefines = getDefaultDefines();
+        globalDefines["fadeValue"] = "0.5";
+        mManager.setGlobalDefines(globalDefines);
+        const std::string vertex = write("main.vert",
+            "#version 120\nuniform float fade = @fadeValue;\nvoid main() { gl_Position = gl_Vertex * fade; }\n");
+        const std::string fragment = write("main.frag", "#version 120\nvoid main() { gl_FragColor = vec4(1.0); }\n");
+        const osg::ref_ptr<osg::Program> program
+            = mManager.getProgram(mManager.getShader(vertex, {}, osg::Shader::VERTEX),
+                mManager.getShader(fragment, {}, osg::Shader::FRAGMENT));
+        EXPECT_EQ(initialValue(*program, "fade"), 0.5f);
+
+        globalDefines["fadeValue"] = "2.0";
+        mManager.setGlobalDefines(globalDefines);
+        EXPECT_EQ(initialValue(*program, "fade"), 2.0f);
+    }
+
+    TEST_F(ShaderManagerGlslEsTest, a_hot_reloaded_shader_brings_its_new_initial_values)
+    {
+        const std::string vertex = write(
+            "main.vert", "#version 120\nuniform float fade = 0.5;\nvoid main() { gl_Position = gl_Vertex * fade; }\n");
+        const std::string fragment = write("main.frag", "#version 120\nvoid main() { gl_FragColor = vec4(1.0); }\n");
+        const osg::ref_ptr<osg::Program> program
+            = mManager.getProgram(mManager.getShader(vertex, {}, osg::Shader::VERTEX),
+                mManager.getShader(fragment, {}, osg::Shader::FRAGMENT));
+        EXPECT_EQ(initialValue(*program, "fade"), 0.5f);
+
+        write(
+            "main.vert", "#version 120\nuniform float fade = 3.0;\nvoid main() { gl_Position = gl_Vertex * fade; }\n");
+        std::filesystem::last_write_time(TestingOpenMW::outputFilePathWithSubDir(vertex),
+            std::filesystem::file_time_type::clock::now() + std::chrono::hours(1));
+        osgViewer::Viewer viewer;
+        mManager.triggerShaderReload();
+        mManager.update(viewer);
+        EXPECT_EQ(initialValue(*program, "fade"), 3.0f);
+    }
+
     TEST_F(ShaderManagerGlslEsTest, a_hot_reload_that_cannot_read_a_linked_template_keeps_the_previous_text)
     {
         const std::string library = write("library.glsl", "#version 120\nfloat foo() { return 1.0; }\n");

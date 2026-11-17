@@ -216,6 +216,71 @@ namespace
         EXPECT_EQ(result.mUniformInitialisers[1].mValue, "true");
     }
 
+    TEST(ShaderGlslEsTest, an_initialiser_inside_a_comment_is_not_taken)
+    {
+        const GlslEsShader result = vertex(
+            "#version 120\n"
+            "/* uniform float a = 1.0;\n"
+            "uniform float b = 2.0; */\n"
+            "// uniform float c = 3.0;\n"
+            "uniform float a; /* = 4.0; */\n"
+            "void main() { }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mUniformInitialisers, IsEmpty());
+    }
+
+    TEST(ShaderGlslEsTest, an_initialiser_inside_an_inactive_branch_is_not_taken)
+    {
+        const GlslEsShader result = vertex(
+            "#version 120\n"
+            "#define LEVEL 2\n"
+            "#if 0\n"
+            "uniform float a = 1.0;\n"
+            "#elif LEVEL > 1 && defined(LEVEL)\n"
+            "uniform float a = 2.0;\n"
+            "#else\n"
+            "uniform float a = 3.0;\n"
+            "#endif\n"
+            "#ifdef MISSING\n"
+            "uniform bool b = true;\n"
+            "#else\n"
+            "  #ifndef LEVEL\n"
+            "uniform bool b = true;\n"
+            "  #endif\n"
+            "uniform bool b = false;\n"
+            "#endif\n"
+            "void main() { }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        ASSERT_EQ(result.mUniformInitialisers.size(), 2);
+        EXPECT_EQ(result.mUniformInitialisers[0].mName, "a");
+        EXPECT_EQ(result.mUniformInitialisers[0].mValue, "2.0");
+        EXPECT_EQ(result.mUniformInitialisers[1].mName, "b");
+        EXPECT_EQ(result.mUniformInitialisers[1].mValue, "false");
+    }
+
+    TEST(ShaderGlslEsTest, an_initialiser_folded_in_twice_is_taken_once)
+    {
+        const GlslEsShader result = vertex(foldLinkedShaders("#version 120\nuniform bool b = true;\nvoid main() { }\n",
+            { "#version 120\nuniform bool b = true;\nvoid foo() { }\n" }));
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        ASSERT_EQ(result.mUniformInitialisers.size(), 1);
+        EXPECT_EQ(result.mUniformInitialisers[0].mValue, "true");
+    }
+
+    TEST(ShaderGlslEsTest, one_uniform_with_two_initial_values_is_an_error)
+    {
+        const GlslEsShader result
+            = vertex("#version 120\nuniform float a = 1.0;\nuniform float a = 2.0;\nvoid main() { }\n");
+        EXPECT_THAT(result.mErrors, Contains(AllOf(HasSubstr("a"), HasSubstr("1.0"), HasSubstr("2.0"))));
+    }
+
+    TEST(ShaderGlslEsTest, an_initialiser_in_a_branch_the_converter_cannot_decide_is_an_error)
+    {
+        const GlslEsShader result = vertex(
+            "#version 120\n#if defined(GL_EXT_gpu_shader4)\nuniform float a = 1.0;\n#endif\nvoid main() { }\n");
+        EXPECT_THAT(result.mErrors, Contains(HasSubstr("uniform float a = 1.0;")));
+    }
+
     TEST(ShaderGlslEsTest, clip_vertex_is_dropped_and_reported)
     {
         const GlslEsShader result
