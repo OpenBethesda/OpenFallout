@@ -117,6 +117,7 @@ Two pictures can only be compared when everything except the renderer is the sam
 | the time of day, the sun | the game's clock is stopped (`TimeScale` 0) and set to the scene's hour |
 | the weather | the scene's weather is forced and held over the region's (`ForceWeather <form> 1`) |
 | random choices of the game | the engine is started with `--random-seed 1` |
+| the player getting hurt (a player who stands in water drowns, and the menu the game then opens holds the world) | god mode; a scene whose simulation time stops before its pause time fails its round |
 | the interface over the picture | the engine's head-up display and the crosshair are hidden, and message boxes (the notices of add-ons) are answered before the picture. The Fallout display (health, compass, action points) is a script of its own with no switch and stays in the picture: it is the same in both runs, and it is drawn by the interface renderer, which the Metal build changes too, so comparing it is wanted |
 | the player's own body and its idle movements | the camera is in its static mode, ahead of the eye or at a fixed place |
 | water waves, cloud drift, animated textures, particles, animations | the world is paused when the simulation time reaches 60 s: they stop at the same phase on both builds (the two pause times are in the report; they differ by at most one frame, 33 ms at 30 frames a second) |

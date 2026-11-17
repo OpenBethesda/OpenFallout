@@ -2,7 +2,7 @@
 -- the round of the scene with the scene's table in front of it (`local SCENE = { ... }`). It holds the scene still and takes one
 -- picture, the same way on every build, so that two pictures differ by what the builds draw and not by when they were taken:
 --
--- 1. the characters' AI goes off at once (they stop where they stand), the engine's head-up display and crosshair are hidden
+-- 1. the characters' AI goes off at once (they stop where they stand), the player cannot be hurt, the engine's head-up display and crosshair are hidden
 --    (the Fallout display of health, compass and action points is a script of its own and stays), the game's
 --    clock stops at the scene's hour and the weather is forced and held;
 -- 2. the place loads (`settle` real seconds) and the camera is put in its static mode at the scene's view (a scene without a
@@ -13,6 +13,8 @@
 -- 4. after `afterPause` real seconds (the drawing of the paused world settles) the picture is taken.
 return { limit = SCENE.limit, delay = 0, run = function(r)
     r.ai(false)
+    -- a player who stands in water drowns, and the menu the game then opens holds the world paused (the first runs)
+    r.god(true)
     r.hud(false)
     r.gameTimeScale(0)
     if SCENE.hour then r.hour(SCENE.hour) end
@@ -30,7 +32,11 @@ return { limit = SCENE.limit, delay = 0, run = function(r)
         r.error('late', string.format('ready at simulation time %.1f, after the time the scene is paused at (%.1f)', now,
             SCENE.pauseAt))
     else
-        r.waitFor(function() return r.simulationTime() >= SCENE.pauseAt end, SCENE.pauseAt - now + 30, 'pause time')
+        -- the simulation time stands still while anything else holds the world (a menu, a box): the scene is then not the same
+        if not r.waitFor(function() return r.simulationTime() >= SCENE.pauseAt end, SCENE.pauseAt - now + 30, 'pause time') then
+            r.error('held', string.format('the simulation time stopped at %.1f before the time the scene is paused at (%.1f): '
+                .. 'something else holds the world', r.simulationTime(), SCENE.pauseAt))
+        end
     end
     r.pause(true)
     r.log('still', string.format('simulation=%.3f', r.simulationTime()))

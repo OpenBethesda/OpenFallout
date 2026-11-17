@@ -128,7 +128,7 @@ class Scenario(unittest.TestCase):
     """The scenario of a scene, run by the scenario player of the rounds against the stand-ins of the engine's Lua modules."""
     WORLD = (HERE / "round" / "scripts" / "roundworld.lua").read_text(encoding="utf-8")
 
-    def play(self, name, simulation_start=20.0, steps=200):
+    def play(self, name, simulation_start=20.0, steps=200, frozen_after=None):
         scene = next(s for s in SCENES["scenes"] if s["name"] == name)
         source = picturecompare.scenario_of(scene, SCENES)
         self.lua = make_runtime(self.WORLD)
@@ -136,6 +136,8 @@ class Scenario(unittest.TestCase):
         module = self.lua.eval("function(source) return load_world(source) end")(source)
         for _ in range(steps):
             self.lua.execute("clock = clock + 1; if not paused_tags.round then simulation = simulation + 1 end")
+            if frozen_after is not None:
+                self.lua.execute(f"if simulation > {frozen_after} then simulation = {frozen_after} end")
             module.engineHandlers.onUpdate(0)
             sent = self.lua.eval("sent_to_player")
             for index in range(1, len(sent) + 1):
@@ -149,8 +151,8 @@ class Scenario(unittest.TestCase):
     def test_the_scene_is_held_still_before_its_one_picture(self):
         lines, asked = self.play("nv-water")
         asked = [asked[i] for i in range(1, len(asked) + 1)]
-        # the player script is asked: AI off, interface hidden, the fixed view, the eye, then the picture
-        self.assertEqual([a for a in asked if a != "quiet"], ["ai", "hud", "view", "eye", "shot"])
+        # the player script is asked: AI off, god mode, interface hidden, the fixed view, the eye, then the picture
+        self.assertEqual([a for a in asked if a != "quiet"], ["ai", "god", "hud", "view", "eye", "shot"])
         steps = [line.split("\t")[1] for line in lines if line.startswith("ROUND\t")]
         order = [steps.index(step) for step in ("gameTimeScale", "hour", "teleport", "weather", "pause", "note", "done")]
         self.assertEqual(order, sorted(order), steps)
@@ -168,6 +170,11 @@ class Scenario(unittest.TestCase):
     def test_a_scene_that_is_ready_after_its_pause_time_is_an_error(self):
         lines, _ = self.play("nv-interior", simulation_start=100.0)
         self.assertTrue(any(line.startswith("ROUND\terror\tlate") for line in lines), lines)
+
+    def test_a_scene_whose_simulation_time_stands_still_is_an_error(self):
+        # a menu or a box holds the world: the pause time is never reached
+        lines, _ = self.play("nv-busy", simulation_start=20.0, steps=200, frozen_after=30.0)
+        self.assertTrue(any(line.startswith("ROUND\terror\theld") and "stopped at 30.0" in line for line in lines), lines)
 
     def test_every_scenario_is_valid_lua(self):
         lua = LuaRuntime(unpack_returned_tuples=True)

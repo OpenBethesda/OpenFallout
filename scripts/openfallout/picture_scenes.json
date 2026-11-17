@@ -86,7 +86,7 @@
       "start": "MegatonWorld:-1,-6",
       "hour": 13,
       "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
-      "camera": { "yaw": 0, "pitch": 3 }
+      "camera": { "yaw": 180, "pitch": 3 }
     },
     {
       "name": "nv-shadows",
@@ -142,12 +142,12 @@
       "name": "fo3-water",
       "game": "fo3",
       "kind": "water",
-      "for": "Water with the water shader, reflection and refraction: the river of grid cell 20,-17 (water level 10500, land under water in the whole cell), the camera 250 units above it looking south to cell 20,-18 (RivetCityExterior07).",
+      "for": "Water with the water shader, reflection and refraction: the river of grid cell 20,-17 (water level 10500, land under water in the whole cell), the camera 250 units above it looking north, away from the ship of cell 20,-18 (RivetCityExterior07).",
       "start": "Wasteland:20,-17",
       "hour": 13,
       "weather": { "master": "Fallout3.esm", "form": "0x064609", "editor_id": "WastelandClear" },
       "place": { "pos": [83968, -67584], "onGround": true },
-      "camera": { "pos": [83968, -67584, 10750], "yaw": 180, "pitch": 5 },
+      "camera": { "pos": [83968, -67584, 10750], "yaw": 0, "pitch": 8 },
       "settings": { "Water": { "shader": "true", "refraction": "true", "reflection detail": "2" } }
     },
     {
