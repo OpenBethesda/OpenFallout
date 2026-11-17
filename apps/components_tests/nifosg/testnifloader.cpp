@@ -5,9 +5,11 @@
 #include <components/nif/extra.hpp>
 #include <components/nif/node.hpp>
 #include <components/nif/property.hpp>
+#include <components/nif/texture.hpp>
 #include <components/nifosg/nifloader.hpp>
 #include <components/resource/bgsmfilemanager.hpp>
 #include <components/resource/imagemanager.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/keyframe.hpp>
 #include <components/sceneutil/serialize.hpp>
 #include <components/sceneutil/userdata.hpp>
@@ -18,6 +20,7 @@
 
 #include <osg/AlphaFunc>
 #include <osg/Geometry>
+#include <osg/Texture2D>
 #include <osgDB/Registry>
 
 #include <array>
@@ -418,6 +421,191 @@ osg::Group {
         const osg::ref_ptr<osg::Node> result = Loader::load(file, &mImageManager, &mMaterialManager);
 
         EXPECT_EQ(alphaTestOf(*result), nullptr);
+    }
+
+    const osg::Image* firstTextureImageOf(const osg::Node& root)
+    {
+        struct FindImage : osg::NodeVisitor
+        {
+            FindImage()
+                : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
+            {
+            }
+            void apply(osg::Node& node) override
+            {
+                if (mFound == nullptr && node.getStateSet() != nullptr)
+                    if (const osg::Texture2D* texture = dynamic_cast<const osg::Texture2D*>(
+                            node.getStateSet()->getTextureAttribute(0, osg::StateAttribute::TEXTURE)))
+                        mFound = texture->getImage();
+                traverse(node);
+            }
+            const osg::Image* mFound = nullptr;
+        } find;
+        const_cast<osg::Node&>(root).accept(find);
+        return find.mFound;
+    }
+
+    // A picture kept inside a model file reaches the graphics card in a layout the build's graphics library takes, as
+    // the pictures of the image manager do: OpenGL ES (the Metal build) uploads no BGR pixels, so there they are RGB
+    TEST_F(NifOsgLoaderTest, givesThePixelsInsideAModelALayoutTheGraphicsLibraryTakes)
+    {
+        Nif::NiPixelData pixels;
+        pixels.mRecordType = Nif::RC_NiPixelData;
+        pixels.mPixelFormat.mFormat = Nif::NiPixelFormat::Format::BGR;
+        pixels.mMipmaps = { { 2, 1, 0 } };
+        pixels.mData = { 30, 20, 10, 60, 50, 40 };
+        Nif::NiSourceTexture source;
+        init(source);
+        source.mRecordType = Nif::RC_NiSourceTexture;
+        source.mExternal = 0;
+        source.mData = Nif::NiPixelDataPtr(&pixels);
+        Nif::NiTexturingProperty property;
+        init(property);
+        property.mRecordType = Nif::RC_NiTexturingProperty;
+        Nif::NiTexturingProperty::Texture base{};
+        base.mEnabled = true;
+        base.mSourceTexture = Nif::NiSourceTexturePtr(&source);
+        base.mClamp = 3;
+        property.mTextures.push_back(base);
+        Nif::NiAVObject node;
+        init(node);
+        node.mProperties.push_back(Nif::RecordPtrT<Nif::NiProperty>(&property));
+        Nif::NIFFile file(testNif);
+        file.mRoots.push_back(&node);
+
+        const osg::ref_ptr<osg::Node> result = Loader::load(file, &mImageManager, &mMaterialManager);
+
+        const osg::Image* image = firstTextureImageOf(*result);
+        ASSERT_NE(image, nullptr);
+        ASSERT_EQ(image->s(), 2);
+        const std::vector<unsigned char> uploaded(image->data(), image->data() + 6);
+        if constexpr (SceneUtil::GLDialect::sUploadsBGR)
+        {
+            EXPECT_EQ(image->getPixelFormat(), static_cast<GLenum>(GL_BGR));
+            EXPECT_EQ(uploaded, (std::vector<unsigned char>{ 30, 20, 10, 60, 50, 40 }));
+        }
+        else
+        {
+            EXPECT_EQ(image->getPixelFormat(), static_cast<GLenum>(GL_RGB));
+            EXPECT_EQ(image->getInternalTextureFormat(), static_cast<GLint>(GL_RGB));
+            EXPECT_EQ(uploaded, (std::vector<unsigned char>{ 10, 20, 30, 40, 50, 60 }));
+        }
+    }
+
+    // A model file's mipmaps are drawn and converted with the sizes that follow from the first level's: a chain whose
+    // levels at those sizes do not fit in the file's pixel data is not used, so nothing reads or writes past it
+    TEST_F(NifOsgLoaderTest, dropsMipmapsThatDoNotFitThePixelsOfTheModel)
+    {
+        Nif::NiPixelData pixels;
+        pixels.mRecordType = Nif::RC_NiPixelData;
+        pixels.mPixelFormat.mFormat = Nif::NiPixelFormat::Format::BGR;
+        // The second level says 1x1 at byte 48 and fits; at the 2x2 that follows from 4x4 it would reach byte 60
+        pixels.mMipmaps = { { 4, 4, 0 }, { 1, 1, 48 } };
+        pixels.mData.assign(51, 7);
+        Nif::NiSourceTexture source;
+        init(source);
+        source.mRecordType = Nif::RC_NiSourceTexture;
+        source.mExternal = 0;
+        source.mData = Nif::NiPixelDataPtr(&pixels);
+        Nif::NiTexturingProperty property;
+        init(property);
+        property.mRecordType = Nif::RC_NiTexturingProperty;
+        Nif::NiTexturingProperty::Texture base{};
+        base.mEnabled = true;
+        base.mSourceTexture = Nif::NiSourceTexturePtr(&source);
+        base.mClamp = 3;
+        property.mTextures.push_back(base);
+        Nif::NiAVObject node;
+        init(node);
+        node.mProperties.push_back(Nif::RecordPtrT<Nif::NiProperty>(&property));
+        Nif::NIFFile file(testNif);
+        file.mRoots.push_back(&node);
+
+        const osg::ref_ptr<osg::Node> result = Loader::load(file, &mImageManager, &mMaterialManager);
+
+        const osg::Image* image = firstTextureImageOf(*result);
+        ASSERT_NE(image, nullptr);
+        EXPECT_EQ(image->s(), 4);
+        EXPECT_EQ(image->t(), 4);
+        EXPECT_EQ(image->getNumMipmapLevels(), 1u);
+    }
+
+    // A chain has no more levels than the first level's size gives: a side of 2^n gives n + 1. A longer one is not
+    // used, however small its levels (past the 32nd level a size would be shifted by more than an int has bits).
+    TEST_F(NifOsgLoaderTest, dropsAChainOfMoreLevelsThanTheFirstLevelsSizeGives)
+    {
+        const auto load = [&](std::vector<Nif::NiPixelData::Mipmap> mipmaps, std::size_t dataSize) {
+            Nif::NiPixelData pixels;
+            pixels.mRecordType = Nif::RC_NiPixelData;
+            pixels.mPixelFormat.mFormat = Nif::NiPixelFormat::Format::RGB;
+            pixels.mMipmaps = std::move(mipmaps);
+            pixels.mData.assign(dataSize, 7);
+            Nif::NiSourceTexture source;
+            init(source);
+            source.mRecordType = Nif::RC_NiSourceTexture;
+            source.mExternal = 0;
+            source.mData = Nif::NiPixelDataPtr(&pixels);
+            Nif::NiTexturingProperty property;
+            init(property);
+            property.mRecordType = Nif::RC_NiTexturingProperty;
+            Nif::NiTexturingProperty::Texture base{};
+            base.mEnabled = true;
+            base.mSourceTexture = Nif::NiSourceTexturePtr(&source);
+            base.mClamp = 3;
+            property.mTextures.push_back(base);
+            Nif::NiAVObject node;
+            init(node);
+            node.mProperties.push_back(Nif::RecordPtrT<Nif::NiProperty>(&property));
+            Nif::NIFFile file(testNif);
+            file.mRoots.push_back(&node);
+            const osg::ref_ptr<osg::Node> result = Loader::load(file, &mImageManager, &mMaterialManager);
+            return osg::ref_ptr<const osg::Image>(firstTextureImageOf(*result));
+        };
+
+        // 1 x 1 pixel of three bytes, 33 levels at offset 0
+        const osg::ref_ptr<const osg::Image> tooMany
+            = load(std::vector<Nif::NiPixelData::Mipmap>(33, Nif::NiPixelData::Mipmap{ 1, 1, 0 }), 3);
+        ASSERT_NE(tooMany, nullptr);
+        EXPECT_EQ(tooMany->s(), 1);
+        EXPECT_EQ(tooMany->getNumMipmapLevels(), 1u);
+
+        // 4 x 1 pixels: 4, 2 and 1 wide, the whole chain
+        const osg::ref_ptr<const osg::Image> whole = load({ { 4, 1, 0 }, { 2, 1, 12 }, { 1, 1, 18 } }, 21);
+        ASSERT_NE(whole, nullptr);
+        EXPECT_EQ(whole->getNumMipmapLevels(), 3u);
+    }
+
+    // A first level whose size does not fit the pixel data is no picture at all. 32768 x 32768 pixels of four bytes are
+    // 2^32 bytes, a size that wraps to 0 in 32 bits
+    TEST_F(NifOsgLoaderTest, usesNoPictureWhoseFirstLevelDoesNotFitThePixelsOfTheModel)
+    {
+        Nif::NiPixelData pixels;
+        pixels.mRecordType = Nif::RC_NiPixelData;
+        pixels.mPixelFormat.mFormat = Nif::NiPixelFormat::Format::BGRA;
+        pixels.mMipmaps = { { 32768, 32768, 0 } };
+        pixels.mData.assign(16, 7);
+        Nif::NiSourceTexture source;
+        init(source);
+        source.mRecordType = Nif::RC_NiSourceTexture;
+        source.mExternal = 0;
+        source.mData = Nif::NiPixelDataPtr(&pixels);
+        Nif::NiTexturingProperty property;
+        init(property);
+        property.mRecordType = Nif::RC_NiTexturingProperty;
+        Nif::NiTexturingProperty::Texture base{};
+        base.mEnabled = true;
+        base.mSourceTexture = Nif::NiSourceTexturePtr(&source);
+        base.mClamp = 3;
+        property.mTextures.push_back(base);
+        Nif::NiAVObject node;
+        init(node);
+        node.mProperties.push_back(Nif::RecordPtrT<Nif::NiProperty>(&property));
+        Nif::NIFFile file(testNif);
+        file.mRoots.push_back(&node);
+
+        const osg::ref_ptr<osg::Node> result = Loader::load(file, &mImageManager, &mMaterialManager);
+
+        EXPECT_EQ(firstTextureImageOf(*result), nullptr);
     }
 
     std::string formatOsgNodeForBSShaderProperty(std::string_view shaderPrefix)

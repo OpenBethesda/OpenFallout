@@ -1,6 +1,8 @@
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/util.hpp>
 
 #include <osg/Image>
+#include <osg/Texture2D>
 
 #include <algorithm>
 #include <cstdint>
@@ -220,6 +222,24 @@ namespace
         EXPECT_EQ(kept, pixel);
     }
 
+    // A depth image of floats (the stand-in for a shadow map where there are no shadows) comes with the unsized depth
+    // format, which OpenGL ES takes only with integer pixels; it gets the sized float depth format and keeps its value
+    TEST(SceneUtilOpenGLESFormatTest, float_depth_pixels_get_the_sized_float_depth_format)
+    {
+        osg::ref_ptr<osg::Image> image = new osg::Image;
+        image->allocateImage(1, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT);
+        const float depth = 0.5f;
+        std::memcpy(image->data(), &depth, sizeof(depth));
+
+        EXPECT_TRUE(SceneUtil::toOpenGLESFormat(*image));
+        EXPECT_EQ(image->getInternalTextureFormat(), static_cast<GLint>(GL_DEPTH_COMPONENT32F));
+        EXPECT_EQ(image->getPixelFormat(), static_cast<GLenum>(GL_DEPTH_COMPONENT));
+        EXPECT_EQ(image->getDataType(), static_cast<GLenum>(GL_FLOAT));
+        float kept = 0.f;
+        std::memcpy(&kept, image->data(), sizeof(kept));
+        EXPECT_EQ(kept, depth);
+    }
+
     TEST(SceneUtilOpenGLESFormatTest, images_opengl_es_takes_are_left_alone)
     {
         osg::ref_ptr<osg::Image> rgba = new osg::Image;
@@ -237,5 +257,35 @@ namespace
         osg::ref_ptr<osg::Image> tenBit = tenBitImage(1, 1, GL_RGBA, { tenBitPixel(1, 2, 3, 0) });
         tenBit->setInternalTextureFormat(GL_RGB10_A2);
         EXPECT_FALSE(SceneUtil::toOpenGLESFormat(*tenBit));
+
+        osg::ref_ptr<osg::Image> depth = new osg::Image;
+        depth->allocateImage(1, 1, 1, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT);
+        EXPECT_FALSE(SceneUtil::toOpenGLESFormat(*depth));
+        EXPECT_EQ(depth->getInternalTextureFormat(), static_cast<GLint>(GL_DEPTH_COMPONENT));
+    }
+
+    // A depth texture read as a number (the rain and snow occluder's) is NEAREST-filtered in the Metal build, where a
+    // filtered one would read 0 everywhere; the OpenGL build keeps the filter asked for
+    TEST(SceneUtilDepthTextureFilterTest, a_depth_texture_read_without_comparison_gets_a_filter_the_build_samples)
+    {
+        osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
+        texture->setInternalFormat(GL_DEPTH_COMPONENT24);
+        SceneUtil::setDepthTextureFilter(*texture, osg::Texture::LINEAR);
+
+        const osg::Texture::FilterMode expected
+            = SceneUtil::GLDialect::sOpenGLES ? osg::Texture::NEAREST : osg::Texture::LINEAR;
+        EXPECT_EQ(texture->getFilter(osg::Texture::MIN_FILTER), expected);
+        EXPECT_EQ(texture->getFilter(osg::Texture::MAG_FILTER), expected);
+    }
+
+    TEST(SceneUtilDepthTextureFilterTest, a_comparing_depth_texture_keeps_the_filter_asked_for)
+    {
+        osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
+        texture->setInternalFormat(GL_DEPTH_COMPONENT24);
+        texture->setShadowComparison(true);
+        SceneUtil::setDepthTextureFilter(*texture, osg::Texture::LINEAR);
+
+        EXPECT_EQ(texture->getFilter(osg::Texture::MIN_FILTER), osg::Texture::LINEAR);
+        EXPECT_EQ(texture->getFilter(osg::Texture::MAG_FILTER), osg::Texture::LINEAR);
     }
 }

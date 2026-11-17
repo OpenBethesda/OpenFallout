@@ -130,7 +130,7 @@ add_component_dir (sceneutil
     detourdebugdraw navmesh agentpath animblendrules shadow mwshadowtechnique recastmesh shadowsbin osgacontroller rtt
     screencapture depth color riggeometryosgaextension extradata unrefqueue lightcommon clearcolor
     cullsafeboundsvisitor keyframe nodecallback templateref textkeymap userdata glextensions fog texmat material
-    smoothnormals loddebug gldialect
+    smoothnormals loddebug gldialect clipplane
     )
 
 add_component_dir (nif
@@ -458,7 +458,7 @@ copy_resource_file("lua_ui/content.lua" "${OPENFALLOUT_RESOURCES_ROOT}" "resourc
 
 
 add_component_dir (crashcatcher
-    crashcatcher
+    crashcatcher crashframe
 )
 
 add_component_dir(detournavigator

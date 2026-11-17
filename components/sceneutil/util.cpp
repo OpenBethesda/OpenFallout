@@ -22,6 +22,8 @@
 #include <components/sceneutil/texturetype.hpp>
 #include <components/vfs/pathutil.hpp>
 
+#include "gldialect.hpp"
+
 namespace SceneUtil
 {
     namespace
@@ -275,6 +277,57 @@ namespace SceneUtil
         mOperationQueue->add(operation);
     }
 
+    namespace
+    {
+        // A size of the first level at a mipmap level: halved once a level, and never less than 1. A file can hold
+        // more levels than an int has bits, so the level is no shift count.
+        int levelSize(int size, unsigned int level)
+        {
+            size = std::max(size, 1);
+            for (; level > 0 && size > 1; --level)
+                size /= 2;
+            return size;
+        }
+    }
+
+    bool mipmapLevelFits(const osg::Image& image, unsigned int level, std::size_t dataSize)
+    {
+        // In 64 bits: osg::Image's own size functions count in 32, and a level of 2^32 bytes would count as 0
+        const std::uint64_t width = levelSize(image.s(), level);
+        const std::uint64_t height = levelSize(image.t(), level);
+        const std::uint64_t depth = levelSize(image.r(), level);
+        const std::uint64_t bits = osg::Image::computePixelSizeInBits(image.getPixelFormat(), image.getDataType());
+        const std::uint64_t packing = std::max(image.getPacking(), 1u);
+        std::uint64_t size = 0;
+        if (image.isCompressed())
+            // Blocks of 4 x 4 pixels, as every compressed format a model file holds
+            size = (width + 3) / 4 * ((height + 3) / 4) * depth * (16 * bits / 8);
+        else
+        {
+            // A row length, when the image gives one, is the length of every row, as OpenSceneGraph uploads it
+            const std::uint64_t rowLength
+                = image.getRowLength() > 0 ? static_cast<std::uint64_t>(image.getRowLength()) : width;
+            const std::uint64_t rowBytes = ((rowLength * bits + 7) / 8 + packing - 1) / packing * packing;
+            size = rowBytes * height * depth;
+        }
+        const std::uint64_t offset = image.getMipmapOffset(level);
+        return offset <= dataSize && size <= dataSize - offset;
+    }
+
+    bool mipmapsFit(const osg::Image& image, std::size_t dataSize)
+    {
+        // Each level halves the first level's larger side, and the chain ends at 1: a 2^n side has n + 1 levels
+        unsigned int levels = 1;
+        for (int side = std::max({ image.s(), image.t(), image.r() }); side > 1; side /= 2)
+            ++levels;
+        if (image.getNumMipmapLevels() > levels)
+            return false;
+        for (unsigned int level = 0; level < image.getNumMipmapLevels(); ++level)
+            if (!mipmapLevelFits(image, level, dataSize))
+                return false;
+        return true;
+    }
+
     bool toRgbOrder(osg::Image& image)
     {
         const GLenum format = image.getPixelFormat();
@@ -284,8 +337,8 @@ namespace SceneUtil
         const unsigned int step = format == GL_BGR ? 3 : 4;
         for (unsigned int level = 0; level < image.getNumMipmapLevels(); ++level)
         {
-            const int width = std::max(image.s() >> level, 1);
-            const int rows = std::max(image.t() >> level, 1) * std::max(image.r() >> level, 1);
+            const int width = levelSize(image.s(), level);
+            const int rows = levelSize(image.t(), level) * levelSize(image.r(), level);
             // A row length, when the image gives one, is the length of every row, as OpenSceneGraph uploads it
             const int rowLength = image.getRowLength() != 0 ? image.getRowLength() : width;
             const unsigned int rowStep
@@ -310,8 +363,8 @@ namespace SceneUtil
         {
             for (unsigned int level = 0; level < image.getNumMipmapLevels(); ++level)
             {
-                const int width = std::max(image.s() >> level, 1);
-                const int rows = std::max(image.t() >> level, 1) * std::max(image.r() >> level, 1);
+                const int width = levelSize(image.s(), level);
+                const int rows = levelSize(image.t(), level) * levelSize(image.r(), level);
                 const int rowLength = image.getRowLength() != 0 ? image.getRowLength() : width;
                 const unsigned int rowStep = osg::Image::computeRowWidthInBytes(
                     rowLength, image.getPixelFormat(), image.getDataType(), image.getPacking());
@@ -342,8 +395,8 @@ namespace SceneUtil
             {
                 if (level > 0)
                     offsets.push_back(static_cast<unsigned int>(size));
-                size += static_cast<std::size_t>(std::max(image.s() >> level, 1)) * std::max(image.t() >> level, 1)
-                    * std::max(image.r() >> level, 1) * 4;
+                size += static_cast<std::size_t>(levelSize(image.s(), level)) * levelSize(image.t(), level)
+                    * levelSize(image.r(), level) * 4;
             }
             unsigned char* data = new unsigned char[size];
             unsigned char* to = data;
@@ -396,10 +449,25 @@ namespace SceneUtil
         }
     }
 
+    void setDepthTextureFilter(osg::Texture& texture, osg::Texture::FilterMode filter)
+    {
+        if (GLDialect::sOpenGLES && !texture.getShadowComparison())
+            filter = osg::Texture::NEAREST;
+        texture.setFilter(osg::Texture::MIN_FILTER, filter);
+        texture.setFilter(osg::Texture::MAG_FILTER, filter);
+    }
+
     bool toOpenGLESFormat(osg::Image& image)
     {
         if (image.isCompressed() || image.data() == nullptr)
             return false;
+        if (image.getPixelFormat() == GL_DEPTH_COMPONENT && image.getDataType() == GL_FLOAT
+            && image.getInternalTextureFormat() == GL_DEPTH_COMPONENT)
+        {
+            // OpenGL ES takes float depth pixels only under the sized float depth format
+            image.setInternalTextureFormat(GL_DEPTH_COMPONENT32F);
+            return true;
+        }
         bool changed = false;
         if (image.getPixelFormat() == GL_BGRA
             && (image.getDataType() == GL_UNSIGNED_SHORT_1_5_5_5_REV

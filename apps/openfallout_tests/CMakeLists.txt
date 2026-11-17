@@ -35,6 +35,7 @@ file(GLOB UNITTEST_SRC_FILES
 
     mwmechanics/testfalloutpackages.cpp
 
+    mwrender/testclipcullnode.cpp
     mwrender/testfalloutanimation.cpp
     mwrender/testfalloutface.cpp
     mwrender/testfogmanager.cpp

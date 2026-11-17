@@ -1,0 +1,69 @@
+Why this patch is needed
+------------------------
+OpenSceneGraph writes its log through one stream that every thread shares (osg::notify gives all callers the same
+std::ostream and the same growing text buffer), with no lock. Lines of two threads that write at the same time are
+mixed, a line can get the severity another thread set, and when one thread makes the buffer grow while another is
+writing into it the program can crash. The Metal build writes far more of these lines than the desktop build, from the
+draw thread, on every frame that uses a state OpenGL ES does not have ("ClipPlane::apply - not supported" and
+"PolygonMode::apply - not supported": 3,568 in one short run against 1 in the desktop build), while other threads load
+the world, and one Metal start crashed at a null address in its first frames, right after such lines. Now every thread
+writes into a stream of its own and the handler gets each thread's lines whole, with their own severity. The handler
+stays the one that osg::setNotifyHandler set.
+diff --git a/src/osg/Notify.cpp b/src/osg/Notify.cpp
+--- a/src/osg/Notify.cpp
++++ b/src/osg/Notify.cpp
+@@ -111,6 +111,11 @@
+         _buffer->setCurrentSeverity(severity);
+     }
+ 
++    void setNotifyHandler(osg::NotifyHandler *handler)
++    {
++        _buffer->setNotifyHandler(handler);
++    }
++
+     osg::NotifySeverity getCurrentSeverity() const
+     {
+         return _buffer->getCurrentSeverity();
+@@ -222,13 +227,40 @@
+     return severity<=getNotifySingleton()._notifyLevel;
+ }
+ #endif
++
++namespace
++{
++    // The stream of the calling thread. A plain pointer, so that it can still be used (and made again) after the
++    // thread's objects are gone, when something logs from a destructor at the end of the thread or the program
++    thread_local osg::NotifyStream* s_threadNotifyStream = 0;
++
++    // Frees the calling thread's stream when the thread ends
++    struct ThreadNotifyStreamCleanup
++    {
++        ~ThreadNotifyStreamCleanup()
++        {
++            delete s_threadNotifyStream;
++            s_threadNotifyStream = 0;
++        }
++    };
++}
+ 
+ std::ostream& osg::notify(const osg::NotifySeverity severity)
+ {
+     if (osg::isNotifyEnabled(severity))
+     {
+-        getNotifySingleton()._notifyStream.setCurrentSeverity(severity);
+-        return getNotifySingleton()._notifyStream;
++        // Every thread writes into a stream of its own, and the handler gets each thread's lines whole. One stream
++        // shared by all threads mixed their lines, gave a line another thread's severity, and could crash when its
++        // buffer grew under a thread that was still writing.
++        if (!s_threadNotifyStream)
++        {
++            static thread_local ThreadNotifyStreamCleanup cleanup;
++            (void)cleanup;
++            s_threadNotifyStream = new osg::NotifyStream;
++        }
++        s_threadNotifyStream->setNotifyHandler(osg::getNotifyHandler());
++        s_threadNotifyStream->setCurrentSeverity(severity);
++        return *s_threadNotifyStream;
+     }
+     return getNotifySingleton()._nullStream;
+ }

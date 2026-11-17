@@ -57,6 +57,10 @@ namespace Fx
     private:
         std::string getPassHeader(Technique& technique, std::string_view preamble, bool fragOut = false);
 
+        // OpenGL ES takes only GLSL ES 3.00: the finished text of a stage, converted (std::runtime_error if it cannot
+        // be)
+        void convertToGlslEs(osg::Shader& shader) const;
+
         bool mCompiled;
 
         osg::ref_ptr<osg::Shader> mVertex;

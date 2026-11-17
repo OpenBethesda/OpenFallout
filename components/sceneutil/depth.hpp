@@ -1,6 +1,10 @@
 #ifndef OPENFALLOUT_COMPONENTS_SCENEUTIL_DEPTH_H
 #define OPENFALLOUT_COMPONENTS_SCENEUTIL_DEPTH_H
 
+#include <functional>
+#include <string_view>
+#include <vector>
+
 #include <osg/Depth>
 
 #include "util.hpp"
@@ -57,6 +61,11 @@ namespace SceneUtil
 
     // Converts depth-stencil formats to their corresponding depth formats.
     GLenum getDepthFormatOfDepthStencilFormat(GLenum internalFormat);
+
+    // The depth-stencil formats to ask the context for, the first it supports taken: a reversed depth buffer asks
+    // first for 32-bit float depth, which is what gives it its precision; then 24-bit depth. hasExtension says whether
+    // the context names an extension.
+    std::vector<GLenum> requestedDepthFormats(bool reversed, const std::function<bool(std::string_view)>& hasExtension);
 
     // Brief wrapper around an osg::Depth that applies the reversed depth function when a reversed depth buffer is in
     // use

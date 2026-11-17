@@ -16,6 +16,7 @@
 #include <osg/Transform>
 
 #include <components/debug/debuglog.hpp>
+#include <components/shader/glsles.hpp>
 
 #include "gldialect.hpp"
 
@@ -48,18 +49,32 @@ namespace SceneUtil
                 GL_TEXTURE_CUBE_MAP_SEAMLESS, GL_LINE_STIPPLE, GL_POLYGON_OFFSET_LINE, GL_POLYGON_OFFSET_POINT };
             for (GLenum mode : desktopModes)
                 state.setModeValidity(mode, false);
+            // A user clip plane is a clip distance in OpenGL ES (GL_CLIP_DISTANCE0 + i is GL_CLIP_PLANE0 + i); the
+            // converted shaders write the first Shader::sClipPlaneCount (components/shader/glsles.hpp)
+            const bool clipDistances = supported("GL_ANGLE_clip_cull_distance");
             for (GLenum i = 0; i < 8; ++i)
             {
                 state.setModeValidity(GL_LIGHT0 + i, false);
-                // gl_ClipVertex is not converted (see components/shader/glsles.hpp), so no clip distance is written
-                state.setModeValidity(GL_CLIP_PLANE0 + i, false);
+                state.setModeValidity(GL_CLIP_PLANE0 + i, clipDistances && i < Shader::sClipPlaneCount);
             }
             state.setModeValidity(GL_DEPTH_CLAMP, supported("GL_EXT_depth_clamp"));
             state.setModeValidity(GL_FRAMEBUFFER_SRGB, supported("GL_EXT_sRGB_write_control"));
             state.setModeValidity(GL_MULTISAMPLE_ARB, supported("GL_EXT_multisample_compatibility"));
 
+            // Depth comparison (sampler2DShadow) is core in OpenGL ES 3.0; OpenSceneGraph looks only for GL_ARB_shadow,
+            // and without it never sets a shadow map's comparison mode
+            extensions.isShadowSupported = true;
+
             // OpenSceneGraph takes "version 1.2 or later" to mean that the texture LOD bias parameter exists
             extensions.isTextureLODBiasSupported = false;
+
+            // Clip control, which a reversed depth buffer needs (depth.cpp), is GL_EXT_clip_control in OpenGL ES, under
+            // the same numbers as desktop OpenGL's
+            if (supported("GL_EXT_clip_control"))
+            {
+                loadFunction(extensions.glClipControl, "glClipControlEXT");
+                extensions.isClipControlSupported = extensions.glClipControl != nullptr;
+            }
 
             // The S3TC formats come as three extensions in OpenGL ES, under other names than desktop OpenGL's
             extensions.isTextureCompressionS3TCSupported = extensions.isTextureCompressionS3TCSupported
@@ -83,9 +98,16 @@ namespace SceneUtil
             loadFunction(extensions.glObjectLabel,
                 supported("GL_KHR_debug") ? std::string("glObjectLabel") + GLDialect::sDebugFunctionSuffix : "");
 
+            // Asked before the log line: OpenSceneGraph logs each question at its INFO level, through the engine's
+            // log, and a log line that is being written holds the log's lock (a question inside it never returned)
+            const bool depthClamp = supported("GL_EXT_depth_clamp");
+            // The normal buffer of post-processing is RGB16F (apps/openfallout/mwrender/postprocessor.cpp)
+            const bool halfFloatColour = supported("GL_EXT_color_buffer_half_float");
             Log(Debug::Info) << "OpenGL ES: per-draw-buffer switches " << (indexed.empty() ? "missing" : indexed)
                              << ", S3TC textures " << (extensions.isTextureCompressionS3TCSupported ? "yes" : "no")
-                             << ", depth clamp " << (supported("GL_EXT_depth_clamp") ? "yes" : "no");
+                             << ", depth clamp " << (depthClamp ? "yes" : "no") << ", clip distances "
+                             << (clipDistances ? "yes" : "no") << ", half-float colour buffers "
+                             << (halfFloatColour ? "yes" : "no");
         }
 #endif
         std::set<osg::observer_ptr<osg::GLExtensions>> sGLExtensions;

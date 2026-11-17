@@ -2,6 +2,8 @@
 #include <components/shader/shadermanager.hpp>
 #include <components/testing/util.hpp>
 
+#include <osg/State>
+
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -17,6 +19,19 @@ namespace
 {
     using namespace testing;
     using namespace Shader;
+
+    // The engine's copy of OpenSceneGraph runs its renaming of built-ins over every stage as it compiles it
+    // (State::convertVertexShaderSourceToOsgBuiltIns, with the attribute aliases and matrix uniforms of OpenGL ES 3).
+    // A converted text must give it nothing to rename: the declarations it would add go before the default precision.
+    bool openSceneGraphLeavesAlone(const std::string& source)
+    {
+        osg::ref_ptr<osg::State> state = new osg::State;
+        state->setUseVertexAttributeAliasing(true);
+        state->setUseModelViewAndProjectionUniforms(true);
+        std::string text = source;
+        state->convertVertexShaderSourceToOsgBuiltIns(text);
+        return text == source;
+    }
 
     // The shader manager as the Metal build uses it: shaders come out as GLSL ES 3.00, one shader object per stage
     struct ShaderManagerGlslEsTest : Test
@@ -276,6 +291,8 @@ namespace
                     if (!shader)
                         continue;
                     ++converted;
+                    EXPECT_TRUE(openSceneGraphLeavesAlone(shader->getShaderSource()))
+                        << name << " with options " << variant << ", reverse-z " << reverseZ;
                     if (dump)
                     {
                         std::string file = std::string(variant) + "_z" + reverseZ + "_" + name;

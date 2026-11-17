@@ -18,16 +18,29 @@ namespace SceneUtil::GLDialect
 
     // Shader text is written in GLSL 1.20; OpenGL ES 3.0 compiles only GLSL ES 3.00, so the shader manager converts it
     // and folds the separately linked library shaders into each shader (OpenGL ES links one shader object per stage).
+    // The passes of post-processing techniques (.omwfx) are converted the same way when they are compiled.
     inline constexpr bool sConvertsShadersToGlslEs = sOpenGLES;
+
+    // OpenGL ES has no user clip planes (glClipPlane, gl_ClipVertex). The Metal build gives the shaders the planes as
+    // uniforms and they write clip distances instead (SceneUtil::setEyeSpaceClipPlane).
+    inline constexpr bool sHasUserClipPlanes = !sOpenGLES;
+
+    // The extension that gives the GL_DEPTH_CLAMP switch (the same number in both)
+    inline constexpr const char* sDepthClampExtension = sOpenGLES ? "GL_EXT_depth_clamp" : "GL_ARB_depth_clamp";
+
+    // The extension that gives clip control, which a reversed depth buffer needs
+    inline constexpr const char* sClipControlExtension = sOpenGLES ? "GL_EXT_clip_control" : "GL_ARB_clip_control";
+
+    // A camera that draws into a depth texture alone gets a colour buffer from OpenSceneGraph unless it asks for none:
+    // a renderbuffer of the unsized GL_RGB format, which desktop OpenGL makes and OpenGL ES refuses (the frame buffer
+    // is then incomplete, and OpenSceneGraph falls back to copying, which cannot copy depth). OpenGL ES completes a
+    // frame buffer with a depth attachment alone, so the Metal build's depth-only cameras (shadow maps, the
+    // precipitation occluder) ask for no implicit attachment.
+    inline constexpr bool sDepthOnlyCamerasGetColourBuffer = !sOpenGLES;
 
     // OpenGL ES promises only RGBA read-back of the frame buffer, and has no BGR or BGRA upload formats.
     inline constexpr bool sReadsBackRGB = !sOpenGLES;
     inline constexpr bool sUploadsBGR = !sOpenGLES;
-
-    // Post-processing techniques (.omwfx) carry their own shaders in desktop GLSL 1.20 or 3.30, which are not yet
-    // turned into GLSL ES 3.00 as the engine's own shaders are; until they are, the Metal build keeps post-processing
-    // off at run time.
-    inline constexpr bool sHasPostProcessing = !sOpenGLES;
 
     // Suffix of the KHR_debug calls: OpenGL ES 3.0 has them only as extension functions. (The fixed-function switches,
     // texture LOD bias, per-draw-buffer switches and object labels OpenGL ES 3.0 lacks are dealt with once, when the

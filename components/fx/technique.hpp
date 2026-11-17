@@ -13,6 +13,7 @@
 #include <osg/StateSet>
 #include <osg/Texture2D>
 
+#include <components/sceneutil/gldialect.hpp>
 #include <components/vfs/pathutil.hpp>
 
 #include "lexer.hpp"
@@ -190,6 +191,11 @@ namespace Fx
         void setInternal(bool internal) { mInternal = internal; }
         bool getInternal() const { return mInternal; }
 
+        /// Whether the passes are converted to GLSL ES 3.00 when they are compiled. The Metal build always converts and
+        /// the OpenGL build never does (SceneUtil::GLDialect); tests may choose either.
+        void setConvertToGlslEs(bool value) { mConvertToGlslEs = value; }
+        bool getConvertToGlslEs() const { return mConvertToGlslEs; }
+
     private:
         [[noreturn]] void error(std::string_view msg);
 
@@ -317,6 +323,7 @@ namespace Fx
         bool mDynamic = false;
         bool mLocked = false;
         bool mInternal = false;
+        bool mConvertToGlslEs = SceneUtil::GLDialect::sConvertsShadersToGlslEs;
     };
 
     template <>

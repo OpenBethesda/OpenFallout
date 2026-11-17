@@ -32,7 +32,7 @@ namespace Shader
     {
         std::string mSource;
         std::vector<UniformInitialiser> mUniformInitialisers;
-        // Desktop features the converted shader goes without (for example user clip planes); the shader still compiles.
+        // Desktop features the converted shader goes without; the shader still compiles.
         std::vector<std::string> mDropped;
         // What could not be converted. The source is not usable when this is not empty.
         std::vector<std::string> mErrors;
@@ -40,6 +40,14 @@ namespace Shader
 
     // Converts the finished text of one vertex or fragment shader (templates resolved, linked shaders folded in).
     GlslEsShader convertToGlslEs(std::string_view source, osg::Shader::Type stage);
+
+    // OpenGL ES has no user clip planes (glClipPlane read through gl_ClipVertex). A converted vertex shader that writes
+    // gl_ClipVertex writes clip distance i (GL_ANGLE_clip_cull_distance) against the eye-space plane in the uniform
+    // clipPlaneUniformName(i), for each of the first sClipPlaneCount planes; GL_CLIP_PLANE0 + i, the same number as
+    // GL_CLIP_DISTANCE0 + i, switches it on. The engine uses plane 0 (the water's reflection) and plane 1 (transparent
+    // objects that cross the water surface).
+    inline constexpr unsigned int sClipPlaneCount = 2;
+    std::string clipPlaneUniformName(unsigned int index);
 
     // OpenGL ES links one shader object per stage. Appends the finished text of each library shader the main shader
     // links, renumbers their #line source numbers so that compiler messages still name the right file, and guards

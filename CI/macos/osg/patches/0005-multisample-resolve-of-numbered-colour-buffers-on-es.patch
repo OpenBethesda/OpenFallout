@@ -1,0 +1,50 @@
+Why this patch is needed
+------------------------
+With antialiasing on, the engine draws the scene into a multisampled frame buffer whose colour buffer is attached as
+the numbered colour buffer 0 (apps/openfallout/mwrender/postprocessor.cpp), and OpenSceneGraph's render stage resolves
+it into the scene texture at the end of the camera. It resolves numbered colour buffers one by one with glReadBuffer,
+glDrawBuffer and glBlitFramebuffer, in a block that an OpenGL ES profile leaves out, because OpenGL ES has no
+glDrawBuffer. So in the Metal build the depth was resolved and the colour never was: the world drew black under the
+head-up display, with no error. OpenGL ES 3.0 has glReadBuffer and glDrawBuffers, which do the same; in an OpenGL ES 3
+profile the block now uses them (the ith draw buffer of a frame buffer object may only be its ith colour attachment, so
+the list holds none up to it). A build for desktop OpenGL is unchanged.
+diff --git a/src/osgUtil/RenderStage.cpp b/src/osgUtil/RenderStage.cpp
+--- a/src/osgUtil/RenderStage.cpp
++++ b/src/osgUtil/RenderStage.cpp
+@@ -1020,6 +1020,36 @@
+             // the buffers will be set explicitly when needed elsewhere.
+             // glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+             // glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
++        }
++#elif defined(OSG_GLES3_AVAILABLE)
++        // OpenGL ES 3.0 has glReadBuffer and glDrawBuffers but no glDrawBuffer, and the ith draw buffer of a frame
++        // buffer object may only be its ith colour attachment or none
++        if (needToBlitColorBuffers && ext->glDrawBuffers)
++        {
++            for (FrameBufferObject::AttachmentMap::const_iterator
++                it = _resolveFbo->getAttachmentMap().begin(),
++                end =_resolveFbo->getAttachmentMap().end(); it != end; ++it)
++            {
++                osg::Camera::BufferComponent attachment = it->first;
++                if (attachment >=osg::Camera::COLOR_BUFFER0)
++                {
++                    const unsigned int index = attachment - osg::Camera::COLOR_BUFFER0;
++                    std::vector<GLenum> drawBuffers(index + 1, GL_NONE);
++                    drawBuffers[index] = GL_COLOR_ATTACHMENT0 + index;
++                    glReadBuffer(GL_COLOR_ATTACHMENT0 + index);
++                    ext->glDrawBuffers(static_cast<GLsizei>(drawBuffers.size()), &drawBuffers[0]);
++
++                    ext->glBlitFramebuffer(
++                        static_cast<GLint>(_viewport->x()), static_cast<GLint>(_viewport->y()),
++                        static_cast<GLint>(_viewport->x() + _viewport->width()), static_cast<GLint>(_viewport->y() + _viewport->height()),
++                        static_cast<GLint>(_viewport->x()), static_cast<GLint>(_viewport->y()),
++                        static_cast<GLint>(_viewport->x() + _viewport->width()), static_cast<GLint>(_viewport->y() + _viewport->height()),
++                        GL_COLOR_BUFFER_BIT, GL_NEAREST);
++                }
++            }
++            // the read buffer and the resolve frame buffer's own draw buffers back as they were
++            glReadBuffer(GL_COLOR_ATTACHMENT0);
++            _resolveFbo->apply(state, FrameBufferObject::DRAW_FRAMEBUFFER);
+         }
+ #endif
+ 

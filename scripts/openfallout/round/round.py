@@ -500,9 +500,12 @@ def priority_prefix(priority):
     priority, so the person at the computer does not feel the run), `nice -n 10` elsewhere; nothing for `normal`."""
     if priority == "normal":
         return []
-    if IS_MAC and shutil.which("taskpolicy"):
-        return ["taskpolicy", "-b"]
-    return ["nice", "-n", "10"] if shutil.which("nice") else []
+    # By its full path: the engine's PATH, which the program is looked up in, holds no programs (engine_environment)
+    taskpolicy = shutil.which("taskpolicy") if IS_MAC else None
+    if taskpolicy:
+        return [taskpolicy, "-b"]
+    nice = shutil.which("nice")
+    return [nice, "-n", "10"] if nice else []
 
 
 class Pictures:
@@ -581,14 +584,22 @@ def stop_engine(process, guard=None, patience=30.0):
     return kill_engine(process), None
 
 
-def engine_environment(extra, is_mac):
+def engine_environment(extra, is_mac, run_dir=None):
     """The environment of the engine: the environment of the runner, a headless run that asks the window system for as little as it
     can (SDL is told to leave the screensaver alone, which on macOS is a power assertion `PreventUserIdleDisplaySleep` held for the whole
     run; the application is an accessory one: no Dock icon, no menu bar, never frontmost), and what the round and the variant say
-    over that (`"OPENFALLOUT_HEADLESS_POLICY": "foreground"` keeps the engine an ordinary application)."""
+    over that (`"OPENFALLOUT_HEADLESS_POLICY": "foreground"` keeps the engine an ordinary application).
+
+    With the run's folder, PATH is an empty folder of the run and TMPDIR another: the engine's crash handler starts gdb or lldb from
+    PATH, and a debugger that attaches can put a password box on the screen of whoever sits at the computer; its crash log
+    (`openfallout-crash.log`) goes to TMPDIR and so stays with the run."""
     env = {"OPENFALLOUT_HEADLESS": "1", "SDL_VIDEO_ALLOW_SCREENSAVER": "1"}
     if is_mac:
         env["OPENFALLOUT_HEADLESS_POLICY"] = "accessory"
+    if run_dir is not None:
+        for name, folder in (("PATH", "no-programs"), ("TMPDIR", "tmp")):
+            (Path(run_dir) / folder).mkdir(parents=True, exist_ok=True)
+            env[name] = str(Path(run_dir) / folder)
     env.update(extra or {})
     return dict(os.environ, **env)
 
@@ -603,7 +614,7 @@ def run_engine(command, run_dir, limit, env_extra=None, priority="low", guard=No
     stops the engine, which would otherwise wait out a delay made for slow pictures), when `limit` seconds are over, or when the guard
     says so (the window system stopped answering, the kill switch, the wall-time limit of the round): then the engine is killed at once."""
     import pty
-    env = engine_environment(env_extra, IS_MAC)
+    env = engine_environment(env_extra, IS_MAC, run_dir)
     prefix = priority_prefix(priority)
     # The engine shows a dialog instead of logging a fatal error when stdin is not a terminal, and a dialog is a window
     master, slave = pty.openpty()

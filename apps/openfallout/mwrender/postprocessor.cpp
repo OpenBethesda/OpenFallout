@@ -4,6 +4,7 @@
 #include <chrono>
 #include <thread>
 
+#include <osg/GLExtensions>
 #include <osg/Texture1D>
 #include <osg/Texture2D>
 #include <osg/Texture2DArray>
@@ -95,8 +96,11 @@ namespace
     {
         if (usage == Usage::RENDER_BUFFER && !Stereo::getMultiview())
         {
-            osg::ref_ptr<osg::RenderBuffer> attachment
-                = new osg::RenderBuffer(width, height, textureTemplate->getInternalFormat(), samples);
+            GLenum internalFormat = textureTemplate->getInternalFormat();
+            // OpenGL ES makes render buffers only of sized formats, and resolves one only into a texture of its format
+            if constexpr (SceneUtil::GLDialect::sOpenGLES)
+                internalFormat = SceneUtil::getSizedColorFormat(internalFormat);
+            osg::ref_ptr<osg::RenderBuffer> attachment = new osg::RenderBuffer(width, height, internalFormat, samples);
             return osg::FrameBufferAttachment(attachment);
         }
 
@@ -213,6 +217,19 @@ namespace OFRender
         else
             Log(Debug::Error) << "'glDisablei' unsupported, pass normals will not be available to shaders.";
 
+        // The normals are drawn into an RGB16F buffer, which OpenGL ES 3.0 draws into only with this extension
+        if constexpr (SceneUtil::GLDialect::sOpenGLES)
+        {
+            const bool halfFloat
+                = osg::isGLExtensionSupported(gc->getState()->getContextID(), "GL_EXT_color_buffer_half_float");
+            if (mNormalsSupported && !halfFloat)
+            {
+                mNormalsSupported = false;
+                Log(Debug::Error) << "GL_EXT_color_buffer_half_float unsupported, pass normals will not be available "
+                                     "to shaders.";
+            }
+        }
+
         mGLSLVersion = static_cast<int>(ext->glslLanguageVersion * 100);
         mUBO = ext->isUniformBufferObjectSupported && mGLSLVersion >= 330;
         mStateUpdater = new Fx::StateUpdater(mUBO);
@@ -229,8 +246,6 @@ namespace OFRender
 
         if (mUsePostProcessing)
             enable();
-        else if constexpr (!SceneUtil::GLDialect::sHasPostProcessing)
-            Log(Debug::Info) << "Post-processing is not available in the Metal build yet";
     }
 
     void PostProcessor::setupTransparentBin(const Water* water)
@@ -282,12 +297,6 @@ namespace OFRender
 
     void PostProcessor::enable()
     {
-        if constexpr (!SceneUtil::GLDialect::sHasPostProcessing)
-        {
-            Log(Debug::Warning) << "Post-processing is not available in the Metal build yet and stays off";
-            mUsePostProcessing = false;
-            return;
-        }
         mReload = true;
         mUsePostProcessing = true;
     }
@@ -616,8 +625,7 @@ namespace OFRender
             if (technique->getHDR())
                 mHDR = true;
 
-            // The Metal build has no post-processing: its main frame buffer takes no normals (RGB16F) either
-            if (technique->getNormals() && SceneUtil::GLDialect::sHasPostProcessing)
+            if (technique->getNormals())
                 mNormals = true;
 
             if (technique->getLights())

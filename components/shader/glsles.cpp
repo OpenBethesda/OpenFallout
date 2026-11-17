@@ -76,7 +76,12 @@ namespace Shader
             { "texelFetch2D", "texelFetch" },
         };
 
-        // shadow2D and shadow2DProj return a vec4 in GLSL 1.20; their GLSL ES 3.00 forms return a float
+        // shadow2D and shadow2DProj return a vec4 in GLSL 1.20; their GLSL ES 3.00 forms return a float. They also
+        // clamp the reference depth to [0, 1], as the comparison does on the fixed-point shadow maps of the OpenGL
+        // build: ANGLE's Metal backend keeps a 24-bit depth texture as 32-bit float depth and compares the reference as
+        // it is, so a surface beyond a shadow map's far plane would read as shadowed. This is reported to ANGLE
+        // (https://issues.angleproject.org/issues/586576671); the clamp can go once its Metal backend clamps the
+        // reference itself.
         struct Helper
         {
             std::string_view mName;
@@ -84,9 +89,12 @@ namespace Shader
         };
 
         constexpr std::array sHelpers = {
-            Helper{ "shadow2D", "vec4 shadow2D(sampler2DShadow s, vec3 c) { return vec4(texture(s, c)); }" },
-            Helper{
-                "shadow2DProj", "vec4 shadow2DProj(sampler2DShadow s, vec4 c) { return vec4(textureProj(s, c)); }" },
+            Helper{ "shadow2D",
+                "vec4 shadow2D(sampler2DShadow s, vec3 c) { "
+                "return vec4(texture(s, vec3(c.xy, clamp(c.z, 0.0, 1.0)))); }" },
+            Helper{ "shadow2DProj",
+                "vec4 shadow2DProj(sampler2DShadow s, vec4 c) { vec3 p = c.xyz / c.w; "
+                "return vec4(texture(s, vec3(p.xy, clamp(p.z, 0.0, 1.0)))); }" },
         };
 
         // Built-ins that GLSL ES 3.00 has under the same name
@@ -111,13 +119,80 @@ namespace Shader
             "gl_MaxDrawBuffers",
             "gl_MinProgramTexelOffset",
             "gl_MaxProgramTexelOffset",
+            // GL_OVR_multiview has it under the same name in GLSL ES
+            "gl_ViewID_OVR",
         };
 
         constexpr std::array sSamplerTypes = { "sampler2D", "sampler3D", "samplerCube", "sampler2DShadow",
             "sampler2DArray", "sampler2DArrayShadow", "samplerCubeShadow" };
 
+        // Names GLSL 1.20 leaves free and GLSL ES 3.00 reserves. Each becomes of_<name>.
+        const std::set<std::string_view> sReservedNames = { "active", "atomic_uint", "coherent", "common", "filter",
+            "partition", "patch", "resource", "sample", "subroutine", "superp" };
+
+        // A uniform is set by its name from outside the shader, so it cannot be renamed; nor can it be called
+        // texture, the name of the GLSL ES 3.00 function the GLSL 1.20 texture functions become.
+        bool isUnusableUniformName(std::string_view name)
+        {
+            return sReservedNames.contains(name) || name == "texture";
+        }
+
+        // Reads the names a declaration declares from the text after its type, "a, b[2], c = 1.0" gives a, b and c.
+        // The text can come a line at a time: the declaration goes on until its semicolon.
+        struct DeclaratorScanner
+        {
+            int mDepth = 0;
+            bool mExpectName = true;
+
+            // Adds the names in text to names. Gives the length of text through the declaration's semicolon, or npos
+            // when the declaration goes on past text.
+            std::size_t scan(std::string_view text, std::vector<std::string>& names)
+            {
+                for (std::size_t i = 0; i < text.size(); ++i)
+                {
+                    const char c = text[i];
+                    if (c == '(' || c == '[' || c == '{')
+                        ++mDepth;
+                    else if (c == ')' || c == ']' || c == '}')
+                        --mDepth;
+                    else if (c == ';' && mDepth <= 0)
+                        return i + 1;
+                    else if (c == ',' && mDepth == 0)
+                        mExpectName = true;
+                    else if (mExpectName && mDepth == 0 && isIdentifierStart(c))
+                    {
+                        std::size_t end = i + 1;
+                        while (end < text.size() && isIdentifierPart(text[end]))
+                            ++end;
+                        names.emplace_back(text.substr(i, end - i));
+                        mExpectName = false;
+                        i = end - 1;
+                    }
+                }
+                return std::string_view::npos;
+            }
+        };
+
+        // What a constant expression may name besides numbers and constants: constructors and the built-in
+        // functions other than the texture functions
+        const std::set<std::string_view> sConstantExpressionNames = { "true", "false", "bool", "int", "uint", "float",
+            "vec2", "vec3", "vec4", "bvec2", "bvec3", "bvec4", "ivec2", "ivec3", "ivec4", "uvec2", "uvec3", "uvec4",
+            "mat2", "mat3", "mat4", "mat2x2", "mat2x3", "mat2x4", "mat3x2", "mat3x3", "mat3x4", "mat4x2", "mat4x3",
+            "mat4x4", "radians", "degrees", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh",
+            "asinh", "acosh", "atanh", "pow", "exp", "log", "exp2", "log2", "sqrt", "inversesqrt", "abs", "sign",
+            "floor", "trunc", "round", "roundEven", "ceil", "fract", "mod", "min", "max", "clamp", "mix", "step",
+            "smoothstep", "length", "distance", "dot", "cross", "normalize", "faceforward", "reflect", "refract",
+            "matrixCompMult", "outerProduct", "transpose", "determinant", "inverse", "lessThan", "lessThanEqual",
+            "greaterThan", "greaterThanEqual", "equal", "notEqual", "any", "all", "not" };
+
+        constexpr std::string_view sGlobalInitialiserMacro = "OF_GLOBAL_INIT_";
+        constexpr std::string_view sInitialiseGlobals = "of_initialiseGlobals";
+
         constexpr std::string_view sClipVertex = "of_ClipVertex";
         constexpr std::string_view sFragData = "of_FragData";
+        // The shader's own main, when a main of the converter's runs after it
+        constexpr std::string_view sShaderMain = "of_main";
+        constexpr std::string_view sClipDistanceExtension = "GL_ANGLE_clip_cull_distance";
 
         // The text with every comment turned into spaces, line breaks kept
         std::string blankComments(std::string_view source)
@@ -486,19 +561,30 @@ namespace Shader
 
         // Removes #version and #extension lines (keeping the line, so that line numbers stay right) and the uniform
         // initialisers GLSL ES does not allow. Comments are blanked first; an initialiser counts only in text the
-        // preprocessor keeps. skipped says, line by line, whether the preprocessor is known to skip the line.
-        void convertLines(std::string_view original, GlslEsShader& result, std::string& out, std::vector<bool>& skipped)
+        // preprocessor keeps. skipped says, line by line, whether the preprocessor is known to skip the line, and kept
+        // whether it is known to keep it.
+        void convertLines(std::string_view original, GlslEsShader& result, std::string& out, std::vector<bool>& skipped,
+            std::vector<bool>& kept)
         {
             static const std::regex version(R"(^\s*#\s*version\s+(\d+).*$)");
             static const std::regex extension(R"(^\s*#\s*extension\b.*$)");
             static const std::regex initialiser(
                 R"(^(\s*uniform\s+([A-Za-z_]\w*)\s+([A-Za-z_]\w*))\s*=\s*([^;]*);(.*)$)");
             static const std::regex anyInitialiser(R"(^\s*uniform\b[^;]*=)");
+            static const std::regex uniformStart(
+                R"(^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*(?:\s+|$))");
+            static const std::regex directive(R"(^\s*#)");
+            static const std::regex defineStart(R"(^\s*#\s*define\s+([A-Za-z_]\w*)(?:\(([^)]*)\))?)");
 
             const std::string code = blankComments(original);
             const std::string_view source = code;
             Branches branches;
             std::map<std::string, UniformInitialiser> taken;
+            // A uniform declaration that goes on to the next line
+            std::optional<DeclaratorScanner> openUniform;
+            // The #define a line belongs to (its first line, or one it is continued on) and that macro's parameters
+            std::string defineName;
+            std::vector<std::string> defineParameters;
 
             std::size_t pos = 0;
             while (pos < source.size())
@@ -511,7 +597,99 @@ namespace Shader
                 const std::string line(source.substr(pos, end - pos));
                 const std::string_view text = original.substr(pos, end - pos);
                 skipped.push_back(branches.active() == Branches::Active::No);
+                kept.push_back(branches.active() == Branches::Active::Yes);
                 std::smatch match;
+                // Every uniform the line declares, in each of its statements. The compiler never sees a declaration
+                // the preprocessor skips. The text of a #define is code where the macro is used, so it is read too
+                // (after the macro's name and parameters); other directives declare nothing.
+                std::smatch define;
+                if (branches.active() == Branches::Active::No)
+                {
+                    openUniform.reset();
+                    defineName.clear();
+                    defineParameters.clear();
+                }
+                else if (!std::regex_search(line, directive)
+                    || (!openUniform && std::regex_search(line, define, defineStart)))
+                {
+                    if (!define.empty())
+                    {
+                        defineName = define[1].str();
+                        defineParameters.clear();
+                        const std::string parameters = define[2].str();
+                        for (std::size_t i = 0; i < parameters.size(); ++i)
+                            if (isIdentifierStart(parameters[i]))
+                            {
+                                std::size_t stop = i + 1;
+                                while (stop < parameters.size() && isIdentifierPart(parameters[stop]))
+                                    ++stop;
+                                defineParameters.push_back(parameters.substr(i, stop - i));
+                                i = stop - 1;
+                            }
+                    }
+                    std::vector<std::string> names;
+                    std::size_t at = define.empty() ? 0 : static_cast<std::size_t>(define.length(0));
+                    // A line continuation is no part of the declaration
+                    std::size_t size = line.size();
+                    if (size > 0 && line[size - 1] == '\\')
+                        --size;
+                    const bool continued = size != line.size();
+                    while (at < size)
+                    {
+                        std::smatch start;
+                        if (openUniform)
+                        {
+                            const std::size_t read
+                                = openUniform->scan(std::string_view(line).substr(at, size - at), names);
+                            if (read == std::string_view::npos)
+                                break;
+                            openUniform.reset();
+                            at += read;
+                        }
+                        else if (std::regex_search(line.cbegin() + at, line.cbegin() + size, start, uniformStart))
+                        {
+                            openUniform.emplace();
+                            at += static_cast<std::size_t>(start.length(0));
+                        }
+                        else
+                        {
+                            // Another statement: the next can start after its end
+                            const std::size_t next = line.find_first_of(";{}", at);
+                            if (next == std::string::npos || next >= size)
+                                break;
+                            at = next + 1;
+                        }
+                    }
+                    // A #define ends with its line unless that is continued: so does a declaration in it
+                    if (!defineName.empty() && !continued)
+                        openUniform.reset();
+                    for (const std::string& name : names)
+                    {
+                        // A name that the macro's use gives is not known here, so nothing can say whether GLSL ES
+                        // 3.00 keeps it for itself: the declaration is refused rather than renamed without a word
+                        if (std::find(defineParameters.begin(), defineParameters.end(), name) != defineParameters.end())
+                            result.mErrors.push_back(std::format(
+                                "a uniform in #define {} takes its name from the parameter {}: it cannot be checked",
+                                defineName, name));
+                        else if (isUnusableUniformName(name))
+                            result.mErrors.push_back(
+                                std::format("uniform {} has a name GLSL ES 3.00 keeps for itself", name));
+                    }
+                    if (!names.empty() && !defineName.empty() && line.find("##") != std::string::npos)
+                        result.mErrors.push_back(
+                            std::format("a uniform in #define {} has a name put together with ##: it cannot be checked",
+                                defineName));
+                    if (!continued)
+                    {
+                        defineName.clear();
+                        defineParameters.clear();
+                    }
+                }
+                else
+                {
+                    defineName.clear();
+                    defineParameters.clear();
+                }
                 if (std::regex_match(line, match, version))
                 {
                     const int number = Misc::StringUtils::toNumeric<int>(match[1].str(), 0);
@@ -568,11 +746,25 @@ namespace Shader
             int mFragData = -1;
             bool mDynamicFragData = false;
             bool mClipVertex = false;
+            bool mGlobalInitialisers = false;
         };
+
+        // Whether the line that starts at pos is a #define
+        bool isDefineLine(const std::string& source, std::size_t pos)
+        {
+            std::size_t p = source.find_first_not_of(" \t", pos);
+            if (p == std::string::npos || source[p] != '#')
+                return false;
+            p = source.find_first_not_of(" \t", p + 1);
+            return p != std::string::npos && source.compare(p, 6, "define") == 0;
+        }
 
         // Renames what GLSL ES 3.00 calls differently, word by word. Comments are dropped (their line breaks kept):
         // OpenSceneGraph's own pass over the text would otherwise turn a built-in name in a comment into a second
-        // declaration. A built-in without an equivalent counts only on a line the preprocessor is not known to skip.
+        // declaration. A built-in without an equivalent counts only on a line the preprocessor is not known to skip. A
+        // #define body is text until the macro is used, and a header that both stages share (that of a post-processing
+        // pass) names built-ins of the other stage there: such a name is left alone, and the GLSL ES compiler reports
+        // it if the macro is ever used.
         std::string convertNames(
             const std::string& source, osg::Shader::Type stage, Uses& uses, const std::vector<bool>& skipped)
         {
@@ -581,6 +773,7 @@ namespace Shader
             std::string out;
             out.reserve(source.size() + source.size() / 8);
             std::size_t i = 0;
+            bool inDefine = isDefineLine(source, 0);
             while (i < source.size())
             {
                 const char c = source[i];
@@ -594,9 +787,21 @@ namespace Shader
                     // A comment on one line stands for a space, which keeps the words around it apart
                     if (!line && lineBreaks == 0)
                         out += ' ';
-                    out.append(lineBreaks, '\n');
+                    // A comment over several lines is one space too, so a #define goes on after it: its line breaks
+                    // are kept for the line numbers, and continue the #define
+                    for (std::size_t n = 0; n < lineBreaks; ++n)
+                        out += inDefine ? " \\\n" : "\n";
                     lineNumber += lineBreaks;
                     i = end;
+                    continue;
+                }
+                if (c == '\n')
+                {
+                    const bool continued = i > 0 && source[i - 1] == '\\';
+                    inDefine = (inDefine && continued) || isDefineLine(source, i + 1);
+                    ++lineNumber;
+                    out += c;
+                    ++i;
                     continue;
                 }
                 if (std::isdigit(static_cast<unsigned char>(c))
@@ -611,8 +816,6 @@ namespace Shader
                 }
                 if (!isIdentifierStart(c))
                 {
-                    if (c == '\n')
-                        ++lineNumber;
                     out += c;
                     ++i;
                     continue;
@@ -632,6 +835,12 @@ namespace Shader
                 if (word == "varying")
                 {
                     out += isVertex ? "out" : "in";
+                    continue;
+                }
+                if (sReservedNames.contains(word))
+                {
+                    out += "of_";
+                    out += word;
                     continue;
                 }
                 if (const auto it = sTextureFunctions.find(word); it != sTextureFunctions.end())
@@ -667,9 +876,13 @@ namespace Shader
                 }
                 else if (const auto attribute = std::find_if(sAttributes.begin(), sAttributes.end(),
                              [&](const BuiltIn& builtIn) { return builtIn.mDesktopName == word; });
-                    isVertex && attribute != sAttributes.end())
+                    (isVertex || inDefine) && attribute != sAttributes.end())
                 {
-                    uses.mAttributes.insert(attribute->mName);
+                    // In a #define of the fragment stage it is never expanded, and is only renamed: OpenSceneGraph,
+                    // which renames these names in every stage as it compiles, would declare a vertex input for it in
+                    // front of the default precision
+                    if (isVertex)
+                        uses.mAttributes.insert(attribute->mName);
                     out += attribute->mName;
                 }
                 else if (!isVertex && word == "gl_FragColor")
@@ -707,7 +920,8 @@ namespace Shader
                 }
                 else
                 {
-                    if (!sKeptBuiltIns.contains(word) && !(lineNumber < skipped.size() && skipped[lineNumber]))
+                    if (!sKeptBuiltIns.contains(word) && !inDefine
+                        && !(lineNumber < skipped.size() && skipped[lineNumber]))
                         uses.mUnknown.insert(std::string(word));
                     out += word;
                 }
@@ -718,6 +932,9 @@ namespace Shader
         std::string preamble(osg::Shader::Type stage, const Uses& uses)
         {
             std::string out = "#version 300 es\n";
+            // #extension comes before any declaration; a context without the extension draws unclipped
+            if (uses.mClipVertex)
+                out += std::format("#ifdef {0}\n#extension {0} : enable\n#endif\n", sClipDistanceExtension);
             out += "precision highp float;\nprecision highp int;\n";
             for (const char* sampler : sSamplerTypes)
                 out += std::format("precision highp {};\n", sampler);
@@ -730,11 +947,51 @@ namespace Shader
             if (stage == osg::Shader::FRAGMENT && uses.mFragData >= 0)
                 out += std::format("layout(location = 0) out vec4 {}[{}];\n", sFragData, uses.mFragData + 1);
             if (uses.mClipVertex)
+            {
                 out += std::format("vec4 {};\n", sClipVertex);
+                for (unsigned int i = 0; i < sClipPlaneCount; ++i)
+                    out += std::format("uniform vec4 {};\n", clipPlaneUniformName(i));
+            }
             for (const Helper& helper : sHelpers)
                 if (uses.mHelpers.contains(helper.mName))
                     out += std::string(helper.mDefinition) + "\n";
+            if (uses.mGlobalInitialisers)
+                out += std::format("void {}();\n", sInitialiseGlobals);
             out += "#line 1 0\n";
+            return out;
+        }
+
+        // Renames one identifier wherever it stands as a whole word (the text has no comments left)
+        std::string renameWord(const std::string& source, std::string_view from, std::string_view to)
+        {
+            std::string out;
+            out.reserve(source.size());
+            std::size_t i = 0;
+            while (i < source.size())
+            {
+                if (!isIdentifierStart(source[i]) || (i > 0 && isIdentifierPart(source[i - 1])))
+                {
+                    out += source[i++];
+                    continue;
+                }
+                std::size_t end = i + 1;
+                while (end < source.size() && isIdentifierPart(source[end]))
+                    ++end;
+                const std::string_view word = std::string_view(source).substr(i, end - i);
+                out += word == from ? to : word;
+                i = end;
+            }
+            return out;
+        }
+
+        // The main of a vertex shader that wrote gl_ClipVertex: the shader's own main, then each clip distance
+        std::string clipDistanceMain()
+        {
+            std::string out
+                = std::format("void main()\n{{\n    {}();\n#ifdef {}\n", sShaderMain, sClipDistanceExtension);
+            for (unsigned int i = 0; i < sClipPlaneCount; ++i)
+                out += std::format("    gl_ClipDistance[{}] = dot({}, {});\n", i, sClipVertex, clipPlaneUniformName(i));
+            out += "#endif\n}\n";
             return out;
         }
 
@@ -769,6 +1026,338 @@ namespace Shader
                 pos = end + 1;
             }
             return lines;
+        }
+
+        // An object-like macro: its text, and whether the converter knows that it holds at a line (it was defined
+        // outside every preprocessor branch). A macro that takes arguments, or one defined in a branch, is not known.
+        struct Macro
+        {
+            std::string mValue;
+            bool mKnown = false;
+        };
+
+        using Macros = std::map<std::string, Macro, std::less<>>;
+
+        // Whether an initialiser names nothing but numbers, constants, constructors, built-in functions and macros
+        // known to stand for such text (followed to a depth, so that macros that name each other end)
+        bool isConstantExpression(std::string_view value, const std::set<std::string, std::less<>>& constants,
+            const Macros& macros, int depth = 0)
+        {
+            std::size_t i = 0;
+            while (i < value.size())
+            {
+                const char c = value[i];
+                if (std::isdigit(static_cast<unsigned char>(c))
+                    || (c == '.' && i + 1 < value.size() && std::isdigit(static_cast<unsigned char>(value[i + 1]))))
+                {
+                    while (i < value.size() && (isIdentifierPart(value[i]) || value[i] == '.'))
+                        ++i;
+                    continue;
+                }
+                if (!isIdentifierStart(c))
+                {
+                    ++i;
+                    continue;
+                }
+                std::size_t end = i + 1;
+                while (end < value.size() && isIdentifierPart(value[end]))
+                    ++end;
+                const std::string_view word = value.substr(i, end - i);
+                std::size_t before = i;
+                while (before > 0 && (value[before - 1] == ' ' || value[before - 1] == '\t'))
+                    --before;
+                const bool field = before > 0 && value[before - 1] == '.';
+                if (!field && !sConstantExpressionNames.contains(word) && !constants.contains(word))
+                {
+                    const auto macro = macros.find(word);
+                    if (macro == macros.end() || !macro->second.mKnown || depth >= 16
+                        || !isConstantExpression(macro->second.mValue, constants, macros, depth + 1))
+                        return false;
+                }
+                i = end;
+            }
+            return true;
+        }
+
+        // The words of a text that are names (not numbers, not fields)
+        std::set<std::string, std::less<>> namesIn(std::string_view value)
+        {
+            std::set<std::string, std::less<>> names;
+            for (std::size_t i = 0; i < value.size();)
+            {
+                if (std::isdigit(static_cast<unsigned char>(value[i])))
+                {
+                    while (i < value.size() && (isIdentifierPart(value[i]) || value[i] == '.'))
+                        ++i;
+                    continue;
+                }
+                if (!isIdentifierStart(value[i]))
+                {
+                    ++i;
+                    continue;
+                }
+                std::size_t end = i + 1;
+                while (end < value.size() && isIdentifierPart(value[end]))
+                    ++end;
+                names.emplace(value.substr(i, end - i));
+                i = end;
+            }
+            return names;
+        }
+
+        // Every text each macro was given up to a line, in whichever branch: a branch decided only when compiling may
+        // leave a macro with any of them
+        using MacroTexts = std::map<std::string, std::vector<std::string>, std::less<>>;
+
+        // The names of a text and, through every text of each macro defined up to that line, the names those macros
+        // name (to the depth isConstantExpression follows): what a moved initialiser takes the meaning of at its new
+        // place
+        void collectNames(
+            std::string_view value, const MacroTexts& texts, std::set<std::string, std::less<>>& names, int depth = 0)
+        {
+            for (const std::string& name : namesIn(value))
+            {
+                const bool added = names.insert(name).second;
+                const auto macro = texts.find(name);
+                if (added && macro != texts.end() && depth < 16)
+                    for (const std::string& text : macro->second)
+                        collectNames(text, texts, names, depth + 1);
+            }
+        }
+
+        // A #define or #undef line: the macro's name, and for an object-like #define its text
+        struct MacroDirective
+        {
+            std::string mName;
+            bool mDefine;
+            bool mTakesArguments;
+            std::string mValue;
+        };
+
+        std::optional<MacroDirective> readMacroDirective(std::string_view line)
+        {
+            static const std::regex directive(R"(^\s*#\s*(define|undef)\s+([A-Za-z_]\w*)(\()?\s*(.*?)\s*$)");
+            std::match_results<std::string_view::const_iterator> match;
+            if (!std::regex_match(line.begin(), line.end(), match, directive))
+                return std::nullopt;
+            return MacroDirective{ match[2].str(), match[1].str() == "define", match[3].matched, match[4].str() };
+        }
+
+        // The declaration a moved initialiser leaves behind. An array that takes its size from its initialiser has
+        // none without it: the size is written out where the initialiser's constructor says it, and where it does not
+        // there is no such declaration (the line is then left as it is).
+        std::optional<std::string> declarationWithoutInitialiser(
+            const std::string& declaration, const std::string& value)
+        {
+            static const std::regex unsized(R"(\[\s*\]\s*$)");
+            static const std::regex sizedConstructor(R"(^[A-Za-z_]\w*\s*\[\s*(\d+)\s*\])");
+            if (!std::regex_search(declaration, unsized))
+                return declaration;
+            std::smatch size;
+            if (!std::regex_search(value, size, sizedConstructor))
+                return std::nullopt;
+            return std::regex_replace(declaration, unsized, "[" + size[1].str() + "]");
+        }
+
+        bool hasTopLevelComma(std::string_view value)
+        {
+            int depth = 0;
+            for (char c : value)
+            {
+                if (c == '(' || c == '[')
+                    ++depth;
+                else if (c == ')' || c == ']')
+                    --depth;
+                else if (c == ',' && depth == 0)
+                    return true;
+            }
+            return false;
+        }
+
+        // GLSL 1.20 lets a global variable start from a uniform or another variable; GLSL ES 3.00 takes only a
+        // constant expression there. Such an initialiser moves into a function that main calls before anything else,
+        // which is when it ran before. The function goes at the end, after every declaration, a linked shader's
+        // folded in after main included. The declaration stays where it was and defines a macro, so that the function
+        // assigns only the variables whose declarations the preprocessor kept. #line directives keep line numbers.
+        // A declaration of several variables, or one that runs over several lines, is left alone.
+        //
+        // A macro is expanded where its line stands. An initialiser whose macros are known to be constant stays (GLSL
+        // ES 3.00 takes it); one that moves takes its macros' text at the end, so a macro it names that is defined
+        // again or undefined further down makes the conversion fail rather than give another value. Lines the
+        // preprocessor is known to skip are left as they are; main is the one of the lines it may keep, or each of them
+        // where the converter cannot tell.
+        std::string moveGlobalInitialisers(const std::string& source, GlslEsShader& result, Uses& uses,
+            const std::vector<bool>& skipped, const std::vector<bool>& kept)
+        {
+            // The first group is the declaration without its initialiser, an array's size included
+            static const std::regex global(R"(^(\s*(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))"
+                                           R"((?:\s*\[[^\]]*\])?)\s*=\s*([^;{}]*?)\s*;\s*$)");
+            static const std::regex constant(
+                R"(^\s*const\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*\s+([A-Za-z_]\w*))");
+
+            std::set<std::string, std::less<>> constants;
+            std::string initialisers;
+            int moved = 0;
+            std::vector<std::string> lines;
+            int lineNumber = 1;
+            int sourceNumber = 0;
+            int depth = 0;
+            bool awaitingMain = false;
+            bool inDirective = false;
+            std::vector<std::pair<std::size_t, std::size_t>> mainBodies;
+            const std::vector<std::string_view> sourceLines = splitLines(source);
+            const auto isSkipped = [&](std::size_t index) { return index < skipped.size() && skipped[index]; };
+            const auto isKept = [&](std::size_t index) { return index < kept.size() && kept[index]; };
+
+            // Where each macro is defined or undefined, line by line
+            std::map<std::string, std::vector<std::size_t>, std::less<>> macroChanges;
+            for (std::size_t index = 0; index < sourceLines.size(); ++index)
+                if (!isSkipped(index))
+                    if (const std::optional<MacroDirective> directive = readMacroDirective(sourceLines[index]))
+                        macroChanges[directive->mName].push_back(index);
+            const auto changedAfter = [&](std::string_view name, std::size_t index) {
+                const auto it = macroChanges.find(name);
+                return it != macroChanges.end() && it->second.back() > index;
+            };
+
+            Macros macros;
+            MacroTexts macroTexts;
+            // The #define whose text goes on over the lines being read
+            std::string openDefine;
+            for (std::size_t index = 0; index < sourceLines.size(); ++index)
+            {
+                const std::string_view line = sourceLines[index];
+                if (const std::optional<LineDirective> directive = readLineDirective(line))
+                {
+                    lineNumber = directive->mLine;
+                    sourceNumber = directive->mSource.value_or(sourceNumber);
+                    lines.emplace_back(line);
+                    continue;
+                }
+                const std::size_t first = line.find_first_not_of(" \t");
+                if (inDirective || (first != std::string_view::npos && line[first] == '#'))
+                {
+                    const bool continued = !line.empty() && line.back() == '\\';
+                    if (!inDirective)
+                    {
+                        // A macro defined in a branch the preprocessor surely takes is as known as one outside any
+                        // branch; in a branch decided only when compiling, its value is not known
+                        if (const std::optional<MacroDirective> directive = readMacroDirective(line);
+                            directive && !isSkipped(index))
+                        {
+                            if (directive->mDefine)
+                            {
+                                macros[directive->mName] = Macro{ directive->mValue,
+                                    !directive->mTakesArguments && !continued && isKept(index) };
+                                macroTexts[directive->mName].push_back(directive->mValue);
+                                if (continued)
+                                    openDefine = directive->mName;
+                            }
+                            else
+                                macros.erase(directive->mName);
+                        }
+                    }
+                    else if (!openDefine.empty())
+                    {
+                        // The next line of that #define's text. A line continuation joins the two lines as they are,
+                        // with nothing between them, so a name may start on one and end on the next.
+                        std::string& text = macroTexts[openDefine].back();
+                        if (!text.empty() && text.back() == '\\')
+                            text.pop_back();
+                        text += line;
+                    }
+                    if (!continued)
+                        openDefine.clear();
+                    inDirective = continued;
+                    lines.emplace_back(line);
+                    ++lineNumber;
+                    continue;
+                }
+                if (isSkipped(index))
+                {
+                    lines.emplace_back(line);
+                    ++lineNumber;
+                    continue;
+                }
+
+                const std::string text(line);
+                std::smatch match;
+                // A structure's constructor is as constant as what it is given, like the built-in constructors
+                static const std::regex structure(R"(^\s*struct\s+([A-Za-z_]\w*))");
+                std::optional<std::string> declaration;
+                if (depth == 0 && std::regex_search(text, match, constant))
+                    constants.insert(match[1].str());
+                else if (depth == 0 && std::regex_search(text, match, structure))
+                    constants.insert(match[1].str());
+                else if (depth == 0 && std::regex_match(text, match, global) && !hasTopLevelComma(match[3].str())
+                    && !isConstantExpression(match[3].str(), constants, macros)
+                    && (declaration = declarationWithoutInitialiser(match[1].str(), match[3].str())))
+                {
+                    std::set<std::string, std::less<>> names;
+                    collectNames(match[3].str(), macroTexts, names);
+                    for (const std::string& name : names)
+                        if (changedAfter(name, index))
+                            result.mErrors.push_back(std::format(
+                                "global {} starts from {}, which is defined again or undefined further down: its "
+                                "initialiser cannot move to main",
+                                match[2].str(), name));
+                    lines.push_back(std::format("{};\n#define {}{}\n#line {} {}", *declaration, sGlobalInitialiserMacro,
+                        moved, lineNumber + 1, sourceNumber));
+                    initialisers += std::format("#ifdef {}{}\n#line {} {}\n    {} = {};\n#endif\n",
+                        sGlobalInitialiserMacro, moved, lineNumber, sourceNumber, match[2].str(), match[3].str());
+                    ++moved;
+                    ++lineNumber;
+                    continue;
+                }
+
+                for (std::size_t i = 0; i < line.size(); ++i)
+                {
+                    const char c = line[i];
+                    if (isIdentifierStart(c) && (i == 0 || !isIdentifierPart(line[i - 1])))
+                    {
+                        std::size_t end = i + 1;
+                        while (end < line.size() && isIdentifierPart(line[end]))
+                            ++end;
+                        if (depth == 0 && line.substr(i, end - i) == "main")
+                            awaitingMain = true;
+                        i = end - 1;
+                    }
+                    else if (c == ';' && depth == 0)
+                        awaitingMain = false;
+                    else if (c == '{')
+                    {
+                        if (depth == 0 && awaitingMain)
+                            mainBodies.emplace_back(lines.size(), i + 1);
+                        awaitingMain = false;
+                        ++depth;
+                    }
+                    else if (c == '}')
+                        --depth;
+                }
+                lines.push_back(text);
+                ++lineNumber;
+            }
+
+            if (moved == 0)
+                return source;
+            if (mainBodies.empty())
+            {
+                result.mErrors.push_back("a global initialiser that is not constant, and no main to run it from");
+                return source;
+            }
+            uses.mGlobalInitialisers = true;
+            // From the last, so that two in one line keep their places
+            for (auto it = mainBodies.rbegin(); it != mainBodies.rend(); ++it)
+                lines[it->first].insert(it->second, std::format("{}();", sInitialiseGlobals));
+            std::string out;
+            out.reserve(source.size() + initialisers.size() + 256);
+            for (const std::string& line : lines)
+            {
+                out += line;
+                out += '\n';
+            }
+            out += std::format("void {}()\n{{\n{}}}\n", sInitialiseGlobals, initialisers);
+            return out;
         }
 
         // Moves every #line source number of a linked shader up by an offset, and starts it on its own number
@@ -811,19 +1400,31 @@ namespace Shader
         std::string lines;
         lines.reserve(source.size());
         std::vector<bool> skipped;
-        convertLines(source, result, lines, skipped);
+        std::vector<bool> kept;
+        convertLines(source, result, lines, skipped, kept);
 
         Uses uses;
-        const std::string body = convertNames(lines, stage, uses, skipped);
+        std::string body = convertNames(lines, stage, uses, skipped);
         for (const std::string& name : uses.mUnknown)
             result.mErrors.push_back(name + " has no GLSL ES 3.00 equivalent");
         if (uses.mDynamicFragData)
             result.mErrors.push_back("gl_FragData is indexed by something other than a number");
+        body = moveGlobalInitialisers(body, result, uses, skipped, kept);
         if (uses.mClipVertex)
-            result.mDropped.push_back("gl_ClipVertex (user clip planes)");
+        {
+            body = renameWord(body, "main", sShaderMain);
+            if (!body.empty() && body.back() != '\n')
+                body += '\n';
+            body += clipDistanceMain();
+        }
 
         result.mSource = preamble(stage, uses) + body;
         return result;
+    }
+
+    std::string clipPlaneUniformName(unsigned int index)
+    {
+        return std::format("of_ClipPlane{}", index);
     }
 
     std::string foldLinkedShaders(std::string_view main, const std::vector<std::string>& linked)

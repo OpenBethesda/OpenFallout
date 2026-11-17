@@ -132,16 +132,22 @@ namespace
         EXPECT_THAT(converted, HasSubstr("textureProj(a, vec3(1.0)) + vec4(vec2(textureSize(a, 0))"));
     }
 
-    TEST(ShaderGlslEsTest, shadow_lookups_keep_their_vec4_result)
+    // The OpenGL build's shadow maps are fixed-point depth textures, whose comparison clamps the reference depth to
+    // [0, 1]: a surface beyond a shadow map's far plane is lit where nothing in the map is in front of it. ANGLE's
+    // Metal backend keeps a 24-bit depth texture as 32-bit float depth and compares the reference as it is, which
+    // shadows that surface. The lookups clamp it themselves.
+    TEST(ShaderGlslEsTest, shadow_lookups_keep_their_vec4_result_and_clamp_their_reference_depth)
     {
         const GlslEsShader result = fragment(
             "#version 120\nuniform sampler2DShadow s;\n"
             "void main() { gl_FragColor = vec4(shadow2DProj(s, vec4(1.0)).r + shadow2D(s, vec3(1.0)).r); }\n");
         EXPECT_THAT(result.mErrors, IsEmpty());
         EXPECT_THAT(result.mSource,
-            HasSubstr("vec4 shadow2DProj(sampler2DShadow s, vec4 c) { return vec4(textureProj(s, c)); }"));
-        EXPECT_THAT(
-            result.mSource, HasSubstr("vec4 shadow2D(sampler2DShadow s, vec3 c) { return vec4(texture(s, c)); }"));
+            HasSubstr("vec4 shadow2DProj(sampler2DShadow s, vec4 c) { vec3 p = c.xyz / c.w; "
+                      "return vec4(texture(s, vec3(p.xy, clamp(p.z, 0.0, 1.0)))); }"));
+        EXPECT_THAT(result.mSource,
+            HasSubstr("vec4 shadow2D(sampler2DShadow s, vec3 c) { "
+                      "return vec4(texture(s, vec3(c.xy, clamp(c.z, 0.0, 1.0)))); }"));
     }
 
     TEST(ShaderGlslEsTest, every_stage_declares_precision_for_floats_ints_and_samplers)
@@ -298,13 +304,48 @@ namespace
         EXPECT_THAT(result.mErrors, Contains(HasSubstr("uniform float a = 1.0;")));
     }
 
-    TEST(ShaderGlslEsTest, clip_vertex_is_dropped_and_reported)
+    TEST(ShaderGlslEsTest, clip_vertex_becomes_clip_distances_against_the_clip_plane_uniforms)
     {
-        const GlslEsShader result
-            = vertex("#version 120\nvoid main() { gl_ClipVertex = vec4(1.0); gl_Position = vec4(1.0); }\n");
+        const GlslEsShader result = vertex(
+            "#version 120\nvoid main() { gl_ClipVertex = vec4(1.0); gl_Position = vec4(1.0); }\nvoid domain() { }\n");
         EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mDropped, IsEmpty());
         EXPECT_THAT(result.mSource, Not(HasSubstr("gl_ClipVertex")));
-        EXPECT_THAT(result.mDropped, Contains(HasSubstr("gl_ClipVertex")));
+        // The extension is asked for before any declaration, and only when the context has it
+        EXPECT_THAT(result.mSource,
+            StartsWith("#version 300 es\n#ifdef GL_ANGLE_clip_cull_distance\n"
+                       "#extension GL_ANGLE_clip_cull_distance : enable\n#endif\n"));
+        ASSERT_EQ(sClipPlaneCount, 2);
+        for (unsigned int i = 0; i < sClipPlaneCount; ++i)
+        {
+            EXPECT_THAT(result.mSource, HasSubstr("uniform vec4 " + clipPlaneUniformName(i) + ";"));
+            EXPECT_THAT(result.mSource,
+                HasSubstr("gl_ClipDistance[" + std::to_string(i) + "] = dot(of_ClipVertex, " + clipPlaneUniformName(i)
+                    + ");"));
+        }
+        // The shader's own main runs first; the distances follow from the eye-space position it wrote
+        EXPECT_THAT(body(result.mSource), HasSubstr("void of_main() { of_ClipVertex = vec4(1.0);"));
+        EXPECT_THAT(body(result.mSource), HasSubstr("void domain() { }"));
+        EXPECT_LT(result.mSource.find("void of_main()"), result.mSource.find("void main()"));
+        EXPECT_THAT(result.mSource, HasSubstr("void main()\n{\n    of_main();\n"));
+    }
+
+    TEST(ShaderGlslEsTest, shaders_without_clip_vertex_write_no_clip_distance)
+    {
+        for (const GlslEsShader& result : { vertex("#version 120\nvoid main() { gl_Position = vec4(1.0); }\n"),
+                 fragment("#version 120\nvoid main() { gl_FragColor = vec4(1.0); }\n") })
+        {
+            EXPECT_THAT(result.mErrors, IsEmpty());
+            EXPECT_THAT(result.mSource, Not(HasSubstr("gl_ClipDistance")));
+            EXPECT_THAT(result.mSource, Not(HasSubstr("clip_cull_distance")));
+            EXPECT_THAT(result.mSource, Not(HasSubstr("of_main")));
+        }
+    }
+
+    TEST(ShaderGlslEsTest, clip_plane_uniforms_have_one_name_each)
+    {
+        EXPECT_EQ(clipPlaneUniformName(0), "of_ClipPlane0");
+        EXPECT_EQ(clipPlaneUniformName(1), "of_ClipPlane1");
     }
 
     TEST(ShaderGlslEsTest, built_ins_glsl_es_keeps_are_left_alone)
@@ -314,6 +355,517 @@ namespace
         EXPECT_THAT(result.mErrors, IsEmpty());
         EXPECT_THAT(
             body(result.mSource), HasSubstr("if (gl_FrontFacing) of_FragData[0] = gl_FragCoord; gl_FragDepth = 0.0;"));
+    }
+
+    // A post-processing pass shares one header between its stages, with lines like these that only one stage expands.
+    // A vertex attribute there takes the vertex stage's name in both stages: OpenSceneGraph's own pass over the text
+    // (which the engine's copy runs on every stage) would otherwise declare a vertex input for it in a fragment shader,
+    // before the default precision, which GLSL ES refuses
+    TEST(ShaderGlslEsTest, a_define_naming_a_built_in_of_the_other_stage_is_left_alone)
+    {
+        const GlslEsShader vertexResult = vertex(
+            "#version 120\n#define omw_FragColor gl_FragColor\n#define omw_Vertex gl_Vertex\n"
+            "void main() { gl_Position = omw_Vertex; }\n");
+        EXPECT_THAT(vertexResult.mErrors, IsEmpty());
+        EXPECT_THAT(vertexResult.mSource, HasSubstr("#define omw_FragColor gl_FragColor\n"));
+        EXPECT_THAT(vertexResult.mSource, HasSubstr("#define omw_Vertex osg_Vertex\n"));
+        EXPECT_THAT(vertexResult.mSource, HasSubstr("in vec4 osg_Vertex;"));
+        EXPECT_THAT(vertexResult.mSource, Not(HasSubstr("of_FragData")));
+
+        const GlslEsShader fragmentResult = fragment(
+            "#version 120\n#define omw_FragColor gl_FragColor\n#define omw_Vertex gl_Vertex\n"
+            "void main() { omw_FragColor = vec4(1.0); }\n");
+        EXPECT_THAT(fragmentResult.mErrors, IsEmpty());
+        EXPECT_THAT(fragmentResult.mSource, HasSubstr("#define omw_FragColor of_FragData[0]\n"));
+        EXPECT_THAT(fragmentResult.mSource, HasSubstr("layout(location = 0) out vec4 of_FragData[1];"));
+        EXPECT_THAT(fragmentResult.mSource, HasSubstr("#define omw_Vertex osg_Vertex\n"));
+        EXPECT_THAT(fragmentResult.mSource, Not(HasSubstr("gl_Vertex")));
+        EXPECT_THAT(fragmentResult.mSource, Not(HasSubstr("in vec4 osg_Vertex")));
+    }
+
+    // A comment is one space to the preprocessor, even one over several lines: the #define goes on after it
+    TEST(ShaderGlslEsTest, a_define_goes_on_past_a_comment_over_several_lines)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "#define omw_Position(x) \\\n"
+            "    /* a comment\n"
+            "       on two lines */ \\\n"
+            "    (x + gl_Vertex)\n"
+            "void main() { gl_FragColor = vec4(1.0); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, Not(HasSubstr("in vec4 osg_Vertex")));
+        // The comment's line breaks are kept (the line numbers stay right), each continuing the #define
+        const std::size_t start = result.mSource.find("#define omw_Position(x)");
+        const std::size_t last = result.mSource.find("(x + osg_Vertex)\n");
+        ASSERT_NE(start, std::string::npos);
+        ASSERT_NE(last, std::string::npos);
+        const std::string defineLines = result.mSource.substr(start, last - start);
+        EXPECT_EQ(count(defineLines, "\n"), 3u);
+        EXPECT_EQ(count(defineLines, "\\\n"), 3u);
+    }
+
+    TEST(ShaderGlslEsTest, a_built_in_of_the_other_stage_outside_a_define_is_an_error)
+    {
+        EXPECT_THAT(fragment("#version 120\nvoid main() { gl_FragColor = gl_Vertex; }\n").mErrors,
+            Contains(HasSubstr("gl_Vertex")));
+        EXPECT_THAT(vertex("#version 120\nvoid main() { gl_FragColor = vec4(1.0); }\n").mErrors,
+            Contains(HasSubstr("gl_FragColor")));
+    }
+
+    // GLSL 1.20 lets a global variable start from a uniform; GLSL ES 3.00 takes only constant initialisers there
+    TEST(ShaderGlslEsTest, global_initialisers_that_read_uniforms_move_to_the_start_of_main)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float time = fract(t);\n"
+            "const float k = 2.0;\n"
+            "vec2 v = vec2(1.0);\n"
+            "float twice = time * k;\n"
+            "void main() { gl_FragColor = vec4(twice); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, HasSubstr("\nvoid of_initialiseGlobals();\n#line 1 0\n"));
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nfloat time;\n#define OF_GLOBAL_INIT_0\n#line 4 0\n"));
+        EXPECT_THAT(text, HasSubstr("\nconst float k = 2.0;\nvec2 v = vec2(1.0);\n"));
+        EXPECT_THAT(text, HasSubstr("\nfloat twice;\n#define OF_GLOBAL_INIT_1\n#line 7 0\n"));
+        EXPECT_THAT(text, HasSubstr("void main() {of_initialiseGlobals(); of_FragData[0] = vec4(twice); }\n"));
+        EXPECT_THAT(text,
+            HasSubstr("void of_initialiseGlobals()\n{\n#ifdef OF_GLOBAL_INIT_0\n#line 3 0\n    time = fract(t);\n"
+                      "#endif\n#ifdef OF_GLOBAL_INIT_1\n#line 6 0\n    twice = time * k;\n#endif\n}\n"));
+    }
+
+    TEST(ShaderGlslEsTest, a_global_array_whose_initialiser_moves_keeps_its_size)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float steps[2] = float[2](t, 1.0);\n"
+            "void main() { gl_FragColor = vec4(steps[0]); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nfloat steps[2];\n#define OF_GLOBAL_INIT_0\n#line 4 0\n"));
+        EXPECT_THAT(text, HasSubstr("#ifdef OF_GLOBAL_INIT_0\n#line 3 0\n    steps = float[2](t, 1.0);\n#endif\n"));
+    }
+
+    // Without its initialiser such an array has no size: the size is written out where the initialiser says it, and
+    // the line is left as it is where it does not
+    TEST(ShaderGlslEsTest, a_global_array_sized_by_its_initialiser_is_never_left_without_a_size)
+    {
+        const GlslEsShader sized = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float steps[] = float[2](t, 1.0);\n"
+            "void main() { gl_FragColor = vec4(steps[0]); }\n");
+        EXPECT_THAT(sized.mErrors, IsEmpty());
+        EXPECT_THAT(body(sized.mSource), HasSubstr("\nfloat steps[2];\n#define OF_GLOBAL_INIT_0\n#line 4 0\n"));
+        EXPECT_THAT(body(sized.mSource), HasSubstr("    steps = float[2](t, 1.0);\n"));
+
+        const GlslEsShader unsized = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float steps[] = float[](t, 1.0);\n"
+            "void main() { gl_FragColor = vec4(steps[0]); }\n");
+        EXPECT_THAT(body(unsized.mSource), HasSubstr("\nfloat steps[] = float[](t, 1.0);\n"));
+        EXPECT_THAT(unsized.mSource, Not(HasSubstr("of_initialiseGlobals")));
+    }
+
+    // A structure's constructor over constants is a constant expression
+    TEST(ShaderGlslEsTest, a_global_built_from_a_structure_of_constants_stays_where_it_is)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "struct Step { float size; };\n"
+            "Step steps[] = Step[2](Step(1.0), Step(2.0));\n"
+            "uniform float t;\n"
+            "Step moving = Step(t);\n"
+            "void main() { gl_FragColor = vec4(steps[0].size + moving.size); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nStep steps[] = Step[2](Step(1.0), Step(2.0));\n"));
+        EXPECT_THAT(text, HasSubstr("\nStep moving;\n#define OF_GLOBAL_INIT_0\n"));
+        EXPECT_THAT(text, HasSubstr("    moving = Step(t);\n"));
+    }
+
+    TEST(ShaderGlslEsTest, a_global_initialiser_moved_to_main_keeps_its_preprocessor_branch)
+    {
+        const GlslEsShader result = vertex(
+            "#version 120\n"
+            "uniform float t;\n"
+            "#if A\n"
+            "float x = t;\n"
+            "#else\n"
+            "float x = 2.0 * t;\n"
+            "#endif\n"
+            "void main()\n"
+            "{\n"
+            "    gl_Position = vec4(x);\n"
+            "}\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text,
+            HasSubstr("#if A\nfloat x;\n#define OF_GLOBAL_INIT_0\n#line 5 0\n#else\nfloat x;\n"
+                      "#define OF_GLOBAL_INIT_1\n#line 7 0\n#endif\n"));
+        EXPECT_THAT(text, HasSubstr("void main()\n{of_initialiseGlobals();\n    gl_Position"));
+        EXPECT_THAT(text,
+            HasSubstr("#ifdef OF_GLOBAL_INIT_0\n#line 4 0\n    x = t;\n#endif\n#ifdef OF_GLOBAL_INIT_1\n"
+                      "#line 6 0\n    x = 2.0 * t;\n#endif\n"));
+    }
+
+    // A linked shader is folded in after main, and so are its globals
+    TEST(ShaderGlslEsTest, a_global_initialiser_after_main_is_moved_too)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "float level();\n"
+            "void main() { gl_FragColor = vec4(level()); }\n"
+            "#line 1 100\n"
+            "uniform float t;\n"
+            "float stored = t;\n"
+            "float level() { return stored; }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nfloat stored;\n#define OF_GLOBAL_INIT_0\n#line 3 100\n"));
+        EXPECT_THAT(text, HasSubstr("#ifdef OF_GLOBAL_INIT_0\n#line 2 100\n    stored = t;\n#endif\n"));
+        EXPECT_LT(text.find("float level() {"), text.find("void of_initialiseGlobals()\n{"));
+    }
+
+    TEST(ShaderGlslEsTest, shaders_with_constant_globals_only_are_left_as_they_are)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\nconst float k = 2.0;\nfloat a = k * 2.0, b = 1.0;\nvec3 c = vec3(sin(k));\n"
+            "void main() { gl_FragColor = vec4(c, a + b); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, Not(HasSubstr("of_initialiseGlobals")));
+        EXPECT_THAT(result.mSource, HasSubstr("\nfloat a = k * 2.0, b = 1.0;\nvec3 c = vec3(sin(k));\n"));
+    }
+
+    TEST(ShaderGlslEsTest, names_glsl_es_reserves_are_renamed)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform sampler2D tex;\n"
+            "vec3 filter(vec3 sample) { return sample * 2.0; }\n"
+            "void main() { vec3 sample = texture2D(tex, vec2(0.0)).rgb; gl_FragColor = vec4(filter(sample), 1.0); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("vec3 of_filter(vec3 of_sample) { return of_sample * 2.0; }"));
+        EXPECT_THAT(text, HasSubstr("vec3 of_sample = texture(tex, vec2(0.0)).rgb;"));
+        EXPECT_THAT(text, HasSubstr("vec4(of_filter(of_sample), 1.0)"));
+    }
+
+    // A uniform is set by its name from outside the shader: renaming it would lose its value
+    TEST(ShaderGlslEsTest, a_uniform_with_a_name_glsl_es_reserves_is_an_error)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\nuniform sampler2D texture;\nvoid main() { gl_FragColor = texture2D(texture, vec2(0.0)); "
+            "}\n");
+        EXPECT_THAT(result.mErrors, Contains(HasSubstr("texture")));
+    }
+
+    // Each name of a declaration of several uniforms is set from outside the shader
+    TEST(ShaderGlslEsTest, every_uniform_of_a_declaration_of_several_is_checked)
+    {
+        EXPECT_THAT(
+            fragment("#version 120\nuniform float gain, filter;\nvoid main() { gl_FragColor = vec4(gain); }\n").mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(
+            fragment("#version 120\nuniform vec2 offsets[2], texture;\nvoid main() { gl_FragColor = vec4(0.0); }\n")
+                .mErrors,
+            Contains(HasSubstr("uniform texture")));
+        // Two declarations on one line, and a declaration that goes on over the next line
+        EXPECT_THAT(fragment("#version 120\nuniform float gain; uniform float filter;\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\nuniform float gain,\n    filter;\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\nuniform float gain, /* a note, ended; */\n    filter;\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\nuniform float gain,\n    level; uniform float scale;\n"
+                             "void main() { gl_FragColor = vec4(gain * level * scale); }\n")
+                        .mErrors,
+            IsEmpty());
+        EXPECT_THAT(fragment("#version 120\nuniform float gain, level[2], scale;\n"
+                             "void main() { gl_FragColor = vec4(gain * scale); }\n")
+                        .mErrors,
+            IsEmpty());
+    }
+
+    // The text of a #define is code where the macro is used: a uniform it declares is checked like any other
+    TEST(ShaderGlslEsTest, a_uniform_declared_in_a_define_is_checked)
+    {
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE uniform float filter;\nDECLARE\n"
+                             "void main() { gl_FragColor = vec4(filter); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(kind) uniform kind gain, texture;\nDECLARE(float)\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform texture")));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE uniform float gain, \\\n    filter;\nDECLARE\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE uniform float gain;\nDECLARE\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            IsEmpty());
+        EXPECT_THAT(fragment("#version 120\n#if 0\n#define DECLARE uniform float filter;\n#endif\n"
+                             "void main() { gl_FragColor = vec4(0.0); }\n")
+                        .mErrors,
+            IsEmpty());
+        // A declaration that the #define leaves open ends with the #define's line
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE uniform float gain\nDECLARE;\nvarying vec2 uv, filter;\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            IsEmpty());
+    }
+
+    // The name is only known where the macro is used, so it cannot be checked: such a declaration is refused
+    TEST(ShaderGlslEsTest, a_uniform_named_by_a_parameter_of_its_define_is_an_error)
+    {
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(name) uniform float name;\nDECLARE(filter)\n"
+                             "void main() { gl_FragColor = vec4(filter); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr("DECLARE"), HasSubstr("parameter name"))));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(kind, name) \\\n    uniform kind name;\n"
+                             "DECLARE(float, gain)\nvoid main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr("DECLARE"), HasSubstr("parameter name"))));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(part) uniform float fil##part;\nDECLARE(ter)\n"
+                             "void main() { gl_FragColor = vec4(filter); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr("DECLARE"), HasSubstr("##"))));
+        // A parameter that gives the type leaves the name as it is written
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(kind) uniform kind gain;\nDECLARE(float)\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            IsEmpty());
+        // The parameters of a #define do not outlive it
+        EXPECT_THAT(fragment("#version 120\n#define TWICE(gain) (gain * 2.0)\nuniform float gain;\n"
+                             "void main() { gl_FragColor = vec4(TWICE(gain)); }\n")
+                        .mErrors,
+            IsEmpty());
+    }
+
+    // The compiler never sees a declaration in a branch the preprocessor skips
+    TEST(ShaderGlslEsTest, a_uniform_with_a_reserved_name_in_a_skipped_branch_is_not_an_error)
+    {
+        EXPECT_THAT(fragment("#version 120\n#if 0\nuniform sampler2D texture;\n#endif\nuniform sampler2D tex;\n"
+                             "void main() { gl_FragColor = texture2D(tex, vec2(0.0)); }\n")
+                        .mErrors,
+            IsEmpty());
+        EXPECT_THAT(fragment("#version 120\n#if 0\nuniform float gain,\n    filter;\n#endif\n"
+                             "void main() { gl_FragColor = vec4(0.0); }\n")
+                        .mErrors,
+            IsEmpty());
+        // In a branch the converter cannot decide it may be compiled
+        EXPECT_THAT(fragment("#version 120\n#ifdef GL_EXT_some_extension\nuniform float filter;\n#endif\n"
+                             "void main() { gl_FragColor = vec4(0.0); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+    }
+
+    TEST(ShaderGlslEsTest, global_initialisers_run_from_the_main_the_preprocessor_keeps)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float x = t;\n"
+            "#if 0\n"
+            "void main() { gl_FragColor = vec4(0.0); }\n"
+            "#else\n"
+            "void main() { gl_FragColor = vec4(x); }\n"
+            "#endif\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("#if 0\nvoid main() { of_FragData[0] = vec4(0.0); }\n"));
+        EXPECT_THAT(text, HasSubstr("#else\nvoid main() {of_initialiseGlobals(); of_FragData[0] = vec4(x); }\n"));
+    }
+
+    // Only one of them is compiled, and the converter cannot tell which
+    TEST(ShaderGlslEsTest, global_initialisers_run_from_each_main_that_may_be_compiled)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "uniform float t;\n"
+            "float x = t;\n"
+            "#ifdef GL_EXT_some_extension\n"
+            "void main() { gl_FragColor = vec4(1.0); }\n"
+            "#else\n"
+            "void main() { gl_FragColor = vec4(x); }\n"
+            "#endif\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        const std::string text = body(result.mSource);
+        EXPECT_THAT(text, HasSubstr("\nvoid main() {of_initialiseGlobals(); of_FragData[0] = vec4(1.0); }\n"));
+        EXPECT_THAT(text, HasSubstr("\nvoid main() {of_initialiseGlobals(); of_FragData[0] = vec4(x); }\n"));
+    }
+
+    // A macro is expanded where the line stands. One whose text is a constant expression keeps the initialiser
+    // constant, so it stays there, even when the macro is given another value further down.
+    TEST(ShaderGlslEsTest, a_global_initialiser_from_a_constant_macro_stays_where_it_is)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "#define BASE 2.0\n"
+            "#define SCALE (BASE * 0.5)\n"
+            "float x = SCALE;\n"
+            "#undef SCALE\n"
+            "#define SCALE 2.0\n"
+            "void main() { gl_FragColor = vec4(x * SCALE); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, Not(HasSubstr("of_initialiseGlobals")));
+        EXPECT_THAT(body(result.mSource), HasSubstr("\nfloat x = SCALE;\n"));
+    }
+
+    // A macro defined in a branch the preprocessor surely takes is as constant as one outside any branch. In a branch
+    // decided only when compiling its value is not known: the initialiser moves, and a later change is an error.
+    TEST(ShaderGlslEsTest, a_constant_macro_from_a_branch_surely_taken_keeps_the_initialiser_where_it_is)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "#if 1\n"
+            "#define SCALE 2.0\n"
+            "#endif\n"
+            "float x = SCALE;\n"
+            "#undef SCALE\n"
+            "void main() { gl_FragColor = vec4(x); }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(result.mSource, Not(HasSubstr("of_initialiseGlobals")));
+        EXPECT_THAT(body(result.mSource), HasSubstr("\nfloat x = SCALE;\n"));
+
+        EXPECT_THAT(fragment("#version 120\n"
+                             "#ifdef GL_EXT_some_extension\n"
+                             "#define SCALE 2.0\n"
+                             "#endif\n"
+                             "float x = SCALE;\n"
+                             "#undef SCALE\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+    }
+
+    TEST(ShaderGlslEsTest, macros_that_name_each_other_are_not_followed_for_ever)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n"
+            "#define A B\n"
+            "#define B A\n"
+            "float x = A;\n"
+            "void main() { gl_FragColor = vec4(x); }\n");
+        EXPECT_THAT(result.mSource, HasSubstr("of_initialiseGlobals"));
+    }
+
+    // Moved to the end, the initialiser would read the macro's later value, or a macro no longer there
+    TEST(ShaderGlslEsTest, a_moved_global_initialiser_naming_a_macro_changed_later_is_an_error)
+    {
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define SCALE 1.0\n"
+                             "float x = u * SCALE;\n"
+                             "#undef SCALE\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define SCALE(v) (v * 2.0)\n"
+                             "float x = SCALE(u);\n"
+                             "#undef SCALE\n"
+                             "#define SCALE(v) (v * 3.0)\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        // A macro reached through the text of another one counts too, whether it changes later or is first defined
+        // later
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define B 1.0\n"
+                             "#define A (B * u)\n"
+                             "float x = A;\n"
+                             "#undef B\n"
+                             "#define B 2.0\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("B"))));
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define A (B * u)\n"
+                             "float x = A;\n"
+                             "#define B 2.0\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("B"))));
+        EXPECT_THAT(fragment("#version 120\n"
+                             "#define SCALE 2.0\n"
+                             "#define FACTOR SCALE\n"
+                             "uniform float u;\n"
+                             "float x = u * FACTOR;\n"
+                             "#undef SCALE\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        // The text of a #define that goes on over lines is followed on every line of it
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define B 1.0\n"
+                             "#define A \\\n"
+                             "    (B * u)\n"
+                             "float x = A;\n"
+                             "#undef B\n"
+                             "#define B 2.0\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("B"))));
+        // A line continuation joins the lines as they are, so a name can be split by one
+        EXPECT_THAT(fragment("#version 120\n"
+                             "uniform float u;\n"
+                             "#define SCALE 1.0\n"
+                             "#define A SC\\\n"
+                             "ALE * u\n"
+                             "float x = A;\n"
+                             "#undef SCALE\n"
+                             "#define SCALE 2.0\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        // A branch decided only when compiling may give a macro either text: each is followed
+        EXPECT_THAT(fragment("#version 120\n"
+                             "#define SCALE 2.0\n"
+                             "#if defined(GL_EXT_gpu_shader4)\n"
+                             "#define FACTOR SCALE\n"
+                             "#else\n"
+                             "#define FACTOR 1.0\n"
+                             "#endif\n"
+                             "uniform float u;\n"
+                             "float x = u * FACTOR;\n"
+                             "#undef SCALE\n"
+                             "void main() { gl_FragColor = vec4(x); }\n")
+                        .mErrors,
+            Contains(AllOf(HasSubstr(" x "), HasSubstr("SCALE"))));
+        // A macro that keeps its value moves with the initialiser as before
+        const GlslEsShader kept = fragment(
+            "#version 120\n"
+            "uniform float u;\n"
+            "#define SCALE 2.0\n"
+            "float x = u * SCALE;\n"
+            "void main() { gl_FragColor = vec4(x); }\n");
+        EXPECT_THAT(kept.mErrors, IsEmpty());
+        EXPECT_THAT(kept.mSource, HasSubstr("    x = u * SCALE;\n"));
+    }
+
+    TEST(ShaderGlslEsTest, multiview_view_index_keeps_its_name)
+    {
+        const GlslEsShader result = fragment(
+            "#version 120\n#if OMW_MULTIVIEW\nint view() { return int(gl_ViewID_OVR); }\n#endif\nvoid main() { }\n");
+        EXPECT_THAT(result.mErrors, IsEmpty());
+        EXPECT_THAT(body(result.mSource), HasSubstr("int(gl_ViewID_OVR)"));
     }
 
     TEST(ShaderGlslEsTest, desktop_built_ins_without_an_equivalent_are_errors)

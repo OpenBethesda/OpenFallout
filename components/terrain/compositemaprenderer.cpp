@@ -127,6 +127,11 @@ namespace Terrain
                 renderInfo.getState()->pushStateSet(stateset);
 
             renderInfo.getState()->apply();
+            // The pass's program reads the model-view matrix that OpenSceneGraph gives as a uniform where there is no
+            // fixed-function matrix (OpenGL ES): it is given to a program before a draw, which RenderLeaf does and a
+            // draw of our own must do too, or the program keeps a matrix of zeros and draws nothing
+            if (state.getUseModelViewAndProjectionUniforms())
+                state.applyModelViewAndProjectionUniformsIfRequired();
 
             glViewport(0, 0, compositeMap.mTexture->getTextureWidth(), compositeMap.mTexture->getTextureHeight());
             drw->drawImplementation(renderInfo);

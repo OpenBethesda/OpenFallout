@@ -122,6 +122,15 @@ namespace SceneUtil
     // Unlike osg::Image::computePixelFormat, this also covers compressed formats
     GLenum computeUnsizedPixelFormat(GLenum format);
 
+    // Whether every level of an image, at the size that follows from the first level's and at its stored offset, lies
+    // inside the first `dataSize` bytes of the image's data: what the graphics library and the conversions below read
+    // and write. An image made with sizes and offsets from a file must be checked against what was allocated. A chain
+    // of more levels than the first level's size gives (a 2^n side gives n + 1) does not fit either.
+    bool mipmapsFit(const osg::Image& image, std::size_t dataSize);
+
+    // The same for one level
+    bool mipmapLevelFits(const osg::Image& image, unsigned int level, std::size_t dataSize);
+
     // Turns an 8-bit BGR or BGRA image, every mipmap of it, into RGB or RGBA in place, and says whether it did. OpenGL
     // ES uploads no BGR or BGRA pixels, so the Metal build does this to images as they load.
     bool toRgbOrder(osg::Image& image);
@@ -129,9 +138,15 @@ namespace SceneUtil
     // Turns an uncompressed image OpenGL ES 3.0 would refuse to upload into one it takes and samples as desktop OpenGL
     // samples the original, in place, and says whether it did: BGR and BGRA become RGB and RGBA (toRgbOrder), the
     // 16-bit BGRA packings (1-5-5-5 and 4-4-4-4) become 8-bit RGBA, 2-10-10-10 pixels become RGBA order under the sized
-    // 10-bit format, and 4-byte pixels under an RGB internal format take an opaque alpha and an RGBA internal format.
-    // The Metal build does this to images as they load.
+    // 10-bit format, 4-byte pixels under an RGB internal format take an opaque alpha and an RGBA internal format, and
+    // float depth pixels under the unsized depth format take the sized float depth format. The Metal build does this to
+    // images as they load and to images made in code.
     bool toOpenGLESFormat(osg::Image& image);
+
+    // Sets both filters of a depth texture. A depth texture read as a number (no comparison) is filtered as asked in
+    // desktop OpenGL; OpenGL ES 3.0 takes such a texture as incomplete unless it is NEAREST-filtered (every read then
+    // gives 0), so the Metal build gives it NEAREST. A comparing depth texture keeps the filter asked for in both.
+    void setDepthTextureFilter(osg::Texture& texture, osg::Texture::FilterMode filter);
 
     // Recover the presumed texture type for the given texture unit
     // It may be set as a state attribute or it may come from the used texture's name

@@ -10,6 +10,11 @@ namespace SceneUtil
     int getColorFormatChannelCount(GLenum format);
     void getColorFormatSourceFormatAndType(GLenum internalFormat, GLenum& sourceFormat, GLenum& sourceType);
 
+    // The sized format of a colour format: a base format (RGB, RGBA) becomes its 8-bit sized format, which is what a
+    // texture of that base format with byte pixels holds; a sized format is kept. OpenGL ES makes render buffers only
+    // of sized formats, and resolves a multisampled one only into a texture of the same format.
+    GLenum getSizedColorFormat(GLenum internalFormat);
+
     namespace Color
     {
         GLenum colorSourceFormat();

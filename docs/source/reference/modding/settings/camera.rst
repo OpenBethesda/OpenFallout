@@ -111,7 +111,9 @@ Camera Settings
    terrain and even tightly coupled meshes at extreme view distances. For this to
    be useful, a floating point depth buffer is required. These features require
    driver and hardware support, but should work on any semi-modern desktop hardware
-   through OpenGL extensions. The exception is macOS, which has since dropped
-   development of OpenGL drivers. If unsupported, this setting has no effect.
+   through OpenGL extensions. On a Mac, the OpenGL build has no clip control
+   (Apple's OpenGL lacks it), so there this setting has no effect; the Metal build
+   has clip control and 32-bit float depth through OpenGL ES, and uses a reverse-z
+   depth buffer when this setting is on. If unsupported, this setting has no effect.
 
    The performance impact of this feature should be negligible.

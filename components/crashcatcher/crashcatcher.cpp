@@ -1,9 +1,11 @@
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <span>
+#include <string>
 
 #include <errno.h>
 #include <limits.h>
@@ -28,10 +30,16 @@
 #include <signal.h>
 
 #include <cassert>
+#include <dlfcn.h>
 #include <libproc.h>
+#include <mach-o/dyld.h>
+#include <mach/mach.h>
+#include <poll.h>
 #include <sys/sysctl.h>
+#include <sys/ucontext.h>
 
 #include "crashcatcher.hpp"
+#include "crashframe.hpp"
 
 static const char fatal_err[] = "\n\n*** Fatal Error ***\n";
 static const char pipe_err[] = "!!! Failed to create pipe\n";
@@ -49,7 +57,21 @@ static struct
     int signum;
     pid_t pid;
     std::optional<siginfo_t> siginfo;
+    // The crashed thread's name and frames, taken in the crashed process: the crash log has them when no debugger
+    // can be started (a hidden run gives the engine no debugger, and a debugger that attaches can end the process).
+    // Only raw addresses here: the names of their images and symbols need the loader's lock, which the crashed thread
+    // may hold, and follow on the pipe after this record (frameNames).
+    char thread[64];
+    std::uintptr_t engineImage;
+    unsigned int registerCount;
+    unsigned int frameCount;
+    std::uintptr_t frames[66];
 } crash_info;
+
+// The frames with their images and symbols, made after the raw record has gone to the crash handler
+static char frameNames[6144];
+// How long the crash handler waits for the names of the frames before it writes the log without them
+static constexpr int frameNamesWaitMs = 3000;
 
 namespace
 {
@@ -261,7 +283,84 @@ static size_t safe_write(int fd, const void* buf, size_t len)
     return ret;
 }
 
-static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
+// Reads one word of the crashed process without faulting on a bad address
+static bool readWord(std::uintptr_t address, std::uintptr_t& value)
+{
+    vm_size_t read = 0;
+    return vm_read_overwrite(mach_task_self(), address, sizeof(value), reinterpret_cast<vm_address_t>(&value), &read)
+        == KERN_SUCCESS
+        && read == sizeof(value);
+}
+
+// The program counter, the link register and the return addresses of the frame pointer chain of the crashed thread.
+// Async-signal-safe: reads registers and memory only.
+static void recordFrames(void* context)
+{
+    crash_info.thread[0] = '\0';
+    crash_info.registerCount = 0;
+    crash_info.frameCount = 0;
+    pthread_getname_np(pthread_self(), crash_info.thread, sizeof(crash_info.thread));
+    const auto* ucontext = static_cast<const ucontext_t*>(context);
+    if (ucontext == nullptr || ucontext->uc_mcontext == nullptr)
+        return;
+    const auto add = [](std::uintptr_t address) {
+        // Return addresses carry no pointer authentication in an arm64 (not arm64e) process; keep the address bits only
+        if (crash_info.frameCount < std::size(crash_info.frames))
+            crash_info.frames[crash_info.frameCount++] = address & 0x0000ffffffffffffULL;
+    };
+#if defined(__arm64__)
+    const auto& registers = ucontext->uc_mcontext->__ss;
+    add(arm_thread_state64_get_pc(registers));
+    add(arm_thread_state64_get_lr(registers));
+    std::uintptr_t frame = arm_thread_state64_get_fp(registers);
+#else
+    const auto& registers = ucontext->uc_mcontext->__ss;
+    add(registers.__rip);
+    std::uintptr_t frame = registers.__rbp;
+#endif
+    crash_info.registerCount = crash_info.frameCount;
+    for (int index = 0; index < 64 && frame != 0 && frame % sizeof(std::uintptr_t) == 0; ++index)
+    {
+        std::uintptr_t next = 0;
+        std::uintptr_t returnAddress = 0;
+        if (!readWord(frame, next) || !readWord(frame + sizeof(std::uintptr_t), returnAddress) || returnAddress == 0)
+            break;
+        add(returnAddress);
+        if (next <= frame)
+            break;
+        frame = next;
+    }
+}
+
+static const char* registerLabel(unsigned int index)
+{
+    return index == 0 ? "pc" : "lr";
+}
+
+// Each recorded frame with its image and symbol. Not async-signal-safe (dladdr takes the loader's lock): runs only
+// after the raw frames are with the crash handler, which writes the log without these if they do not come in time.
+static std::size_t nameFrames()
+{
+    std::span<char> out(frameNames, sizeof(frameNames));
+    std::size_t used = 0;
+    char label[8];
+    for (unsigned int i = 0; i < crash_info.frameCount; ++i)
+    {
+        const std::uintptr_t address = crash_info.frames[i];
+        if (i < crash_info.registerCount)
+            std::strncpy(label, registerLabel(i), sizeof(label));
+        else
+            CrashCatcher::formatFrameNumber(label, i - crash_info.registerCount);
+        Dl_info info{};
+        const bool known = address != 0 && dladdr(reinterpret_cast<const void*>(address), &info) != 0;
+        used += CrashCatcher::formatFrame(out.subspan(used), label, address, known ? info.dli_fname : nullptr,
+            known ? reinterpret_cast<std::uintptr_t>(info.dli_fbase) : 0, known ? info.dli_sname : nullptr,
+            known ? reinterpret_cast<std::uintptr_t>(info.dli_saddr) : 0);
+    }
+    return used;
+}
+
+static void crash_catcher(int signum, siginfo_t* siginfo, void* context)
 {
     /* Make sure the effective uid is the real uid */
     if (getuid() != geteuid())
@@ -285,6 +384,7 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
         crash_info.siginfo = std::nullopt;
     else
         crash_info.siginfo = *siginfo;
+    recordFrames(context);
 
     const pid_t dbgPid = fork();
     /* Fork off to start a crash handler */
@@ -309,6 +409,7 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
         default:
             safe_write(fd[1], &crash_info, sizeof(crash_info));
             close(fd[0]);
+            safe_write(fd[1], frameNames, nameFrames());
             close(fd[1]);
 
             /* Wait; we'll be killed when gdb is done */
@@ -325,9 +426,53 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
     }
 }
 
+static std::size_t readFully(int fd, void* buffer, std::size_t size)
+{
+    std::size_t done = 0;
+    while (done < size)
+    {
+        const ssize_t got = read(fd, static_cast<char*>(buffer) + done, size - done);
+        if (got == -1 && errno == EINTR)
+            continue;
+        if (got <= 0)
+            break;
+        done += static_cast<std::size_t>(got);
+    }
+    return done;
+}
+
+// What comes on `fd` until it is closed or `limitMs` milliseconds have passed
+static std::string readWithTimeLimit(int fd, int limitMs)
+{
+    std::string text;
+    const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(limitMs);
+    while (true)
+    {
+        const auto left
+            = std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now()).count();
+        if (left <= 0)
+            break;
+        pollfd entry{ fd, POLLIN, 0 };
+        const int ready = poll(&entry, 1, static_cast<int>(left));
+        if (ready == -1 && errno == EINTR)
+            continue;
+        if (ready <= 0)
+            break;
+        char chunk[1024];
+        const ssize_t got = read(fd, chunk, sizeof(chunk));
+        if (got == -1 && errno == EINTR)
+            continue;
+        if (got <= 0)
+            break;
+        text.append(chunk, static_cast<std::size_t>(got));
+    }
+    return text;
+}
+
 [[noreturn]] static void handleCrash(const char* logfile)
 {
-    if (fread(&crash_info, sizeof(crash_info), 1, stdin) != 1)
+    // read(), not fread(): the names of the frames that follow the record are read with a time limit
+    if (readFully(STDIN_FILENO, &crash_info, sizeof(crash_info)) != sizeof(crash_info))
     {
         fprintf(stderr, "Failed to retrieve info from crashed process: %s\n",
             std::generic_category().message(errno).c_str());
@@ -378,6 +523,26 @@ static void crash_catcher(int signum, siginfo_t* siginfo, void* /*context*/)
     if (crash_info.siginfo.has_value())
         printf("Address: %p\n", crash_info.siginfo->si_addr);
     fputc('\n', stdout);
+    crash_info.thread[sizeof(crash_info.thread) - 1] = '\0';
+    crash_info.frameCount = std::min<unsigned int>(crash_info.frameCount, std::size(crash_info.frames));
+    // The raw addresses first: if naming them hangs in the crashed process, the log already has them
+    printf("* Frames of the crashed thread \"%s\" (taken without a debugger; engine image at 0x%llx)\n",
+        crash_info.thread, static_cast<unsigned long long>(crash_info.engineImage));
+    for (unsigned int i = 0; i < crash_info.frameCount; ++i)
+    {
+        if (i < crash_info.registerCount)
+            printf("%s", registerLabel(i));
+        else
+            printf("#%u", i - crash_info.registerCount);
+        printf(" 0x%llx\n", static_cast<unsigned long long>(crash_info.frames[i]));
+    }
+    fputc('\n', stdout);
+    fflush(stdout);
+    const std::string names = readWithTimeLimit(STDIN_FILENO, frameNamesWaitMs);
+    if (names.empty())
+        printf("* The crashed process gave no names for these frames\n\n");
+    else
+        printf("* The same frames with their images and symbols\n%s\n", names.c_str());
     fflush(stdout);
 
     fflush(stdout);
@@ -439,6 +604,8 @@ static void getExecPath(char** argv)
 static bool crashCatcherInstallHandlers(char** argv)
 {
     getExecPath(argv);
+    // Where the engine is loaded, so that its frames in a crash log can be found in it without the names
+    crash_info.engineImage = reinterpret_cast<std::uintptr_t>(_dyld_get_image_header(0));
 
     /* Set an alternate signal stack so SIGSEGVs caused by stack overflows
      * still run */

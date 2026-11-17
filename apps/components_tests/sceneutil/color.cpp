@@ -32,4 +32,23 @@ namespace
         EXPECT_EQ(format, static_cast<GLenum>(GL_RGBA));
         EXPECT_EQ(type, static_cast<GLenum>(GL_FLOAT));
     }
+
+    // OpenGL ES makes render buffers (the multisampled targets of antialiasing) only of sized formats, where desktop
+    // OpenGL also takes a base format; a multisample resolve in OpenGL ES also wants the render buffer's format to be
+    // the one the texture it is resolved into has, which for a base format with byte pixels is the 8-bit sized format
+    TEST(SceneUtilColorTest, base_colour_formats_become_their_8_bit_sized_formats)
+    {
+        EXPECT_EQ(SceneUtil::getSizedColorFormat(GL_RGBA), static_cast<GLenum>(GL_RGBA8));
+        EXPECT_EQ(SceneUtil::getSizedColorFormat(GL_RGB), static_cast<GLenum>(GL_RGB8));
+        EXPECT_EQ(SceneUtil::getSizedColorFormat(4), static_cast<GLenum>(GL_RGBA8));
+        EXPECT_EQ(SceneUtil::getSizedColorFormat(3), static_cast<GLenum>(GL_RGB8));
+    }
+
+    TEST(SceneUtilColorTest, sized_colour_formats_are_kept)
+    {
+        EXPECT_EQ(SceneUtil::getSizedColorFormat(GL_RGBA8), static_cast<GLenum>(GL_RGBA8));
+        EXPECT_EQ(SceneUtil::getSizedColorFormat(GL_RGB8), static_cast<GLenum>(GL_RGB8));
+        EXPECT_EQ(SceneUtil::getSizedColorFormat(GL_RGBA16F), static_cast<GLenum>(GL_RGBA16F));
+        EXPECT_EQ(SceneUtil::getSizedColorFormat(GL_R11F_G11F_B10F), static_cast<GLenum>(GL_R11F_G11F_B10F));
+    }
 }

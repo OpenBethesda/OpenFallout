@@ -55,6 +55,7 @@
 #include <components/sceneutil/depth.hpp>
 #include <components/sceneutil/extradata.hpp>
 #include <components/sceneutil/fog.hpp>
+#include <components/sceneutil/gldialect.hpp>
 #include <components/sceneutil/keyframe.hpp>
 #include <components/sceneutil/material.hpp>
 #include <components/sceneutil/morphgeometry.hpp>
@@ -63,6 +64,7 @@
 #include <components/sceneutil/texmat.hpp>
 #include <components/sceneutil/texturetype.hpp>
 #include <components/sceneutil/userdata.hpp>
+#include <components/sceneutil/util.hpp>
 #include <components/sceneutil/visitor.hpp>
 
 #include "autotransform.hpp"
@@ -2316,6 +2318,7 @@ namespace NifOsg
 
             osg::ref_ptr<osg::Image> image(new osg::Image);
             const std::vector<unsigned char>& pixels = pixelData->mData;
+            std::size_t dataSize = pixels.size();
             switch (niPixelFormat.mFormat)
             {
                 case NiPixelFormat::Format::RGB:
@@ -2354,6 +2357,7 @@ namespace NifOsg
                     }
                     for (unsigned int& offset : mipmapOffsets)
                         offset *= numChannels;
+                    dataSize *= numChannels;
                     image->setImage(width, height, 1, pixelformat, pixelformat, GL_UNSIGNED_BYTE, data,
                         osg::Image::USE_NEW_DELETE, packing);
                     break;
@@ -2363,6 +2367,25 @@ namespace NifOsg
             }
 
             image->setMipmapLevels(mipmapOffsets);
+            // The graphics library and the conversion below take each level at the size that follows from the first
+            // level's, at its stored offset. A first level that does not fit the data is no picture; a chain that does
+            // not fit is not used.
+            if (!SceneUtil::mipmapLevelFits(*image, 0, dataSize))
+            {
+                Log(Debug::Info) << "Internal texture's first level in " << mFilename
+                                 << " does not fit its data, ignoring texture";
+                return nullptr;
+            }
+            if (!SceneUtil::mipmapsFit(*image, dataSize))
+            {
+                Log(Debug::Warning) << "Internal texture's mipmaps in " << mFilename
+                                    << " do not fit its size or data, using the first level only";
+                image->setMipmapLevels({});
+            }
+
+            // OpenGL ES uploads no BGR or BGRA pixels: the picture gets the layout the image manager gives its own
+            if constexpr (!SceneUtil::GLDialect::sUploadsBGR)
+                SceneUtil::toOpenGLESFormat(*image);
 
             return image;
         }
