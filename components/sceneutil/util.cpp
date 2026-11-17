@@ -4,8 +4,10 @@
 #include <array>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 
 #include <osg/FrameBufferObject>
+#include <osg/Image>
 #include <osg/Node>
 #include <osg/NodeVisitor>
 #include <osgUtil/CullVisitor>
@@ -268,6 +270,31 @@ namespace SceneUtil
     void OperationSequence::add(osg::Operation* operation)
     {
         mOperationQueue->add(operation);
+    }
+
+    bool toRgbOrder(osg::Image& image)
+    {
+        const GLenum format = image.getPixelFormat();
+        if ((format != GL_BGR && format != GL_BGRA) || image.getDataType() != GL_UNSIGNED_BYTE
+            || image.data() == nullptr)
+            return false;
+        const unsigned int step = format == GL_BGR ? 3 : 4;
+        for (unsigned int level = 0; level < image.getNumMipmapLevels(); ++level)
+        {
+            const int width = std::max(image.s() >> level, 1);
+            const int rows = std::max(image.t() >> level, 1) * std::max(image.r() >> level, 1);
+            const unsigned int rowStep
+                = osg::Image::computeRowWidthInBytes(width, format, GL_UNSIGNED_BYTE, image.getPacking());
+            unsigned char* row = image.getMipmapData(level);
+            for (int i = 0; i < rows; ++i, row += rowStep)
+                for (unsigned char* pixel = row; pixel < row + width * step; pixel += step)
+                    std::swap(pixel[0], pixel[2]);
+        }
+        const GLenum rgb = format == GL_BGR ? GL_RGB : GL_RGBA;
+        image.setPixelFormat(rgb);
+        if (image.getInternalTextureFormat() == static_cast<GLint>(format))
+            image.setInternalTextureFormat(rgb);
+        return true;
     }
 
     GLenum computeUnsizedPixelFormat(GLenum format)
