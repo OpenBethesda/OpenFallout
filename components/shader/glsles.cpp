@@ -574,6 +574,7 @@ namespace Shader
             static const std::regex uniformStart(
                 R"(^\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?[A-Za-z_]\w*(?:\s+|$))");
             static const std::regex directive(R"(^\s*#)");
+            static const std::regex defineStart(R"(^\s*#\s*define\s+[A-Za-z_]\w*(?:\([^)]*\))?)");
 
             const std::string code = blankComments(original);
             const std::string_view source = code;
@@ -596,25 +597,33 @@ namespace Shader
                 kept.push_back(branches.active() == Branches::Active::Yes);
                 std::smatch match;
                 // Every uniform the line declares, in each of its statements. The compiler never sees a declaration
-                // the preprocessor skips.
+                // the preprocessor skips. The text of a #define is code where the macro is used, so it is read too
+                // (after the macro's name and parameters); other directives declare nothing.
+                std::smatch define;
                 if (branches.active() == Branches::Active::No)
                     openUniform.reset();
-                else if (!std::regex_search(line, directive))
+                else if (!std::regex_search(line, directive)
+                    || (!openUniform && std::regex_search(line, define, defineStart)))
                 {
                     std::vector<std::string> names;
-                    std::size_t at = 0;
-                    while (at < line.size())
+                    std::size_t at = define.empty() ? 0 : static_cast<std::size_t>(define.length(0));
+                    // A line continuation is no part of the declaration
+                    std::size_t size = line.size();
+                    if (size > 0 && line[size - 1] == '\\')
+                        --size;
+                    while (at < size)
                     {
                         std::smatch start;
                         if (openUniform)
                         {
-                            const std::size_t read = openUniform->scan(std::string_view(line).substr(at), names);
+                            const std::size_t read
+                                = openUniform->scan(std::string_view(line).substr(at, size - at), names);
                             if (read == std::string_view::npos)
                                 break;
                             openUniform.reset();
                             at += read;
                         }
-                        else if (std::regex_search(line.cbegin() + at, line.cend(), start, uniformStart))
+                        else if (std::regex_search(line.cbegin() + at, line.cbegin() + size, start, uniformStart))
                         {
                             openUniform.emplace();
                             at += static_cast<std::size_t>(start.length(0));
@@ -623,11 +632,14 @@ namespace Shader
                         {
                             // Another statement: the next can start after its end
                             const std::size_t next = line.find_first_of(";{}", at);
-                            if (next == std::string::npos)
+                            if (next == std::string::npos || next >= size)
                                 break;
                             at = next + 1;
                         }
                     }
+                    // A #define ends with its line unless that is continued: so does a declaration in it
+                    if (!define.empty() && size == line.size())
+                        openUniform.reset();
                     for (const std::string& name : names)
                         if (isUnusableUniformName(name))
                             result.mErrors.push_back(

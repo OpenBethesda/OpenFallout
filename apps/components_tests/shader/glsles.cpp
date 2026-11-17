@@ -558,6 +558,36 @@ namespace
             IsEmpty());
     }
 
+    // The text of a #define is code where the macro is used: a uniform it declares is checked like any other
+    TEST(ShaderGlslEsTest, a_uniform_declared_in_a_define_is_checked)
+    {
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE uniform float filter;\nDECLARE\n"
+                             "void main() { gl_FragColor = vec4(filter); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE(kind) uniform kind gain, texture;\nDECLARE(float)\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform texture")));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE uniform float gain, \\\n    filter;\nDECLARE\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            Contains(HasSubstr("uniform filter")));
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE uniform float gain;\nDECLARE\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            IsEmpty());
+        EXPECT_THAT(fragment("#version 120\n#if 0\n#define DECLARE uniform float filter;\n#endif\n"
+                             "void main() { gl_FragColor = vec4(0.0); }\n")
+                        .mErrors,
+            IsEmpty());
+        // A declaration that the #define leaves open ends with the #define's line
+        EXPECT_THAT(fragment("#version 120\n#define DECLARE uniform float gain\nDECLARE;\nvarying vec2 uv, filter;\n"
+                             "void main() { gl_FragColor = vec4(gain); }\n")
+                        .mErrors,
+            IsEmpty());
+    }
+
     // The compiler never sees a declaration in a branch the preprocessor skips
     TEST(ShaderGlslEsTest, a_uniform_with_a_reserved_name_in_a_skipped_branch_is_not_an_error)
     {
