@@ -913,6 +913,17 @@ class AngleCheckTests(unittest.TestCase):
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL no-opengl: Contents/MacOS/openfallout links Apple's OpenGL framework", output)
 
+    def test_apples_opengl_reached_through_another_binarys_run_path_is_caught_too(self):
+        """A library without a run path of its own inherits the run paths of the program that loads it."""
+        self.tools.links["Frameworks/libopenal.1.25.0.dylib"] = ["@rpath/OpenGL.framework/Versions/A/OpenGL"]
+        _, output = self.check("--forbid-opengl")
+        self.assertIn("PASS no-opengl", output)
+        self.tools.rpaths["MacOS/openfallout"] = ["/System/Library/Frameworks"]
+        status, output = self.check("--forbid-opengl")
+        self.assertEqual(status, 1, output)
+        self.assertIn("FAIL no-opengl: Contents/Frameworks/libopenal.1.25.0.dylib links Apple's OpenGL framework",
+                      output)
+
     def add_probe(self, status, out, err=""):
         probe = self.app / "Contents/MacOS/openfallout-angle-probe"
         probe.write_bytes(FAKE_MACHO)

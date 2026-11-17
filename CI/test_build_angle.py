@@ -10,6 +10,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import unittest.mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "CI"))
@@ -111,6 +112,15 @@ class CommandTests(unittest.TestCase):
             (Path(checkout) / "src/source.cpp").write_text("edited\n")
             with self.assertRaisesRegex(build_angle.BuildError, "changed files.*src/source.cpp"):
                 build_angle.check_checkout(Path(checkout), version)
+
+
+    def test_a_checkout_whose_state_cannot_be_read_is_refused(self):
+        """git status failing (a damaged index) is not the same as "nothing changed"."""
+        answers = {"rev-parse": subprocess.CompletedProcess([], 0, self.version["angle"]["commit"] + "\n", ""),
+                   "status": subprocess.CompletedProcess([], 128, "", "fatal: index file corrupt\n")}
+        with unittest.mock.patch.object(build_angle, "output", lambda command: answers[command[3]]):
+            with self.assertRaisesRegex(build_angle.BuildError, "git status failed.*index file corrupt"):
+                build_angle.check_checkout(Path("/work/angle"), self.version)
 
 
 class NoticesTests(unittest.TestCase):

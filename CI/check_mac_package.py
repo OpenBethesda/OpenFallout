@@ -550,11 +550,20 @@ def check_angle(app, mode, team_id, version_file):
 
 
 def check_no_opengl(app):
+    """No Mach-O file of the app may load Apple's OpenGL framework, by its full name or through a run path. A library
+    without a run path of its own inherits those of the program that loaded it, and which program that is cannot be
+    read from the files, so an @rpath name is tried against the run paths of every Mach-O file in the app: stricter
+    than the loader, never laxer."""
     machos = sorted(path for path in app.rglob("*") if is_macho(path))
-    linking = [relative(path, app) for path in machos
-               # resolve(): a name such as @rpath/OpenGL.framework/... loads Apple's framework through a run path
-               if any(str(candidate).startswith(OPENGL_FRAMEWORK)
-                      for name in linked_libraries(path) for candidate in resolve(name, path))]
+    system_rpaths = sorted({rpath for path in machos for rpath in rpaths(path) if rpath.startswith("/")})
+
+    def loads_opengl(name):
+        if name.startswith("@rpath/"):
+            return any(f"{rpath.rstrip('/')}/{name[len('@rpath/'):]}".startswith(OPENGL_FRAMEWORK)
+                       for rpath in system_rpaths)
+        return name.startswith(OPENGL_FRAMEWORK)
+
+    linking = [relative(path, app) for path in machos if any(loads_opengl(name) for name in linked_libraries(path))]
     if linking:
         raise StepFailed(", ".join(f"{name} links Apple's OpenGL framework" for name in linking))
     return f"none of the {len(machos)} Mach-O files links OpenGL.framework"

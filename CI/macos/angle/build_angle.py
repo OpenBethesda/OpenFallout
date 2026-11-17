@@ -118,7 +118,10 @@ def check_checkout(checkout, version):
         raise BuildError(f"{checkout} is at {head or 'no commit'}, not the recorded {version['angle']['commit']}")
     # The asset names the recorded commit: sources that differ from it are never built into it. Untracked files (the
     # build output, the dependencies gclient fetched) are not changes to ANGLE's own sources.
-    changed = output(["git", "-C", checkout, "status", "--porcelain", "--untracked-files=no"]).stdout.splitlines()
+    status = output(["git", "-C", checkout, "status", "--porcelain", "--untracked-files=no"])
+    if status.returncode != 0:
+        raise BuildError(f"git status failed in {checkout} ({status.stderr.strip()}); its sources cannot be trusted")
+    changed = status.stdout.splitlines()
     if changed:
         names = ", ".join(line[3:] for line in changed[:5])  # a line is two status letters, a space, the path
         raise BuildError(f"{checkout} has changed files ({names}); the asset is built only from the recorded commit")
