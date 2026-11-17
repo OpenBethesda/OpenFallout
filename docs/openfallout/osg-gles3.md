@@ -80,11 +80,29 @@ the front of `CMAKE_PREFIX_PATH` (and as `OSG_DIR`) together with `-DOPENFALLOUT
 `-DOPENFALLOUT_ANGLE_ROOT=<ANGLE folder>`. In CI, `CI/macos/before_install_osg.sh` runs the script and
 `CI/before_script.macos.sh -M` configures the Metal tree.
 
+## In the Mac job
+
+The steps are one block named "Metal build: ..." in `.github/workflows/macos.yml`, after every step that makes, checks
+or reports the packaged app, so a failure there never hides those results. A release tag run skips the whole block (the
+packaged app is still the OpenGL build). In order:
+
+1. Fingerprint: `python3 CI/macos/osg/osg_gles3.py key --input CI/macos/angle/angle.json --input <dependency manifest>`.
+2. Restore the install (`/tmp/openfallout-osg-gles3`, 19 MB) from the cache of that key.
+3. Fetch the ANGLE asset into `/tmp/openfallout-angle` (`CI/angle_asset.py fetch`), unless the manual ANGLE test run
+   already did: both read the one folder, and the fetch never changes it.
+4. Only when the cache missed: build the library (`CI/macos/before_install_osg.sh`, about 8 to 10 minutes), then save the
+   install at once.
+5. Configure `build-metal` (`CI/before_script.macos.sh -C -k -M`), build the engine and the two test suites in it
+   with the job's ccache, and run both suites. The results are pass or fail only (see [CI reporting](ci-reporting.md)).
+
+The ANGLE release named in `CI/macos/angle/angle.json` must be published before this block can pass: until then the
+fetch step fails with the address it could not read, and the steps after it do not run.
+
 ## When it is built again (the cache key)
 
 `python3 CI/macos/osg/osg_gles3.py key --input <file>...` prints the SHA-256 that names the cached build. It covers the
 commit file, every patch, the build script, the helper, the engine's two component lists and the files given with
-`--input` (the ANGLE version file and the dependency set's manifest). A change to any of them builds it again. A change
+`--input` (`CI/macos/angle/angle.json`, the ANGLE record, and the dependency set's manifest). A change to any of them builds it again. A change
 to anything else in the repository does not.
 
 ## How the version changes
