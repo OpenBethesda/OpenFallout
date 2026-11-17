@@ -286,8 +286,10 @@ namespace SceneUtil
         {
             const int width = std::max(image.s() >> level, 1);
             const int rows = std::max(image.t() >> level, 1) * std::max(image.r() >> level, 1);
+            // A row length, when the image gives one, is the length of every row, as OpenSceneGraph uploads it
+            const int rowLength = image.getRowLength() != 0 ? image.getRowLength() : width;
             const unsigned int rowStep
-                = osg::Image::computeRowWidthInBytes(width, format, GL_UNSIGNED_BYTE, image.getPacking());
+                = osg::Image::computeRowWidthInBytes(rowLength, format, GL_UNSIGNED_BYTE, image.getPacking());
             unsigned char* row = image.getMipmapData(level);
             for (int i = 0; i < rows; ++i, row += rowStep)
                 for (unsigned char* pixel = row; pixel < row + width * step; pixel += step)
@@ -310,8 +312,9 @@ namespace SceneUtil
             {
                 const int width = std::max(image.s() >> level, 1);
                 const int rows = std::max(image.t() >> level, 1) * std::max(image.r() >> level, 1);
+                const int rowLength = image.getRowLength() != 0 ? image.getRowLength() : width;
                 const unsigned int rowStep = osg::Image::computeRowWidthInBytes(
-                    width, image.getPixelFormat(), image.getDataType(), image.getPacking());
+                    rowLength, image.getPixelFormat(), image.getDataType(), image.getPacking());
                 unsigned char* row = image.getMipmapData(level);
                 for (int i = 0; i < rows; ++i, row += rowStep)
                     f(row, width);
