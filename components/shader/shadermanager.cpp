@@ -249,6 +249,7 @@ namespace Shader
         void reloadTouchedShaders(ShaderManager& manager, osgViewer::Viewer& viewer)
         {
             bool threadsRunningToStop = false;
+            std::vector<ShaderManager::MapKey> rebuilt;
             for (auto& [pathShaderToTest, shaderKeys] : mShaderFiles)
             {
                 const std::filesystem::file_time_type writeTime = std::filesystem::last_write_time(pathShaderToTest);
@@ -309,8 +310,17 @@ namespace Shader
                         }
                         shaderIt->second->setShaderSource(shaderSource);
                         setInitialValues(*shaderIt->second, std::move(initialValues));
+                        rebuilt.emplace_back(templateName, shaderDefines);
                     }
                 }
+            }
+            // In the Metal build a rebuilt shader may fold in library shaders it did not before: their files are
+            // watched from now on (added here, as the loop above walks the same map)
+            if (manager.mConvertToGlslEs)
+            {
+                std::lock_guard<std::mutex> lock(manager.mMutex);
+                for (const auto& [templateName, shaderDefines] : rebuilt)
+                    addShaderFiles(templateName, shaderDefines);
             }
             if (threadsRunningToStop)
                 viewer.startThreading();
@@ -867,6 +877,9 @@ namespace Shader
                 continue;
             shader->setShaderSource(shaderSource);
             setInitialValues(*shader, std::move(initialValues));
+            // The library shaders folded in for the new defines are watched by the hot reload
+            if (mConvertToGlslEs)
+                mHotReloadManager->addShaderFiles(templateId, defines);
 
             getLinkedShaders(shader, linkedShaderNames, defines);
         }

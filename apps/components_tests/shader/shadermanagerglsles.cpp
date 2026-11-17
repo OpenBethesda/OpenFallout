@@ -162,6 +162,60 @@ namespace
         EXPECT_THAT(shader->getShaderSource(), HasSubstr("return 1.0;"));
     }
 
+    // Marks a file as written after the last hot reload
+    void touch(const std::string& templateName)
+    {
+        std::filesystem::last_write_time(TestingOpenMW::outputFilePathWithSubDir(templateName),
+            std::filesystem::file_time_type::clock::now() + std::chrono::hours(1));
+    }
+
+    TEST_F(ShaderManagerGlslEsTest, a_library_a_hot_reload_newly_links_is_watched_by_later_reloads)
+    {
+        const std::string library = write("library.glsl", "#version 120\nfloat foo() { return 1.0; }\n");
+        const std::string vertex = write("main.vert", "#version 120\nvoid main() { gl_Position = vec4(0.0); }\n");
+        const osg::ref_ptr<osg::Shader> shader = mManager.getShader(vertex, {}, osg::Shader::VERTEX);
+        ASSERT_TRUE(shader);
+
+        write("main.vert",
+            "#version 120\n@link \"" + library + "\"\nfloat foo();\nvoid main() { gl_Position = vec4(foo()); }\n");
+        touch(vertex);
+        osgViewer::Viewer viewer;
+        mManager.triggerShaderReload();
+        mManager.update(viewer);
+        ASSERT_THAT(shader->getShaderSource(), HasSubstr("return 1.0;"));
+
+        write("library.glsl", "#version 120\nfloat foo() { return 2.0; }\n");
+        touch(library);
+        mManager.triggerShaderReload();
+        mManager.update(viewer);
+        EXPECT_THAT(shader->getShaderSource(), HasSubstr("return 2.0;"));
+    }
+
+    TEST_F(ShaderManagerGlslEsTest, a_library_new_defines_newly_link_is_watched_by_hot_reloads)
+    {
+        ShaderManager::DefineMap globalDefines = getDefaultDefines();
+        globalDefines["useLibrary"] = "0";
+        mManager.setGlobalDefines(globalDefines);
+        const std::string library = write("library.glsl", "#version 120\nfloat foo() { return 1.0; }\n");
+        const std::string vertex = write("main.vert",
+            "#version 120\n@link \"" + library
+                + "\" if @useLibrary\nfloat foo();\nvoid main() { gl_Position = vec4(0.0); }\n");
+        const osg::ref_ptr<osg::Shader> shader = mManager.getShader(vertex, {}, osg::Shader::VERTEX);
+        ASSERT_TRUE(shader);
+        ASSERT_THAT(shader->getShaderSource(), Not(HasSubstr("return 1.0;")));
+
+        globalDefines["useLibrary"] = "1";
+        mManager.setGlobalDefines(globalDefines);
+        ASSERT_THAT(shader->getShaderSource(), HasSubstr("return 1.0;"));
+
+        write("library.glsl", "#version 120\nfloat foo() { return 2.0; }\n");
+        touch(library);
+        osgViewer::Viewer viewer;
+        mManager.triggerShaderReload();
+        mManager.update(viewer);
+        EXPECT_THAT(shader->getShaderSource(), HasSubstr("return 2.0;"));
+    }
+
     // Every vertex and fragment shader the engine ships, with its options all off and all on, must convert. With
     // OPENFALLOUT_GLSL_ES_DUMP=<folder> the converted text is written there, for a compile check against ANGLE.
     TEST(ShaderGlslEsCorpusTest, every_shader_the_engine_ships_converts)
