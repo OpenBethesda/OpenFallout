@@ -69,16 +69,20 @@ they left out.
 scripts/openfallout/mac_measure.py run all --display fullscreen --engine <...> --repeat 3 --out <results>
 ```
 
-`--display fullscreen` starts each run as an ordinary application, in front and full screen (`window mode = 0`), at the
-pixels of the main display (or `--size 3456x2234`). Still no vsync and no frame-rate limit. This is how the numbers a
-player gets are taken: the frame rate at the display's full resolution, and one build against another in a window that
-is really shown. Numbers of the background window are not comparable with these.
+`--display fullscreen` starts each run as an ordinary application, in front and full screen (`window mode = 0`). Still
+no vsync and no frame-rate limit. This is how the numbers a player gets are taken: the frame rate at the display's full
+resolution, and one build against another in a window that is really shown. Numbers of the background window are not
+comparable with these.
+
+The size of the picture cannot be chosen: on a Mac the engine goes full screen in a Space of its own, and the desktop
+gives that Space its size whatever resolution the settings name. To measure at another resolution, change the
+resolution of the display itself.
 
 - It takes the screen and the keyboard for the length of each run (about two minutes a scene). Whoever sits at the Mac
   starts it and keeps the hands off until the last run has quit; a key that is pressed goes to the game.
-- `result.json` has `display`: the `mode`, the pixels that were `asked` for, and the size of the `picture` the engine
-  really drew (read from the probe's first screenshot). Compare the two before believing the numbers. On a display with
-  a camera housing macOS keeps a full-screen application below it, so the picture is some rows short of the panel
+- `result.json` has `display`: the `mode`, the pixels of the main display's `panel`, and the size of the `picture` the
+  engine really drew (read from the probe's first screenshot). The picture is what the numbers belong to. On a display
+  with a camera housing macOS keeps a full-screen application below it, so the picture is some rows short of the panel
   (3456 x 2168 on a panel of 3456 x 2234).
 - The engine's `PATH` is an empty folder of the run in both modes, so its crash handler finds no debugger to start, and
   its crash log stays in the run's `tmp` folder.

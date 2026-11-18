@@ -4,7 +4,7 @@
     scripts/openfallout/mac_measure.py scenes
     scripts/openfallout/mac_measure.py run SCENE... --engine <build>/openfallout [--out DIR] [--repeat N]
                                        [--capture time|alloc|game|metal] [--hud] [--label TEXT]
-                                       [--display window|fullscreen] [--size WxH]
+                                       [--display window|fullscreen]
     scripts/openfallout/mac_measure.py compare BEFORE AFTER
 
 `run` starts the engine once per scene and repeat, windowed and in the background (SDL_MAC_BACKGROUND_APP=1: never
@@ -15,8 +15,8 @@ and quits the game. Each run writes `result.json`: frame times of the stand and 
 new game" to the first frame of the scene (cell load), the start-up time, the memory footprint (now and peak, from
 `footprint`), the machine, the macOS version, the engine version line and the load of the computer before and after.
 `--capture` also records an Instruments trace of the stand and turn phases with `xctrace record --attach`.
-`--display fullscreen` shows each run in front and full screen at the pixels of the main display instead (it takes the
-screen and the keyboard while it runs): the way the numbers a player gets are taken.
+`--display fullscreen` shows each run in front and full screen instead, at the size the desktop gives a full screen
+application (it takes the screen and the keyboard while it runs): the way the numbers a player gets are taken.
 `compare` prints the medians of two result folders (or files) side by side.
 
 The game data folders come from the round profile (~/.config/openfallout-rounds.json, `games.nv.data`/`games.fo3.data`,
@@ -190,27 +190,22 @@ def compare(before, after):
 # ------------------------------------------------------------------------------------------------------------------ runs
 
 # How a run is shown: `window` is a plain window of a fixed size in the background; `fullscreen` is the game as a player
-# has it, in front and full screen at the pixels of the display (the acceptance numbers of the Mac are taken this way).
+# has it, in front and full screen (the acceptance numbers of the Mac are taken this way). The size of a full screen
+# picture is the desktop's to give, not the tool's to ask for: the engine goes full screen in a Space of its own on a
+# Mac, whatever resolution its settings name.
 DISPLAYS = ("window", "fullscreen")
 WINDOW_SIZE = (1280, 720)
 
 
-def settings_text(display="window", size=None):
+def settings_text(display="window"):
     """The run's settings.cfg, over the engine's defaults: the window, no vsync and no frame-rate limit, so that frame
-    times are the engine's and not the display's. Nothing of the player's own settings.cfg is read. The size is in
-    pixels of the picture (the engine halves it for the window of a Retina display)."""
-    width, height = size if display == "fullscreen" else WINDOW_SIZE
+    times are the engine's and not the display's. Nothing of the player's own settings.cfg is read. The size is that
+    of the window, in pixels of the picture; a full screen run does not draw at it (it is the size the window would
+    have if the game left full screen)."""
+    width, height = WINDOW_SIZE
     mode = 0 if display == "fullscreen" else 2
     return (f"[Video]\nwindow mode = {mode}\nresolution x = {width}\nresolution y = {height}\n"
             "vsync mode = 0\nframerate limit = 0\n")
-
-
-def parse_size(text):
-    """`3456x2234` as (3456, 2234)."""
-    match = re.fullmatch(r"(\d+)x(\d+)", text.strip())
-    if not match:
-        raise argparse.ArgumentTypeError(f"{text!r} is not a size like 3456x2234")
-    return int(match.group(1)), int(match.group(2))
 
 
 def main_display_pixels(report):
@@ -265,6 +260,10 @@ def picture_size(path):
     return None
 
 
+def as_list(size):
+    return list(size) if size else None
+
+
 def run_picture_size(run_dir):
     """The size of the first screenshot the probe took in the run: what the engine really drew, whatever was asked."""
     shots = sorted((Path(run_dir) / "userdata" / "screenshots").glob("*"))
@@ -315,10 +314,10 @@ def game_folders(profile_path, args):
     return folders, profile
 
 
-def prepare(run_dir, display="window", size=None):
+def prepare(run_dir, display="window"):
     for sub in ("config", "userdata/data", "data/scripts"):
         (run_dir / sub).mkdir(parents=True, exist_ok=True)
-    (run_dir / "config" / "settings.cfg").write_text(settings_text(display, size), encoding="utf-8")
+    (run_dir / "config" / "settings.cfg").write_text(settings_text(display), encoding="utf-8")
     (run_dir / "config" / "openfallout.cfg").write_text("replace=config\n", encoding="utf-8")
     (run_dir / "data" / "scripts" / "perfprobeconfig.lua").write_text(PROBE_CONFIG, encoding="utf-8")
 
@@ -361,7 +360,7 @@ def run_once(args, scene_name, run_dir, data):
     import roundguard
 
     scene = SCENES[scene_name]
-    prepare(run_dir, args.display, args.size)
+    prepare(run_dir, args.display)
     engine = Path(args.engine).resolve()
     resources = Path(args.resources).resolve() if args.resources else engine.parent.parent / "Resources" / "resources"
     command = engine_command(engine, resources, scene, data, run_dir)
@@ -446,8 +445,7 @@ def run_once(args, scene_name, run_dir, data):
         "memory": {"footprint_mib": (samples.get("stand_end") or {}).get("footprint_mib"),
                    "peak_mib": max((s["peak_mib"] for s in valid), default=None), "samples": samples},
         "capture": trace, "capture_error": capture_error,
-        "display": {"mode": args.display, "asked": list(args.size if args.display == "fullscreen" else WINDOW_SIZE),
-                    "picture": (lambda size: list(size) if size else None)(run_picture_size(run_dir))},
+        "display": {"mode": args.display, "panel": as_list(args.panel), "picture": as_list(run_picture_size(run_dir))},
         "machine_before": before, "machine_after": machine(),
         "when": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     })
@@ -494,10 +492,9 @@ def main(argv=None):
     run.add_argument("--capture", choices=sorted(TEMPLATES), help="also record an Instruments trace of the measured phases")
     run.add_argument("--hud", action="store_true", help="show the Metal performance HUD (MTL_HUD_ENABLED=1)")
     run.add_argument("--display", choices=DISPLAYS, default="window",
-                     help="window: a 1280x720 window in the background; fullscreen: in front and full screen, which takes "
-                          "the screen and the keyboard for the length of each run (default: %(default)s)")
-    run.add_argument("--size", type=parse_size, default=None,
-                     help="pixels of a full screen run, as 3456x2234 (default: those of the main display)")
+                     help="window: a 1280x720 window in the background; fullscreen: in front and full screen at the size "
+                          "the desktop gives, which takes the screen and the keyboard for the length of each run "
+                          "(default: %(default)s)")
     run.add_argument("--label", default="", help="a note stored in every result (what was measured)")
     run.add_argument("--commit", default=None, help="the engine's commit (default: the commit of this checkout)")
     run.add_argument("--nice", type=int, default=0, help="run the engine at this nice value (default: %(default)s)")
@@ -527,10 +524,8 @@ def main(argv=None):
     if unknown:
         parser.error(f"unknown scene(s) {', '.join(unknown)}; `scenes` lists them")
     folders, _ = game_folders(args.profile, args)
-    if args.display == "fullscreen" and args.size is None:
-        args.size = main_display_pixels(text_of(["system_profiler", "SPDisplaysDataType", "-json"]) or "")
-        if args.size is None:
-            sys.exit("the pixels of the main display could not be read: give --size, as 3456x2234")
+    # for the record only: what the panel has, beside what the engine drew
+    args.panel = main_display_pixels(text_of(["system_profiler", "SPDisplaysDataType", "-json"]) or "")
     args.commit = args.commit or git_commit()
     out = Path(args.out).resolve() / time.strftime("%Y%m%d-%H%M%S")
     results, first = [], True

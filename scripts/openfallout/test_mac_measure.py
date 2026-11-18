@@ -33,9 +33,9 @@ class DisplayTests(unittest.TestCase):
                          "[Video]\nwindow mode = 2\nresolution x = 1280\nresolution y = 720\n"
                          "vsync mode = 0\nframerate limit = 0\n")
 
-    def test_a_full_screen_run_asks_for_full_screen_at_the_pixels_given(self):
-        self.assertEqual(mac_measure.settings_text("fullscreen", (3456, 2234)),
-                         "[Video]\nwindow mode = 0\nresolution x = 3456\nresolution y = 2234\n"
+    def test_a_full_screen_run_asks_for_full_screen_and_names_no_size_of_its_own(self):
+        self.assertEqual(mac_measure.settings_text("fullscreen"),
+                         "[Video]\nwindow mode = 0\nresolution x = 1280\nresolution y = 720\n"
                          "vsync mode = 0\nframerate limit = 0\n")
 
     def test_reads_the_pixels_of_the_main_display(self):
@@ -48,10 +48,10 @@ class DisplayTests(unittest.TestCase):
         self.assertIsNone(mac_measure.main_display_pixels('{"SPDisplaysDataType": []}'))
         self.assertIsNone(mac_measure.main_display_pixels("not a report"))
 
-    def test_reads_a_size_given_on_the_command_line(self):
-        self.assertEqual(mac_measure.parse_size("3456x2234"), (3456, 2234))
-        with self.assertRaises(argparse.ArgumentTypeError):
-            mac_measure.parse_size("big")
+    def test_a_full_screen_run_takes_no_size(self):
+        with self.assertRaises(SystemExit), unittest.mock.patch("sys.stderr"):
+            mac_measure.main(["run", "nv-interior", "--engine", "/build/openfallout", "--display", "fullscreen",
+                              "--size", "1280x720"])
 
 
 class EngineEnvironmentTests(unittest.TestCase):
@@ -291,7 +291,7 @@ class RunTests(unittest.TestCase):
 
     def args(self, capture=None):
         return argparse.Namespace(engine="/build/openfallout", resources="/build/resources", nice=0, hud=False,
-                                  capture=capture, limit=300, label="x", commit="c", display="window", size=None)
+                                  capture=capture, limit=300, label="x", commit="c", display="window", panel=(3456, 2234))
 
     def run_with(self, processes, ticks):
         """run_once where Popen gives `processes` in turn and each half-second tick calls the next of `ticks`."""
@@ -351,7 +351,7 @@ class RunTests(unittest.TestCase):
 
     def test_a_run_records_how_it_was_shown(self):
         result = self.run_with([FakeProcess(4242, exit_after=1)], [lambda: None])
-        self.assertEqual(result["display"], {"mode": "window", "asked": [1280, 720], "picture": None})
+        self.assertEqual(result["display"], {"mode": "window", "panel": [3456, 2234], "picture": None})
 
 
 if __name__ == "__main__":
