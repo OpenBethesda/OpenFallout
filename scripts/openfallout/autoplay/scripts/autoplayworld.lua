@@ -40,6 +40,33 @@ local pausedNow = ''
 local elapsed = 0
 local started = core.getRealTime()
 local lastGate = 0
+-- The gates that wait for a talk to end, logged once each ('AUTOPLAY talk wait')
+local waitLogged = {}
+
+-- The one the player talks with (as core.getFormId writes it), or nil when no talk is open
+local function talkingWith()
+    if not core.conversation.available() then return nil end
+    local state = core.conversation.get()
+    if not state.active or state.speakerId == '' then return nil end
+    return state.speakerId
+end
+
+-- Whether the gate activates a character while the player talks with another: the engine starts no second talk, so the
+-- activation would do nothing and use up a try. Such a gate waits until the talk is over (autoplay.lua ends it when it
+-- has picked its topics), as a player says goodbye before turning to someone else. An object that is no character (a
+-- terminal, a seat) is activated as before, also in a talk.
+local function waitsForTalk(gate)
+    if gate.how ~= 'activate' or gate.refs then return false end
+    local speaker = talkingWith()
+    if speaker == nil then return false end
+    local form = core.getFormId(gate.file, gate.ref)
+    if speaker == form then return false end
+    local object = world.getObjectByFormId(form)
+    for _, actor in ipairs(world.activeActors) do
+        if actor == object then return true, speaker end
+    end
+    return false
+end
 
 -- Does what the gate says: the player goes to the middle of the reference (a trigger volume), or activates it (or each of
 -- the `refs`), or is told to shoot at it (the player script fires: the weapon is not a thing of the world script), or is
@@ -134,7 +161,22 @@ return {
                 if quest and quest.stage == gate.stage and (tries[index] or 0) < (gate.tries or config.tries)
                     and real - (changed[gate.quest] or real) >= (gate.settle or config.settle)
                     and real - lastGate >= (gate.gap or config.settle) then
-                    useGate(index, gate, real)
+                    -- an object that is not there is the business of useGate, which logs it
+                    local ok, waits, speaker = pcall(waitsForTalk, gate)
+                    if not ok and not waitLogged[index] then
+                        waitLogged[index] = true
+                        print('AUTOPLAY', 'talk wait error', gate.quest, string.format('stage=%d', gate.stage),
+                            tostring(waits))
+                    end
+                    if ok and waits then
+                        if not waitLogged[index] then
+                            waitLogged[index] = true
+                            print('AUTOPLAY', 'talk wait', gate.quest, string.format('stage=%d ref=%06X', gate.stage,
+                                gate.ref), 'talk=' .. speaker)
+                        end
+                    else
+                        useGate(index, gate, real)
+                    end
                 end
             end
             if real >= LIMIT then

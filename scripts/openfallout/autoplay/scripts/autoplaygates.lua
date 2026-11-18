@@ -2,9 +2,10 @@
 -- do: walk into a trigger volume, activate an object or shoot at one. autoplayworld.lua reads this table. When a quest has
 -- stood at a stage for `settle` real seconds (nothing else changed in it), the gates of that stage are tried, one at a time:
 -- 'walk' puts the player at the reference (the middle of its volume; with `face`, a reference of the same plugin, turned to it), 'activate' makes the player activate it (or each of the
--- `refs`), 'fire' makes the player shoot at it with the weapon in hand (`shots` times, or, with `untilDead`, until it is
--- dead; autoplay.lua does the shooting), 'teleport' takes the player to the cell `cell` of the plugin at the place `at` (for
--- a room the data has no door to), 'setstage' puts the quest at the stage `to` (a stand-in for what the engine cannot bring
+-- `refs`; a character is activated only when the player talks with no one else, and the gate waits for the talk to end
+-- without using up a try), 'fire' makes the player shoot at it with the weapon in hand (`shots` times, or, with
+-- `untilDead`, until it is dead; autoplay.lua does the shooting), 'teleport' takes the player to the cell `cell` of the
+-- plugin at the place `at` (for a room the data has no door to), 'setstage' puts the quest at the stage `to` (a stand-in for what the engine cannot bring
 -- about yet; the table has none since the Mac rounds 10O and 10P). A gate is tried `tries` times at most (its
 -- own `tries` if it has one: activating a piece of furniture a second time gets the player up from it). A gate can have its
 -- own `settle` (the quest has to stand still that long first) and its own
@@ -158,7 +159,11 @@ return {
         -- resident of Megaton is asked about the father (the topic is in the list of Confessor Cromwell, in a house that is a
         -- cell of its own); 20 goes to 40 at the terminal in Moriarty's saloon (average, hacked; its second line sets 40) or in
         -- the talk with Moriarty (four topics deep, the last with a Speechcraft check); 40 goes to 50 when the player is in the
-        -- box of the ambush in Washington (a child of the exterior cell ChevyChaseOrigin), or in that of its failsafe
+        -- box of the ambush in Washington (a child of the exterior cell ChevyChaseOrigin), or in that of its failsafe. Tale of
+        -- Two Wastelands plays by the rules of New Vegas, where a closed terminal asks for Science (50 for an average one)
+        -- and the player of level 2 has less: no hacking screen opens, and the talk of the last gate of stage 20 brings 40.
+        -- The talk of stage 10 is still open then (the player is taken to the other cell in it), and that gate waits for it
+        -- to end (two Mac rounds of 2026-11-17 stood still at 20: both tries were used up in that talk)
         { quest = 'MQ01', stage = 10, file = 'Fallout3.esm', cell = 0x003A2D, at = { 1500.0, -121.0, -256.0 },
             how = 'teleport', tries = 1 },
         { quest = 'MQ01', stage = 10, file = 'Fallout3.esm', ref = 0x003B48, how = 'activate', gap = 10 },

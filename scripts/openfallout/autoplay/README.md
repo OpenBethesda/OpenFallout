@@ -16,14 +16,17 @@ something, which no button does. `scripts/autoplaygates.lua` lists them (quest, 
 has stood at such a stage for twenty seconds, the world script does what the gate says and logs `AUTOPLAY gate`. `walk` puts the
 player in the middle of the reference (turned to the reference `face` of the gate when it has one: the picture of the birthday
 wants the player to look at the photographer), `activate` makes the player activate it (or each of the `refs` of the gate, at once;
-activating a character starts a talk), `fire` makes the player shoot at it with the weapon in hand (`shots` times, or with
-`untilDead` until it is dead; the player script logs `AUTOPLAY fire` for each shot and `AUTOPLAY fire done` with the reason it
-stopped), `teleport` takes the player to a place `at` in a cell of the plugin (a room that no door of the data leads to). A gate
+activating a character starts a talk, and while the player talks with someone else the gate waits for that talk to end, logs
+`AUTOPLAY talk wait` once and does not use up a try: the engine starts no second talk), `fire` makes the player shoot at it
+with the weapon in hand (`shots` times, or with `untilDead` until it is dead; the player script logs `AUTOPLAY fire` for each
+shot and `AUTOPLAY fire done` with the reason it stopped), `teleport` takes the player to a place `at` in a cell of the plugin (a room that no door of the data leads to). A gate
 is tried twice (its own `tries` if it has one). A gate can have a `settle` (how long the quest stands still first) and a `gap` (the
 real seconds since the gate before it): of the gates that are ready, the first of the table goes first.
 
 The gates after the intros bring the main quest on: at `MQ01` stage 10 the player goes to the house of Cromwell in Megaton and
-talks to him, at 20 to the terminal and then Moriarty in his saloon (`teleport` to the cell, then `activate`), at 40 to the trigger
+talks to him, at 20 to the terminal and then Moriarty in his saloon (`teleport` to the cell, then `activate`; in Tale of Two
+Wastelands the terminal asks for more Science than the player has, as in New Vegas, so the talk brings the stage on),
+at 40 to the trigger
 volumes of Chevy Chase; at `VMQ01` stage 10 to the terminal of Novac, at 50 to the Tops
 restaurant and the Khan hideout of Boulder City. None of these stages has a `setstage` row any more: Mac rounds 10K and 10L
 played them on the real data without one (`MQ01` stage 50 at about 1,700 s in Fallout 3 and Tale of Two Wastelands, `VMQ01`
