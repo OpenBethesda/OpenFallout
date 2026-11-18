@@ -234,8 +234,20 @@ class CompareTests(unittest.TestCase):
 class LeftBehindTests(unittest.TestCase):
     """What is still in the engine's session when the engine is gone: its crash reporter, which shows a box."""
 
-    def clear(self, answers):
-        """clear_process_group(77) where each killpg call gets the next of `answers` (an exception is raised)."""
+    def clear(self, killpg, wait=1.0):
+        """clear_process_group(77) with `killpg` in place of the real one and a clock that only sleeping moves."""
+        now = [0.0]
+
+        def sleep(seconds):
+            now[0] += seconds
+
+        with unittest.mock.patch("mac_measure.os.killpg", killpg), \
+                unittest.mock.patch("mac_measure.time.sleep", sleep), \
+                unittest.mock.patch("mac_measure.time.monotonic", lambda: now[0]):
+            return mac_measure.clear_process_group(77, wait=wait)
+
+    def answering(self, answers):
+        """A killpg that records its calls and gives each the next of `answers` (an exception is raised)."""
         calls, answers = [], iter(answers)
 
         def killpg(group, sig):
@@ -244,17 +256,16 @@ class LeftBehindTests(unittest.TestCase):
             if answer is not None:
                 raise answer
 
-        with unittest.mock.patch("mac_measure.os.killpg", killpg), unittest.mock.patch("mac_measure.time.sleep"):
-            return mac_measure.clear_process_group(77, wait=0.05), calls
+        return killpg, calls
 
     def test_an_empty_session_is_left_alone(self):
-        found, calls = self.clear([ProcessLookupError()])
-        self.assertFalse(found)
+        killpg, calls = self.answering([ProcessLookupError()])
+        self.assertFalse(self.clear(killpg))
         self.assertEqual(calls, [(77, signal.SIGTERM)])
 
     def test_what_is_left_is_told_to_end_and_waited_for(self):
-        found, calls = self.clear([None, None, ProcessLookupError()])
-        self.assertTrue(found)
+        killpg, calls = self.answering([None, None, ProcessLookupError()])
+        self.assertTrue(self.clear(killpg))
         self.assertEqual(calls, [(77, signal.SIGTERM), (77, 0), (77, 0)])
 
     def test_what_does_not_end_is_killed(self):
@@ -265,11 +276,9 @@ class LeftBehindTests(unittest.TestCase):
             if sig == 0 and signal.SIGKILL in calls:
                 raise ProcessLookupError()
 
-        with unittest.mock.patch("mac_measure.os.killpg", killpg), unittest.mock.patch("mac_measure.time.sleep"):
-            self.assertTrue(mac_measure.clear_process_group(77, wait=0.01))
-        self.assertEqual(calls[0], signal.SIGTERM)
-        self.assertIn(signal.SIGKILL, calls)
-        self.assertEqual(calls[-1], 0, "it waits for the session to be empty after the kill too")
+        self.assertTrue(self.clear(killpg, wait=0.5))
+        # told to end, asked five times in the half second it is given, killed, and asked once more
+        self.assertEqual(calls, [signal.SIGTERM, 0, 0, 0, 0, 0, signal.SIGKILL, 0])
 
 
 class FakeProcess:
