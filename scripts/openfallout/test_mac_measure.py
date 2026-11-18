@@ -231,6 +231,47 @@ class CompareTests(unittest.TestCase):
         self.assertIn(("fo3-busy", "stand p50 ms", 10.0, None, None), rows)
 
 
+class LeftBehindTests(unittest.TestCase):
+    """What is still in the engine's session when the engine is gone: its crash reporter, which shows a box."""
+
+    def clear(self, answers):
+        """clear_process_group(77) where each killpg call gets the next of `answers` (an exception is raised)."""
+        calls, answers = [], iter(answers)
+
+        def killpg(group, sig):
+            calls.append((group, sig))
+            answer = next(answers)
+            if answer is not None:
+                raise answer
+
+        with unittest.mock.patch("mac_measure.os.killpg", killpg), unittest.mock.patch("mac_measure.time.sleep"):
+            return mac_measure.clear_process_group(77, wait=0.05), calls
+
+    def test_an_empty_session_is_left_alone(self):
+        found, calls = self.clear([ProcessLookupError()])
+        self.assertFalse(found)
+        self.assertEqual(calls, [(77, signal.SIGTERM)])
+
+    def test_what_is_left_is_told_to_end_and_waited_for(self):
+        found, calls = self.clear([None, None, ProcessLookupError()])
+        self.assertTrue(found)
+        self.assertEqual(calls, [(77, signal.SIGTERM), (77, 0), (77, 0)])
+
+    def test_what_does_not_end_is_killed(self):
+        calls = []
+
+        def killpg(group, sig):
+            calls.append(sig)
+            if sig == 0 and signal.SIGKILL in calls:
+                raise ProcessLookupError()
+
+        with unittest.mock.patch("mac_measure.os.killpg", killpg), unittest.mock.patch("mac_measure.time.sleep"):
+            self.assertTrue(mac_measure.clear_process_group(77, wait=0.01))
+        self.assertEqual(calls[0], signal.SIGTERM)
+        self.assertIn(signal.SIGKILL, calls)
+        self.assertEqual(calls[-1], 0, "it waits for the session to be empty after the kill too")
+
+
 class FakeProcess:
     """A stand-in for the engine or xctrace: running until it is stopped or `exits()` says so."""
 
@@ -266,6 +307,7 @@ class RunTests(unittest.TestCase):
         self.run_dir = Path(temporary.name) / "nv-interior-1"
         self.log = self.run_dir / "config" / "openfallout.log"
         self.killed = []
+        self.cleared = []
         self.fds = []
         self.heartbeat = unittest.mock.Mock()
         self.heartbeat.problem.return_value = None
@@ -284,7 +326,8 @@ class RunTests(unittest.TestCase):
                               ("pty.openpty", openpty),
                               ("mac_measure.sample_footprint", lambda pid: None),
                               ("mac_measure.machine", lambda: {}),
-                              ("mac_measure.os.killpg", lambda pid, sig: self.killed.append((pid, sig)))):
+                              ("mac_measure.os.killpg", lambda pid, sig: self.killed.append((pid, sig))),
+                              ("mac_measure.clear_process_group", lambda group: self.cleared.append(group))):
             patcher = unittest.mock.patch(target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -305,6 +348,7 @@ class RunTests(unittest.TestCase):
         return lambda: self.log.write_text(text)
 
     def assert_cleaned_up(self):
+        self.assertEqual(self.cleared, [4242], "what the engine left in its session is ended")
         self.heartbeat.stop.assert_called_once()
         for fd in self.fds:
             with self.assertRaises(OSError, msg="the pty is closed"):
@@ -340,6 +384,12 @@ class RunTests(unittest.TestCase):
         self.assertIn("xctrace exited with status 1", result["capture_error"])
         self.assertIn(str(self.run_dir / "xctrace.log"), result["capture_error"])
         self.assertEqual(self.killed, [], "an engine that quit by itself is not signalled")
+        self.assert_cleaned_up()
+
+    def test_an_engine_that_ended_by_itself_still_has_its_session_cleared(self):
+        # a crashed engine is killed by its own crash reporter, which then shows a box and waits for a click
+        self.run_with([FakeProcess(4242, exit_after=1, status=-9)], [lambda: None, lambda: None])
+        self.assertEqual(self.killed, [])
         self.assert_cleaned_up()
 
     def test_a_capture_that_succeeded_is_recorded(self):

@@ -86,6 +86,8 @@ resolution of the display itself.
   (3456 x 2168 on a panel of 3456 x 2234).
 - The engine's `PATH` is an empty folder of the run in both modes, so its crash handler finds no debugger to start, and
   its crash log stays in the run's `tmp` folder.
+- An engine that crashes shows a box and its crash reporter waits for a click. When the engine is gone the tool ends
+  whatever is left in the engine's session, so the box does not stay on the screen; the run says so.
 
 ## Instruments captures with `xctrace`
 

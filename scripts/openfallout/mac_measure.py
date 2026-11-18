@@ -343,6 +343,29 @@ def stop_process_group(process):
         process.wait()
 
 
+def clear_process_group(group, wait=5.0):
+    """Ends whatever is still in the engine's session once the engine itself is gone, and waits until the session is
+    empty; says whether anything was there. An engine that crashes is killed by its own crash reporter, which then
+    shows a box and waits for a click: left alone it would stay on the screen, into the next run and after the last."""
+    import signal
+
+    found = False
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(group, sig)
+        except (ProcessLookupError, PermissionError):
+            return found
+        found = True
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            try:
+                os.killpg(group, 0)
+            except (ProcessLookupError, PermissionError):
+                return found
+            time.sleep(0.1)
+    return found
+
+
 def capture_outcome(kind, capture, run_dir):
     """(the trace's file name, None) when xctrace recorded it (exit status 0), else (None, why, naming xctrace.log)."""
     if capture is None:
@@ -416,6 +439,9 @@ def run_once(args, scene_name, run_dir, data):
     finally:
         if process is not None and process.poll() is None:
             stop_process_group(process)
+        if process is not None and clear_process_group(process.pid):
+            print(f"{scene_name}: the engine left a process behind (its crash reporter?), which was ended",
+                  file=sys.stderr)
         if capture is not None and capture.poll() is None:
             capture.terminate()
             try:
