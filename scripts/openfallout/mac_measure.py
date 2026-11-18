@@ -4,6 +4,7 @@
     scripts/openfallout/mac_measure.py scenes
     scripts/openfallout/mac_measure.py run SCENE... --engine <build>/openfallout [--out DIR] [--repeat N]
                                        [--capture time|alloc|game|metal] [--hud] [--label TEXT]
+                                       [--display window|fullscreen]
     scripts/openfallout/mac_measure.py compare BEFORE AFTER
 
 `run` starts the engine once per scene and repeat, windowed and in the background (SDL_MAC_BACKGROUND_APP=1: never
@@ -14,6 +15,8 @@ and quits the game. Each run writes `result.json`: frame times of the stand and 
 new game" to the first frame of the scene (cell load), the start-up time, the memory footprint (now and peak, from
 `footprint`), the machine, the macOS version, the engine version line and the load of the computer before and after.
 `--capture` also records an Instruments trace of the stand and turn phases with `xctrace record --attach`.
+`--display fullscreen` shows each run in front and full screen instead, at the size the desktop gives a full screen
+application (it takes the screen and the keyboard while it runs): the way the numbers a player gets are taken.
 `compare` prints the medians of two result folders (or files) side by side.
 
 The game data folders come from the round profile (~/.config/openfallout-rounds.json, `games.nv.data`/`games.fo3.data`,
@@ -186,9 +189,87 @@ def compare(before, after):
 
 # ------------------------------------------------------------------------------------------------------------------ runs
 
-# Over the engine's defaults: a plain window of a fixed size, no vsync and no frame-rate limit, so that frame times are the
-# engine's and not the display's. Nothing of the player's own settings.cfg is read.
-SETTINGS = "[Video]\nwindow mode = 2\nresolution x = 1280\nresolution y = 720\nvsync mode = 0\nframerate limit = 0\n"
+# How a run is shown: `window` is a plain window of a fixed size in the background; `fullscreen` is the game as a player
+# has it, in front and full screen (the acceptance numbers of the Mac are taken this way). The size of a full screen
+# picture is the desktop's to give, not the tool's to ask for: the engine goes full screen in a Space of its own on a
+# Mac, whatever resolution its settings name.
+DISPLAYS = ("window", "fullscreen")
+WINDOW_SIZE = (1280, 720)
+
+
+def settings_text(display="window"):
+    """The run's settings.cfg, over the engine's defaults: the window, no vsync and no frame-rate limit, so that frame
+    times are the engine's and not the display's. Nothing of the player's own settings.cfg is read. The size is that
+    of the window, in pixels of the picture; a full screen run does not draw at it (it is the size the window would
+    have if the game left full screen)."""
+    width, height = WINDOW_SIZE
+    mode = 0 if display == "fullscreen" else 2
+    return (f"[Video]\nwindow mode = {mode}\nresolution x = {width}\nresolution y = {height}\n"
+            "vsync mode = 0\nframerate limit = 0\n")
+
+
+def main_display_pixels(report):
+    """The pixels of the main display, from `system_profiler SPDisplaysDataType -json`; None when it names none."""
+    try:
+        cards = json.loads(report).get("SPDisplaysDataType") or []
+    except (ValueError, AttributeError):
+        return None
+    for card in cards:
+        for display in card.get("spdisplays_ndrvs") or []:
+            match = re.fullmatch(r"(\d+) x (\d+)", display.get("_spdisplays_pixels") or "")
+            if display.get("spdisplays_main") == "spdisplays_yes" and match:
+                return int(match.group(1)), int(match.group(2))
+    return None
+
+
+def engine_environment(display, run_dir, hud=False, base=None):
+    """The environment of the engine. A window run never comes to the front (SDL_MAC_BACKGROUND_APP=1); a full screen
+    run is an ordinary application. PATH is an empty folder of the run and TMPDIR another, as in the rounds: the
+    engine's crash handler starts gdb or lldb from PATH, and a debugger that attaches can put a password box on the
+    screen; the crash log goes to TMPDIR and so stays with the run."""
+    env = dict(os.environ if base is None else base)
+    for name, folder in (("PATH", "no-programs"), ("TMPDIR", "tmp")):
+        (Path(run_dir) / folder).mkdir(parents=True, exist_ok=True)
+        env[name] = str(Path(run_dir) / folder)
+    if display == "window":
+        env["SDL_MAC_BACKGROUND_APP"] = "1"
+    else:
+        env.pop("SDL_MAC_BACKGROUND_APP", None)
+    if hud:
+        env["MTL_HUD_ENABLED"] = "1"
+    return env
+
+
+def picture_size(path):
+    """(width, height) of a PNG or JPEG file, None for anything else."""
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return None
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR" and len(data) >= 24:
+        return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+    if data[:2] != b"\xff\xd8":
+        return None
+    at = 2
+    while at + 9 <= len(data) and data[at] == 0xFF:
+        marker, length = data[at + 1], int.from_bytes(data[at + 2:at + 4], "big")
+        # the frame headers (baseline, progressive and the rest), not the tables that share their range
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            return int.from_bytes(data[at + 7:at + 9], "big"), int.from_bytes(data[at + 5:at + 7], "big")
+        at += 2 + length
+    return None
+
+
+def as_list(size):
+    return list(size) if size else None
+
+
+def run_picture_size(run_dir):
+    """The size of the first screenshot the probe took in the run: what the engine really drew, whatever was asked."""
+    shots = sorted((Path(run_dir) / "userdata" / "screenshots").glob("*"))
+    return next((size for size in map(picture_size, shots) if size), None)
+
+
 # The probe's phases for a fixed scene: settle after the load (a picture at the end to check the scene), stand still, then
 # one full turn (four pictures). No running: the scene stays the same cells.
 PROBE_CONFIG = """return {
@@ -233,10 +314,10 @@ def game_folders(profile_path, args):
     return folders, profile
 
 
-def prepare(run_dir):
+def prepare(run_dir, display="window"):
     for sub in ("config", "userdata/data", "data/scripts"):
         (run_dir / sub).mkdir(parents=True, exist_ok=True)
-    (run_dir / "config" / "settings.cfg").write_text(SETTINGS, encoding="utf-8")
+    (run_dir / "config" / "settings.cfg").write_text(settings_text(display), encoding="utf-8")
     (run_dir / "config" / "openfallout.cfg").write_text("replace=config\n", encoding="utf-8")
     (run_dir / "data" / "scripts" / "perfprobeconfig.lua").write_text(PROBE_CONFIG, encoding="utf-8")
 
@@ -262,6 +343,29 @@ def stop_process_group(process):
         process.wait()
 
 
+def clear_process_group(group, wait=5.0):
+    """Ends whatever is still in the engine's session once the engine itself is gone, and waits until the session is
+    empty; says whether anything was there. An engine that crashes is killed by its own crash reporter, which then
+    shows a box and waits for a click: left alone it would stay on the screen, into the next run and after the last."""
+    import signal
+
+    found = False
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(group, sig)
+        except (ProcessLookupError, PermissionError):
+            return found
+        found = True
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            try:
+                os.killpg(group, 0)
+            except (ProcessLookupError, PermissionError):
+                return found
+            time.sleep(0.1)
+    return found
+
+
 def capture_outcome(kind, capture, run_dir):
     """(the trace's file name, None) when xctrace recorded it (exit status 0), else (None, why, naming xctrace.log)."""
     if capture is None:
@@ -279,15 +383,14 @@ def run_once(args, scene_name, run_dir, data):
     import roundguard
 
     scene = SCENES[scene_name]
-    prepare(run_dir)
+    prepare(run_dir, args.display)
     engine = Path(args.engine).resolve()
     resources = Path(args.resources).resolve() if args.resources else engine.parent.parent / "Resources" / "resources"
     command = engine_command(engine, resources, scene, data, run_dir)
     if args.nice:
-        command = ["nice", "-n", str(args.nice)] + command
-    env = dict(os.environ, SDL_MAC_BACKGROUND_APP="1")
-    if args.hud:
-        env["MTL_HUD_ENABLED"] = "1"
+        # by its full name: the engine's PATH holds no program
+        command = ["/usr/bin/nice", "-n", str(args.nice)] + command
+    env = engine_environment(args.display, run_dir, args.hud)
     before = machine()
     system = roundguard.default_system(platform.system() == "Darwin")
     heartbeat = roundguard.Heartbeat(system.ping, system.window_server_pid) if system.heartbeat else None
@@ -336,6 +439,9 @@ def run_once(args, scene_name, run_dir, data):
     finally:
         if process is not None and process.poll() is None:
             stop_process_group(process)
+        if process is not None and clear_process_group(process.pid):
+            print(f"{scene_name}: the engine left a process behind (its crash reporter?), which was ended",
+                  file=sys.stderr)
         if capture is not None and capture.poll() is None:
             capture.terminate()
             try:
@@ -365,6 +471,7 @@ def run_once(args, scene_name, run_dir, data):
         "memory": {"footprint_mib": (samples.get("stand_end") or {}).get("footprint_mib"),
                    "peak_mib": max((s["peak_mib"] for s in valid), default=None), "samples": samples},
         "capture": trace, "capture_error": capture_error,
+        "display": {"mode": args.display, "panel": as_list(args.panel), "picture": as_list(run_picture_size(run_dir))},
         "machine_before": before, "machine_after": machine(),
         "when": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     })
@@ -402,7 +509,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("scenes", help="list the fixed scenes and their start arguments")
-    run = sub.add_parser("run", help="measure scenes (windowed, in the background)")
+    run = sub.add_parser("run", help="measure scenes (in a background window, or full screen in front)")
     run.add_argument("scenes", nargs="+", help="scene names, or `all`")
     run.add_argument("--engine", required=True, help="the openfallout program of the build")
     run.add_argument("--resources", help="its resources folder (default: next to the program in the app bundle)")
@@ -410,6 +517,10 @@ def main(argv=None):
     run.add_argument("--repeat", type=int, default=3, help="starts per scene (default: %(default)s)")
     run.add_argument("--capture", choices=sorted(TEMPLATES), help="also record an Instruments trace of the measured phases")
     run.add_argument("--hud", action="store_true", help="show the Metal performance HUD (MTL_HUD_ENABLED=1)")
+    run.add_argument("--display", choices=DISPLAYS, default="window",
+                     help="window: a 1280x720 window in the background; fullscreen: in front and full screen at the size "
+                          "the desktop gives, which takes the screen and the keyboard for the length of each run "
+                          "(default: %(default)s)")
     run.add_argument("--label", default="", help="a note stored in every result (what was measured)")
     run.add_argument("--commit", default=None, help="the engine's commit (default: the commit of this checkout)")
     run.add_argument("--nice", type=int, default=0, help="run the engine at this nice value (default: %(default)s)")
@@ -439,6 +550,8 @@ def main(argv=None):
     if unknown:
         parser.error(f"unknown scene(s) {', '.join(unknown)}; `scenes` lists them")
     folders, _ = game_folders(args.profile, args)
+    # for the record only: what the panel has, beside what the engine drew
+    args.panel = main_display_pixels(text_of(["system_profiler", "SPDisplaysDataType", "-json"]) or "")
     args.commit = args.commit or git_commit()
     out = Path(args.out).resolve() / time.strftime("%Y%m%d-%H%M%S")
     results, first = [], True
@@ -452,7 +565,8 @@ def main(argv=None):
             first = False
             result = run_once(args, name, out / f"{name}-{repeat}", data)
             stand = result["phases"].get("stand", {})
-            print(f"{name} #{repeat}: stand p50 {stand.get('p50')} ms, cell load {result['cell_load_s']} s, "
+            print(f"{name} #{repeat}: stand p50 {stand.get('p50')} ms ({stand.get('fps')} fps), "
+                  f"picture {result['display']['picture']}, cell load {result['cell_load_s']} s, "
                   f"peak {result['memory']['peak_mib']} MiB, exit {result['exit_status']}"
                   + (f", stopped: {result['stopped']}" if result["stopped"] else ""), flush=True)
             results.append(result)

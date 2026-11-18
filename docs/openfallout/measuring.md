@@ -4,9 +4,10 @@ This page says how to measure frame time, cell-load time, memory and CPU time of
 scenes, so that two measurements taken a month apart (or before and after a change) can be compared. It promises no
 numbers: it is the method, and the first baseline below is a record of what the method gave when the page was written.
 
-Everything here runs the game in a window in the background: nothing goes full screen, nothing takes the keyboard focus
-or the pointer, nothing presses keys, and each run has its own configuration and user-data folders, so the settings and
-saves of whoever uses the Mac are never read or written.
+Unless full screen is asked for (see "Full screen, as a player has it"), everything here runs the game in a window in
+the background: nothing goes full screen, nothing takes the keyboard focus or the pointer, nothing presses keys. Each
+run has its own configuration and user-data folders, so the settings and saves of whoever uses the Mac are never read
+or written.
 
 ## The fixed scenes
 
@@ -61,6 +62,32 @@ medians per scene and metric with the change in percent. A change smaller than t
 is noise: look at the repeats of each side before believing a few percent. A run that was stopped, crashed, did not finish
 the probe or lacks the `stand` or `turn` phase is left out of every median, and both `run` and `compare` name each run
 they left out.
+
+## Full screen, as a player has it
+
+```
+scripts/openfallout/mac_measure.py run all --display fullscreen --engine <...> --repeat 3 --out <results>
+```
+
+`--display fullscreen` starts each run as an ordinary application, in front and full screen (`window mode = 0`). Still
+no vsync and no frame-rate limit. This is how the numbers a player gets are taken: the frame rate at the display's full
+resolution, and one build against another in a window that is really shown. Numbers of the background window are not
+comparable with these.
+
+The size of the picture cannot be chosen: on a Mac the engine goes full screen in a Space of its own, and the desktop
+gives that Space its size whatever resolution the settings name. To measure at another resolution, change the
+resolution of the display itself.
+
+- It takes the screen and the keyboard for the length of each run (about two minutes a scene). Whoever sits at the Mac
+  starts it and keeps the hands off until the last run has quit; a key that is pressed goes to the game.
+- `result.json` has `display`: the `mode`, the pixels of the main display's `panel`, and the size of the `picture` the
+  engine really drew (read from the probe's first screenshot). The picture is what the numbers belong to. On a display
+  with a camera housing macOS keeps a full-screen application below it, so the picture is some rows short of the panel
+  (3456 x 2168 on a panel of 3456 x 2234).
+- The engine's `PATH` is an empty folder of the run in both modes, so its crash handler finds no debugger to start, and
+  its crash log stays in the run's `tmp` folder.
+- An engine that crashes shows a box and its crash reporter waits for a click. When the engine is gone the tool ends
+  whatever is left in the engine's session, so the box does not stay on the screen; the run says so.
 
 ## Instruments captures with `xctrace`
 

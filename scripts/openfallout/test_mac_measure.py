@@ -27,6 +27,95 @@ class SceneCommandTests(unittest.TestCase):
         ])
 
 
+class DisplayTests(unittest.TestCase):
+    def test_a_window_run_keeps_the_small_window_without_vsync_or_limit(self):
+        self.assertEqual(mac_measure.settings_text("window"),
+                         "[Video]\nwindow mode = 2\nresolution x = 1280\nresolution y = 720\n"
+                         "vsync mode = 0\nframerate limit = 0\n")
+
+    def test_a_full_screen_run_asks_for_full_screen_and_names_no_size_of_its_own(self):
+        self.assertEqual(mac_measure.settings_text("fullscreen"),
+                         "[Video]\nwindow mode = 0\nresolution x = 1280\nresolution y = 720\n"
+                         "vsync mode = 0\nframerate limit = 0\n")
+
+    def test_reads_the_pixels_of_the_main_display(self):
+        report = """{"SPDisplaysDataType": [{"spdisplays_ndrvs": [
+            {"_name": "Second", "_spdisplays_pixels": "2560 x 1440"},
+            {"_name": "Built in", "_spdisplays_pixels": "3456 x 2234", "spdisplays_main": "spdisplays_yes"}]}]}"""
+        self.assertEqual(mac_measure.main_display_pixels(report), (3456, 2234))
+
+    def test_no_main_display_in_the_report_gives_nothing(self):
+        self.assertIsNone(mac_measure.main_display_pixels('{"SPDisplaysDataType": []}'))
+        self.assertIsNone(mac_measure.main_display_pixels("not a report"))
+
+    def test_a_full_screen_run_takes_no_size(self):
+        with self.assertRaises(SystemExit), unittest.mock.patch("sys.stderr"):
+            mac_measure.main(["run", "nv-interior", "--engine", "/build/openfallout", "--display", "fullscreen",
+                              "--size", "1280x720"])
+
+
+class EngineEnvironmentTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.run_dir = Path(temporary.name) / "run"
+        self.base = {"PATH": "/usr/bin:/opt/debuggers", "HOME": "/home/x", "SDL_MAC_BACKGROUND_APP": "1"}
+
+    def test_a_window_run_never_comes_to_the_front(self):
+        env = mac_measure.engine_environment("window", self.run_dir, base=self.base)
+        self.assertEqual(env["SDL_MAC_BACKGROUND_APP"], "1")
+
+    def test_a_full_screen_run_is_an_ordinary_application(self):
+        env = mac_measure.engine_environment("fullscreen", self.run_dir, base=self.base)
+        self.assertNotIn("SDL_MAC_BACKGROUND_APP", env)
+
+    def test_the_engine_finds_no_debugger_and_keeps_its_crash_log_with_the_run(self):
+        for display in ("window", "fullscreen"):
+            env = mac_measure.engine_environment(display, self.run_dir, base=self.base)
+            self.assertEqual(env["PATH"], str(self.run_dir / "no-programs"))
+            self.assertEqual(os.listdir(env["PATH"]), [])
+            self.assertEqual(env["TMPDIR"], str(self.run_dir / "tmp"))
+            self.assertTrue(Path(env["TMPDIR"]).is_dir())
+            self.assertEqual(env["HOME"], "/home/x")
+
+    def test_the_hud_is_asked_for_by_its_variable(self):
+        self.assertEqual(mac_measure.engine_environment("window", self.run_dir, hud=True, base=self.base)["MTL_HUD_ENABLED"], "1")
+        self.assertNotIn("MTL_HUD_ENABLED", mac_measure.engine_environment("window", self.run_dir, base=self.base))
+
+
+class PictureSizeTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name)
+
+    def test_reads_the_size_of_a_png(self):
+        picture = self.folder / "a.png"
+        picture.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (3456).to_bytes(4, "big")
+                            + (2234).to_bytes(4, "big") + b"\x08\x02\x00\x00\x00")
+        self.assertEqual(mac_measure.picture_size(picture), (3456, 2234))
+
+    def test_reads_the_size_of_a_jpeg_past_its_other_segments(self):
+        picture = self.folder / "a.jpg"
+        picture.write_bytes(b"\xff\xd8" + b"\xff\xe0\x00\x04ab" + b"\xff\xc0\x00\x11\x08"
+                            + (2234).to_bytes(2, "big") + (3456).to_bytes(2, "big") + b"\x03" + bytes(9))
+        self.assertEqual(mac_measure.picture_size(picture), (3456, 2234))
+
+    def test_a_file_that_is_no_picture_or_is_missing_gives_nothing(self):
+        other = self.folder / "a.txt"
+        other.write_bytes(b"hello")
+        self.assertIsNone(mac_measure.picture_size(other))
+        self.assertIsNone(mac_measure.picture_size(self.folder / "missing.png"))
+
+    def test_the_first_picture_of_a_run_is_measured(self):
+        shots = self.folder / "userdata" / "screenshots"
+        shots.mkdir(parents=True)
+        (shots / "screenshot001.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR"
+                                                  + (640).to_bytes(4, "big") + (480).to_bytes(4, "big") + bytes(5))
+        self.assertEqual(mac_measure.run_picture_size(self.folder), (640, 480))
+        self.assertIsNone(mac_measure.run_picture_size(self.folder / "elsewhere"))
+
+
 class CaptureCommandTests(unittest.TestCase):
     def test_time_profile_attaches_to_the_running_engine_for_the_measured_phases(self):
         self.assertEqual(mac_measure.xctrace_command("time", pid=4242, trace=Path("/runs/r1/time.trace"), seconds=70), [
@@ -142,6 +231,56 @@ class CompareTests(unittest.TestCase):
         self.assertIn(("fo3-busy", "stand p50 ms", 10.0, None, None), rows)
 
 
+class LeftBehindTests(unittest.TestCase):
+    """What is still in the engine's session when the engine is gone: its crash reporter, which shows a box."""
+
+    def clear(self, killpg, wait=1.0):
+        """clear_process_group(77) with `killpg` in place of the real one and a clock that only sleeping moves."""
+        now = [0.0]
+
+        def sleep(seconds):
+            now[0] += seconds
+
+        with unittest.mock.patch("mac_measure.os.killpg", killpg), \
+                unittest.mock.patch("mac_measure.time.sleep", sleep), \
+                unittest.mock.patch("mac_measure.time.monotonic", lambda: now[0]):
+            return mac_measure.clear_process_group(77, wait=wait)
+
+    def answering(self, answers):
+        """A killpg that records its calls and gives each the next of `answers` (an exception is raised)."""
+        calls, answers = [], iter(answers)
+
+        def killpg(group, sig):
+            calls.append((group, sig))
+            answer = next(answers)
+            if answer is not None:
+                raise answer
+
+        return killpg, calls
+
+    def test_an_empty_session_is_left_alone(self):
+        killpg, calls = self.answering([ProcessLookupError()])
+        self.assertFalse(self.clear(killpg))
+        self.assertEqual(calls, [(77, signal.SIGTERM)])
+
+    def test_what_is_left_is_told_to_end_and_waited_for(self):
+        killpg, calls = self.answering([None, None, ProcessLookupError()])
+        self.assertTrue(self.clear(killpg))
+        self.assertEqual(calls, [(77, signal.SIGTERM), (77, 0), (77, 0)])
+
+    def test_what_does_not_end_is_killed(self):
+        calls = []
+
+        def killpg(group, sig):
+            calls.append(sig)
+            if sig == 0 and signal.SIGKILL in calls:
+                raise ProcessLookupError()
+
+        self.assertTrue(self.clear(killpg, wait=0.5))
+        # told to end, asked five times in the half second it is given, killed, and asked once more
+        self.assertEqual(calls, [signal.SIGTERM, 0, 0, 0, 0, 0, signal.SIGKILL, 0])
+
+
 class FakeProcess:
     """A stand-in for the engine or xctrace: running until it is stopped or `exits()` says so."""
 
@@ -177,6 +316,7 @@ class RunTests(unittest.TestCase):
         self.run_dir = Path(temporary.name) / "nv-interior-1"
         self.log = self.run_dir / "config" / "openfallout.log"
         self.killed = []
+        self.cleared = []
         self.fds = []
         self.heartbeat = unittest.mock.Mock()
         self.heartbeat.problem.return_value = None
@@ -195,14 +335,15 @@ class RunTests(unittest.TestCase):
                               ("pty.openpty", openpty),
                               ("mac_measure.sample_footprint", lambda pid: None),
                               ("mac_measure.machine", lambda: {}),
-                              ("mac_measure.os.killpg", lambda pid, sig: self.killed.append((pid, sig)))):
+                              ("mac_measure.os.killpg", lambda pid, sig: self.killed.append((pid, sig))),
+                              ("mac_measure.clear_process_group", lambda group: self.cleared.append(group))):
             patcher = unittest.mock.patch(target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
 
     def args(self, capture=None):
         return argparse.Namespace(engine="/build/openfallout", resources="/build/resources", nice=0, hud=False,
-                                  capture=capture, limit=300, label="x", commit="c")
+                                  capture=capture, limit=300, label="x", commit="c", display="window", panel=(3456, 2234))
 
     def run_with(self, processes, ticks):
         """run_once where Popen gives `processes` in turn and each half-second tick calls the next of `ticks`."""
@@ -216,6 +357,7 @@ class RunTests(unittest.TestCase):
         return lambda: self.log.write_text(text)
 
     def assert_cleaned_up(self):
+        self.assertEqual(self.cleared, [4242], "what the engine left in its session is ended")
         self.heartbeat.stop.assert_called_once()
         for fd in self.fds:
             with self.assertRaises(OSError, msg="the pty is closed"):
@@ -253,11 +395,22 @@ class RunTests(unittest.TestCase):
         self.assertEqual(self.killed, [], "an engine that quit by itself is not signalled")
         self.assert_cleaned_up()
 
+    def test_an_engine_that_ended_by_itself_still_has_its_session_cleared(self):
+        # a crashed engine is killed by its own crash reporter, which then shows a box and waits for a click
+        self.run_with([FakeProcess(4242, exit_after=1, status=-9)], [lambda: None, lambda: None])
+        self.assertEqual(self.killed, [])
+        self.assert_cleaned_up()
+
     def test_a_capture_that_succeeded_is_recorded(self):
         engine, xctrace = FakeProcess(4242, exit_after=2), FakeProcess(4343, exit_after=0, status=0)
         result = self.run_with([engine, xctrace], [self.write_log(LOG + f"{PROBE}start\tstand\n"), lambda: None])
         self.assertEqual(result["capture"], "time.trace")
         self.assertIsNone(result["capture_error"])
+
+
+    def test_a_run_records_how_it_was_shown(self):
+        result = self.run_with([FakeProcess(4242, exit_after=1)], [lambda: None])
+        self.assertEqual(result["display"], {"mode": "window", "panel": [3456, 2234], "picture": None})
 
 
 if __name__ == "__main__":
