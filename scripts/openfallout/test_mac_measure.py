@@ -27,6 +27,95 @@ class SceneCommandTests(unittest.TestCase):
         ])
 
 
+class DisplayTests(unittest.TestCase):
+    def test_a_window_run_keeps_the_small_window_without_vsync_or_limit(self):
+        self.assertEqual(mac_measure.settings_text("window"),
+                         "[Video]\nwindow mode = 2\nresolution x = 1280\nresolution y = 720\n"
+                         "vsync mode = 0\nframerate limit = 0\n")
+
+    def test_a_full_screen_run_asks_for_full_screen_at_the_pixels_given(self):
+        self.assertEqual(mac_measure.settings_text("fullscreen", (3456, 2234)),
+                         "[Video]\nwindow mode = 0\nresolution x = 3456\nresolution y = 2234\n"
+                         "vsync mode = 0\nframerate limit = 0\n")
+
+    def test_reads_the_pixels_of_the_main_display(self):
+        report = """{"SPDisplaysDataType": [{"spdisplays_ndrvs": [
+            {"_name": "Second", "_spdisplays_pixels": "2560 x 1440"},
+            {"_name": "Built in", "_spdisplays_pixels": "3456 x 2234", "spdisplays_main": "spdisplays_yes"}]}]}"""
+        self.assertEqual(mac_measure.main_display_pixels(report), (3456, 2234))
+
+    def test_no_main_display_in_the_report_gives_nothing(self):
+        self.assertIsNone(mac_measure.main_display_pixels('{"SPDisplaysDataType": []}'))
+        self.assertIsNone(mac_measure.main_display_pixels("not a report"))
+
+    def test_reads_a_size_given_on_the_command_line(self):
+        self.assertEqual(mac_measure.parse_size("3456x2234"), (3456, 2234))
+        with self.assertRaises(argparse.ArgumentTypeError):
+            mac_measure.parse_size("big")
+
+
+class EngineEnvironmentTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.run_dir = Path(temporary.name) / "run"
+        self.base = {"PATH": "/usr/bin:/opt/debuggers", "HOME": "/home/x", "SDL_MAC_BACKGROUND_APP": "1"}
+
+    def test_a_window_run_never_comes_to_the_front(self):
+        env = mac_measure.engine_environment("window", self.run_dir, base=self.base)
+        self.assertEqual(env["SDL_MAC_BACKGROUND_APP"], "1")
+
+    def test_a_full_screen_run_is_an_ordinary_application(self):
+        env = mac_measure.engine_environment("fullscreen", self.run_dir, base=self.base)
+        self.assertNotIn("SDL_MAC_BACKGROUND_APP", env)
+
+    def test_the_engine_finds_no_debugger_and_keeps_its_crash_log_with_the_run(self):
+        for display in ("window", "fullscreen"):
+            env = mac_measure.engine_environment(display, self.run_dir, base=self.base)
+            self.assertEqual(env["PATH"], str(self.run_dir / "no-programs"))
+            self.assertEqual(os.listdir(env["PATH"]), [])
+            self.assertEqual(env["TMPDIR"], str(self.run_dir / "tmp"))
+            self.assertTrue(Path(env["TMPDIR"]).is_dir())
+            self.assertEqual(env["HOME"], "/home/x")
+
+    def test_the_hud_is_asked_for_by_its_variable(self):
+        self.assertEqual(mac_measure.engine_environment("window", self.run_dir, hud=True, base=self.base)["MTL_HUD_ENABLED"], "1")
+        self.assertNotIn("MTL_HUD_ENABLED", mac_measure.engine_environment("window", self.run_dir, base=self.base))
+
+
+class PictureSizeTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name)
+
+    def test_reads_the_size_of_a_png(self):
+        picture = self.folder / "a.png"
+        picture.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (3456).to_bytes(4, "big")
+                            + (2234).to_bytes(4, "big") + b"\x08\x02\x00\x00\x00")
+        self.assertEqual(mac_measure.picture_size(picture), (3456, 2234))
+
+    def test_reads_the_size_of_a_jpeg_past_its_other_segments(self):
+        picture = self.folder / "a.jpg"
+        picture.write_bytes(b"\xff\xd8" + b"\xff\xe0\x00\x04ab" + b"\xff\xc0\x00\x11\x08"
+                            + (2234).to_bytes(2, "big") + (3456).to_bytes(2, "big") + b"\x03" + bytes(9))
+        self.assertEqual(mac_measure.picture_size(picture), (3456, 2234))
+
+    def test_a_file_that_is_no_picture_or_is_missing_gives_nothing(self):
+        other = self.folder / "a.txt"
+        other.write_bytes(b"hello")
+        self.assertIsNone(mac_measure.picture_size(other))
+        self.assertIsNone(mac_measure.picture_size(self.folder / "missing.png"))
+
+    def test_the_first_picture_of_a_run_is_measured(self):
+        shots = self.folder / "userdata" / "screenshots"
+        shots.mkdir(parents=True)
+        (shots / "screenshot001.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR"
+                                                  + (640).to_bytes(4, "big") + (480).to_bytes(4, "big") + bytes(5))
+        self.assertEqual(mac_measure.run_picture_size(self.folder), (640, 480))
+        self.assertIsNone(mac_measure.run_picture_size(self.folder / "elsewhere"))
+
+
 class CaptureCommandTests(unittest.TestCase):
     def test_time_profile_attaches_to_the_running_engine_for_the_measured_phases(self):
         self.assertEqual(mac_measure.xctrace_command("time", pid=4242, trace=Path("/runs/r1/time.trace"), seconds=70), [
@@ -202,7 +291,7 @@ class RunTests(unittest.TestCase):
 
     def args(self, capture=None):
         return argparse.Namespace(engine="/build/openfallout", resources="/build/resources", nice=0, hud=False,
-                                  capture=capture, limit=300, label="x", commit="c")
+                                  capture=capture, limit=300, label="x", commit="c", display="window", size=None)
 
     def run_with(self, processes, ticks):
         """run_once where Popen gives `processes` in turn and each half-second tick calls the next of `ticks`."""
@@ -258,6 +347,11 @@ class RunTests(unittest.TestCase):
         result = self.run_with([engine, xctrace], [self.write_log(LOG + f"{PROBE}start\tstand\n"), lambda: None])
         self.assertEqual(result["capture"], "time.trace")
         self.assertIsNone(result["capture_error"])
+
+
+    def test_a_run_records_how_it_was_shown(self):
+        result = self.run_with([FakeProcess(4242, exit_after=1)], [lambda: None])
+        self.assertEqual(result["display"], {"mode": "window", "asked": [1280, 720], "picture": None})
 
 
 if __name__ == "__main__":

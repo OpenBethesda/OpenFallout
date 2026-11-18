@@ -4,9 +4,10 @@ This page says how to measure frame time, cell-load time, memory and CPU time of
 scenes, so that two measurements taken a month apart (or before and after a change) can be compared. It promises no
 numbers: it is the method, and the first baseline below is a record of what the method gave when the page was written.
 
-Everything here runs the game in a window in the background: nothing goes full screen, nothing takes the keyboard focus
-or the pointer, nothing presses keys, and each run has its own configuration and user-data folders, so the settings and
-saves of whoever uses the Mac are never read or written.
+Unless full screen is asked for (see "Full screen, as a player has it"), everything here runs the game in a window in
+the background: nothing goes full screen, nothing takes the keyboard focus or the pointer, nothing presses keys. Each
+run has its own configuration and user-data folders, so the settings and saves of whoever uses the Mac are never read
+or written.
 
 ## The fixed scenes
 
@@ -61,6 +62,24 @@ medians per scene and metric with the change in percent. A change smaller than t
 is noise: look at the repeats of each side before believing a few percent. A run that was stopped, crashed, did not finish
 the probe or lacks the `stand` or `turn` phase is left out of every median, and both `run` and `compare` name each run
 they left out.
+
+## Full screen, as a player has it
+
+```
+scripts/openfallout/mac_measure.py run all --display fullscreen --engine <...> --repeat 3 --out <results>
+```
+
+`--display fullscreen` starts each run as an ordinary application, in front and full screen (`window mode = 0`), at the
+pixels of the main display (or `--size 3456x2234`). Still no vsync and no frame-rate limit. This is how the numbers a
+player gets are taken: the frame rate at the display's full resolution, and one build against another in a window that
+is really shown. Numbers of the background window are not comparable with these.
+
+- It takes the screen and the keyboard for the length of each run (about two minutes a scene). Whoever sits at the Mac
+  starts it and keeps the hands off until the last run has quit; a key that is pressed goes to the game.
+- `result.json` has `display`: the `mode`, the pixels that were `asked` for, and the size of the `picture` the engine
+  really drew (read from the probe's first screenshot). Check that the two agree before believing the numbers.
+- The engine's `PATH` is an empty folder of the run in both modes, so its crash handler finds no debugger to start, and
+  its crash log stays in the run's `tmp` folder.
 
 ## Instruments captures with `xctrace`
 
