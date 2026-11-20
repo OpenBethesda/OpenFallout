@@ -203,3 +203,22 @@ class MacWorkflowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MergeQueueTest(unittest.TestCase):
+    """Every workflow that checks a pull request also runs for the merge queue, so the full checks run on the commit
+    that lands on master, not only on the pull request's own head."""
+
+    def test_pull_request_workflows_listen_to_the_merge_queue(self):
+        for name in ("push.yml", "documentation.yml", "docs.yml"):
+            with self.subTest(workflow=name):
+                text = (WORKFLOWS / name).read_text()
+                on = text[text.index("\non:\n"):text.index("\npermissions:")]
+                self.assertIn("\n  pull_request:", on)
+                self.assertRegex(on, r"\n  merge_group:\n(  [a-z_]+:|$)")
+
+    def test_the_change_classifier_builds_everything_in_the_queue(self):
+        import sys
+        sys.path.insert(0, str(ROOT / "CI"))
+        import changed_paths
+        self.assertEqual(changed_paths.decide("merge_group", "0" * 40)[0], True)
