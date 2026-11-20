@@ -180,20 +180,11 @@ jobs:
         MACOS_NOTARY_API_ISSUER_ID: ${{ github.event_name != 'pull_request' && secrets.MACOS_NOTARY_API_ISSUER_ID || '' }}
       run: python3 CI/macos/release_signing.py setup
 
+    # One attempt. A retry on "hdiutil: create failed - Resource busy" (added in #9) hid that failure; none of the 13
+    # packaging runs whose logs were kept on 20 November 2026 needed it. If it comes back, the failing log is the
+    # evidence for the cause (the suspect is file scanning right after the signing script, CMake issue 25671).
     - name: Package disk image
-      run: |
-        for attempt in 1 2 3; do
-          if CI/macos/build.sh package > "$RUNNER_TEMP/package.log" 2>&1; then
-            cat "$RUNNER_TEMP/package.log"
-            exit 0
-          fi
-          cat "$RUNNER_TEMP/package.log"
-          if ! grep -q 'hdiutil: create failed - Resource busy' "$RUNNER_TEMP/package.log" || [ "$attempt" -eq 3 ]; then
-            exit 1
-          fi
-          echo "Disk-image creation is busy; retrying in 10 seconds ($attempt/3)"
-          sleep 10
-        done
+      run: CI/macos/build.sh package
 
     - name: Notarize and staple
       if: ${{ steps.signing.outputs.mode == 'release' }}
