@@ -21,6 +21,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <functional>
 #include <iosfwd>
 #include <list>
 #include <memory>
@@ -194,8 +195,12 @@ namespace DetourNavigator
     class AsyncNavMeshUpdater
     {
     public:
-        AsyncNavMeshUpdater(const Settings& settings, TileCachedRecastMeshManager& recastMeshManager,
-            OffMeshConnectionsManager& offMeshConnectionsManager, std::unique_ptr<NavMeshDb>&& db);
+        using Clock = std::function<std::chrono::steady_clock::time_point()>;
+
+        AsyncNavMeshUpdater(
+            const Settings& settings, TileCachedRecastMeshManager& recastMeshManager,
+            OffMeshConnectionsManager& offMeshConnectionsManager, std::unique_ptr<NavMeshDb>&& db,
+            Clock clock = [] { return std::chrono::steady_clock::now(); });
         ~AsyncNavMeshUpdater();
 
         void post(const AgentBounds& agentBounds, const SharedNavMeshCacheItem& navMeshCacheItem,
@@ -216,6 +221,7 @@ namespace DetourNavigator
         std::reference_wrapper<const Settings> mSettings;
         std::reference_wrapper<TileCachedRecastMeshManager> mRecastMeshManager;
         std::reference_wrapper<OffMeshConnectionsManager> mOffMeshConnectionsManager;
+        Clock mClock;
         std::atomic_bool mShouldStop;
         mutable std::mutex mMutex;
         std::condition_variable mHasJob;

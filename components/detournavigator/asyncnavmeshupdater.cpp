@@ -273,10 +273,11 @@ namespace DetourNavigator
     }
 
     AsyncNavMeshUpdater::AsyncNavMeshUpdater(const Settings& settings, TileCachedRecastMeshManager& recastMeshManager,
-        OffMeshConnectionsManager& offMeshConnectionsManager, std::unique_ptr<NavMeshDb>&& db)
+        OffMeshConnectionsManager& offMeshConnectionsManager, std::unique_ptr<NavMeshDb>&& db, Clock clock)
         : mSettings(settings)
         , mRecastMeshManager(recastMeshManager)
         , mOffMeshConnectionsManager(offMeshConnectionsManager)
+        , mClock(std::move(clock))
         , mShouldStop()
         , mNavMeshTilesCache(settings.mMaxNavMeshTilesCacheSize)
         , mDbWorker(makeDbWorker(*this, std::move(db), mSettings))
@@ -305,10 +306,12 @@ namespace DetourNavigator
 
         std::unique_lock lock(mMutex);
 
+        const std::chrono::steady_clock::time_point now = mClock();
+
         if (playerTileChanged)
         {
             Log(Debug::Debug) << "Player tile has been changed to " << playerTile;
-            mWaiting.update(playerTile, mSettings.get().mMaxTilesNumber);
+            mWaiting.update(playerTile, mSettings.get().mMaxTilesNumber, now);
         }
 
         for (const auto& [changedTile, changeType] : changedTiles)
@@ -331,14 +334,14 @@ namespace DetourNavigator
                                   << " changedTile=(" << it->mChangedTile << ")"
                                   << " changeType=" << it->mChangeType;
 
-                mWaiting.push(it);
+                mWaiting.push(it, now);
                 ++mPostedCount;
             }
         }
 
         Log(Debug::Debug) << "Posted " << mJobs.size() << " navigator jobs";
 
-        if (mWaiting.hasJob())
+        if (mWaiting.hasJob(now))
             mHasJob.notify_all();
 
         lock.unlock();
@@ -708,7 +711,7 @@ namespace DetourNavigator
         bool shouldStop = false;
         const auto hasJob = [&] {
             shouldStop = mShouldStop.load();
-            return shouldStop || mWaiting.hasJob();
+            return shouldStop || mWaiting.hasJob(mClock());
         };
 
         if (!mHasJob.wait_for(lock, std::chrono::milliseconds(10), hasJob))
@@ -725,7 +728,7 @@ namespace DetourNavigator
 
         JobIt job = mJobs.end();
 
-        if (const std::optional<JobIt> nextJob = mWaiting.pop(playerTile))
+        if (const std::optional<JobIt> nextJob = mWaiting.pop(playerTile, mClock()))
             job = *nextJob;
 
         if (job == mJobs.end())
@@ -739,13 +742,14 @@ namespace DetourNavigator
         if (!lockTile(job->mId, job->mAgentBounds, job->mChangedTile))
         {
             Log(Debug::Debug) << "Failed to lock tile by job " << job->mId;
-            job->mProcessTime = std::chrono::steady_clock::now() + mSettings.get().mMinUpdateInterval;
-            mWaiting.push(job);
+            const std::chrono::steady_clock::time_point now = mClock();
+            job->mProcessTime = now + mSettings.get().mMinUpdateInterval;
+            mWaiting.push(job, now);
             return mJobs.end();
         }
 
         if (job->mChangeType == ChangeType::update)
-            mLastUpdates[getAgentAndTile(*job)] = std::chrono::steady_clock::now();
+            mLastUpdates[getAgentAndTile(*job)] = mClock();
         mPushed.erase(getAgentAndTile(*job));
 
         return job;
@@ -778,7 +782,7 @@ namespace DetourNavigator
 
     void AsyncNavMeshUpdater::cleanupLastUpdates() noexcept
     {
-        const auto now = std::chrono::steady_clock::now();
+        const auto now = mClock();
 
         const std::lock_guard<std::mutex> lock(mMutex);
 
@@ -795,7 +799,7 @@ namespace DetourNavigator
     {
         Log(Debug::Debug) << "Enqueueing job " << job->mId << " by thread=" << std::this_thread::get_id();
         const std::lock_guard lock(mMutex);
-        mWaiting.push(job);
+        mWaiting.push(job, mClock());
         mHasJob.notify_all();
     }
 
