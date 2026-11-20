@@ -44,12 +44,26 @@ def build_command(app, stdout, stderr, env, engine_args, background=False):
     return command + ["-a", str(app), "--args", *engine_args]
 
 
+def last_value_wins(args):
+    """An option given twice keeps its last value, so a caller can override what a profile already passes."""
+    pairs, i = [], 0
+    while i < len(args):
+        if args[i].startswith("--") and i + 1 < len(args) and not args[i + 1].startswith("--"):
+            pairs.append((args[i], [args[i], args[i + 1]]))
+            i += 2
+        else:
+            pairs.append((args[i], [args[i]]))
+            i += 1
+    last = {name: n for n, (name, _) in enumerate(pairs)}
+    return [word for n, (name, words) in enumerate(pairs) if last[name] == n for word in words]
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     engine_args = []
     if "--" in argv:
         split = argv.index("--")
-        argv, engine_args = argv[:split], argv[split + 1:]
+        argv, engine_args = argv[:split], last_value_wins(argv[split + 1:])
     parser = argparse.ArgumentParser(usage="%(prog)s [options] [-- engine arguments...]",
                                      description=__doc__.split("\n\n")[0])
     parser.add_argument("--app", default=DEFAULT_APP,
