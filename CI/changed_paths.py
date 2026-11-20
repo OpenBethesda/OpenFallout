@@ -26,11 +26,51 @@ DOCUMENTATION_FILES = ("README.md", "CHANGELOG.md", "AUTHORS.md")
 # on macOS only).  They run in the Mac job "Python tests on macOS", so a change to what they test must not skip it.
 MAC_TESTED_FILES = ("scripts/openfallout/round/round.py", "scripts/openfallout/round/roundguard.py",
                     "scripts/openfallout/test_round.py")
+# The scripts the Mac jobs run against the built app: the packaged-app check starts the app through
+# scripts/openfallout/mac_launch.py and builds its smoke plugin with synthetic_fallout_plugin.py, which imports more
+# helpers. A change to any of them can break that check without failing a unit test (on 20 November 2026 a launcher
+# change that dropped all but the last --content passed every test and skipped the Mac build: pull request 257).
+# They are read from the imports, so a new import is covered without a list to keep.
+MAC_RUNNERS = ("CI/check_mac_package.py",)
+HELPERS = "scripts/openfallout"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def skippable(status, path):
+def _helper_references(source):
+    """The helper modules a Python file names: `import x`/`from x import` of a module in HELPERS, and string literals
+    that spell out a path in HELPERS."""
+    import ast
+    import re
+    tree = ast.parse(source)
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            names.add(node.module.split(".")[0])
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            names.update(re.findall(HELPERS + r"/([A-Za-z_][A-Za-z0-9_]*)\.py", node.value))
+    return names
+
+
+def mac_checked_helpers(root=ROOT):
+    """Paths (relative to root) of every helper module the MAC_RUNNERS reach, following imports between helpers."""
+    found, todo = set(), [os.path.join(root, runner) for runner in MAC_RUNNERS]
+    while todo:
+        with open(todo.pop(), encoding="utf-8") as source:
+            for name in _helper_references(source.read()):
+                path = "%s/%s.py" % (HELPERS, name)
+                if path not in found and os.path.isfile(os.path.join(root, path)):
+                    found.add(path)
+                    todo.append(os.path.join(root, path))
+    return frozenset(found)
+
+
+def skippable(status, path, mac_checked=None):
     """Whether a changed file can be left out of the build, from git's one-letter status."""
     if path in MAC_TESTED_FILES:
+        return False
+    if path in (mac_checked_helpers() if mac_checked is None else mac_checked):
         return False
     if path.startswith(DOCUMENTATION_TREES):
         return True
@@ -41,7 +81,8 @@ def needs_build(changes):
     """changes is a list of (status, path) pairs, as git diff --name-status --no-renames gives."""
     if not changes:
         return True
-    return not all(skippable(status, path) for status, path in changes)
+    mac_checked = mac_checked_helpers()
+    return not all(skippable(status, path, mac_checked) for status, path in changes)
 
 
 def diff_changes(base, head="HEAD", cwd=None):
@@ -71,7 +112,8 @@ def decide(event, base, cwd=None):
         changes = diff_changes(base, "HEAD", cwd)
         if not changes:
             return True, "the list of changed files is empty"
-        other = [path for status, path in changes if not skippable(status, path)]
+        mac_checked = mac_checked_helpers(cwd or ROOT)
+        other = [path for status, path in changes if not skippable(status, path, mac_checked)]
         if other:
             return True, "%d of %d changed files are not documentation, first %s" % (
                 len(other), len(changes), other[0])

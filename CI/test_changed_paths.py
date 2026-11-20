@@ -46,6 +46,33 @@ class ClassificationTest(unittest.TestCase):
             "scripts/openfallout/test_round_scenario.py",
         )))
 
+    def test_the_helpers_the_packaged_app_check_runs_build(self):
+        # Pull request 257: a launcher change that dropped all but the last --content passed every unit test and, with
+        # scripts/openfallout counted as documentation, skipped the Mac build whose smoke run would have caught it.
+        for path in ("scripts/openfallout/mac_launch.py", "scripts/openfallout/synthetic_fallout_plugin.py",
+                     "scripts/openfallout/lod_tile.py"):
+            with self.subTest(path=path):
+                self.assertIn(path, changed_paths.mac_checked_helpers())
+                self.assertTrue(changed_paths.needs_build(modified(path)))
+                self.assertTrue(changed_paths.needs_build(modified("docs/openfallout/roadmap.md", path)))
+
+    def test_the_helpers_are_read_from_the_imports(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "CI"))
+            os.makedirs(os.path.join(root, "scripts/openfallout"))
+            files = {
+                "CI/check_mac_package.py": 'LAUNCHER = ROOT / "scripts/openfallout/launch.py"\nimport plugin as p\n',
+                "scripts/openfallout/launch.py": "import subprocess\n",
+                "scripts/openfallout/plugin.py": "from records import x\n",
+                "scripts/openfallout/records.py": "import plugin\n",
+                "scripts/openfallout/unrelated.py": "import launch\n",
+            }
+            for path, text in files.items():
+                with open(os.path.join(root, path), "w") as handle:
+                    handle.write(text)
+            self.assertEqual(changed_paths.mac_checked_helpers(root), {
+                "scripts/openfallout/launch.py", "scripts/openfallout/plugin.py", "scripts/openfallout/records.py"})
+
     def test_code_hidden_among_documentation_builds(self):
         self.assertTrue(changed_paths.needs_build(modified(
             "docs/openfallout/roadmap.md",
