@@ -36,7 +36,10 @@ with the same three steps as `build-tests` and the key start
 `build-macos-metal-v1-`.
 
 Each ccache is limited to 1,000 MB when it is stored (`ccache --max-size=1000M; ccache --cleanup` as the last step of
-its job). The Metal build
+its job). ccache identifies the compiler by a hash of `xcrun clang -v` (`CCACHE_COMPILERCHECK=string:...`, set by
+`.github/actions/mac-build-setup`), not by the compiler's file time: the hosted pool hands out more than one runner
+image with the same Xcode but different file times, and with the default check a cache saved on one image missed on
+the other (18-20% hits instead of 99.8%). The Metal build
 also has a small cache of its own: the OpenSceneGraph for OpenGL ES 3 it needs
 (about 19 MB). Its key is the output of `CI/macos/osg/osg_gles3.py key`, not
 `CI/build_cache.py`; see [OpenSceneGraph for OpenGL ES 3](osg-gles3.md). It is
