@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import socketserver
 import threading
 import unittest
 import unittest.mock
@@ -404,6 +405,24 @@ class EngineReleaseGateTests(unittest.TestCase):
         self.refused(api, "Played on")
 
 
+class LocalServer(HTTPServer):
+    """HTTPServer without its reverse lookup. HTTPServer.server_bind asks socket.getfqdn(host) for the server's name,
+    which is a PTR query for the address; where the resolver is slow (a VPN's resolver, a stuck mDNSResponder) the first
+    one in a process took 35 s. A test server on 127.0.0.1 has no use for a name."""
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+    def serve_in_background(self, test):
+        """Serve on a thread; stop it when the test ends (a short poll interval, so stopping is not half a second)."""
+        thread = threading.Thread(target=self.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+        thread.start()
+        test.addCleanup(thread.join)
+        test.addCleanup(self.server_close)
+        test.addCleanup(self.shutdown)
+
+
 class AssetDownloadTests(unittest.TestCase):
     """GitHub's asset download answers with a redirect to a signed address on another host: the token goes to GitHub
     only and never to that host."""
@@ -421,7 +440,7 @@ class AssetDownloadTests(unittest.TestCase):
             def log_message(self, *args):
                 pass
 
-        blob = HTTPServer(("127.0.0.1", 0), Blob)
+        blob = LocalServer(("127.0.0.1", 0), Blob)
 
         class Api(BaseHTTPRequestHandler):
             def do_GET(self):
@@ -433,10 +452,9 @@ class AssetDownloadTests(unittest.TestCase):
             def log_message(self, *args):
                 pass
 
-        api = HTTPServer(("127.0.0.1", 0), Api)
+        api = LocalServer(("127.0.0.1", 0), Api)
         for server in (blob, api):
-            threading.Thread(target=server.serve_forever, daemon=True).start()
-            self.addCleanup(server.shutdown)
+            server.serve_in_background(self)
         with unittest.mock.patch.dict(os.environ, {"GH_TOKEN": "secret-token"}):
             content = harness_release.GitHub().download_asset({"name": "x", "url": f"http://127.0.0.1:{api.server_port}/asset"})
         self.assertEqual(content, b'{"schema": 1}')
@@ -454,13 +472,15 @@ class AssetDownloadTests(unittest.TestCase):
             def log_message(self, *args):
                 pass
 
-        server = HTTPServer(("127.0.0.1", 0), Huge)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
-        self.addCleanup(server.shutdown)
+        server = LocalServer(("127.0.0.1", 0), Huge)
+        server.serve_in_background(self)
+        expected = {"huge": f"x is larger than {harness_release.MAX_STATEMENT_BYTES} bytes",
+                    "missing": "GitHub asset download of x returned HTTP 404"}
         with unittest.mock.patch.dict(os.environ, {"GH_TOKEN": "secret-token"}):
-            for path in ("huge", "missing"):
-                with self.subTest(path=path), self.assertRaises(ReleaseError):
+            for path, message in expected.items():
+                with self.subTest(path=path), self.assertRaises(ReleaseError) as raised:
                     harness_release.GitHub().download_asset({"name": "x", "url": f"http://127.0.0.1:{server.server_port}/{path}"})
+                self.assertIn(message, str(raised.exception))
 
 
 if __name__ == "__main__":
