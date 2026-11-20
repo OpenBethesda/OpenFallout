@@ -5,7 +5,8 @@ Only a change that touches nothing but the notes and trackers under docs/openfal
 the helper scripts under scripts/openfallout (their Python tests run in the Changes job
 of push.yml, whatever else changed) and the top-level README, CHANGELOG and AUTHORS may
 skip them.  The round runner is the exception among the helper scripts: the tests that
-run a whole round work on macOS only and run in the Mac job, so a change to it builds.
+run a whole round work on macOS only and run in the Mac jobs, so a change to it builds.  Each Mac job of macos.yml
+runs this script itself, as its first step.
 A skipped build reports green, so every
 doubt runs everything: an empty or unreadable list of changed files, a base commit that
 cannot be fetched, a manual run, a deleted file outside the two folders, and any change
@@ -22,7 +23,7 @@ DOCUMENTATION_TREES = ("docs/openfallout/", "scripts/openfallout/")
 # CMakeLists.txt installs these files, so changing one is harmless but removing one is not.
 DOCUMENTATION_FILES = ("README.md", "CHANGELOG.md", "AUTHORS.md")
 # The Changes job runs on a Linux runner, where the tests that run a whole round skip themselves (round.py run works
-# on macOS only).  They run in the Mac job, so a change to what they test must not skip it.
+# on macOS only).  They run in the Mac job "Python tests on macOS", so a change to what they test must not skip it.
 MAC_TESTED_FILES = ("scripts/openfallout/round/round.py", "scripts/openfallout/round/roundguard.py",
                     "scripts/openfallout/test_round.py")
 
