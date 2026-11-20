@@ -4,7 +4,7 @@ How to contribute to OpenFallout
 OpenFallout is at an early stage. Start with the [roadmap](docs/openfallout/gap-audit-and-roadmap.md), then pick or open an issue at https://github.com/OpenBethesda/OpenFallout/issues and send a pull request against `master`.
 
 * Keep each pull request to one change, and say in its description what you ran to check it. The build and test baseline is in [docs/openfallout/build-baseline.md](docs/openfallout/build-baseline.md).
-* Format C++ with the repository's `.clang-format`.
+* Format C++ with the repository's `.clang-format`, using the clang-format version in `CI/clang-format-version.txt`. CI checks the lines each change touches (`CI/check_format_changes.py`). Install the git hooks once per clone (`brew install hk pkl uv`, then `hk install`): pre-commit formats your staged lines, and pre-push runs CI's fast checks (format of changed lines, core and edges, documentation links) in about 5 seconds.
 * OpenFallout is Mac only (Apple Silicon, macOS 26.0 or later). Do not add code for another platform. Mac-only code is allowed at the edges only; the core stays plain C++, and `python3 CI/check_core_edges.py` checks it. See [core and edges](docs/openfallout/core-and-edges.md).
 * Keep the GPLv3 license and the copyright notices on everything inherited from OpenMW. New files are GPLv3 too.
 
