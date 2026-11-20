@@ -195,10 +195,12 @@ jobs:
       run: python3 CI/macos/release_signing.py cleanup
 
     # Release mode on the notarized build (Developer ID on every binary, Gatekeeper, stapled tickets); local mode on the
-    # ad hoc one (Gatekeeper is not asked). The smoke step starts the game from the disk image with a hidden window; a
-    # runner that gives it no OpenGL context, or whose software renderer is too slow for the run to end in time, reports
-    # it as skipped; a crash or an engine that does not quit peacefully fails the job. Before a release the smoke step
-    # is run on the development Mac on the draft release's image (`--smoke run`). The check appends the release-notes
+    # ad hoc one (Gatekeeper is not asked). The smoke step starts the game from the disk image with a hidden window and
+    # fails the job unless the game starts in its cell and quits peacefully (`--smoke run`). It used `--smoke auto`, which
+    # reports a run that times out on Apple's software renderer as skipped; but the hosted runner's software renderer
+    # passed it in all 16 runs read on 20 November 2026, and a broken game that never reaches its cell also times out:
+    # throwaway pull request 258 dropped the test plugin from the launch and the job stayed green with "SKIP smoke".
+    # Before a release the smoke step is also run on the development Mac on the draft release's image. The check appends the release-notes
     # line (renderer, SHA-256, macOS version and chip). The build makes exactly one disk image, for Apple Silicon.
     - name: Check the packaged app
       if: ${{ steps.classify.outputs.code != 'false' }}
@@ -211,7 +213,7 @@ jobs:
           echo "FAIL dmg: expected exactly one disk image in build/, found: $*"
           exit 1
         fi
-        python3 CI/check_mac_package.py "$1" --mode "$CHECK_MODE" --smoke auto --work "$RUNNER_TEMP/package-check" \
+        python3 CI/check_mac_package.py "$1" --mode "$CHECK_MODE" --smoke run --work "$RUNNER_TEMP/package-check" \
           --notes "$RUNNER_TEMP/release-notes.md" --angle "$ANGLE_CHECK"
 
     # The engine release (docs/openfallout/engine-release.md), on an `openfallout-*` tag build. The statement the shell reads is written from the checked
