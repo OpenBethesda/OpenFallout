@@ -40,7 +40,8 @@ jobs:
   Changes:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Time budget: 55 s p50, 78 s p95 over 150 runs (17-18 Nov 2026).
+    timeout-minutes: 10
 
     steps:
     - uses: actions/checkout@v7

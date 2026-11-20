@@ -47,6 +47,8 @@ jobs:
     name: Build, test and package
     # The one runner image: Apple Silicon, macOS 26. The cache keys below spell it out.
     runs-on: macos-26
+    # Time budget: a cold compiler cache took 34.9 min (20 Nov 2026), a warm one 6.4 min; release runs add notarization.
+    timeout-minutes: 60
     # The environment's own rules (which branches and tags may use it, who must approve) decide whether this job gets
     # the signing secrets; a tag or branch outside those rules cannot read them whatever its copy of the scripts says.
     environment: ${{ inputs.signing-environment }}
@@ -280,6 +282,8 @@ jobs:
     name: Unit tests and coverage
     if: ${{ inputs.build-type != 'Release' }}
     runs-on: macos-26
+    # Time budget: cold 28.8 min, warm 3.8 min (20 Nov 2026).
+    timeout-minutes: 45
     env:
       CMAKE_BUILD_TYPE: ${{ inputs.build-type }}
     steps:
@@ -477,6 +481,8 @@ jobs:
     name: Metal build
     if: ${{ inputs.build-type != 'Release' }}
     runs-on: macos-26
+    # Time budget: cold 20.9 min plus 6.6 min when OpenSceneGraph for GLES3 is rebuilt, warm 4.6 min (20 Nov 2026).
+    timeout-minutes: 40
     env:
       CMAKE_BUILD_TYPE: ${{ inputs.build-type }}
       # ANGLE (CI/angle_asset.py fetch) and OpenSceneGraph for OpenGL ES 3 (CI/macos/before_install_osg.sh) live in one
@@ -604,6 +610,8 @@ jobs:
   PythonMac:
     name: Python tests on macOS
     runs-on: macos-26
+    # Time budget: 8.3 min (20 Nov 2026).
+    timeout-minutes: 15
     steps:
     - uses: actions/checkout@v7
 

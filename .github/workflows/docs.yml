@@ -30,7 +30,8 @@ jobs:
   HTML:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Time budget: 70 s p50, 80 s p95 over 150 runs (17-18 Nov 2026).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Test Lua documentation failure handling
