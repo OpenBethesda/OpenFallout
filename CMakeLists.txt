@@ -636,9 +636,36 @@ if (BUILD_LAUNCHER AND BUILD_OPENFALLOUT)
 
     set(CPACK_GENERATOR "DragNDrop")
 
+    # fixup_bundle runs otool about 2000 times and install_name_tool about 150 times on this app. Left to find them,
+    # BundleUtilities picks /usr/bin/otool and /usr/bin/install_name_tool, which are stubs that ask xcrun for the real
+    # tool on every call; running the real tools directly makes the same calls with the same arguments, byte for byte
+    # the same app, in about half the time. xcrun gives the tool the stub would run.
+    set(BUNDLE_OTOOL "")
+    set(BUNDLE_INSTALL_NAME_TOOL "")
+    execute_process(COMMAND xcrun --find otool OUTPUT_VARIABLE BUNDLE_OTOOL_FOUND OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET RESULT_VARIABLE BUNDLE_OTOOL_RESULT)
+    if (BUNDLE_OTOOL_RESULT EQUAL 0 AND EXISTS "${BUNDLE_OTOOL_FOUND}")
+        set(BUNDLE_OTOOL "${BUNDLE_OTOOL_FOUND}")
+    endif()
+    execute_process(COMMAND xcrun --find install_name_tool OUTPUT_VARIABLE BUNDLE_INSTALL_NAME_TOOL_FOUND
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE BUNDLE_INSTALL_NAME_TOOL_RESULT)
+    if (BUNDLE_INSTALL_NAME_TOOL_RESULT EQUAL 0 AND EXISTS "${BUNDLE_INSTALL_NAME_TOOL_FOUND}")
+        set(BUNDLE_INSTALL_NAME_TOOL "${BUNDLE_INSTALL_NAME_TOOL_FOUND}")
+    endif()
+
     install(CODE "
         set(BU_CHMOD_BUNDLE_ITEMS ON)
         set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH})
+        # find_program takes these cache entries as they are (GetPrerequisites: gp_cmd; BundleUtilities: otool_cmd,
+        # CMAKE_INSTALL_NAME_TOOL); empty when xcrun found nothing, which leaves the search as it was
+        if (NOT \"${BUNDLE_OTOOL}\" STREQUAL \"\")
+            set(gp_cmd \"${BUNDLE_OTOOL}\" CACHE FILEPATH \"otool\")
+            set(otool_cmd \"${BUNDLE_OTOOL}\" CACHE FILEPATH \"otool\")
+        endif()
+        if (NOT \"${BUNDLE_INSTALL_NAME_TOOL}\" STREQUAL \"\")
+            set(CMAKE_INSTALL_NAME_TOOL \"${BUNDLE_INSTALL_NAME_TOOL}\" CACHE FILEPATH \"install_name_tool\")
+            set(CMAKE_INSTALL_NAME_TOOL \"${BUNDLE_INSTALL_NAME_TOOL}\")
+        endif()
         include(BundleUtilities)
 
         function(gp_item_default_embedded_path_override item default_embedded_path_var)
