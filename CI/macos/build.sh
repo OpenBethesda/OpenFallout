@@ -5,7 +5,8 @@ set -euxo pipefail
 cd "${BUILD_DIR:-build}"
 
 if [[ $# -eq 0 ]]; then
-    set -- package
+    # the package target no longer builds everything first (CMAKE_SKIP_INSTALL_ALL_DEPENDENCY in before_script.macos.sh)
+    set -- all package
 fi
 
 make -j "$(sysctl -n hw.logicalcpu)" "$@"

@@ -222,6 +222,15 @@ class MacWorkflowTest(unittest.TestCase):
         self.assertIn("pip\" wheel --wheel-dir", install)
         self.assertIn("lupa==2.8 pillow==12.0.0", install)
 
+    def test_the_package_step_runs_cpack_on_the_tree_the_build_step_finished(self):
+        # `make package` builds `all` again before CPack; the Build step has built it, so the walk is skipped
+        build = self.steps[self.index("Build")]
+        package = self.steps[self.index("Package disk image")]
+        self.assertEqual(build["run"], "CI/macos/build.sh all")
+        self.assertEqual(package["run"], "cpack --config ./CPackConfig.cmake")
+        self.assertNotIn("make ", package["text"])
+        self.assertIn("working-directory: build\n", package["text"])
+
     def test_the_app_job_keeps_everything_that_makes_checks_or_publishes_the_app(self):
         names = [step["name"] for step in self.steps]
         for name in ("Configure", "Build", "Record source timestamps", "Save incremental build",
