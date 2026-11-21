@@ -4,7 +4,6 @@
 #include "ui_datafilespage.h"
 #include "ui_directorypicker.h"
 
-
 #include <QDir>
 #include <QMenu>
 #include <QStringList>

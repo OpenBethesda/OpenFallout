@@ -4,13 +4,16 @@
 #include <QClipboard>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QList>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPair>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QTimer>
+#include <QUrl>
 
 #include <algorithm>
 #include <mutex>
