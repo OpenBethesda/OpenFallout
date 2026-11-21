@@ -105,8 +105,8 @@ jobs:
           build/*
           !build/*.dmg
           !build/_CPack_Packages
-        key: build-macos-v1-${{ steps.build-env.outputs.key }}-${{ github.sha }}
-        restore-keys: build-macos-v1-${{ steps.build-env.outputs.key }}-
+        key: build-macos-v2-${{ steps.build-env.outputs.key }}-${{ github.sha }}
+        restore-keys: build-macos-v2-${{ steps.build-env.outputs.key }}-
 
     - name: Restore unchanged source timestamps
       if: ${{ steps.classify.outputs.code != 'false' }}
@@ -329,8 +329,8 @@ jobs:
       with:
         path: build-tests
         # Never restore ordinary build objects into an instrumented build.
-        key: build-macos-coverage-v1-${{ steps.test-build-env.outputs.key }}-${{ github.sha }}
-        restore-keys: build-macos-coverage-v1-${{ steps.test-build-env.outputs.key }}-
+        key: build-macos-coverage-v2-${{ steps.test-build-env.outputs.key }}-${{ github.sha }}
+        restore-keys: build-macos-coverage-v2-${{ steps.test-build-env.outputs.key }}-
 
     - name: Restore unchanged source timestamps of the unit-test build
       if: ${{ !cancelled() && steps.test-build-env.outcome == 'success' }}

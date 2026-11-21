@@ -23,6 +23,39 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# Tracked files outside CMakeLists.txt and *.cmake whose content decides whether an old build folder may be reused.
+# The Configure step re-runs CMake and `restore` re-dates changed sources, so what matters is what CMake and make
+# cannot correct on their own: how the tools and dependencies were produced, and how the folder is restored.
+# Every other file under CI/ (checkers, report and release scripts, the Metal/OSG/ANGLE builders, tests,
+# the ANGLE probe) is never run by the Configure or Build steps of a cached tree, so it cannot change the folder.
+KEY_FILES = frozenset((
+    # Configure: the CMake options, compiler, generator and deployment target of every cached tree.
+    "CI/before_script.macos.sh",
+    # Build: the make invocation.
+    "CI/macos/build.sh",
+    # Sourced by the configure script (Qt version, the pinned dependency set).
+    "CI/macos/deps_versions.sh",
+    # Produce the Qt/openmw-deps trees (the dependency cache key hashes the same files), including the LuaJIT build and
+    # its patch, which the dependency manifest passed to `key` does not describe.
+    "CI/before_install.macos.sh",
+    "CI/macos/fetch_deps_manifest.sh",
+    "CI/macos/build_luajit_hrt.sh",
+    "CI/macos/luajit-osx-hrt-void-return.patch",
+    # The ANGLE libraries a bundle-angle run configures against.
+    "CI/macos/angle/angle.json",
+    # The timestamp reconciliation (restore/snapshot) and this fingerprint: a change here changes what a restored
+    # folder means.
+    "CI/build_cache.py",
+    # The job that configures, builds and restores (its environment and the arguments it passes).
+    ".github/workflows/macos.yml",
+))
+
+
+def is_key_rule(relative):
+    return (relative.name == "CMakeLists.txt" or relative.suffix == ".cmake"
+            or relative.as_posix() in KEY_FILES)
+
+
 def build_key(root, compiler, dependency_files, mode):
     # A build tree contains absolute paths, generated rules and toolchain state.
     # Never fall back to a cache with a different environment fingerprint.
@@ -47,9 +80,7 @@ def build_key(root, compiler, dependency_files, mode):
             ["xcrun", "--show-sdk-path"], text=True
         )
     for relative in tracked_files(root):
-        if (relative.name == "CMakeLists.txt" or relative.suffix == ".cmake"
-                or relative.parts[0] == "CI"
-                or relative.parts[:2] == (".github", "workflows")):
+        if is_key_rule(relative):
             path = root / relative
             if path.is_file() and not path.is_symlink():
                 identity["rules"][relative.as_posix()] = digest(path)
