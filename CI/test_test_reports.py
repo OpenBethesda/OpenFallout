@@ -158,7 +158,7 @@ class TestReportsTests(unittest.TestCase):
             reports.merge_coverage(self.root)
 
     def test_suites_run_from_another_build_folder_and_from_the_app_bundle(self):
-        # The Mac job keeps the instrumented test build next to the packaged build, and CMake puts executables
+        # The unit-test job keeps the instrumented test build in its own folder, and CMake puts executables
         # inside the app bundle on the Mac.
         tests = self.root / "build-tests"
         bundle = tests / "OpenFallout.app" / "Contents" / "MacOS"

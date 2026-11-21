@@ -84,20 +84,21 @@ the front of `CMAKE_PREFIX_PATH` (and as `OSG_DIR`) together with `-DOPENFALLOUT
 
 ## In the Mac job
 
-The steps are one block named "Metal build: ..." in `.github/workflows/macos.yml`, after every step that makes, checks
-or reports the packaged app, so a failure there never hides those results. A release tag run skips the whole block (the
-packaged app is still the OpenGL build). In order:
+The steps are one block named "Metal build: ..." in the job `Metal` ("Metal build") of `.github/workflows/macos.yml`, a
+job of its own that does not wait for the packaged app, so a failure there never hides or delays the app's results.
+A release tag run skips the whole job (the packaged app is still the OpenGL build). The job sets up the dependency set
+and the pinned ccache itself (`.github/actions/mac-build-setup`) and needs nothing that the OpenGL build makes. In order:
 
 1. Fingerprint: `python3 CI/macos/osg/osg_gles3.py key` with four `--input` files (see the cache key below).
 2. Restore the install (`/tmp/openfallout-osg-gles3`, 19 MB) from the cache of that key.
-3. Fetch the ANGLE asset into `/tmp/openfallout-angle` (`CI/angle_asset.py fetch`), unless the manual ANGLE test run
-   already did: both read the one folder, and the fetch never changes it.
+3. Fetch the ANGLE asset into `/tmp/openfallout-angle` (`CI/angle_asset.py fetch`). The manual ANGLE test run fetches
+   its own copy on the runner of the app job.
 4. Only when the cache missed: build the library (`CI/macos/before_install_osg.sh`, about 8 to 10 minutes), then save the
    install at once.
 5. Configure `build-metal` (`CI/before_script.macos.sh -C -k -M`), build the engine and the two test suites in it
-   with the job's ccache, and run both suites. The results are pass or fail only (see [CI reporting](ci-reporting.md)).
+   with the ccache of this job (key `macos-26-metal`), and run both suites. The results are pass or fail only (see [CI reporting](ci-reporting.md)).
 
-The dependency set of the Mac job holds a desktop OpenSceneGraph, and its toolchain file puts its own folders in front
+The dependency set of the Mac jobs holds a desktop OpenSceneGraph, and its toolchain file puts its own folders in front
 of every search. So the configure step does not rely on a search order. `CI/before_script.macos.sh -M` names each
 OpenSceneGraph library and header folder to CMake (`osg_gles3.py find-options`), and the engine's CMake puts the headers
 for OpenGL ES 3 first and stops if a desktop OpenSceneGraph would be read before them.
@@ -109,7 +110,7 @@ fetch step fails with the address it could not read, and the steps after it do n
 
 `python3 CI/macos/osg/osg_gles3.py key --input <file>...` prints the SHA-256 that names the cached build. It covers the
 commit file, every patch, the build script, the helper, the engine's two component lists and the files given with
-`--input`. The Mac job gives four: `CI/macos/angle/angle.json` (the ANGLE record), the dependency set's manifest,
+`--input`. The Metal job gives four: `CI/macos/angle/angle.json` (the ANGLE record), the dependency set's manifest,
 `CI/macos/before_install_osg.sh` (it chooses the build's folders and arguments) and the output of `clang --version`
 (a new compiler on the runner builds it again). A change to any of them builds it again. A change to anything else in
 the repository does not.
