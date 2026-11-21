@@ -1,10 +1,12 @@
 # Codecov coverage flags and Test Analytics
 
-The one Mac job (`.github/workflows/macos.yml`, check name `macOS / Build, test and package`) runs the
-components and OpenFallout test suites and uploads their coverage and test results. No other job builds or
-tests the engine. Each suite produces its own coverage report and JUnit test
+The Mac jobs of `.github/workflows/macos.yml` build and test the engine: the packaged app (check name
+`macOS / Build, test and package`), the unit tests (`macOS / Unit tests and coverage`), the Metal build
+(`macOS / Metal build`) and the Python tests (`macOS / Python tests on macOS`). They run side by side, and no
+other job builds or tests the engine. The unit-test job runs the components and OpenFallout test suites and uploads
+their coverage and test results. Each suite produces its own coverage report and JUnit test
 results. The existing `CODECOV_TOKEN` Actions secret authenticates both coverage and Test Analytics uploads;
-`push.yml` passes it to the Mac job.
+`push.yml` passes it to the Mac jobs.
 
 | Flag | Executable | Coverage report | Test results |
 | --- | --- | --- | --- |
@@ -17,22 +19,22 @@ flags. Test sources, third-party dependencies, and generated build files are
 excluded from coverage.
 
 The editor is not built, so it has no suite and the `editor` flag ended when
-the uploads moved from the Ubuntu job, which no longer exists, to the Mac job.
+the uploads moved from the Ubuntu job, which no longer exists, to the Mac unit-test job.
 
-## The Mac job
+## The unit-test job
 
-The packaged app is built RelWithDebInfo and is never instrumented. The tests
-get a second build tree in the same job, `build-tests`, configured by
+The packaged app is built RelWithDebInfo, in its own job, and is never instrumented. The tests
+get a second build tree in a job of their own (`UnitTests`, "Unit tests and coverage"), `build-tests`, configured by
 `CI/before_script.macos.sh -T`: Debug without debug information (`-O0`, no
 `-g`), `BUILD_WITH_CODE_COVERAGE=ON` and the two test suites. Only `components-tests` and
 `openfallout-tests` are built in it. The launcher stays configured because it
 turns on Qt, which the launcher-settings tests in `components-tests` need. The
 tree has its own incremental build cache, `build-macos-coverage-v1-…`, and
-shares the job's ccache (see [CI build cache contract](ci-cache.md)). The test
-steps run whenever the app compiled, so a packaging or notarization failure
-does not hide the test results.
+its own ccache (see [CI build cache contract](ci-cache.md)). The job does not wait for
+the app build, so a packaging or notarization failure does not hide the test results,
+and a test failure does not hold up the package.
 
-Every run of the Mac job for a branch or pull request runs them. A release tag
+Every run of the Mac jobs for a branch or pull request runs them. A release tag
 (`build-type: Release`) does not: a tag is made from a commit whose branch run
 already tested it, and a second upload for the same commit would be counted
 twice by Codecov.
@@ -46,7 +48,7 @@ ruleset on `master` with required checks) is a repository setting, switched on b
 
 ## The Metal build's tests
 
-The same job builds a third tree, `build-metal` (the Metal build, see
+A third job, `Metal` ("Metal build"), builds a third tree, `build-metal` (the Metal build, see
 [Two build configurations](architecture.md#two-build-configurations)), and runs
 the same two test suites in it, from the repository root. They are not
 instrumented and their results are **not uploaded**: the steps are pass or fail
@@ -58,9 +60,9 @@ coverage and the test history stay those of the desktop OpenGL build. If the
 suites of the two builds ever differ (a test that only the Metal build runs),
 that test needs its own report and its own flag, not a shared one.
 
-These steps come after every upload, in one block named "Metal build: ...", so a
-failure there fails the job but never hides a report. A release tag does not run
-them.
+These steps are one block named "Metal build: ..." in a job of their own, so a
+failure there fails that job's check but never hides a report or delays the package.
+A release tag does not run it.
 
 ## How coverage is measured
 
@@ -157,17 +159,20 @@ historical component trends.
 
 The `Changes` job of `push.yml` runs on a Linux runner and runs every Python test
 on every pull request and every push to `master`, including the documentation-only
-changes that skip the Mac build: the tests of the CI scripts (`CI/test_*.py`),
+changes that skip the Mac builds: the tests of the CI scripts (`CI/test_*.py`),
 of the helper scripts (`scripts/openfallout/test_*.py`) and of the Lua
 documentation generator (`docs/test_luadoc.py`). The tests that need macOS
 skip themselves there: those of the packaged-app check and the bundle selection
 (`codesign`, `hdiutil`, `vtool`), the top CMake file's refusal of Intel, and the
-whole runs of the round runner (`round.py run` works on macOS only). The Mac job runs the
+whole runs of the round runner (`round.py run` works on macOS only). The Mac job `PythonMac`
+("Python tests on macOS") runs the
 tests of the CI scripts and of the helper scripts again, on macOS, so those run
-too (`macos.yml`, "Run the Python tests on macOS"). A documentation-only change
-has no Mac job, and it changes nothing those tests cover: a change to the round
-runner (`round.py`, `roundguard.py`, `test_round.py`) always gets the Mac job
-(`CI/changed_paths.py`), and so does any change to `CI/`.
+too (`macos.yml`, "Run the Python tests on macOS"). None of these tests reads the built app or the disk image, so the
+job needs no build. A documentation-only change
+skips every step of the Mac jobs, and it changes nothing those tests cover: a change to the round
+runner (`round.py`, `roundguard.py`, `test_round.py`) always gets the Mac jobs
+(`CI/changed_paths.py`), and so does any change to `CI/`. Each Mac job runs `CI/changed_paths.py` itself as its
+first step; none waits for the `Changes` job.
 
 The `Changes` job and the two documentation jobs (`links`, `HTML`) were on Mac
 runners from the Mac-only cut until 16 November 2026. That day GitHub's hosted
@@ -179,7 +184,7 @@ The helper-script tests read the Lua scripts and the coverage tracker, so they
 check that those still agree. The `Changes` job installs a `luajit` executable
 with apt, and `lupa` and Pillow in a virtual environment (pinned in the workflow,
 so Dependabot does not update them); without them the Lua tests and one picture
-test of the round runner skip. The Mac job installs `lupa` and Pillow the same
+test of the round runner skip. The `PythonMac` job installs `lupa` and Pillow the same
 way and no `luajit` executable, so the two tests that need one run in the
 `Changes` job only. lupa's wheels
 for Apple Silicon have no LuaJIT runtime, so the tests use its Lua 5.2 runtime
@@ -192,7 +197,7 @@ python3 -m venv .venv-tests && .venv-tests/bin/pip install lupa==2.8 pillow==12.
 python3 -m unittest discover -s docs -p test_luadoc.py
 ```
 
-On the Mac, with an instrumented test tree in `build-tests/` (as the Mac job
+On the Mac, with an instrumented test tree in `build-tests/` (as the unit-test job
 configures it), the same reporting commands can be run locally. They use
 `xcrun llvm-profdata` and `xcrun llvm-cov` from Xcode and need no gcovr:
 

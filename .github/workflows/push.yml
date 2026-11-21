@@ -34,18 +34,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Documentation-only changes skip the Mac build.  The job fails open to a full build: a problem in it leaves "code"
-  # empty, which the job below reads as "build".  It also runs every Python test of the CI scripts, the helper scripts
-  # and the documentation generator, on every change, including the documentation-only ones.  It runs on a Linux
+  # Runs every Python test of the CI scripts, the helper scripts and the documentation generator, on every change,
+  # including the documentation-only ones.  It gates nothing: the Mac jobs (macos.yml) do not wait for it, and each decides
+  # for itself, from the changed paths, whether the change needs a build (CI/changed_paths.py).  It runs on a Linux
   # runner, so that it does not wait for a Mac runner when those are short (on 16 November 2026 the jobs of pull
   # requests waited for hours).  The tests that need macOS (codesign, hdiutil, vtool, a whole run of the round runner) skip
-  # themselves here and run in the Mac job (macos.yml, "Run the Python tests on macOS").
+  # themselves here and run in the Mac job "Python tests on macOS" (macos.yml, "Run the Python tests on macOS").
   Changes:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    outputs:
-      code: ${{ steps.classify.outputs.code }}
 
     steps:
     - uses: actions/checkout@v7
@@ -71,21 +69,13 @@ jobs:
     - name: Test the Lua documentation generator
       run: python3 -m unittest discover -s docs -p test_luadoc.py -v
 
-    - name: Decide whether the Mac build is needed
-      id: classify
-      env:
-        EVENT: ${{ github.event_name }}
-        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: python3 CI/changed_paths.py --event "$EVENT" --base "$BASE" --github-output "$GITHUB_OUTPUT"
-
-  # The one job that builds the engine: the packaged app, its checks, the unit tests and coverage (macos.yml). Its check
-  # name, "macOS / Build, test and package", is fixed here and in macos.yml; CI/harness_release.py and the documentation
-  # name it.
+  # The jobs that build and test the engine (macos.yml): the packaged app and its checks, the unit tests and coverage, the
+  # Metal build and the Python tests on macOS. They run in parallel and nothing waits for the Changes job. The check
+  # name of the app, "macOS / Build, test and package", is fixed here and in macos.yml; CI/harness_release.py and the
+  # documentation name it.
   MacOS:
     name: macOS
-    needs: Changes
-    # !cancelled() lets the build run when Changes failed (fail open), so the draft rule is repeated here.
-    if: ${{ !cancelled() && !github.event.pull_request.draft && needs.Changes.outputs.code != 'false' }}
+    if: ${{ !github.event.pull_request.draft }}
     uses: ./.github/workflows/macos.yml
     with:
       # a push to the default branch, or the manual ANGLE test run on it, signs and notarizes
