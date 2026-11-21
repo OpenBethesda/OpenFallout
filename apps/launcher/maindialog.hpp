@@ -24,7 +24,6 @@ namespace Launcher
 {
     class GraphicsPage;
     class DataFilesPage;
-    class ImportPage;
     class SettingsPage;
 
     enum FirstRunDialogResult
@@ -50,7 +49,6 @@ namespace Launcher
         void enableDataPage();
         void enableGraphicsPage();
         void enableSettingsPage();
-        void enableImportPage();
         void play();
         void help();
 
@@ -83,7 +81,6 @@ namespace Launcher
 
         GraphicsPage* mGraphicsPage;
         DataFilesPage* mDataFilesPage;
-        ImportPage* mImportPage;
         SettingsPage* mSettingsPage;
 
         Process::ProcessInvoker* mGameInvoker;

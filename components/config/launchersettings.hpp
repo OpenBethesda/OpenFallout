@@ -59,13 +59,6 @@ namespace Config
             UnknownKeys mUnknown;
         };
 
-        struct Importer
-        {
-            bool mImportContentSetup = true;
-            bool mImportFontSetup = true;
-            UnknownKeys mUnknown;
-        };
-
         void readFile(QTextStream& stream);
 
         void clear();
@@ -105,19 +98,10 @@ namespace Config
 
         void setMainWindow(const MainWindow& value) { mGeneral.mMainWindow = value; }
 
-        bool getImportContentSetup() const { return mImporter.mImportContentSetup; }
-
-        void setImportContentSetup(bool value) { mImporter.mImportContentSetup = value; }
-
-        bool getImportFontSetup() const { return mImporter.mImportFontSetup; }
-
-        void setImportFontSetup(bool value) { mImporter.mImportFontSetup = value; }
-
     private:
         Settings mSettings;
         Profiles mProfiles;
         General mGeneral;
-        Importer mImporter;
         /// Sections this version does not know at all, in name order, written back as read
         QMap<QString, UnknownKeys> mUnknownSections;
 

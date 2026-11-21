@@ -52,10 +52,6 @@ Default/future=2
 firstrun=false
 future=3
 
-[Importer]
-importfontsetup=false
-future=4
-
 [Future]
 thing=5
 )");
@@ -77,11 +73,6 @@ MainWindow/posy=0
 MainWindow/posx=0
 MainWindow/height=0
 future=3
-
-[Importer]
-importcontentsetup=true
-importfontsetup=false
-future=4
 
 [Future]
 thing=5

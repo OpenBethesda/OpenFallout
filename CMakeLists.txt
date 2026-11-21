@@ -40,8 +40,6 @@ option(DEPLOY_QT_TRANSLATIONS "Deploy standard Qt translations to resources fold
 # Apps and tools
 option(BUILD_OPENFALLOUT             "Build OpenFallout" ON)
 option(BUILD_LAUNCHER           "Build Launcher" ON)
-option(BUILD_MWINIIMPORTER      "Build MWiniImporter" ON)
-option(BUILD_ESSIMPORTER        "Build ESS (Morrowind save game) importer" ON)
 option(BUILD_BSATOOL            "Build BSA extractor" ON)
 option(BUILD_ESMTOOL            "Build ESM inspector" ON)
 option(BUILD_NIFTEST            "Build nif file tester" ON)
@@ -49,8 +47,6 @@ option(BUILD_DOCS               "Build documentation." OFF )
 option(BUILD_WITH_CODE_COVERAGE "Enable code coverage with gconv" OFF)
 option(BUILD_COMPONENTS_TESTS   "Build components library tests" OFF)
 option(BUILD_BENCHMARKS         "Build benchmarks with Google Benchmark" OFF)
-option(BUILD_NAVMESHTOOL        "Build navmesh tool" ON)
-option(BUILD_BULLETOBJECTTOOL   "Build Bullet object tool" ON)
 option(BUILD_OPENFALLOUT_TESTS       "Build OpenFallout tests" OFF)
 
 set(OpenGL_GL_PREFERENCE LEGACY)  # Use LEGACY as we use GL2; GLNVD is for GL3 and up.
@@ -556,14 +552,6 @@ if (BUILD_LAUNCHER)
     add_subdirectory( apps/launcher )
 endif()
 
-if (BUILD_MWINIIMPORTER)
-    add_subdirectory( apps/mwiniimporter )
-endif()
-
-if (BUILD_ESSIMPORTER)
-    add_subdirectory (apps/essimporter )
-endif()
-
 if (BUILD_NIFTEST)
     add_subdirectory(apps/niftest)
 endif()
@@ -574,14 +562,6 @@ endif()
 
 if (BUILD_BENCHMARKS)
     add_subdirectory(apps/benchmarks)
-endif()
-
-if (BUILD_NAVMESHTOOL)
-    add_subdirectory(apps/navmeshtool)
-endif()
-
-if (BUILD_BULLETOBJECTTOOL)
-    add_subdirectory(apps/bulletobjecttool)
 endif()
 
 if (BUILD_OPENFALLOUT_TESTS)

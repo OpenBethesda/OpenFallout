@@ -550,10 +550,6 @@ add_component_dir(esmloader
     esmdata
 )
 
-add_component_dir(navmeshtool
-    protocol
-    )
-
 add_component_dir(platform
     file
     )
