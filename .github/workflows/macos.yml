@@ -603,8 +603,9 @@ jobs:
   PythonMac:
     name: Python tests on macOS
     runs-on: macos-26
-    # Time budget: 8.3 min (20 Nov 2026), before the test files ran in parallel.
-    timeout-minutes: 15
+    # Time budget: 2.7 min with the wheels built, 1.6 min with them cached (PR #269, 21 Nov 2026); was 8.3 min when the
+    # test files ran one after another.
+    timeout-minutes: 6
     steps:
     - uses: actions/checkout@v7
 
@@ -643,8 +644,9 @@ jobs:
         "$RUNNER_TEMP/script-tests/bin/pip" wheel --wheel-dir "$RUNNER_TEMP/python-wheels" --find-links "$RUNNER_TEMP/python-wheels" lupa==2.8 pillow==12.0.0
         "$RUNNER_TEMP/script-tests/bin/pip" install --find-links "$RUNNER_TEMP/python-wheels" lupa==2.8 pillow==12.0.0
 
+    # Only master stores it, like the compiler caches: a pull request's cache is not shared with other pull requests.
     - name: Keep the wheels of the Python test packages
-      if: ${{ steps.classify.outputs.code != 'false' && steps.python-wheels.outputs.cache-hit != 'true' }}
+      if: ${{ steps.classify.outputs.code != 'false' && steps.python-wheels.outputs.cache-hit != 'true' && github.ref == 'refs/heads/master' }}
       uses: actions/cache/save@v6
       with:
         path: ${{ runner.temp }}/python-wheels
