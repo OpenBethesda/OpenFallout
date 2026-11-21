@@ -82,14 +82,6 @@ Command line options
       --groundcover arg                     groundcover content file(s): esm/esp,
                                             or omwgame/omwaddon
       --no-sound [=arg(=1)] (=0)            disable all sounds
-      --script-all [=arg(=1)] (=0)          compile all scripts (excluding dialogue
-                                            scripts) at startup
-      --script-all-dialogue [=arg(=1)] (=0) compile all dialogue scripts at startup
-      --script-console [=arg(=1)] (=0)      enable console-only script
-                                            functionality
-      --script-run arg                      select a file containing a list of
-                                            console commands that is executed on
-                                            startup
       --script-warn [=arg(=1)] (=1)         handling of warnings when compiling
                                             scripts
                                             0 - ignore warnings

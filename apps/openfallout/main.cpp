@@ -315,10 +315,6 @@ bool parseOptions(int argc, char** argv, OF::Engine& engine, Files::Configuratio
         Log(Debug::Warning) << "Warning: new-game used without skip-menu -> ignoring it";
 
     // scripts
-    engine.setCompileAll(variables["script-all"].as<bool>());
-    engine.setCompileAllDialogue(variables["script-all-dialogue"].as<bool>());
-    engine.setScriptConsoleMode(variables["script-console"].as<bool>());
-    engine.setStartupScript(variables["script-run"].as<std::string>());
     engine.setWarningsMode(variables["script-warn"].as<int>());
     engine.setSaveGameFile(variables["load-savegame"].as<Files::MaybeQuotedPath>().u8string());
     engine.setMissingContentAnswer(OpenMW::readMissingContentAnswer(variables));

@@ -609,18 +609,6 @@ namespace OFGui
 
     void InventoryWindow::useItem(const OFWorld::Ptr& ptr, bool force)
     {
-        const ESM::RefId& script = ptr.getClass().getScript(ptr);
-        if (!script.empty())
-        {
-            // Don't try to equip the item if PCSkipEquip is set to 1
-            if (ptr.getRefData().getLocals().getIntVar(script, "pcskipequip") == 1)
-            {
-                ptr.getRefData().getLocals().setVarByInt(script, "onpcequip", 1);
-                return;
-            }
-            ptr.getRefData().getLocals().setVarByInt(script, "onpcequip", 0);
-        }
-
         OFWorld::Ptr player = OFMechanics::getPlayer();
         auto type = ptr.getType();
         bool isWeaponOrArmor = type == ESM::Weapon::sRecordId || type == ESM::Armor::sRecordId;
@@ -639,18 +627,6 @@ namespace OFGui
         }
 
         const bool willEquip = canEquipResult != 0 || force;
-
-        // If the item has a script, set OnPCEquip or PCSkipEquip to 1
-        if (!script.empty() && willEquip)
-        {
-            // Ingredients, books and repair hammers must not have OnPCEquip set to 1 here
-            bool isBook = type == ESM::Book::sRecordId;
-            if (!isBook && type != ESM::Ingredient::sRecordId && type != ESM::Repair::sRecordId)
-                ptr.getRefData().getLocals().setVarByInt(script, "onpcequip", 1);
-            // Books must have PCSkipEquip set to 1 instead
-            else if (isBook)
-                ptr.getRefData().getLocals().setVarByInt(script, "pcskipequip", 1);
-        }
 
         std::unique_ptr<OFWorld::Action> action = ptr.getClass().use(ptr, force);
 

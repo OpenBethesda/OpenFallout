@@ -7,8 +7,6 @@
 #include <components/esm/refid.hpp>
 #include <components/interpreter/context.hpp>
 
-#include "globalscripts.hpp"
-
 #include "../mwworld/ptr.hpp"
 
 namespace OFScript
@@ -25,7 +23,6 @@ namespace OFScript
     {
         Locals* mLocals;
         mutable OFWorld::Ptr mReference;
-        std::shared_ptr<GlobalScriptDesc> mGlobalScriptDesc;
 
         /// If \a id is empty, a reference the script is run from is returned or in case
         /// of a non-local script the reference derived from the target ID.
@@ -42,8 +39,6 @@ namespace OFScript
         int findLocalVariableIndex(const ESM::RefId& scriptId, std::string_view name, char type) const;
 
     public:
-        InterpreterContext(std::shared_ptr<GlobalScriptDesc> globalScriptDesc);
-
         InterpreterContext(OFScript::Locals* locals, const OFWorld::Ptr& reference);
         ///< The ownership of \a locals is not transferred. 0-pointer allowed.
 

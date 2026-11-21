@@ -57,7 +57,6 @@
 #include "cellvisitors.hpp"
 #include "class.hpp"
 #include "esmstore.hpp"
-#include "localscripts.hpp"
 #include "player.hpp"
 #include "worldimp.hpp"
 
@@ -450,7 +449,6 @@ namespace OFWorld
         mRendering.removeCell(cell);
         OFBase::Environment::get().getWindowManager()->removeCell(cell);
 
-        mWorld.getLocalScripts().clearCell(cell);
         OFBase::Environment::get().getFalloutScripts()->cellUnloaded(*cell);
 
         OFBase::Environment::get().getSoundManager()->stopSound(cell);
@@ -527,10 +525,6 @@ namespace OFWorld
                        [&](const ESM4::Cell& /*c*/) {},
                    },
             *cell.getCell());
-
-        // register local scripts
-        // do this before insertCell, to make sure we don't add scripts from levelled creature spawning twice
-        mWorld.getLocalScripts().addCell(&cell);
 
         if (respawn)
             cell.respawn();

@@ -76,8 +76,6 @@ namespace OFClass
             // store
             ptr.getRefData().setCustomData(std::make_unique<ContainerCustomData>(*ref->mBase, ptr.getCell()));
             getContainerStore(ptr).setPtr(ptr);
-
-            OFBase::Environment::get().getWorld()->addContainerScripts(ptr, ptr.getCell());
         }
     }
 
@@ -101,7 +99,6 @@ namespace OFClass
             if (ptr.getRefData().getCustomData() == nullptr)
                 return;
 
-            OFBase::Environment::get().getWorld()->removeContainerScripts(ptr);
             ptr.getRefData().setCustomData(nullptr);
         }
     }

@@ -21,7 +21,6 @@
 
 #include "../mwmechanics/npcstats.hpp"
 
-#include "globalscripts.hpp"
 #include "locals.hpp"
 
 namespace OFScript
@@ -34,9 +33,6 @@ namespace OFScript
         }
         else
         {
-            if (mReference.isEmpty() && mGlobalScriptDesc)
-                mReference = mGlobalScriptDesc->getPtr();
-
             if (mReference.isEmpty() && doThrow)
                 throw MissingImplicitRefError();
 
@@ -47,37 +43,29 @@ namespace OFScript
     const Locals& InterpreterContext::getMemberLocals(bool global, ESM::RefId& id) const
     {
         if (global)
-        {
-            return OFBase::Environment::get().getScriptManager()->getGlobalScripts().getLocals(id);
-        }
-        else
-        {
-            const OFWorld::Ptr ptr = getReferenceImp(id, false);
+            throw std::runtime_error("Morrowind global scripts do not run any more");
 
-            id = ptr.getClass().getScript(ptr);
+        const OFWorld::Ptr ptr = getReferenceImp(id, false);
 
-            ptr.getRefData().setLocals(*OFBase::Environment::get().getESMStore()->get<ESM::Script>().find(id));
+        id = ptr.getClass().getScript(ptr);
 
-            return ptr.getRefData().getLocals();
-        }
+        ptr.getRefData().setLocals(*OFBase::Environment::get().getESMStore()->get<ESM::Script>().find(id));
+
+        return ptr.getRefData().getLocals();
     }
 
     Locals& InterpreterContext::getMemberLocals(bool global, ESM::RefId& id)
     {
         if (global)
-        {
-            return OFBase::Environment::get().getScriptManager()->getGlobalScripts().getLocals(id);
-        }
-        else
-        {
-            const OFWorld::Ptr ptr = getReferenceImp(id, false);
+            throw std::runtime_error("Morrowind global scripts do not run any more");
 
-            id = ptr.getClass().getScript(ptr);
+        const OFWorld::Ptr ptr = getReferenceImp(id, false);
 
-            ptr.getRefData().setLocals(*OFBase::Environment::get().getESMStore()->get<ESM::Script>().find(id));
+        id = ptr.getClass().getScript(ptr);
 
-            return ptr.getRefData().getLocals();
-        }
+        ptr.getRefData().setLocals(*OFBase::Environment::get().getESMStore()->get<ESM::Script>().find(id));
+
+        return ptr.getRefData().getLocals();
     }
 
     MissingImplicitRefError::MissingImplicitRefError()
@@ -120,25 +108,10 @@ namespace OFScript
     {
     }
 
-    InterpreterContext::InterpreterContext(std::shared_ptr<GlobalScriptDesc> globalScriptDesc)
-        : mLocals(&(globalScriptDesc->mLocals))
-    {
-        const OFWorld::Ptr* ptr = globalScriptDesc->getPtrIfPresent();
-        // A nullptr here signifies that the script's target has not yet been resolved after loading the game.
-        // Script targets are lazily resolved to OFWorld::Ptrs (which can, upon resolution, be empty)
-        // because scripts started through dialogue often don't use their implicit target.
-        if (ptr)
-            mReference = *ptr;
-        else
-            mGlobalScriptDesc = std::move(globalScriptDesc);
-    }
-
     ESM::RefId InterpreterContext::getTarget() const
     {
         if (!mReference.isEmpty())
             return mReference.mRef->mRef.getRefId();
-        else if (mGlobalScriptDesc)
-            return mGlobalScriptDesc->getId();
         return ESM::RefId();
     }
 

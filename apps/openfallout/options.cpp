@@ -71,18 +71,6 @@ namespace OpenMW
 
         addOption("no-sound", bpo::value<bool>()->implicit_value(true)->default_value(false), "disable all sounds");
 
-        addOption("script-all", bpo::value<bool>()->implicit_value(true)->default_value(false),
-            "compile all scripts (excluding dialogue scripts) at startup");
-
-        addOption("script-all-dialogue", bpo::value<bool>()->implicit_value(true)->default_value(false),
-            "compile all dialogue scripts at startup");
-
-        addOption("script-console", bpo::value<bool>()->implicit_value(true)->default_value(false),
-            "enable console-only script functionality");
-
-        addOption("script-run", bpo::value<std::string>()->default_value(""),
-            "select a file containing a list of console commands that is executed on startup");
-
         addOption("script-warn", bpo::value<int>()->implicit_value(1)->default_value(1),
             "handling of warnings when compiling scripts\n"
             "\t0 - ignore warnings\n"

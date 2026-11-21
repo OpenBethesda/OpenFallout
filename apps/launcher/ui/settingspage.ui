@@ -1613,27 +1613,6 @@
         </layout>
        </item>
        <item>
-        <widget class="QLabel" name="label">
-         <property name="text">
-          <string>Run Script After Startup:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="runScriptAfterStartupHorizontalLayout">
-         <item>
-          <widget class="QLineEdit" name="runScriptAfterStartupField"/>
-         </item>
-         <item>
-          <widget class="QPushButton" name="runScriptAfterStartupBrowseButton">
-           <property name="text">
-            <string>Browse…</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
         <spacer>
          <property name="orientation">
           <enum>Qt::Vertical</enum>

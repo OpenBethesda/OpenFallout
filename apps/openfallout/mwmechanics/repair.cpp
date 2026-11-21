@@ -64,11 +64,6 @@ namespace OFMechanics
             // attempt to re-stack item, in case it was fully repaired
             OFWorld::ContainerStoreIterator stacked = player.getClass().getContainerStore(player).restack(itemToRepair);
 
-            // set the OnPCRepair variable on the item's script
-            const ESM::RefId& script = stacked->getClass().getScript(itemToRepair);
-            if (!script.empty())
-                stacked->getRefData().getLocals().setVarByInt(script, "onpcrepair", 1);
-
             // increase skill
             player.getClass().skillUsageSucceeded(player, ESM::Skill::Armorer, ESM::Skill::Armorer_Repair);
 

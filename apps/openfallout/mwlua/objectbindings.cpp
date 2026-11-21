@@ -12,7 +12,6 @@
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/containerstore.hpp"
-#include "../mwworld/localscripts.hpp"
 #include "../mwworld/player.hpp"
 #include "../mwworld/scene.hpp"
 #include "../mwworld/worldmodel.hpp"
@@ -132,20 +131,10 @@ namespace OFLua
                 ptr.getCellRef().unsetRefNum();
                 ptr.getRefData().setLuaScripts(nullptr);
                 ptr.getCellRef().setCount(0);
-                ESM::RefId script = cls.getScript(newPtr);
-                if (!script.empty())
-                    world->getLocalScripts().add(script, newPtr);
-                world->addContainerScripts(newPtr, newPtr.getCell());
             }
             else
             {
                 newPtr = world->moveObject(ptr, destCell, pos);
-                if (srcCell == destCell)
-                {
-                    ESM::RefId script = cls.getScript(newPtr);
-                    if (!script.empty())
-                        world->getLocalScripts().add(script, newPtr);
-                }
                 world->rotateObject(newPtr, rot, OFBase::RotationFlag_none);
             }
             if (placeOnGround)

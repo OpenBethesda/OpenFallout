@@ -169,12 +169,8 @@ namespace OF
 
         bool mSkipMenu;
         bool mUseSound;
-        bool mCompileAll;
-        bool mCompileAllDialogue;
         int mWarningsMode;
         std::string mFocusName;
-        bool mScriptConsoleMode;
-        std::filesystem::path mStartupScript;
         int mActivationDistanceOverride;
         std::filesystem::path mSaveGameFile;
         // Grab mouse?
@@ -202,8 +198,6 @@ namespace OF
         // not implemented
         Engine(const Engine&);
         Engine& operator=(const Engine&);
-
-        void executeLocalScripts();
 
         bool frame(unsigned frameNumber, float dt);
 
@@ -263,20 +257,8 @@ namespace OF
         /// Initialise and enter main loop.
         void go();
 
-        /// Compile all scripts (excludign dialogue scripts) at startup?
-        void setCompileAll(bool all);
-
-        /// Compile all dialogue scripts at startup?
-        void setCompileAllDialogue(bool all);
-
         /// Font encoding
         void setEncoding(const ToUTF8::FromType& encoding);
-
-        /// Enable console-only script functionality
-        void setScriptConsoleMode(bool enabled);
-
-        /// Set path for a script that is run on startup in the console.
-        void setStartupScript(const std::filesystem::path& path);
 
         /// Override the game setting specified activation distance.
         void setActivationDistanceOverride(int distance);

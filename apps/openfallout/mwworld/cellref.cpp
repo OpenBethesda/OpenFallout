@@ -388,8 +388,6 @@ namespace OFWorld
                            [&](ESM::CellRef& ref) { ref.mCount = value; },
                        },
                 mCellRef.mVariant);
-            if (value == 0)
-                OFBase::Environment::get().getWorld()->removeRefScript(this);
         }
     }
 

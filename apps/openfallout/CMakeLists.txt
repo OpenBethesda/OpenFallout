@@ -44,14 +44,12 @@ add_openfallout_dir (mwgui
     )
 
 add_openfallout_dir (mwdialogue
-    dialoguemanagerimp journalimp journalentry quest topic filter selectwrapper keywordsearch scripttest
+    dialoguemanagerimp journalimp journalentry quest topic filter selectwrapper keywordsearch
     )
 
 add_openfallout_dir (mwscript
-    locals scriptmanagerimp compilercontext interpretercontext cellextensions miscextensions
-    guiextensions soundextensions skyextensions statsextensions containerextensions
-    aiextensions controlextensions extensions globalscripts ref dialogueextensions
-    animationextensions transformationextensions consoleextensions userextensions falloutscripts falloutprogress falloutreputation falloutobjectstate falloutdetection falloutinterface falloutpresentation falloutpipboy falloutinteraction falloutmusic falloutambient falloutradio falloutcrafting falloutbarter falloutrepair falloutlook falloutmods falloutcompanion falloutcasino falloutcaravan fallouthotkeys falloutregionline falloutvats falloutsave falloutdamage falloutchallenges falloutperks falloutdebug
+    locals scriptmanagerimp compilercontext interpretercontext extensions
+    falloutscripts falloutprogress falloutreputation falloutobjectstate falloutdetection falloutinterface falloutpresentation falloutpipboy falloutinteraction falloutmusic falloutambient falloutradio falloutcrafting falloutbarter falloutrepair falloutlook falloutmods falloutcompanion falloutcasino falloutcaravan fallouthotkeys falloutregionline falloutvats falloutsave falloutdamage falloutchallenges falloutperks falloutdebug
     falloutvatscommands
     falloutmines
     falloutspawn
@@ -92,7 +90,7 @@ add_openfallout_dir (mwsound
 add_openfallout_dir (mwworld
     refdata worldimp scene globals class action nullaction actionteleport
     containerstore actiontalk actiontake manualref player cellvisitors failedaction
-    worldmodel localscripts customdata inventorystore ptr actionopen actionread actionharvest
+    worldmodel customdata inventorystore ptr actionopen actionread actionharvest
     actionequip timestamp actionalchemy cellstore actionapply actioneat
     store esmstore fallback actionrepair actionsoulgem livecellref actiondoor
     contentloader esmloader actiontrap cellreflist cellref weather projectilemanager

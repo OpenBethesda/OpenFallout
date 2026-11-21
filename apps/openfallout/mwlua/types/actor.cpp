@@ -99,21 +99,7 @@ namespace OFLua
                 slot = *firstAllowed;
             }
 
-            bool skipEquip = false;
-
-            if (isPlayer)
-            {
-                const ESM::RefId& script = itemPtr.getClass().getScript(itemPtr);
-                if (!script.empty())
-                {
-                    OFScript::Locals& locals = itemPtr.getRefData().getLocals();
-                    locals.setVarByInt(script, "onpcequip", 1);
-                    skipEquip = locals.getIntVar(script, "pcskipequip") == 1;
-                }
-            }
-
-            if (!skipEquip)
-                store.equip(slot, it);
+            store.equip(slot, it);
 
             return requestedSlotIsAllowed; // return true if equipped to requested slot and false if slot was changed
         };

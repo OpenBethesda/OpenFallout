@@ -54,7 +54,6 @@
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/failedaction.hpp"
 #include "../mwworld/inventorystore.hpp"
-#include "../mwworld/localscripts.hpp"
 #include "../mwworld/ptr.hpp"
 #include "../mwworld/worldmodel.hpp"
 
@@ -715,14 +714,6 @@ namespace OFClass
         if (!object.empty())
             stats.setLastHitAttemptObject(object);
 
-        if (setOnPcHitMe && !attacker.isEmpty() && attacker == OFMechanics::getPlayer())
-        {
-            const ESM::RefId& script = getScript(ptr);
-            /* Set the OnPCHitMe script variable. The script is responsible for clearing it. */
-            if (!script.empty())
-                ptr.getRefData().getLocals().setVarByInt(script, "onpchitme", 1);
-        }
-
         if (!successful)
         {
             // Missed
@@ -1308,12 +1299,8 @@ namespace OFClass
                 if (ptr.getCellRef().getCount() == 0)
                 {
                     ptr.getCellRef().setCount(1);
-                    const ESM::RefId& script = getScript(ptr);
-                    if (!script.empty())
-                        OFBase::Environment::get().getWorld()->getLocalScripts().add(script, ptr);
                 }
 
-                OFBase::Environment::get().getWorld()->removeContainerScripts(ptr);
                 OFBase::Environment::get().getWindowManager()->onDeleteCustomData(ptr);
                 ptr.getRefData().setCustomData(nullptr);
 

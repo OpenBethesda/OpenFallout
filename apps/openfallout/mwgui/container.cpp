@@ -300,13 +300,6 @@ namespace OFGui
                     creatureStats.setDeathAnimationFinished(true);
                     OFBase::Environment::get().getMechanicsManager()->notifyDied(ptr);
 
-                    const ESM::RefId& script = ptr.getClass().getScript(ptr);
-                    if (!script.empty() && OFBase::Environment::get().getWorld()->getScriptsEnabled())
-                    {
-                        OFScript::InterpreterContext interpreterContext(&ptr.getRefData().getLocals(), ptr);
-                        OFBase::Environment::get().getScriptManager()->run(script, interpreterContext);
-                    }
-
                     // Clean up summoned creatures as well
                     auto& creatureMap = creatureStats.getSummonedCreatureMap();
                     for (const auto& creature : creatureMap)

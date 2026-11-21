@@ -22,7 +22,6 @@
 
 #include "class.hpp"
 #include "esmstore.hpp"
-#include "localscripts.hpp"
 #include "manualref.hpp"
 #include "player.hpp"
 #include "refdata.hpp"
@@ -30,21 +29,6 @@
 
 namespace
 {
-    void addScripts(OFWorld::ContainerStore& store, OFWorld::CellStore* cell)
-    {
-        auto& scripts = OFBase::Environment::get().getWorld()->getLocalScripts();
-        for (const auto&& ptr : store)
-        {
-            const auto& script = ptr.getClass().getScript(ptr);
-            if (!script.empty())
-            {
-                OFWorld::Ptr item = ptr;
-                item.mCell = cell;
-                scripts.add(script, item);
-            }
-        }
-    }
-
     template <typename T>
     float getTotalWeight(const OFWorld::CellRefList<T>& cellRefList)
     {
@@ -324,10 +308,6 @@ OFWorld::ContainerStoreIterator OFWorld::ContainerStore::unstack(const Ptr& ptr,
     newPtr.getRefData().setLuaScripts(nullptr);
     OFBase::Environment::get().getWorldModel()->registerPtr(newPtr);
 
-    const ESM::RefId& script = it->getClass().getScript(*it);
-    if (!script.empty())
-        OFBase::Environment::get().getWorld()->getLocalScripts().add(script, *it);
-
     remove(ptr, ptr.getCellRef().getCount() - count);
 
     return it;
@@ -453,13 +433,6 @@ OFWorld::ContainerStoreIterator OFWorld::ContainerStore::add(
         }
 
         item.mContainerStore = this;
-
-        OFBase::Environment::get().getWorld()->getLocalScripts().add(script, item);
-
-        // Set OnPCAdd special variable, if it is declared
-        // Make sure to do this *after* we have added the script to LocalScripts
-        if (contPtr == player)
-            item.getRefData().getLocals().setVarByInt(script, "onpcadd", 1);
     }
 
     // we should not fire event for InventoryStore yet - it has some custom logic
@@ -814,7 +787,6 @@ void OFWorld::ContainerStore::resolve()
             ptr.getCellRef().setCount(0);
         Misc::Rng::Generator prng{ mSeed };
         fill(container.get<ESM::Container>()->mBase->mInventory, ESM::RefId(), prng);
-        addScripts(*this, container.mCell);
     }
     mModified = true;
 }
@@ -836,7 +808,6 @@ OFWorld::ResolutionHandle OFWorld::ContainerStore::resolveTemporarily()
             ptr.getCellRef().setCount(0);
         Misc::Rng::Generator prng{ mSeed };
         fill(container.get<ESM::Container>()->mBase->mInventory, ESM::RefId(), prng);
-        addScripts(*this, container.mCell);
     }
     return { std::move(listener) };
 }
@@ -852,7 +823,6 @@ void OFWorld::ContainerStore::unresolve()
         for (const auto&& ptr : *this)
             ptr.getCellRef().setCount(0);
         fillNonRandom(container.get<ESM::Container>()->mBase->mInventory, ESM::RefId(), mSeed);
-        addScripts(*this, container.mCell);
         mResolved = false;
     }
 }

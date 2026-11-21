@@ -706,6 +706,50 @@ namespace ESM
             EXPECT_FALSE(withoutItem.mItem.isSet());
         }
 
+        TEST_P(Esm3SaveGameRecordTest, aGlobalScriptRecordOfAnOldSaveIsSkippedAndTheRecordAfterItStillLoads)
+        {
+            // The engine no longer runs Morrowind scripts: when it loads a save that holds the record of a running
+            // global script (REC_GSCR) it skips it (StateManager::loadGame), and the record after it must be read as
+            // if the global script was never there.
+            GlobalScript oldScript;
+            oldScript.mId = id("myscript");
+            oldScript.mRunning = true;
+            Variant count(3);
+            count.setType(VT_Short);
+            oldScript.mLocals.mVariables.emplace_back("count", count);
+
+            GlobalScript next;
+            next.mId = id("nextscript");
+            next.mRunning = false;
+
+            ESMWriter writer;
+            auto stream = std::make_unique<std::stringstream>();
+            writer.setFormatVersion(GetParam());
+            writer.save(*stream);
+            writer.startRecord(REC_GSCR);
+            oldScript.save(writer);
+            writer.endRecord(REC_GSCR);
+            writer.startRecord(fakeRecordId);
+            next.save(writer);
+            writer.endRecord(fakeRecordId);
+
+            ESMReader reader;
+            reader.open(std::move(stream), "stream");
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), static_cast<std::uint32_t>(REC_GSCR));
+            reader.getRecHeader();
+            reader.skipRecord();
+
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), fakeRecordId);
+            reader.getRecHeader();
+            GlobalScript result;
+            result.load(reader);
+            EXPECT_EQ(result.mId, next.mId);
+            EXPECT_FALSE(result.mRunning);
+            EXPECT_FALSE(reader.hasMoreRecs());
+        }
+
         INSTANTIATE_TEST_SUITE_P(FormatVersions, Esm3SaveGameRecordTest, ValuesIn(getFormats()));
     }
 }

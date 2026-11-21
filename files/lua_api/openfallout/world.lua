@@ -15,11 +15,11 @@
 -- @field [parent=#world] openfallout.core#ObjectList players
 
 ---
--- Functions related to MWScript (see @{#MWScriptFunctions}).
+-- The global variables of the game (see @{#MWScriptFunctions}). Morrowind scripts are not run any more.
 -- @field [parent=#world] #MWScriptFunctions mwscript
 
 ---
--- Functions related to MWScript.
+-- Functions for the global variables.
 -- @type MWScriptFunctions
 
 ---
@@ -27,40 +27,10 @@
 -- @map <#string, #number>
 
 ---
--- Returns local mwscript on ``object``. Returns `nil` if the script doesn't exist or is not started.
--- @function [parent=#MWScriptFunctions] getLocalScript
--- @param openfallout.core#GameObject object
--- @param openfallout.core#GameObject player (optional) Will be used in multiplayer mode to get the script if there is a separate instance for each player. Currently has no effect.
--- @return #MWScript, #nil
-
----
 -- Returns mutable global variables. In multiplayer, these may be specific to the provided player.
 -- @function [parent=#MWScriptFunctions] getGlobalVariables
 -- @param openfallout.core#GameObject player (optional) Will be used in multiplayer mode to get the globals if there is a separate instance for each player. Currently has no effect.
 -- @return #MWScriptVariables
-
----
--- Returns global mwscript with given recordId. Returns `nil` if the script doesn't exist or is not started.
--- Currently there can be only one instance of each mwscript, but in multiplayer it will be possible to have a separate instance per player.
--- @function [parent=#MWScriptFunctions] getGlobalScript
--- @param #string recordId
--- @param openfallout.core#GameObject player (optional) Will be used in multiplayer mode to get the script if there is a separate instance for each player. Currently has no effect.
--- @return #MWScript, #nil
-
----
--- @type MWScript
--- @field #string recordId Id of the script
--- @field openfallout.core#GameObject object The object the script is attached to.
--- @field openfallout.core#GameObject player The player the script refers to.
--- @field #boolean isRunning Whether the script is currently running
--- @field #MWScriptVariables variables Local variables of the script (mutable)
--- @usage
--- for _, script in ipairs(world.mwscript.getLocalScripts(object)) do
---   -- print the value of local variable 'something' (0 if there is no such variable)
---   print(script.variables.something)
---   -- set the variable 'something' (raises an error if there is no such variable)
---   script.variables.something = 5
--- end
 
 ---
 -- The quests of Fallout 3 and New Vegas (see @{#QuestFunctions}). Empty of quests in a game without them.
