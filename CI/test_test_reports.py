@@ -1,6 +1,7 @@
 """Verify per-suite isolation and faithful JUnit reporting, including failures."""
 
 import importlib.util
+import io
 from pathlib import Path
 import subprocess
 import tempfile
@@ -209,8 +210,9 @@ class TestReportsTests(unittest.TestCase):
                                                   "tool": reports.default_coverage_tool()}))
         self.assertEqual(calls[1], ("merge", (), {"suites": ("components", "openfallout"),
                                                   "build_dir": "build-tests", "tool": "llvm"}))
-        self.assertEqual(calls[2], ("run", ("openfallout",), {"build_dir": "build", "tool": "gcov"}))
-        for argv in (["merge", "bogus"], ["run", "editor"], ["merge", "components", "editor"]):
+        self.assertEqual(calls[2], ("run", ("openfallout",), {"build_dir": "build", "tool": "gcov", "shards": 1}))
+        for argv in (["merge", "bogus"], ["run", "editor"], ["merge", "components", "editor"],
+                     ["--tool", "gcov", "run", "components", "--shards", "3"], ["run", "components", "--shards", "0"]):
             with self.subTest(argv=argv), patch.object(reports.sys, "argv", ["test_reports.py", *argv]), \
                     patch.object(reports.sys, "stderr"), self.assertRaises(SystemExit):
                 reports.main()
@@ -341,6 +343,131 @@ class LlvmCoverageTests(unittest.TestCase):
         self.assertIn(str(self.bundle / "components-tests"), export)
         self.assertEqual(export[export.index("-object") + 1], str(self.bundle / "openfallout-tests"))
         self.assertIn(("components/esm4/reader.cpp", 4), self.lines(self.root / "coverage.xml"))
+
+
+STAND_IN = r"""#!/usr/bin/env python3
+import os, sys
+TESTS = {"Alpha": ["one", "two", "DISABLED_three"], "Beta/Param": ["run/0", "run/1"], "Gamma": ["only"]}
+FLAT = [(suite, test) for suite, tests in TESTS.items() for test in tests]
+if "--gtest_list_tests" in sys.argv:
+    for suite, tests in TESTS.items():
+        print(suite + ".")
+        for test in tests:
+            print("  " + test + ("  # GetParam() = 1" if "/" in test else ""))
+    sys.exit(0)
+mode = os.environ.get("STAND_IN_MODE", "")
+total, index = int(os.environ["GTEST_TOTAL_SHARDS"]), int(os.environ["GTEST_SHARD_INDEX"])
+output = [a for a in sys.argv if a.startswith("--gtest_output=xml:")][0].split("xml:", 1)[1]
+# Each shard must have its own temporary folder.
+mine = os.path.join(os.environ["TMPDIR"], "fixed.bin")
+if os.path.exists(mine):
+    sys.exit(99)
+open(mine, "w").close()
+rows = [pair for i, pair in enumerate(FLAT) if i % total == index]
+if mode == "drop" and index == 1:
+    rows = rows[1:]
+if mode == "twice" and index == 0:
+    rows = rows + rows[:1]
+by_suite = {}
+for suite, test in rows:
+    disabled = test.startswith("DISABLED_")
+    by_suite.setdefault(suite, []).append(
+        '<testcase name="%s" classname="%s" time="1"%s>%s</testcase>' % (
+            test, suite, ' status="notrun" result="suppressed"' if disabled else "",
+            '<failure message="bad"/>' if mode == "fail" and index == 2 and not disabled else ""))
+print("shard", index, "of", total, "ran", len(rows))
+with open(output, "w") as f:
+    f.write('<testsuites time="2">' + "".join(
+        '<testsuite name="%s" time="1">%s</testsuite>' % (suite, "".join(c)) for suite, c in by_suite.items())
+        + "</testsuites>")
+sys.exit(3 if mode == "fail" and index == 2 else 0)
+"""
+
+
+class ShardedRunTests(unittest.TestCase):
+    """Three parallel GoogleTest shards, with the proof that together they ran every listed test."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.binary = self.root / "components-tests"
+        self.binary.write_text(STAND_IN)
+        self.binary.chmod(0o755)
+        self.raw, self.junit = self.root / "raw.xml", self.root / "junit.xml"
+
+    def run_shards(self, mode="", shards=3):
+        with patch.dict("os.environ", {"STAND_IN_MODE": mode}), \
+                patch("sys.stdout", new=io.StringIO()) as out, patch("sys.stderr", new=io.StringIO()) as err:
+            status = reports.run_sharded_tests(self.root, "components", self.binary, self.raw, self.junit, shards)
+        return status, out.getvalue(), err.getvalue()
+
+    def test_listing_names_every_test_including_disabled_and_parameterized(self):
+        self.assertEqual(reports.listed_tests(self.binary, self.root),
+                         ["Alpha.one", "Alpha.two", "Alpha.DISABLED_three", "Beta/Param.run/0", "Beta/Param.run/1",
+                          "Gamma.only"])
+
+    def test_three_shards_together_run_every_test_once_and_make_one_report(self):
+        # The stand-in exits 99 if its TMPDIR already holds another shard's file, so this also proves the folders differ.
+        status, out, _ = self.run_shards()
+        self.assertEqual(status, 0)
+        self.assertIn("3 shards ran all 6 listed tests, each once", out)
+        root = ET.parse(self.junit).getroot()
+        self.assertEqual((root.get("tests"), root.get("skipped")), ("6", "1"))
+        names = [suite.get("name") for suite in root.findall("testsuite")]
+        self.assertEqual(sorted(names), sorted(set(names)))
+
+    def test_a_test_no_shard_ran_fails_the_step(self):
+        status, _, err = self.run_shards("drop")
+        self.assertEqual(status, 1)
+        self.assertIn("1 not run", err)
+
+    def test_a_test_run_by_two_shards_fails_the_step(self):
+        status, _, err = self.run_shards("twice")
+        self.assertEqual(status, 1)
+        self.assertIn("1 run more than once", err)
+
+    def test_every_failing_shard_is_reported_and_its_tests_stay_in_the_report(self):
+        status, _, err = self.run_shards("fail")
+        self.assertEqual(status, 3)
+        self.assertIn("shard 3 of 3 failed with exit code 3", err)
+        self.assertGreater(int(ET.parse(self.junit).getroot().get("failures")), 0)
+
+    def test_llvm_run_passes_the_shards_on_and_merges_every_profile(self):
+        bundle = self.root / "build-tests" / "OpenFallout.app" / "Contents" / "MacOS"
+        bundle.mkdir(parents=True)
+        (bundle / "components-tests").write_text(STAND_IN)
+        (bundle / "components-tests").chmod(0o755)
+        real_run, commands = subprocess.run, []
+
+        def run(command, **kwargs):
+            if command[0] != "xcrun":
+                return real_run(command, **kwargs)
+            commands.append(command)
+            if command[1] == "llvm-profdata":
+                Path(command[command.index("-o") + 1]).write_text("profdata")
+            else:
+                kwargs["stdout"].write("")
+            return subprocess.CompletedProcess(command, 0)
+
+        profiles = self.root / "build-tests" / "profiles"
+        profiles.mkdir()
+        original_popen = subprocess.Popen
+
+        def popen(command, **kwargs):
+            if "LLVM_PROFILE_FILE" in kwargs.get("env", {}):  # subprocess.run also goes through Popen
+                pattern = kwargs["env"]["LLVM_PROFILE_FILE"]
+                self.assertIn("-shard", pattern)
+                Path(pattern.replace("%p", "1")).write_text("raw")
+            return original_popen(command, **kwargs)
+
+        with patch.object(reports.subprocess, "run", side_effect=run), \
+                patch.object(reports.subprocess, "Popen", side_effect=popen), patch("sys.stdout", new=io.StringIO()):
+            status = reports.collect_suite(self.root, "components", build_dir="build-tests", tool="llvm", shards=3)
+        self.assertEqual(status, 0)
+        merge = commands[0]
+        self.assertEqual(merge[:3], ["xcrun", "llvm-profdata", "merge"])
+        self.assertEqual(len([a for a in merge if a.endswith(".profraw")]), 3)
 
 
 if __name__ == "__main__":

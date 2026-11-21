@@ -5,6 +5,7 @@
 #include <components/esm3/infoorder.hpp>
 #include <components/esm3/loaddial.hpp>
 #include <components/esm3/loadinfo.hpp>
+#include <components/misc/strings/lower.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -469,7 +470,9 @@ namespace ESM
 
             std::vector<std::string> ids;
             for (const DialInfo& info : dialogue.mInfo)
-                ids.push_back(info.mId.getRefIdString());
+                // An id keeps the spelling it was first seen with in the process, which depends on the tests that ran
+                // before, so only the letters count.
+                ids.push_back(Misc::StringUtils::lowerCase(info.mId.getRefIdString()));
             return ids;
         }
 
@@ -657,7 +660,7 @@ namespace ESM
         {
             std::vector<std::string> result;
             for (const Link& link : order.getOrderedInfo())
-                result.push_back(link.mId.getRefIdString());
+                result.push_back(Misc::StringUtils::lowerCase(link.mId.getRefIdString()));
             return result;
         }
 

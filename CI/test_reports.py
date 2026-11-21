@@ -189,6 +189,109 @@ def export_cobertura(root, build_dir, profile, binaries, destination):
     return 0
 
 
+def listed_tests(binary, root, env=None):
+    """Every test the binary knows (Suite.Test, disabled ones included), one entry per test, from --gtest_list_tests."""
+    listing = subprocess.run([str(binary), "--gtest_list_tests"], cwd=root, stdout=subprocess.PIPE, text=True,
+                             **({"env": env} if env is not None else {}))
+    if listing.returncode:
+        raise ValueError(f"{binary.name} --gtest_list_tests exited with {listing.returncode}")
+    names, suite = [], None
+    for line in listing.stdout.splitlines():
+        entry = line.split("#", 1)[0].rstrip()
+        if not entry.strip():
+            continue
+        if not entry.startswith(" "):
+            suite = entry.strip()
+        elif suite is not None:
+            names.append(suite + entry.strip())
+    return names
+
+
+def reported_tests(roots):
+    """Suite.Test of every test case in GoogleTest XML reports, one entry per report line."""
+    return [f"{suite.get('name', '')}.{case.get('name', '')}"
+            for root in roots for suite in root.findall("testsuite") for case in suite.findall("testcase")]
+
+
+def merge_gtest_reports(roots):
+    """One GoogleTest report from the reports of several shards; a suite split across shards becomes one suite."""
+    merged = ET.Element("testsuites")
+    suites = {}
+    for root in roots:
+        for suite in root.findall("testsuite"):
+            target = suites.get(suite.get("name"))
+            if target is None:
+                target = suites[suite.get("name")] = ET.SubElement(merged, "testsuite", suite.attrib)
+                target.set("time", "0")
+            target.set("time", str(float(target.get("time")) + float(suite.get("time", "0"))))
+            target.extend(copy.deepcopy(case) for case in suite.findall("testcase"))
+    merged.set("time", str(max((float(root.get("time", "0")) for root in roots), default=0.0)))
+    return merged
+
+
+def run_sharded_tests(root, suite, binary, raw, junit, shards, profiles=None):
+    """Run the binary as `shards` parallel processes (GoogleTest's own sharding) and report as one run.
+
+    Each shard has its own temporary folder, so tests that write fixed file names cannot collide, and its own raw
+    profiles. Every shard's exit code is reported. The run fails unless the shards together ran exactly the tests that
+    --gtest_list_tests names, each once.
+    """
+    expected = listed_tests(binary, root)
+    status = 0
+    processes = []
+    with tempfile.TemporaryDirectory(prefix="shards-") as scratch:
+        scratch = Path(scratch)
+        for index in range(shards):
+            shard = scratch / str(index)
+            (shard / "tmp").mkdir(parents=True)
+            env = dict(os.environ, GTEST_TOTAL_SHARDS=str(shards), GTEST_SHARD_INDEX=str(index),
+                       TMPDIR=str(shard / "tmp"))
+            if profiles is not None:
+                env["LLVM_PROFILE_FILE"] = str(profiles / f"{suite}-shard{index}-%p.profraw")
+            log = open(shard / "log.txt", "w+", encoding="utf-8", errors="replace")
+            process = subprocess.Popen([str(binary), f"--gtest_output=xml:{shard / 'report.xml'}"], cwd=root,
+                                       env=env, stdout=log, stderr=subprocess.STDOUT)
+            processes.append((index, process, log, shard))
+        reports = []
+        for index, process, log, shard in processes:
+            code = process.wait()
+            log.seek(0)
+            print(f"::group::{suite} tests, shard {index + 1} of {shards} (exit code {code})", flush=True)
+            sys.stdout.write(log.read())
+            print("::endgroup::", flush=True)
+            log.close()
+            if code:
+                print(f"{suite} tests: shard {index + 1} of {shards} failed with exit code {code}", file=sys.stderr)
+                status = status or code
+            try:
+                reports.append(ET.parse(shard / "report.xml").getroot())
+            except (OSError, ET.ParseError) as error:
+                print(f"{suite} tests: shard {index + 1} of {shards} wrote no readable report: {error}",
+                      file=sys.stderr)
+                status = status or 1
+    ran = reported_tests(reports)
+    missing, extra = sorted(set(expected) - set(ran)), sorted(set(ran) - set(expected))
+    duplicates = sorted(name for name in set(ran) if ran.count(name) > 1)
+    if missing or extra or duplicates or len(ran) != len(expected):
+        print(f"{suite} tests: the shards ran {len(ran)} tests but --gtest_list_tests names {len(expected)}; "
+              f"{len(missing)} not run, {len(extra)} not listed, {len(duplicates)} run more than once", file=sys.stderr)
+        for label, names in (("not run", missing), ("not listed", extra), ("run more than once", duplicates)):
+            for name in names[:20]:
+                print(f"  {label}: {name}", file=sys.stderr)
+        status = status or 1
+    else:
+        print(f"{suite} tests: {shards} shards ran all {len(expected)} listed tests, each once")
+    merged = merge_gtest_reports(reports)
+    ET.indent(merged)
+    ET.ElementTree(merged).write(raw, encoding="utf-8", xml_declaration=True)
+    try:
+        write_junit(raw, junit, root)
+    except (OSError, ET.ParseError, ValueError) as error:
+        print(f"Could not generate {suite} JUnit results: {error}", file=sys.stderr)
+        return status or 1
+    return status
+
+
 def run_tests(root, suite, binary, raw, junit, env=None):
     tests = subprocess.run([str(binary), f"--gtest_output=xml:{raw}"], cwd=root,
                            **({"env": env} if env is not None else {}))
@@ -249,7 +352,7 @@ def clear_profiles(profiles):
         path.unlink()
 
 
-def collect_suite_llvm(root, suite, build_dir):
+def collect_suite_llvm(root, suite, build_dir, shards=1):
     build = root / build_dir
     binary = find_binary(build, suite)
     raw, junit, xml, profile = report_paths(root, suite, "xml", "profdata")
@@ -259,7 +362,10 @@ def collect_suite_llvm(root, suite, build_dir):
     clear_profiles(profiles)
     try:
         env = dict(os.environ, LLVM_PROFILE_FILE=str(profiles / f"{suite}-%p.profraw"))
-        test_status = run_tests(root, suite, binary, raw, junit, env)
+        if shards > 1:
+            test_status = run_sharded_tests(root, suite, binary, raw, junit, shards, profiles)
+        else:
+            test_status = run_tests(root, suite, binary, raw, junit, env)
         # Collect coverage even on test failure, so failure reports remain useful.
         status = subprocess.run([*LLVM, "llvm-profdata", "merge", "-sparse", "-o", str(profile),
                                  *map(str, sorted(profiles.glob("*.profraw")))], cwd=root).returncode
@@ -274,9 +380,9 @@ def collect_suite_llvm(root, suite, build_dir):
         clear_profiles(profiles)
 
 
-def collect_suite(root, suite, gcovr="gcovr", build_dir="build", tool="gcov"):
+def collect_suite(root, suite, gcovr="gcovr", build_dir="build", tool="gcov", shards=1):
     if tool == "llvm":
-        return collect_suite_llvm(root, suite, build_dir)
+        return collect_suite_llvm(root, suite, build_dir, shards)
     return collect_suite_gcov(root, suite, build_dir, gcovr)
 
 
@@ -308,7 +414,11 @@ def main():
     parser.add_argument("--tool", choices=("gcov", "llvm"), default=default_coverage_tool(),
                         help="gcov counters (GCC) or Clang source-based coverage; default by platform")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("run").add_argument("suite", choices=SUITES)
+    run = commands.add_parser("run")
+    run.add_argument("suite", choices=SUITES)
+    run.add_argument("--shards", type=int, default=1,
+                     help="run the suite as this many parallel processes (GoogleTest sharding; Clang coverage only); "
+                          "use the number of cores")
     # No choices= here: Python 3.11 rejects an empty list of positionals that have choices.
     merge = commands.add_parser("merge")
     merge.add_argument("suites", nargs="*", metavar="suite", help=f"suites to merge (default: all of {', '.join(SUITES)})")
@@ -318,7 +428,9 @@ def main():
     root = Path.cwd().resolve()
     try:
         if args.command == "run":
-            return collect_suite(root, args.suite, build_dir=args.build_dir, tool=args.tool)
+            if args.shards < 1 or (args.shards > 1 and args.tool != "llvm"):
+                parser.error("--shards needs a positive number and the llvm coverage tool")
+            return collect_suite(root, args.suite, build_dir=args.build_dir, tool=args.tool, shards=args.shards)
         return merge_coverage(root, suites=tuple(args.suites or SUITES), build_dir=args.build_dir, tool=args.tool)
     except (OSError, ValueError) as error:
         print(error, file=sys.stderr)
