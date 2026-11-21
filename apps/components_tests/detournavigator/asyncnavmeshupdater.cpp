@@ -16,6 +16,8 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
+#include <chrono>
 #include <limits>
 #include <map>
 
@@ -376,7 +378,9 @@ namespace
         mSettings.mMaxTilesNumber = 9;
         mSettings.mMinUpdateInterval = std::chrono::milliseconds(250);
 
-        AsyncNavMeshUpdater updater(mSettings, mRecastMeshManager, mOffMeshConnectionsManager, nullptr);
+        std::atomic<std::chrono::steady_clock::rep> now{ std::chrono::steady_clock::now().time_since_epoch().count() };
+        AsyncNavMeshUpdater updater(mSettings, mRecastMeshManager, mOffMeshConnectionsManager, nullptr,
+            [&] { return std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(now.load())); });
         const auto navMeshCacheItem = std::make_shared<GuardedNavMeshCacheItem>(1, mSettings);
 
         std::map<TilePosition, ChangeType> changedTiles;
@@ -402,6 +406,8 @@ namespace
             EXPECT_EQ(stats.mJobs, 49);
             EXPECT_EQ(stats.mWaiting.mDelayed, 49);
         }
+
+        now += std::chrono::duration_cast<std::chrono::steady_clock::duration>(mSettings.mMinUpdateInterval).count();
 
         updater.wait(WaitConditionType::allJobsDone, &mListener);
 
