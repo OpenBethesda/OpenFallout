@@ -16,7 +16,7 @@ stays green. A run on a tag or the default branch that has only some of the secr
    list and hands the Developer ID Application identity of `MACOS_TEAM_ID` to the packaging step as
    `OPENFALLOUT_CODESIGN_IDENTITY` and `OPENFALLOUT_CODESIGN_TEAM_ID` (read by `cmake/SignMacApplications.cmake`, which
    signs inside out with the hardened runtime, a secure timestamp and `files/mac/*.entitlements`).
-2. **Package disk image**: CPack signs and builds the image as usual.
+2. **Package disk image**: `cpack` runs in `build/` on the tree the Build step finished (not `make package`, which walks it again first); CPack signs and builds the image as usual.
 3. **Notarize and staple** (`release_signing.py notarize <dmg>`): signs the image, submits it with
    `xcrun notarytool submit --wait` (this notarizes every app inside it), copies the volume out, staples each app,
    builds the image again from that copy, signs and submits it again, staples it, and runs `stapler validate` on the
