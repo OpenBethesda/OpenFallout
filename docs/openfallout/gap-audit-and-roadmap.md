@@ -326,7 +326,7 @@ The census tool and every real-data check need the installed game folders, not t
 Sizing at commit `f90f239d`, excluding `extern/`:
 
 - 1,206 tracked files mention "openmw" (5,720 lines). 1,010 paths contain "openmw", almost all under `apps/openfallout/`.
-- 6 executables are named `openmw*` (`openmw`, `openmw-cs`, `openmw-launcher`, `openmw-wizard` and two test binaries; the iniimporter, essimporter, navmeshtool and bulletobjecttool binaries that were here are deleted), plus the `openmw-lib` and `openmw-cs-lib` libraries.
+- 10 executables are named `openmw*` (`openmw`, `openmw-cs`, `openmw-launcher`, `openmw-wizard`, `openmw-iniimporter`, `openmw-essimporter`, `openmw-navmeshtool`, `openmw-bulletobjecttool` and two test binaries), plus the `openmw-lib` and `openmw-cs-lib` libraries.
 - Lua modules are named `openmw.*` (20 API files under `files/lua_api/openmw/`). `openmw.cfg` is mentioned 228 times. `OPENMW_*` guards and options are everywhere, and `OMWEngine` and `OMW*` symbols exist.
 - 792 files use `MW*` namespaces (`MWGui`, `MWWorld`, `MWLua`, `MWMechanics` and others). `MW` stands for Morrowind.
 - 206 files mention Morrowind outside `extern/` and the translations (launcher and wizard text, docs, data). Those belong with the new-game and launcher work in M2, not the rename.
