@@ -278,22 +278,36 @@ class PackageCheckTests(unittest.TestCase):
         os.symlink("/Applications", stage / "Applications")
         (stage / "README.txt").write_text("extra")
         dmg = self.root / "OpenFallout-test-macOS-arm64.dmg"
+        mountpoint = self.root / "image-mount"
+        mountpoint.mkdir()
 
-        def make_image():
-            dmg.unlink(missing_ok=True)
-            subprocess.run(["hdiutil", "create", "-quiet", "-fs", "HFS+", "-srcfolder", str(stage), "-volname",
-                            "OFTest", str(dmg)], check=True)
+        def edit_image(change):
+            """Opens the image read-write, lets `change` edit its volume, closes it. The image is one empty read-write
+            image made once and edited between the two checks, not a compressed image built from a folder each time:
+            `hdiutil create -srcfolder` takes 5 s however small the folder, and attaching a compressed (checksummed)
+            image makes hdiutil verify it first, another 5 s, where a read-write image attaches in 0.2 s. The check
+            under test reads the mounted volume, so what it sees is the same."""
+            subprocess.run(["hdiutil", "attach", "-quiet", "-nobrowse", "-noautoopen", "-mountpoint", str(mountpoint),
+                            str(dmg)], check=True)
+            try:
+                change(mountpoint)
+            finally:
+                subprocess.run(["hdiutil", "detach", "-quiet", "-force", str(mountpoint)], check=True)
 
-        make_image()
+        subprocess.run(["hdiutil", "create", "-quiet", "-size", "32m", "-fs", "HFS+", "-volname", "OFTest", str(dmg)],
+                       check=True)
+        edit_image(lambda volume: subprocess.run(["ditto", str(stage), str(volume)], check=True))
         status, output = run_check(dmg, "--smoke", "skip")
         self.assertEqual(status, 1, output)
         self.assertIn("FAIL dmg: the disk image holds what it should not: OpenFallout-CS.app, README.txt", output)
         self.assertIn("PASS signatures", output)
 
-        (stage / "OpenFallout-CS.app").rmdir()
-        (stage / "README.txt").unlink()
-        (stage / "README.md").write_text("read me")
-        make_image()
+        def replace_extras(volume):
+            (volume / "OpenFallout-CS.app").rmdir()
+            (volume / "README.txt").unlink()
+            (volume / "README.md").write_text("read me")
+
+        edit_image(replace_extras)
         status, output = run_check(dmg, "--smoke", "skip")
         self.assertEqual(status, 0, output)
         self.assertIn("PASS dmg", output)
