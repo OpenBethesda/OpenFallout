@@ -54,3 +54,13 @@ runs:
         printf '%s  %s\n' "$CCACHE_SHA256" "$archive" | shasum -a 256 -c -
         tar -xzf "$archive" -C "$RUNNER_TEMP"
         echo "$RUNNER_TEMP/ccache-${CCACHE_VERSION}-darwin" >> "$GITHUB_PATH"
+
+    # ccache tells compilers apart by the compiler's file time by default. The hosted pool hands out two runner images
+    # (20261028 and 20261103 on 17-18 November 2026), both with Xcode 26.6 but with different file times, so a cache
+    # saved on one image missed on the other: 18-20% hits against 99.8% when both runs had the same image. Identify the
+    # compiler by what it reports instead (version, target, install folder), worked out once per job.
+    - name: Identify the compiler for ccache by its version
+      shell: bash
+      run: |
+        xcrun clang -v 2>&1 | tee "$RUNNER_TEMP/clang-identity.txt"
+        echo "CCACHE_COMPILERCHECK=string:$(shasum -a 256 "$RUNNER_TEMP/clang-identity.txt" | cut -d' ' -f1)" >> "$GITHUB_ENV"
