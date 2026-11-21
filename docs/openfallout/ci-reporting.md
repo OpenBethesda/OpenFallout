@@ -39,6 +39,13 @@ Every run of the Mac jobs for a branch or pull request runs them. A release tag
 already tested it, and a second upload for the same commit would be counted
 twice by Codecov.
 
+## Merge queue
+
+`Build and test` (push.yml), `Documentation` and `Documentation links` also run on `merge_group`, the event of
+GitHub's merge queue. In the queue nothing is skipped by path: `CI/changed_paths.py` builds everything for any event
+other than `push` and `pull_request`, and `Documentation` has no path filter for this event. The queue itself (a
+ruleset on `master` with required checks) is a repository setting, switched on by the owner.
+
 ## The Metal build's tests
 
 A third job, `Metal` ("Metal build"), builds a third tree, `build-metal` (the Metal build, see

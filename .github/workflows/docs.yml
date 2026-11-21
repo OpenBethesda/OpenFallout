@@ -14,6 +14,9 @@ on:
       - docs/**
       - .readthedocs.yaml
       - .github/workflows/docs.yml
+  # The merge queue builds the HTML for every entry: merge_group takes no path filter, and a required check that a
+  # path filter skipped would stay pending and block the queue.
+  merge_group:
   workflow_dispatch:
 
 permissions:

@@ -8,6 +8,9 @@ on:
   # for review starts the run.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  # The merge queue: every pull request runs the whole workflow again on top of the current master before it lands
+  # (CI/changed_paths.py builds everything for this event, so nothing in the queue is skipped by path).
+  merge_group:
   workflow_dispatch:
     inputs:
       bundle-angle:
