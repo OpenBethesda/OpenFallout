@@ -98,11 +98,11 @@ checks every file against `SHA256SUMS` and the libraries and the notices against
 `FAIL angle: ...` and leaves `DEST` empty. It never rebuilds ANGLE. `DEST` is then the `-DOPENFALLOUT_ANGLE_ROOT` of the
 Metal build. `CI/angle_asset.py digest <library>` prints the two digests of a library.
 
-The Mac job fetches the asset at most once per run, into `/tmp/openfallout-angle`. The manual test run (below) fetches
-it before the OpenGL configure step, because it packages the libraries; the Metal build fetches it later, in its own
-block of steps, unless that folder already holds it. Neither changes the folder after the fetch (CMake copies the
-libraries into the app, it does not rewrite them), so one fetch serves both. The release named in `angle.json` has to be
-published before the Metal block can pass; until then its fetch step fails with the address it could not read (or the
+Each Mac job that needs the asset fetches it once per run, into `/tmp/openfallout-angle` of its own runner. The manual
+test run (below) fetches it in the job of the packaged app, before the OpenGL configure step, because it packages the
+libraries; the Metal build fetches it in the job `Metal`, in its own block of steps. Neither changes the folder after
+the fetch (CMake copies the libraries into the app, it does not rewrite them). The release named in `angle.json` has to be
+published before the Metal job can pass; until then its fetch step fails with the address it could not read (or the
 digest that does not match), and the steps after it do not run. A release tag run does not build the Metal tree.
 
 ## In the packaged app, and how it is signed
