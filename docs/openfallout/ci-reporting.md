@@ -29,7 +29,7 @@ get a second build tree in a job of their own (`UnitTests`, "Unit tests and cove
 `-g`), `BUILD_WITH_CODE_COVERAGE=ON` and the two test suites. Only `components-tests` and
 `openfallout-tests` are built in it. The launcher stays configured because it
 turns on Qt, which the launcher-settings tests in `components-tests` need. The
-tree has its own incremental build cache, `build-macos-coverage-v1-…`, and
+tree has its own incremental build cache, `build-macos-coverage-v2-…`, and
 its own ccache (see [CI build cache contract](ci-cache.md)). The job does not wait for
 the app build, so a packaging or notarization failure does not hide the test results,
 and a test failure does not hold up the package.
