@@ -19,6 +19,9 @@ MARKER = ".harness/openfallout-release.yaml"
 # The one job that builds the engine: push.yml's MacOS job ("macOS") calls macos.yml, whose job is "Build, test and
 # package"; GitHub joins the two names. No other platform has a job.
 MAC_JOB = "macOS / Build, test and package"
+# A docs-only change still runs the Mac job, which then skips every step and reports success; only a job in which this
+# step passed has built, packaged and checked the app.
+MAC_CHECK_STEP = "Check the packaged app"
 # A release holds one disk image, for Apple Silicon; these are the packages of other platforms.
 OTHER_PLATFORM_SUFFIXES = (".exe", ".msi", ".appimage", ".deb", ".rpm", ".apk", ".flatpak", ".snap")
 
@@ -113,7 +116,9 @@ def release_plan(api, source_ref, tag):
         problems.append("The latest master Build and test run for this commit must pass")
     else:
         jobs = api.request(f"actions/runs/{latest['id']}/jobs?filter=latest&per_page=100")["jobs"]
-        passed = {job["name"] for job in jobs if job["conclusion"] == "success"}
+        passed = {job["name"] for job in jobs if job["conclusion"] == "success"
+                  and any(step.get("name") == MAC_CHECK_STEP and step.get("conclusion") == "success"
+                          for step in job.get("steps", []))}
         if MAC_JOB not in passed:
             problems.append(f"The {MAC_JOB} job must pass; run the full Build and test workflow on this master commit")
     ref = api.request(f"git/ref/tags/{quote(tag, safe='')}", missing_ok=True)
