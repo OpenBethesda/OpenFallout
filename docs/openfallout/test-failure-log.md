@@ -26,8 +26,9 @@ C++ tests since their JUnit upload began; it does not have the Python tests).
 | Not a test (runner, network, cache, CodeQL set-up) | 24 | downloads and DNS 4, CodeQL set-up 4, runner lost 1, runs cancelled with no step run 11, runs with no failed job 4 |
 | Caught regression | 4 | below; all builds or the smoke run, none a unit-test assertion |
 | Test bug | 4 | below |
-| Flaky | 2 | below; one cause found and fixed |
-| Change detector | 1 | below; on a branch built to be thrown away |
+| Flaky | 2 | below; one test, its cause found and fixed |
+| Change detector | 0 | |
+| A guard doing its job | 1 | below; nothing was fixed |
 
 ### Caught regressions
 
@@ -52,15 +53,15 @@ C++ tests since their JUnit upload began; it does not have the Python tests).
 |---|---|---|---|
 | 20 and 21 Nov | `DetourNavigatorAsyncNavMeshUpdaterTest.repeated_tile_updates_should_be_delayed` (concurrency) | the test waited on the real clock; a slow runner let the delay pass | #267: an injected clock |
 
-### Change detectors
+### A guard doing its job
 
-| Date | Test | What it pins |
+| Date | Test | What happened |
 |---|---|---|
-| 20 Nov | `CI/test_workflows.py`, `test_the_jobs_that_compile_share_one_setup_written_once_and_each_has_a_compiler_cache_of_its_own` | the exact condition under which the Mac jobs store their compiler caches. It failed only on a measuring branch that changed that condition on purpose and was never merged; on any other branch the same failure would stop pull requests from pushing master's caches out of the 10 GB budget. |
+| 20 Nov | `CI/test_workflows.py`, `test_the_jobs_that_compile_share_one_setup_written_once_and_each_has_a_compiler_cache_of_its_own` | it pins the condition under which the Mac jobs store their compiler caches (only master and releases). A measuring branch changed that condition on purpose, failed this test, and was thrown away; neither the test nor master changed. On any other branch the same failure stops a pull request from pushing master's caches out of the 10 GB budget. |
 
-**Outcome**: no test file failed only as a change detector, so none is deleted and no pattern is banned.
-`CI/test_workflows.py` pins workflow structure and is edited whenever the workflows change, which is its cost; its
-record so far is one guard working as intended.
+**Outcome**: no failure in these two weeks was a change detector, so no test file is deleted and no pattern is banned.
+`CI/test_workflows.py` pins workflow structure, so it is edited whenever the workflows change; that is its cost, and the
+next change-detector failure of it goes in this log.
 
 Gaps: GitHub keeps only some runs (a re-run that passed replaces the failed one in the list); one job's log was gone
 (the annotation says the runner lost contact); Codecov does not see the Python tests.
