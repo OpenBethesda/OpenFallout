@@ -202,10 +202,17 @@ configures it), the same reporting commands can be run locally. They use
 `xcrun llvm-profdata` and `xcrun llvm-cov` from Xcode and need no gcovr:
 
 ```sh
-python3 CI/test_reports.py --build-dir build-tests run components
+python3 CI/test_reports.py --build-dir build-tests run components --shards 3
 python3 CI/test_reports.py --build-dir build-tests run openfallout
 python3 CI/test_reports.py --build-dir build-tests merge components openfallout
 ```
+
+`--shards N` (Clang coverage only) runs the suite as N parallel processes with GoogleTest's own
+sharding (`GTEST_TOTAL_SHARDS`, `GTEST_SHARD_INDEX`); the CI job uses 3, one per core of the runner.
+Each shard has its own `TMPDIR` and its own `.profraw` files, which are all merged. The shard
+reports are merged into one `components.gtest.xml` and one JUnit file. The step fails if any shard
+fails (each failing shard is named with its exit code), or if the tests in the shard reports are
+not exactly the tests `--gtest_list_tests` names, each once.
 
 With an instrumented GCC build in `build/` and gcovr 8.3 on `PATH`, `run` and
 `merge` without `--build-dir` read gcov counters. `--tool gcov` or `--tool llvm`
