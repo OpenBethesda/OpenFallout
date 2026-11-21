@@ -107,7 +107,6 @@ Launcher::DataFilesPage::DataFilesPage(const Files::ConfigurationManager& cfg, C
     Config::LauncherSettings& launcherSettings, MainDialog* parent)
     : QWidget(parent)
     , mDirectoryPickerDialog(new QDialog(this))
-    , mMainDialog(parent)
     , mCfgMgr(cfg)
     , mGameSettings(gameSettings)
     , mLauncherSettings(launcherSettings)

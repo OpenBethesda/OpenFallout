@@ -100,7 +100,6 @@ namespace Launcher
         const static char* mDefaultContentListName;
 
     private:
-        MainDialog* mMainDialog;
         TextInputDialog* mNewProfileDialog;
         TextInputDialog* mCloneProfileDialog;
 
