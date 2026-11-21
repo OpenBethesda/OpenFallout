@@ -18,6 +18,8 @@
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 
+#include "../mwworld/class.hpp"
+
 namespace
 {
     bool isWhitespace(MyGUI::UString::code_point c)
@@ -149,7 +151,6 @@ namespace OFGui
                 }
             }
         }
-    }
 
         if (mCommandHistory.empty())
             return;
