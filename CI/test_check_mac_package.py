@@ -1,5 +1,6 @@
 """The packaged-app check against small stand-in bundles: real Mach-O files, real codesign, no game and no engine."""
 
+import atexit
 import contextlib
 import io
 import json
@@ -27,12 +28,32 @@ GAME_KEYS = {
 }
 
 
+_COMPILED = {}            # (source, flags) -> a built file, kept for the whole run of the tests
+_COMPILED_DIR = []
+
+
 def compile_c(output, source, *flags):
+    """Builds `source` into `output` with clang. A program or library that was built before from the same source and
+    flags is copied instead of built again: every fixture of this file lays out the same few stand-ins (clang takes about
+    a tenth of a second for each, five of them for each of about eighty tests), and the checks under test read the file
+    that is there, as they would a built one. A library that the program links is named by its file name in the key:
+    the linker records its install name, not where it lay."""
     output.parent.mkdir(parents=True, exist_ok=True)
-    c_file = output.parent / (output.name.replace(" ", "_") + ".c")
-    c_file.write_text(source)
-    subprocess.run(["clang", "-o", str(output), str(c_file), *flags], check=True)
-    c_file.unlink()
+    key = (source, tuple(os.path.basename(flag) if flag.endswith(".dylib") and "/" in flag and not flag.startswith("@")
+                         else flag for flag in flags))
+    built = _COMPILED.get(key)
+    if built is None:
+        if not _COMPILED_DIR:
+            folder = tempfile.TemporaryDirectory(prefix="stand-in builds ")
+            atexit.register(folder.cleanup)
+            _COMPILED_DIR.append(Path(folder.name))
+        built = _COMPILED_DIR[0] / f"{len(_COMPILED)}"
+        c_file = built.with_suffix(".c")
+        c_file.write_text(source)
+        subprocess.run(["clang", "-o", str(built), str(c_file), *flags], check=True)
+        c_file.unlink()
+        _COMPILED[key] = built
+    shutil.copy2(built, output)
 
 
 def write_plist(app, **keys):

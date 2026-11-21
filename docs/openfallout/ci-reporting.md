@@ -197,6 +197,14 @@ python3 -m venv .venv-tests && .venv-tests/bin/pip install lupa==2.8 pillow==12.
 python3 -m unittest discover -s docs -p test_luadoc.py
 ```
 
+The Mac job runs the same two folders through `CI/run_python_tests.py`, one process per test file and as many at a time as
+the computer has cores. It counts the tests of each file by loading them first and fails if a file did not run, ran another
+number of tests, or failed (the output of a failing file is printed again at the end):
+
+```sh
+python3 CI/run_python_tests.py CI "scripts/openfallout=.venv-tests/bin/python"
+```
+
 On the Mac, with an instrumented test tree in `build-tests/` (as the unit-test job
 configures it), the same reporting commands can be run locally. They use
 `xcrun llvm-profdata` and `xcrun llvm-cov` from Xcode and need no gcovr:

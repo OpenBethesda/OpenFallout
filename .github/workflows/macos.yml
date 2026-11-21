@@ -604,8 +604,9 @@ jobs:
   PythonMac:
     name: Python tests on macOS
     runs-on: macos-26
-    # Time budget: 8.3 min (20 Nov 2026).
-    timeout-minutes: 15
+    # Time budget: 2.7 min with the wheels built, 1.6 min with them cached (PR #269, 21 Nov 2026); was 8.3 min when the
+    # test files ran one after another.
+    timeout-minutes: 6
     steps:
     - uses: actions/checkout@v7
 
@@ -621,10 +622,41 @@ jobs:
         BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: python3 CI/changed_paths.py --event "$EVENT" --base "$BASE" --github-output "$GITHUB_OUTPUT"
 
-    - name: Run the Python tests on macOS
+    # Python 3.15 has no prebuilt lupa or pillow, so pip compiles both (about 50 s). The wheels are kept between runs, keyed by
+    # the Python version, and pip falls back to building them when one is missing or does not fit.
+    - name: Name the Python version for the wheel cache
+      id: python-version
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      run: echo "key=$(python3 -c 'import sys, sysconfig; print(sysconfig.get_platform() + "-" + sys.version.split()[0])')" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the wheels of the Python test packages
+      id: python-wheels
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/python-wheels
+        key: python-wheels-v1-${{ steps.python-version.outputs.key }}-lupa2.8-pillow12.0.0
+
+    - name: Install the Python test packages
       if: ${{ steps.classify.outputs.code != 'false' }}
       run: |
         python3 -m venv "$RUNNER_TEMP/script-tests"
-        "$RUNNER_TEMP/script-tests/bin/pip" install lupa==2.8 pillow==12.0.0
-        python3 -m unittest discover -s CI -p 'test_*.py' -v
-        "$RUNNER_TEMP/script-tests/bin/python" -m unittest discover -s scripts/openfallout -p 'test_*.py' -v
+        mkdir -p "$RUNNER_TEMP/python-wheels"
+        "$RUNNER_TEMP/script-tests/bin/pip" wheel --wheel-dir "$RUNNER_TEMP/python-wheels" --find-links "$RUNNER_TEMP/python-wheels" lupa==2.8 pillow==12.0.0
+        "$RUNNER_TEMP/script-tests/bin/pip" install --find-links "$RUNNER_TEMP/python-wheels" lupa==2.8 pillow==12.0.0
+
+    # Only master stores it, like the compiler caches: a pull request's cache is not shared with other pull requests.
+    - name: Keep the wheels of the Python test packages
+      if: ${{ steps.classify.outputs.code != 'false' && steps.python-wheels.outputs.cache-hit != 'true' && github.ref == 'refs/heads/master' }}
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/python-wheels
+        key: ${{ steps.python-wheels.outputs.cache-primary-key }}
+
+    # One process per test file, as many at a time as the runner has cores (3). The runner counts the tests of each file by
+    # loading them, as `unittest discover` does, and fails the step if any file did not run, ran a different number of tests,
+    # or failed; every failing file's output is printed again at the end (CI/run_python_tests.py).
+    - name: Run the Python tests on macOS
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      run: |
+        python3 CI/run_python_tests.py CI "scripts/openfallout=$RUNNER_TEMP/script-tests/bin/python"
