@@ -55,6 +55,14 @@ runs:
         tar -xzf "$archive" -C "$RUNNER_TEMP"
         echo "$RUNNER_TEMP/ccache-${CCACHE_VERSION}-darwin" >> "$GITHUB_PATH"
 
+    # Ninja builds every Mac tree (CI/before_script.macos.sh, CI/macos/build.sh). The runner image ships it (1.13.2 on
+    # the macos-26 arm64 image of 21 November 2026); a missing one fails here by name, not as a CMake error later.
+    - name: Check that Ninja is on the runner
+      shell: bash
+      run: |
+        command -v ninja
+        ninja --version
+
     # ccache tells compilers apart by the compiler's file time by default. The hosted pool hands out two runner images
     # (20261028 and 20261103 on 17-18 November 2026), both with Xcode 26.6 but with different file times, so a cache
     # saved on one image missed on the other: 18-20% hits against 99.8% when both runs had the same image. Identify the

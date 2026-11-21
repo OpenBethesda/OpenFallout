@@ -12,16 +12,25 @@ The Mac jobs run on one runner image, `macos-26` (Apple Silicon), and build
 three trees, one tree in each of three jobs that run side by side; the first two are cached. `build` is the packaged
 app, built by the job `MacOS` ("Build, test and package"); its cache key starts with
 `build-macos-v2-` and its fingerprint mode is the image name and build type
-(`macos-26-RelWithDebInfo`). `build-tests` is the instrumented unit-test tree, built by the job `UnitTests` ("Unit tests and coverage"; Debug without `-g`,
+(`macos-26-RelWithDebInfo-ninja`). `build-tests` is the instrumented unit-test tree, built by the job `UnitTests` ("Unit tests and coverage"; Debug without `-g`,
 coverage, only the two test suites; about 1.8 GB before compression, against
 about 8 GB with debug information); its key starts with `build-macos-coverage-v2-`, its mode
-is `macos-26-coverage`, and the job passes `--build-dir
+is `macos-26-coverage-ninja`, and the job passes `--build-dir
 build-tests` to `restore` and `snapshot`. The two never share a cache entry, so
 ordinary objects are never restored into an instrumented build. Each job has a ccache of its own
 (`hendrikmuhs/ccache-action`, keys `macos-26-app-<build type>`, `macos-26-coverage` and `macos-26-metal`), because the
 three trees are compiled with different flags and share no objects; one cache for all three was always full and
 evicted most of what each needed. Only `master` runs save either tree, and a release-tag
 run, which does not build the test tree, saves only `build`.
+
+All three trees are configured for Ninja (`-G Ninja`) and built with `cmake --build`. The `-ninja` ending of the two
+modes keeps a tree made by the Unix Makefiles generator from being restored into a Ninja build (a different generator
+in an existing build folder is a CMake error). The ccache keys did not change, but the entries did for two trees:
+when debug information (`-g`, the app tree) or coverage mapping (the unit-test tree) is on, ccache also hashes the
+directory the compiler runs in, and Ninja runs every compile from the build root where Make ran it from each target's
+subfolder. So the first runs after the switch missed the app and unit-test caches (0% and 4.6% hits on 21 November,
+against 99.94% for the Metal tree, which has neither), until a `master` run stored Ninja entries; after that they hit as
+before. A run that changes the build folder layout again has the same one-time cost.
 
 `build-metal` is the Metal build, built by the job `Metal` ("Metal build"; `CI/before_script.macos.sh -M`: Debug, `-O0`,
 no coverage, the engine and the two test suites). It is never packaged and its

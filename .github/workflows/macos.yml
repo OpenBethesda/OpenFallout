@@ -94,7 +94,7 @@ jobs:
       id: build-env
       if: ${{ steps.classify.outputs.code != 'false' }}
       run: |
-        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-${{ inputs.build-type }}' --dependency-file "${{ steps.setup.outputs.manifest-path }}")" >> "$GITHUB_OUTPUT"
+        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-${{ inputs.build-type }}-ninja' --dependency-file "${{ steps.setup.outputs.manifest-path }}")" >> "$GITHUB_OUTPUT"
 
     - name: Restore incremental build
       id: build-cache
@@ -168,9 +168,9 @@ jobs:
     # packaging runs whose logs were kept on 20 November 2026 needed it. If it comes back, the failing log is the
     # evidence for the cause (the suspect is file scanning right after the signing script, CMake issue 25671).
     #
-    # CPack runs directly. `make package` runs the `all` target first (the Build step above has already built it) and
+    # CPack runs directly. `make package` (`ninja package`) runs the `all` target first (the Build step above has already built it) and
     # then `cpack --config ./CPackConfig.cmake`; walking the finished tree again cost 15 s, and CPack's own `preinstall` target walked it once more until
-    # CMAKE_SKIP_INSTALL_ALL_DEPENDENCY went into the configuration (CI/before_script.macos.sh). Makefile trees are single
+    # CMAKE_SKIP_INSTALL_ALL_DEPENDENCY went into the configuration (CI/before_script.macos.sh). Ninja trees are single
     # configuration, so there is no -C.
     - name: Package disk image
       if: ${{ steps.classify.outputs.code != 'false' }}
@@ -326,7 +326,7 @@ jobs:
       id: test-build-env
       if: ${{ !cancelled() && steps.classify.outputs.code != 'false' && steps.setup.outcome == 'success' }}
       run: |
-        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-coverage' --dependency-file "${{ steps.setup.outputs.manifest-path }}")" >> "$GITHUB_OUTPUT"
+        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-coverage-ninja' --dependency-file "${{ steps.setup.outputs.manifest-path }}")" >> "$GITHUB_OUTPUT"
 
     - name: Restore incremental unit-test build
       id: test-build-cache
