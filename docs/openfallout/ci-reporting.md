@@ -246,3 +246,5 @@ using this configuration after it reaches the default branch.
 CMake FetchContent pins and packages installed by shell commands, such as the
 inline gcovr version, still need manual updates. The current Docker base images
 use floating tags, so they may not produce version-update PRs until pinned.
+
+Every test failure that is fixed is recorded, with its kind, in the [test failure log](test-failure-log.md).
