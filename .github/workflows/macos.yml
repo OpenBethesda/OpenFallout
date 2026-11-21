@@ -349,7 +349,8 @@ jobs:
 
     - name: Run components tests
       if: ${{ !cancelled() && steps.test-build.outcome == 'success' }}
-      run: python3 CI/test_reports.py --build-dir build-tests run components
+      # One process per core of the runner (3), with the proof that together they ran every listed test.
+      run: python3 CI/test_reports.py --build-dir build-tests run components --shards 3
 
     - name: Run OpenFallout tests
       if: ${{ !cancelled() && steps.test-build.outcome == 'success' }}
