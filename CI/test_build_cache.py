@@ -97,6 +97,47 @@ class BuildCacheTests(unittest.TestCase):
             stream.write("\nadd_compile_definitions(CHANGED_RULES)\n")
         self.assertNotEqual(first, cache.build_key(self.root, "cc", [dependency], "Debug"))
 
+    def test_key_ignores_ci_files_that_do_not_build(self):
+        (self.root / "CI" / "macos").mkdir(parents=True)
+        (self.root / ".github" / "workflows").mkdir(parents=True)
+        files = {
+            "checker": "CI/check_mac_package.py",
+            "test": "CI/test_build_cache.py",
+            "push": ".github/workflows/push.yml",
+            "configure": "CI/before_script.macos.sh",
+            "build": "CI/macos/build.sh",
+            "deps": "CI/macos/deps_versions.sh",
+            "workflow": ".github/workflows/macos.yml",
+            "cmake": "CI/macos/Extra.cmake",
+        }
+        for path in files.values():
+            (self.root / path).write_text("v1\n")
+        self.run_command("git", "add", ".")
+        dependency = self.root / "manifest.txt"
+        dependency.write_text("dependencies-v1")
+        first = cache.build_key(self.root, "cc", [dependency], "Debug")
+
+        def changed(path):
+            target = self.root / path
+            original = target.read_text()
+            target.write_text(original + "# changed\n")
+            try:
+                return cache.build_key(self.root, "cc", [dependency], "Debug") != first
+            finally:
+                target.write_text(original)
+
+        for name in ("checker", "test", "push"):
+            self.assertFalse(changed(files[name]), files[name])
+        for name in ("configure", "build", "deps", "workflow", "cmake"):
+            self.assertTrue(changed(files[name]), files[name])
+        # A CMakeLists.txt in a subdirectory counts too.
+        (self.root / "sub").mkdir()
+        (self.root / "sub" / "CMakeLists.txt").write_text("# a\n")
+        self.run_command("git", "add", ".")
+        second = cache.build_key(self.root, "cc", [dependency], "Debug")
+        (self.root / "sub" / "CMakeLists.txt").write_text("# b\n")
+        self.assertNotEqual(second, cache.build_key(self.root, "cc", [dependency], "Debug"))
+
     def test_removed_resource_discards_stale_generated_files(self):
         resource = self.root / "asset.txt"
         resource.write_text("resource")

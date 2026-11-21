@@ -11,10 +11,10 @@ test-report behavior is described in [CI reporting](ci-reporting.md).
 The Mac jobs run on one runner image, `macos-26` (Apple Silicon), and build
 three trees, one tree in each of three jobs that run side by side; the first two are cached. `build` is the packaged
 app, built by the job `MacOS` ("Build, test and package"); its cache key starts with
-`build-macos-v1-` and its fingerprint mode is the image name and build type
+`build-macos-v2-` and its fingerprint mode is the image name and build type
 (`macos-26-RelWithDebInfo-ninja`). `build-tests` is the instrumented unit-test tree, built by the job `UnitTests` ("Unit tests and coverage"; Debug without `-g`,
 coverage, only the two test suites; about 1.8 GB before compression, against
-about 8 GB with debug information); its key starts with `build-macos-coverage-v1-`, its mode
+about 8 GB with debug information); its key starts with `build-macos-coverage-v2-`, its mode
 is `macos-26-coverage-ninja`, and the job passes `--build-dir
 build-tests` to `restore` and `snapshot`. The two never share a cache entry, so
 ordinary objects are never restored into an instrumented build. Each job has a ccache of its own
@@ -65,9 +65,23 @@ The `key` command prints a SHA-256 fingerprint of:
 - the resolved compiler path and its `--version` output;
 - `cmake --version`, and the SDK path when `xcrun` is available;
 - `SDKROOT`, `DEVELOPER_DIR`, `CC`, `CXX`, `CFLAGS`, `CXXFLAGS`, and `LDFLAGS`;
-- contents of tracked CMake rules (`CMakeLists.txt`, `.cmake` files, `CI/`, and
-  `.github/workflows/`); and
+- contents of the tracked files that decide how a build folder was made (below); and
 - the contents of each explicitly supplied dependency file.
+
+The files in the fingerprint are every `CMakeLists.txt` and `.cmake` file, plus the explicit list `KEY_FILES` in
+`CI/build_cache.py`, each with a comment there saying why: `CI/before_script.macos.sh` (the configure options),
+`CI/macos/build.sh` (the make call), `CI/macos/deps_versions.sh` (sourced by the configure script),
+`CI/before_install.macos.sh`, `CI/macos/fetch_deps_manifest.sh`, `CI/macos/build_luajit_hrt.sh` and its patch (they
+produce the dependency trees, and the LuaJIT build is not described by the manifest), `CI/macos/angle/angle.json`,
+`CI/build_cache.py` itself and `.github/workflows/macos.yml`.
+Nothing else under `CI/` is in it, and neither are the other workflow files or the shared setup action (it only installs the dependency set, whose own cache key hashes its scripts, and ccache, which the build folder does not hold). The reasoning: the Configure step re-runs
+CMake on every run, and `restore` gives changed sources a newer timestamp, so a changed CMake file or source is
+corrected by the build itself. What neither can correct is the way the tools and dependencies were produced and how
+the tree is restored, which is what the listed files do. The checkers, report and release scripts, the Metal, OSG and
+ANGLE builders (the Metal tree is not cached), the tests and the other workflows are never run by the Configure or
+Build steps of a cached tree, so they cannot change the folder. A pull request that only changes them restores the
+folder of its base. Changing the meaning of the key means changing the prefix (`v1` became `v2` when the list was
+narrowed).
 
 This is deliberately tied to the absolute checkout path because generated
 build rules and toolchain state contain absolute paths. The snapshot also
