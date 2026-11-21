@@ -39,6 +39,9 @@ on:
         required: false
 
 jobs:
+  # The packaged app: the OpenGL build, its signing, packaging, notarization and checks, and the release. The unit tests, the
+  # Metal build and the Python tests are jobs of their own below, so that none of them waits for the app (or the app for
+  # them) and each has a compiler cache of its own: the three trees are built with different flags and share no objects.
   MacOS:
     # A fixed name: the check is "macOS / Build, test and package" (CI/harness_release.py MAC_JOB).
     name: Build, test and package
@@ -48,66 +51,38 @@ jobs:
     # the signing secrets; a tag or branch outside those rules cannot read them whatever its copy of the scripts says.
     environment: ${{ inputs.signing-environment }}
     env:
-      # ANGLE (CI/angle_asset.py fetch) and OpenSceneGraph for OpenGL ES 3 (CI/macos/before_install_osg.sh) live in one
-      # folder each, named here once. The manual ANGLE test run (bundle-angle) and the Metal build read the same
-      # ANGLE folder, so the asset is fetched at most once per job. These are the defaults of CI/before_script.macos.sh
-      # and CI/macos/before_install_osg.sh; the steps below pass them anyway.
+      CMAKE_BUILD_TYPE: ${{ inputs.build-type }}
+      # ANGLE (CI/angle_asset.py fetch) lives in one folder, named here once. It is only needed here by the manual ANGLE
+      # test run (bundle-angle); the Metal job fetches its own copy into the same name. This is the default of
+      # CI/before_script.macos.sh; the steps below pass it anyway.
       ANGLE_ROOT_PATH: /tmp/openfallout-angle
-      OSG_GLES3_PREFIX: /tmp/openfallout-osg-gles3
     steps:
     - uses: actions/checkout@v7
-    - run: echo "CMAKE_BUILD_TYPE=${{ inputs.build-type }}" >> "$GITHUB_ENV"
 
-    # The unit tests and their coverage run on the build of branches and pull requests. A release tag skips them: it is made from a commit whose branch run already tested it, and a second report for the same commit
-    # would be counted twice by Codecov.
-    - run: echo "UNIT_TESTS=true" >> "$GITHUB_ENV"
+    # Each job decides for itself whether the change needs it, so that no Mac job waits for another job. A documentation-only
+    # change skips every step after this one (CI/changed_paths.py; the job itself still reports green). It fails closed: a
+    # problem in it means "build". A release tag always builds: the step is skipped there and its empty output reads as
+    # "build".
+    - name: Decide whether the Mac build is needed
+      id: classify
       if: ${{ inputs.build-type != 'Release' }}
-
-    # The Metal build (spec "Mac Native", milestone two; docs/openfallout/osg-gles3.md) is a second build configuration
-    # beside the OpenGL one until it passes its checks. Its steps are one block, "Metal build: ...", near the end of
-    # the job, and every one of them reads this switch: a release tag run (release.yml, build-type Release) never
-    # builds it, so nothing in it can touch a release. The packaged app above is always the OpenGL build.
-    - run: echo "METAL_BUILD=true" >> "$GITHUB_ENV"
-      if: ${{ inputs.build-type != 'Release' }}
-
-    # The manifest comes from the main branch of openmw-deps, so its digest has to be part of the cache key.
-    - name: Fetch dependency manifest
-      id: deps-manifest
-      run: |
-        CI/macos/fetch_deps_manifest.sh "$RUNNER_TEMP/openmw-manifest.txt"
-        echo "digest=$(shasum -a 256 "$RUNNER_TEMP/openmw-manifest.txt" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-
-    - name: Cache building dependencies
-      id: deps-cache
-      uses: actions/cache@v6
-      with:
-        path: |
-          /tmp/Qt
-          /tmp/openmw-deps
-        key: macos-deps-macos-26-${{ runner.arch }}-${{ steps.deps-manifest.outputs.digest }}-${{ hashFiles('CI/macos/deps_versions.sh', 'CI/macos/fetch_deps_manifest.sh', 'CI/before_install.macos.sh', 'CI/macos/build_luajit_hrt.sh', 'CI/macos/luajit-osx-hrt-void-return.patch') }}
-
-    - name: Install Building Dependencies
-      if: steps.deps-cache.outputs.cache-hit != 'true'
-      run: CI/before_install.macos.sh
-
-    # A pinned, checksummed release of ccache rather than whatever Homebrew has.
-    - name: Install prebuilt ccache
       env:
-        CCACHE_VERSION: 4.14.1
-        CCACHE_SHA256: c279fa81e2e806b4d9e64d4a06cb569a84ef54151feef796e5d4f4e95a464563
-      run: |
-        archive="$RUNNER_TEMP/ccache.tar.gz"
-        curl --fail --retry 3 -L "https://github.com/ccache/ccache/releases/download/v${CCACHE_VERSION}/ccache-${CCACHE_VERSION}-darwin.tar.gz" -o "$archive"
-        printf '%s  %s\n' "$CCACHE_SHA256" "$archive" | shasum -a 256 -c -
-        tar -xzf "$archive" -C "$RUNNER_TEMP"
-        echo "$RUNNER_TEMP/ccache-${CCACHE_VERSION}-darwin" >> "$GITHUB_PATH"
+        EVENT: ${{ github.event_name }}
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: python3 CI/changed_paths.py --event "$EVENT" --base "$BASE" --github-output "$GITHUB_OUTPUT"
+
+    - name: Set up the Mac build
+      id: setup
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      uses: ./.github/actions/mac-build-setup
 
     - name: Prime ccache
       id: compiler-cache
+      if: ${{ steps.classify.outputs.code != 'false' }}
       uses: hendrikmuhs/ccache-action@v1.2.25
       with:
         install: 'no'
-        key: macos-26-${{ inputs.build-type }}
+        key: macos-26-app-${{ inputs.build-type }}
         max-size: 1000M
         # Only master and release builds store caches, so that pull request runs
         # do not push the caches pull requests start from out of the 10 GB budget.
@@ -115,11 +90,13 @@ jobs:
 
     - name: Fingerprint build environment
       id: build-env
+      if: ${{ steps.classify.outputs.code != 'false' }}
       run: |
-        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-${{ inputs.build-type }}' --dependency-file "$RUNNER_TEMP/openmw-manifest.txt")" >> "$GITHUB_OUTPUT"
+        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-${{ inputs.build-type }}' --dependency-file "${{ steps.setup.outputs.manifest-path }}")" >> "$GITHUB_OUTPUT"
 
     - name: Restore incremental build
       id: build-cache
+      if: ${{ steps.classify.outputs.code != 'false' }}
       uses: actions/cache/restore@v6
       with:
         path: |
@@ -130,28 +107,31 @@ jobs:
         restore-keys: build-macos-v1-${{ steps.build-env.outputs.key }}-
 
     - name: Restore unchanged source timestamps
+      if: ${{ steps.classify.outputs.code != 'false' }}
       run: python3 CI/build_cache.py restore
 
     # The ANGLE release asset named in CI/macos/angle/angle.json, verified against its recorded digests; never built
-    # here. Only the manual ANGLE test run needs it this early (it packages the libraries); the Metal build fetches it
-    # later, from the same folder, unless this step already did.
+    # here. Only the manual ANGLE test run needs it in this job (it packages the libraries).
     - name: Fetch the ANGLE libraries
-      if: ${{ inputs.bundle-angle }}
+      if: ${{ steps.classify.outputs.code != 'false' && inputs.bundle-angle }}
       run: python3 CI/angle_asset.py fetch "$ANGLE_ROOT_PATH"
 
     - name: Configure
+      if: ${{ steps.classify.outputs.code != 'false' }}
       env:
         BUNDLE_ANGLE: ${{ inputs.bundle-angle && 'yes' || '' }}
       run: CI/before_script.macos.sh -C -k ${BUNDLE_ANGLE:+-A "$ANGLE_ROOT_PATH"}
     - name: Build
       id: build
+      if: ${{ steps.classify.outputs.code != 'false' }}
       run: CI/macos/build.sh all
 
     - name: Record source timestamps
+      if: ${{ steps.classify.outputs.code != 'false' }}
       run: python3 CI/build_cache.py snapshot
 
     - name: Save incremental build
-      if: steps.build-cache.outputs.cache-hit != 'true' && !inputs.bundle-angle && (inputs.build-type == 'Release' || github.ref == 'refs/heads/master')
+      if: ${{ steps.classify.outputs.code != 'false' && steps.build-cache.outputs.cache-hit != 'true' && !inputs.bundle-angle && (inputs.build-type == 'Release' || github.ref == 'refs/heads/master') }}
       uses: actions/cache/save@v6
       with:
         path: |
@@ -163,6 +143,7 @@ jobs:
     # The core (records, scripts, world, rules) stays plain C++: no Apple header, macro or AppKit name outside the
     # edge list (docs/openfallout/core-and-edges.md).
     - name: Check that the core has no Apple code
+      if: ${{ steps.classify.outputs.code != 'false' }}
       run: python3 CI/check_core_edges.py
 
     # Tags and the default branch with the signing secrets: import the Developer ID identity into a temporary keychain
@@ -170,6 +151,7 @@ jobs:
     # "ad hoc build, notarization skipped".
     - name: Release signing
       id: signing
+      if: ${{ steps.classify.outputs.code != 'false' }}
       env:
         OPENFALLOUT_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         MACOS_DEVELOPER_ID_P12_BASE64: ${{ github.event_name != 'pull_request' && secrets.MACOS_DEVELOPER_ID_P12_BASE64 || '' }}
@@ -181,6 +163,7 @@ jobs:
       run: python3 CI/macos/release_signing.py setup
 
     - name: Package disk image
+      if: ${{ steps.classify.outputs.code != 'false' }}
       run: |
         for attempt in 1 2 3; do
           if CI/macos/build.sh package > "$RUNNER_TEMP/package.log" 2>&1; then
@@ -196,7 +179,7 @@ jobs:
         done
 
     - name: Notarize and staple
-      if: ${{ steps.signing.outputs.mode == 'release' }}
+      if: ${{ steps.classify.outputs.code != 'false' && steps.signing.outputs.mode == 'release' }}
       env:
         MACOS_NOTARY_API_KEY: ${{ github.event_name != 'pull_request' && secrets.MACOS_NOTARY_API_KEY || '' }}
         MACOS_NOTARY_API_KEY_ID: ${{ github.event_name != 'pull_request' && secrets.MACOS_NOTARY_API_KEY_ID || '' }}
@@ -205,20 +188,11 @@ jobs:
         set -- build/OpenFallout-*.dmg
         python3 CI/macos/release_signing.py notarize "$1"
 
-    # Always: setup can fail before it sets its output; cleanup does nothing when this job made no keychain
+    # Always: setup can fail before it sets its output; cleanup does nothing when this job made no keychain (a
+    # documentation-only run made none)
     - name: Remove the signing keychain
       if: ${{ always() }}
       run: python3 CI/macos/release_signing.py cleanup
-
-    # The Changes job (push.yml) runs every Python test on a Linux runner, where the tests that need macOS skip
-    # themselves: the packaged-app check and the bundle selection (codesign, hdiutil, vtool) and the whole runs of
-    # the round runner. Here they run. The two tests that need a luajit executable run in the Changes job only.
-    - name: Run the Python tests on macOS
-      run: |
-        python3 -m venv "$RUNNER_TEMP/script-tests"
-        "$RUNNER_TEMP/script-tests/bin/pip" install lupa==2.8 pillow==12.0.0
-        python3 -m unittest discover -s CI -p 'test_*.py' -v
-        "$RUNNER_TEMP/script-tests/bin/python" -m unittest discover -s scripts/openfallout -p 'test_*.py' -v
 
     # Release mode on the notarized build (Developer ID on every binary, Gatekeeper, stapled tickets); local mode on the
     # ad hoc one (Gatekeeper is not asked). The smoke step starts the game from the disk image with a hidden window; a
@@ -227,6 +201,7 @@ jobs:
     # is run on the development Mac on the draft release's image (`--smoke run`). The check appends the release-notes
     # line (renderer, SHA-256, macOS version and chip). The build makes exactly one disk image, for Apple Silicon.
     - name: Check the packaged app
+      if: ${{ steps.classify.outputs.code != 'false' }}
       env:
         CHECK_MODE: ${{ steps.signing.outputs.mode == 'release' && 'release' || 'local' }}
         ANGLE_CHECK: ${{ inputs.bundle-angle && 'bundled' || 'none' }}
@@ -244,11 +219,11 @@ jobs:
     # disagree. The "Supported" line joins the release notes. The "Played on" line is the owner's, added to the draft
     # before publishing; the release gate asks for it.
     - name: Test the engine-release tooling
-      if: ${{ inputs.build-type == 'Release' && startsWith(github.ref_name, 'openfallout-') }}
+      if: ${{ steps.classify.outputs.code != 'false' && inputs.build-type == 'Release' && startsWith(github.ref_name, 'openfallout-') }}
       run: python3 -m unittest discover -s CI -p test_engine_release.py -v
 
     - name: Write the engine-release statement
-      if: ${{ inputs.build-type == 'Release' && startsWith(github.ref_name, 'openfallout-') }}
+      if: ${{ steps.classify.outputs.code != 'false' && inputs.build-type == 'Release' && startsWith(github.ref_name, 'openfallout-') }}
       run: |
         set -- build/OpenFallout-*.dmg
         python3 CI/engine_release.py write "$1" --tag "$GITHUB_REF_NAME" --commit "$GITHUB_SHA" \
@@ -257,7 +232,7 @@ jobs:
           --append "$RUNNER_TEMP/release-notes.md"
 
     - name: Store the packaged-app check logs
-      if: ${{ always() }}
+      if: ${{ always() && steps.classify.outputs.code != 'false' }}
       uses: actions/upload-artifact@v7
       with:
         name: openfallout-macos-package-check-arm64-${{ github.sha }}
@@ -268,24 +243,87 @@ jobs:
         if-no-files-found: ignore
 
     - name: Store dmg
+      if: ${{ steps.classify.outputs.code != 'false' }}
       uses: actions/upload-artifact@v7
       with:
         name: openfallout-macos-dmg-arm64-${{ github.sha }}
         path: |
           ${{ github.workspace }}/build/OpenFallout-*.dmg
 
-    # The unit tests: a second build tree, unoptimized and instrumented for coverage, with only the two test suites
-    # (CI/before_script.macos.sh -T). The packaged app above is never instrumented. They run whenever the app compiled,
-    # so a packaging failure does not hide the test results.
+    # The ccache of this job holds the objects of the package build only: the unit-test tree and the Metal tree are built
+    # in their own jobs, with their own caches.
+    - name: Limit stored compiler cache
+      if: always() && steps.compiler-cache.outcome == 'success'
+      run: |
+        ccache --max-size=1000M
+        ccache --cleanup
+
+    - name: Create prerelease
+      if: ${{ steps.classify.outputs.code != 'false' && inputs.build-type == 'Release' }}
+      uses: softprops/action-gh-release@v3
+      with:
+        files: |
+          ${{ github.workspace }}/build/OpenFallout-*.dmg
+          ${{ runner.temp }}/openfallout-engine-release.json
+        # one line per disk image: its SHA-256 and the macOS version and chip it was checked on (check_mac_package.py --notes)
+        body_path: ${{ runner.temp }}/release-notes.md
+        append_body: true
+        prerelease: true
+        draft: true
+
+  # The unit tests: a second build tree, unoptimized and instrumented for coverage, with only the two test suites
+  # (CI/before_script.macos.sh -T). The packaged app is never instrumented. They run on the build of branches and pull
+  # requests. A release tag skips them: it is made from a commit whose branch run already tested it, and a second report
+  # for the same commit would be counted twice by Codecov. They no longer wait for the app: a job of their own, so a
+  # packaging failure does not hide the test results and a test failure does not hold up the package.
+  UnitTests:
+    name: Unit tests and coverage
+    if: ${{ inputs.build-type != 'Release' }}
+    runs-on: macos-26
+    env:
+      CMAKE_BUILD_TYPE: ${{ inputs.build-type }}
+    steps:
+    - uses: actions/checkout@v7
+
+    # Each job decides for itself whether the change needs it, so that no Mac job waits for another job. A documentation-only
+    # change skips every step after this one (CI/changed_paths.py; the job itself still reports green). It fails closed: a
+    # problem in it means "build". A release tag always builds: the step is skipped there and its empty output reads as
+    # "build".
+    - name: Decide whether the Mac build is needed
+      id: classify
+      if: ${{ inputs.build-type != 'Release' }}
+      env:
+        EVENT: ${{ github.event_name }}
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: python3 CI/changed_paths.py --event "$EVENT" --base "$BASE" --github-output "$GITHUB_OUTPUT"
+
+    - name: Set up the Mac build
+      id: setup
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      uses: ./.github/actions/mac-build-setup
+
+    # Its own ccache: this tree is compiled with other flags than the app, so they would share no objects anyway.
+    - name: Prime ccache
+      id: compiler-cache
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      uses: hendrikmuhs/ccache-action@v1.2.25
+      with:
+        install: 'no'
+        key: macos-26-coverage
+        max-size: 1000M
+        # Only master and release builds store caches, so that pull request runs
+        # do not push the caches pull requests start from out of the 10 GB budget.
+        save: ${{ inputs.build-type == 'Release' || github.ref == 'refs/heads/master' }}
+
     - name: Test coverage and JUnit report collection
-      if: ${{ !cancelled() && env.UNIT_TESTS == 'true' && steps.build.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.classify.outputs.code != 'false' }}
       run: python3 -m unittest discover -s CI -p test_test_reports.py -v
 
     - name: Fingerprint unit-test build environment
       id: test-build-env
-      if: ${{ !cancelled() && env.UNIT_TESTS == 'true' && steps.build.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.classify.outputs.code != 'false' && steps.setup.outcome == 'success' }}
       run: |
-        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-coverage' --dependency-file "$RUNNER_TEMP/openmw-manifest.txt")" >> "$GITHUB_OUTPUT"
+        echo "key=$(python3 CI/build_cache.py key --compiler clang --mode 'macos-26-coverage' --dependency-file "${{ steps.setup.outputs.manifest-path }}")" >> "$GITHUB_OUTPUT"
 
     - name: Restore incremental unit-test build
       id: test-build-cache
@@ -322,7 +360,7 @@ jobs:
 
     - name: Merge suite coverage reports
       if: >-
-        !cancelled() && hashFiles('coverage/components.profdata') != '' &&
+        !cancelled() && steps.classify.outputs.code != 'false' && hashFiles('coverage/components.profdata') != '' &&
         hashFiles('coverage/openfallout.profdata') != ''
       run: python3 CI/test_reports.py --build-dir build-tests merge components openfallout
 
@@ -340,7 +378,7 @@ jobs:
         key: ${{ steps.test-build-cache.outputs.cache-primary-key }}
 
     - name: Keep coverage reports
-      if: ${{ !cancelled() && hashFiles('coverage/*.xml') != '' }}
+      if: ${{ !cancelled() && steps.classify.outputs.code != 'false' && hashFiles('coverage/*.xml') != '' }}
       uses: actions/upload-artifact@v7
       with:
         name: macos-coverage
@@ -351,7 +389,7 @@ jobs:
         if-no-files-found: error
 
     - name: Keep test results
-      if: ${{ !cancelled() && hashFiles('test-results/*.xml') != '' }}
+      if: ${{ !cancelled() && steps.classify.outputs.code != 'false' && hashFiles('test-results/*.xml') != '' }}
       uses: actions/upload-artifact@v7
       with:
         name: macos-test-results
@@ -360,7 +398,7 @@ jobs:
 
     - name: Upload test results to Codecov Test Analytics
       if: >-
-        !cancelled() && hashFiles('test-results/*.junit.xml') != '' &&
+        !cancelled() && steps.classify.outputs.code != 'false' && hashFiles('test-results/*.junit.xml') != '' &&
         (github.event_name != 'pull_request' ||
         (github.event.pull_request.head.repo.full_name == github.repository &&
         github.actor != 'dependabot[bot]'))
@@ -376,7 +414,7 @@ jobs:
     - name: Upload components coverage to Codecov
       # Fork and Dependabot pull requests cannot access Actions secrets.
       if: >-
-        !cancelled() && hashFiles('coverage/components.xml') != '' &&
+        !cancelled() && steps.classify.outputs.code != 'false' && hashFiles('coverage/components.xml') != '' &&
         (github.event_name != 'pull_request' ||
         (github.event.pull_request.head.repo.full_name == github.repository &&
         github.actor != 'dependabot[bot]'))
@@ -391,7 +429,7 @@ jobs:
 
     - name: Upload OpenFallout coverage to Codecov
       if: >-
-        !cancelled() && hashFiles('coverage/openfallout.xml') != '' &&
+        !cancelled() && steps.classify.outputs.code != 'false' && hashFiles('coverage/openfallout.xml') != '' &&
         (github.event_name != 'pull_request' ||
         (github.event.pull_request.head.repo.full_name == github.repository &&
         github.actor != 'dependabot[bot]'))
@@ -408,7 +446,7 @@ jobs:
       # Separate XML reports cannot describe complementary branches across suites.
       # Keep this report unflagged so it does not inflate the individual flags.
       if: >-
-        !cancelled() && hashFiles('coverage.xml') != '' &&
+        !cancelled() && steps.classify.outputs.code != 'false' && hashFiles('coverage.xml') != '' &&
         (github.event_name != 'pull_request' ||
         (github.event.pull_request.head.repo.full_name == github.repository &&
         github.actor != 'dependabot[bot]'))
@@ -420,52 +458,102 @@ jobs:
         plugins: noop
         fail_ci_if_error: true
 
-    # The Metal build: the engine and the two unit-test suites against ANGLE and an OpenSceneGraph built for OpenGL ES 3
-    # (Debug, no coverage, never packaged, never part of a release). One block, after every step that makes, checks,
-    # uploads or reports the packaged app, so that a Metal failure fails the job but never hides or delays what exists.
-    # Each step runs when the OpenGL build compiled and the Metal step before it worked (a failed or cancelled step
-    # skips the rest), and only where METAL_BUILD is set (not on a release tag). The ANGLE asset must exist: the
-    # release named in CI/macos/angle/angle.json has to be published before this block can pass.
-    # Nothing here is cached except the small OpenSceneGraph install: the build folder is not (docs/openfallout/ci-cache.md).
+    # The ccache of this job holds the objects of the unit-test tree only.
+    - name: Limit stored compiler cache
+      if: always() && steps.compiler-cache.outcome == 'success'
+      run: |
+        ccache --max-size=1000M
+        ccache --cleanup
+
+  # The Metal build (spec "Mac Native", milestone two; docs/openfallout/osg-gles3.md) is a second build configuration
+  # beside the OpenGL one until it passes its checks: the engine and the two unit-test suites against ANGLE and an
+  # OpenSceneGraph built for OpenGL ES 3 (Debug, no coverage, never packaged, never part of a release). It is a job of its
+  # own, so that a Metal failure fails its own check but never hides or delays the packaged app, and a release tag run
+  # (release.yml, build-type Release) never builds it, so nothing in it can touch a release. The ANGLE asset must exist:
+  # the release named in CI/macos/angle/angle.json has to be published before this job can pass.
+  # Nothing here is cached except the small OpenSceneGraph install and the compiler cache: the build folder is not
+  # (docs/openfallout/ci-cache.md).
+  Metal:
+    name: Metal build
+    if: ${{ inputs.build-type != 'Release' }}
+    runs-on: macos-26
+    env:
+      CMAKE_BUILD_TYPE: ${{ inputs.build-type }}
+      # ANGLE (CI/angle_asset.py fetch) and OpenSceneGraph for OpenGL ES 3 (CI/macos/before_install_osg.sh) live in one
+      # folder each, named here once. These are the defaults of CI/before_script.macos.sh and
+      # CI/macos/before_install_osg.sh; the steps below pass them anyway.
+      ANGLE_ROOT_PATH: /tmp/openfallout-angle
+      OSG_GLES3_PREFIX: /tmp/openfallout-osg-gles3
+    steps:
+    - uses: actions/checkout@v7
+
+    # Each job decides for itself whether the change needs it, so that no Mac job waits for another job. A documentation-only
+    # change skips every step after this one (CI/changed_paths.py; the job itself still reports green). It fails closed: a
+    # problem in it means "build". A release tag always builds: the step is skipped there and its empty output reads as
+    # "build".
+    - name: Decide whether the Mac build is needed
+      id: classify
+      if: ${{ inputs.build-type != 'Release' }}
+      env:
+        EVENT: ${{ github.event_name }}
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: python3 CI/changed_paths.py --event "$EVENT" --base "$BASE" --github-output "$GITHUB_OUTPUT"
+
+    - name: Set up the Mac build
+      id: setup
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      uses: ./.github/actions/mac-build-setup
+
+    # Its own ccache: this tree is compiled with its own flags (nearly every file with -DOPENFALLOUT_METAL), so it
+    # shares no objects with the app or the unit-test tree.
+    - name: Prime ccache
+      id: compiler-cache
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      uses: hendrikmuhs/ccache-action@v1.2.25
+      with:
+        install: 'no'
+        key: macos-26-metal
+        max-size: 1000M
+        # Only master and release builds store caches, so that pull request runs
+        # do not push the caches pull requests start from out of the 10 GB budget.
+        save: ${{ inputs.build-type == 'Release' || github.ref == 'refs/heads/master' }}
+
+    # Each step runs when the dependency set is in place and the Metal step before it worked (a failed or cancelled step
+    # skips the rest).
     - name: 'Metal build: fingerprint OpenSceneGraph for OpenGL ES 3'
       id: metal-key
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.build.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.classify.outputs.code != 'false' && steps.setup.outcome == 'success' }}
       run: |
         clang --version > "$RUNNER_TEMP/clang-version.txt"
-        key="$(python3 CI/macos/osg/osg_gles3.py key --input CI/macos/angle/angle.json --input "$RUNNER_TEMP/openmw-manifest.txt" --input CI/macos/before_install_osg.sh --input "$RUNNER_TEMP/clang-version.txt")"
+        key="$(python3 CI/macos/osg/osg_gles3.py key --input CI/macos/angle/angle.json --input "${{ steps.setup.outputs.manifest-path }}" --input CI/macos/before_install_osg.sh --input "$RUNNER_TEMP/clang-version.txt")"
         echo "key=$key" >> "$GITHUB_OUTPUT"
 
     - name: 'Metal build: restore OpenSceneGraph for OpenGL ES 3'
       id: metal-osg-cache
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-key.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.metal-key.outcome == 'success' }}
       uses: actions/cache/restore@v6
       with:
         path: ${{ env.OSG_GLES3_PREFIX }}
         key: macos-osg-gles3-macos-26-${{ runner.arch }}-${{ steps.metal-key.outputs.key }}
 
-    # The manual ANGLE test run fetched the asset before the OpenGL configure step, into this folder; CI/angle_asset.py
-    # refuses a folder that is not empty, so it is not fetched twice.
+    # The folder is empty on this runner: the manual ANGLE test run of the app job fetches its own copy on its own
+    # runner (CI/angle_asset.py refuses a folder that is not empty).
     - name: 'Metal build: fetch the ANGLE libraries'
       id: metal-angle
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-key.outcome == 'success' }}
-      run: |
-        if [ -f "$ANGLE_ROOT_PATH/lib/libGLESv2.dylib" ]; then
-          echo "The ANGLE asset is already in $ANGLE_ROOT_PATH"
-        else
-          python3 CI/angle_asset.py fetch "$ANGLE_ROOT_PATH"
-        fi
+      if: ${{ !cancelled() && steps.metal-key.outcome == 'success' }}
+      run: python3 CI/angle_asset.py fetch "$ANGLE_ROOT_PATH"
 
     # Only when the cache above missed: an input of the key changed (CI/macos/osg/, the ANGLE record, the engine's
     # OpenSceneGraph lists or the dependency manifest).
     - name: 'Metal build: build OpenSceneGraph for OpenGL ES 3'
       id: metal-osg-build
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-osg-cache.outputs.cache-hit != 'true' && steps.metal-angle.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.metal-osg-cache.outputs.cache-hit != 'true' && steps.metal-angle.outcome == 'success' }}
       run: CI/macos/before_install_osg.sh
 
     # Saved at once, not at the end of the job: a later failure must not throw the build away. A pull request run saves
     # it too (it is 19 MB).
     - name: 'Metal build: keep OpenSceneGraph for OpenGL ES 3'
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-osg-build.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.metal-osg-build.outcome == 'success' }}
       uses: actions/cache/save@v6
       with:
         path: ${{ env.OSG_GLES3_PREFIX }}
@@ -473,14 +561,14 @@ jobs:
 
     - name: 'Metal build: configure'
       id: metal-configure
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-angle.outcome == 'success' && (steps.metal-osg-cache.outputs.cache-hit == 'true' || steps.metal-osg-build.outcome == 'success') }}
+      if: ${{ !cancelled() && steps.metal-angle.outcome == 'success' && (steps.metal-osg-cache.outputs.cache-hit == 'true' || steps.metal-osg-build.outcome == 'success') }}
       run: CI/before_script.macos.sh -C -k -M -a "$ANGLE_ROOT_PATH" -o "$OSG_GLES3_PREFIX"
 
-    # The job's ccache serves this tree too; its own build folder is not stored. The statistics before and after, and
+    # The job's ccache serves this tree; its own build folder is not stored. The statistics before and after, and
     # the free disk space, are what the first runs measure.
     - name: 'Metal build: compile'
       id: metal-build
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-configure.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.metal-configure.outcome == 'success' }}
       env:
         BUILD_DIR: build-metal
       run: |
@@ -494,30 +582,47 @@ jobs:
     # OpenGL unit-test tree, and a second report would count every test twice in Codecov's Test Analytics
     # (docs/openfallout/ci-reporting.md).
     - name: 'Metal build: run components tests'
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-build.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.metal-build.outcome == 'success' }}
       run: build-metal/OpenFallout.app/Contents/MacOS/components-tests
 
     - name: 'Metal build: run OpenFallout tests'
-      if: ${{ !cancelled() && env.METAL_BUILD == 'true' && steps.metal-build.outcome == 'success' }}
+      if: ${{ !cancelled() && steps.metal-build.outcome == 'success' }}
       run: build-metal/OpenFallout.app/Contents/MacOS/openfallout-tests
 
-    # After every tree: the stored cache holds the objects of the package build and, where they ran, of the unit-test
-    # build and the Metal build.
+    # The stored cache holds the objects of the Metal build.
     - name: Limit stored compiler cache
       if: always() && steps.compiler-cache.outcome == 'success'
       run: |
-        ccache --max-size=${{ env.METAL_BUILD == 'true' && '1000M' || '384M' }}
+        ccache --max-size=1000M
         ccache --cleanup
 
-    - name: Create prerelease
-      if: ${{ inputs.build-type == 'Release' }}
-      uses: softprops/action-gh-release@v3
-      with:
-        files: |
-          ${{ github.workspace }}/build/OpenFallout-*.dmg
-          ${{ runner.temp }}/openfallout-engine-release.json
-        # one line per disk image: its SHA-256 and the macOS version and chip it was checked on (check_mac_package.py --notes)
-        body_path: ${{ runner.temp }}/release-notes.md
-        append_body: true
-        prerelease: true
-        draft: true
+  # The Changes job (push.yml) runs every Python test on a Linux runner, where the tests that need macOS skip themselves:
+  # the packaged-app check and the bundle selection (codesign, hdiutil, vtool) and the whole runs of the round runner.
+  # Here they run. The two tests that need a luajit executable run in the Changes job only. None of these tests reads the
+  # built app or the disk image (they build stand-ins of their own), so this job needs neither the dependency set nor
+  # the app job.
+  PythonMac:
+    name: Python tests on macOS
+    runs-on: macos-26
+    steps:
+    - uses: actions/checkout@v7
+
+    # Each job decides for itself whether the change needs it, so that no Mac job waits for another job. A documentation-only
+    # change skips every step after this one (CI/changed_paths.py; the job itself still reports green). It fails closed: a
+    # problem in it means "build". A release tag always builds: the step is skipped there and its empty output reads as
+    # "build".
+    - name: Decide whether the Mac build is needed
+      id: classify
+      if: ${{ inputs.build-type != 'Release' }}
+      env:
+        EVENT: ${{ github.event_name }}
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: python3 CI/changed_paths.py --event "$EVENT" --base "$BASE" --github-output "$GITHUB_OUTPUT"
+
+    - name: Run the Python tests on macOS
+      if: ${{ steps.classify.outputs.code != 'false' }}
+      run: |
+        python3 -m venv "$RUNNER_TEMP/script-tests"
+        "$RUNNER_TEMP/script-tests/bin/pip" install lupa==2.8 pillow==12.0.0
+        python3 -m unittest discover -s CI -p 'test_*.py' -v
+        "$RUNNER_TEMP/script-tests/bin/python" -m unittest discover -s scripts/openfallout -p 'test_*.py' -v

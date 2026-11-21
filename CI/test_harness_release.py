@@ -11,7 +11,7 @@ from pathlib import Path
 
 import engine_release
 import harness_release
-from harness_release import MAC_JOB, ReleaseError, create_tag, find_release, finish_release, plan_phase, release_plan, validate_tag, verify_assets
+from harness_release import MAC_CHECK_STEP, MAC_JOB, ReleaseError, create_tag, find_release, finish_release, plan_phase, release_plan, validate_tag, verify_assets
 
 
 SHA = "a" * 40
@@ -50,6 +50,11 @@ def with_engine_release(release):
     return release
 
 
+
+def mac_job(name, conclusion="success"):
+    """A job as the jobs API returns it, with the step the release gate reads."""
+    return {"name": name, "conclusion": conclusion, "steps": [{"name": MAC_CHECK_STEP, "conclusion": conclusion}]}
+
 class FakeGitHub:
     def __init__(self):
         self.statement = copy.deepcopy(STATEMENT)
@@ -63,7 +68,7 @@ class FakeGitHub:
         self.release = with_engine_release(copy.deepcopy(RELEASE))
         self.release_pages = None
         self.master_sha = SHA
-        self.jobs = [{"name": "Changes", "conclusion": "success"}, {"name": MAC_JOB, "conclusion": "success"}]
+        self.jobs = [{"name": "Changes", "conclusion": "success"}, mac_job(MAC_JOB)]
 
     def download_asset(self, asset):
         self.downloads.append(asset["name"])
@@ -131,14 +136,27 @@ class ReleaseTests(unittest.TestCase):
             create_tag(api, release_plan(api, "master", TAG))
         self.assertEqual(api.writes, [])
 
+    def test_docs_only_success_with_every_mac_step_skipped_blocks_release(self):
+        # the split Mac jobs (macos.yml) decide for themselves: on a docs-only change they skip every step and succeed
+        api = FakeGitHub()
+        api.jobs[1]["steps"] = [{"name": "Decide whether the Mac build is needed", "conclusion": "success"},
+                                {"name": MAC_CHECK_STEP, "conclusion": "skipped"}]
+        with self.assertRaisesRegex(ReleaseError, "macOS / Build, test and package"):
+            create_tag(api, release_plan(api, "master", TAG))
+        self.assertEqual(api.writes, [])
+
+    def test_the_gate_step_is_a_step_of_the_mac_job(self):
+        macos = (Path(__file__).resolve().parent.parent / ".github/workflows/macos.yml").read_text()
+        self.assertIn(f"- name: {MAC_CHECK_STEP}\n", macos)
+
     def test_the_one_mac_job_is_the_only_job_the_gate_waits_for(self):
         # no Ubuntu, Windows or Intel Mac job is expected: a run that has only the Mac job qualifies
         api = FakeGitHub()
-        api.jobs = [{"name": MAC_JOB, "conclusion": "success"}]
+        api.jobs = [mac_job(MAC_JOB)]
         self.assertTrue(release_plan(api, "master", TAG)["ready"])
         for job in ("Ubuntu", "Windows (2025) / windows-2025", "MacOS (macos-26-intel) / macos-26-intel",
                     "MacOS (macos-26) / macos-26"):
-            api.jobs = [{"name": job, "conclusion": "success"}]
+            api.jobs = [mac_job(job)]
             with self.subTest(job=job):
                 self.assertFalse(release_plan(api, "master", TAG)["ready"])
 

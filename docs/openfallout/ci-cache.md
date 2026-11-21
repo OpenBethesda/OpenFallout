@@ -3,28 +3,31 @@
 `CI/build_cache.py` fingerprints a build environment and reconciles source file
 timestamps after a workflow restores a cached build directory. It does not
 transfer or save the build directory itself: the GitHub Actions cache steps of
-the one Mac job ([macos.yml](../../.github/workflows/macos.yml), called by
+the Mac jobs ([macos.yml](../../.github/workflows/macos.yml), called by
 [push.yml](../../.github/workflows/push.yml) and
 [release.yml](../../.github/workflows/release.yml)) do that. The related
 test-report behavior is described in [CI reporting](ci-reporting.md).
 
-The Mac job runs on one runner image, `macos-26` (Apple Silicon), and builds
-three trees; it caches the first two. `build` is the packaged app; its cache key starts with
+The Mac jobs run on one runner image, `macos-26` (Apple Silicon), and build
+three trees, one tree in each of three jobs that run side by side; the first two are cached. `build` is the packaged
+app, built by the job `MacOS` ("Build, test and package"); its cache key starts with
 `build-macos-v1-` and its fingerprint mode is the image name and build type
-(`macos-26-RelWithDebInfo`). `build-tests` is the instrumented unit-test tree (Debug without `-g`,
+(`macos-26-RelWithDebInfo`). `build-tests` is the instrumented unit-test tree, built by the job `UnitTests` ("Unit tests and coverage"; Debug without `-g`,
 coverage, only the two test suites; about 1.8 GB before compression, against
 about 8 GB with debug information); its key starts with `build-macos-coverage-v1-`, its mode
 is `macos-26-coverage`, and the job passes `--build-dir
 build-tests` to `restore` and `snapshot`. The two never share a cache entry, so
-ordinary objects are never restored into an instrumented build. Both trees use
-the job's one ccache. Only `master` runs save either tree, and a release-tag
+ordinary objects are never restored into an instrumented build. Each job has a ccache of its own
+(`hendrikmuhs/ccache-action`, keys `macos-26-app-<build type>`, `macos-26-coverage` and `macos-26-metal`), because the
+three trees are compiled with different flags and share no objects; one cache for all three was always full and
+evicted most of what each needed. Only `master` runs save either tree, and a release-tag
 run, which does not build the test tree, saves only `build`.
 
-`build-metal` is the Metal build (`CI/before_script.macos.sh -M`: Debug, `-O0`,
+`build-metal` is the Metal build, built by the job `Metal` ("Metal build"; `CI/before_script.macos.sh -M`: Debug, `-O0`,
 no coverage, the engine and the two test suites). It is never packaged and its
 folder is **not** cached: it would double the space the test tree takes in the
 10 GB budget, and the ccache already gives most of the saving (the rest is
-linking). It uses the job's ccache. Nearly every file of this tree is compiled with
+linking). It uses the ccache of its job. Nearly every file of this tree is compiled with
 `-DOPENFALLOUT_METAL`, so its objects are their own entries in the ccache: the
 first run on `master` after the change fills them, and later runs hit them.
 A release-tag run does not build it. If the first warm run of this tree takes
@@ -32,8 +35,8 @@ more than ten minutes, the fix is a cache of `build-metal` on `master` only,
 with the same three steps as `build-tests` and the key start
 `build-macos-metal-v1-`.
 
-The ccache is limited to 1,000 MB when it is stored after a run that built the
-Metal tree (every run but a release tag) and to 384 MB otherwise. The Metal build
+Each ccache is limited to 1,000 MB when it is stored (`ccache --max-size=1000M; ccache --cleanup` as the last step of
+its job). The Metal build
 also has a small cache of its own: the OpenSceneGraph for OpenGL ES 3 it needs
 (about 19 MB). Its key is the output of `CI/macos/osg/osg_gles3.py key`, not
 `CI/build_cache.py`; see [OpenSceneGraph for OpenGL ES 3](osg-gles3.md). It is

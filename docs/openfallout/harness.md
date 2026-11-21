@@ -13,7 +13,7 @@ the inline definitions. Apply reviewed changes in Harness too.
 
 Harness no longer builds or tests OpenFallout. Its build pipeline, `openfallout_ci`, was an Ubuntu container build
 that duplicated the Linux job of GitHub Actions; the owner switched it and its webhook triggers off in Harness when the
-codebase became Mac-only. The one build is the Mac job of GitHub Actions (`macOS / Build, test and package`, see
+codebase became Mac-only. The one build is the Mac jobs of GitHub Actions (the app is `macOS / Build, test and package`, see
 [CI reporting](ci-reporting.md)). What is left in Harness is the security scan and the release pipeline below.
 
 ## Source and supply-chain security
@@ -59,9 +59,10 @@ until this setup is merged into master. No tag or release is created by preview.
 
 `draft` requires the source to be on master, this setup to exist at that commit,
 and its latest master **Build and test** push or manual run to have passed the
-one Mac job, `macOS / Build, test and package`. A green docs-only run with a
-skipped Mac job does not qualify; run the full workflow manually on that master
-commit if necessary. It creates a
+one Mac job, `macOS / Build, test and package`. A docs-only run reports that job green with every build step
+skipped (each Mac job decides for itself from the changed paths, so the job is no longer skipped as a whole). Such a run
+is not a build, so `CI/harness_release.py` also requires the job's step "Check the packaged app" to have passed; run the
+full workflow manually on that master commit if necessary. It creates a
 lightweight tag, waits for release packaging through `gh run watch`, and verifies
 exactly one nonempty uploaded disk image, the Apple Silicon one
 (`OpenFallout-<version>-macOS-arm64.dmg`). A second image, an Intel image, a
