@@ -127,7 +127,7 @@ declare -a BUILD_OPTS=(
 -D BUILD_NIFTEST=TRUE
 -D BUILD_NAVMESHTOOL=TRUE
 -D BUILD_BULLETOBJECTTOOL=TRUE
--G"Unix Makefiles"
+-G"Ninja"
 )
 
 # The unit tests and their coverage (CI/test_reports.py) need an unoptimized, instrumented build, and the packaged app

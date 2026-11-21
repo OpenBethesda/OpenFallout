@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euxo pipefail
 
-# BUILD_DIR names another build tree (the unit-test tree is build-tests); the arguments are make targets.
+# BUILD_DIR names another build tree (the unit-test tree is build-tests); the arguments are build targets.
 cd "${BUILD_DIR:-build}"
 
 if [[ $# -eq 0 ]]; then
@@ -9,4 +9,4 @@ if [[ $# -eq 0 ]]; then
     set -- all package
 fi
 
-make -j "$(sysctl -n hw.logicalcpu)" "$@"
+cmake --build . --parallel "$(sysctl -n hw.logicalcpu)" --target "$@"
