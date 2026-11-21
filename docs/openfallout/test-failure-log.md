@@ -34,14 +34,14 @@ C++ tests since their JUnit upload began; it does not have the Python tests).
 | Date | Where it failed | What was wrong | Fixed by |
 |---|---|---|---|
 | 14 Nov | Linux and Windows builds, PRs #196 and #197 | `apps/openfallout/mwmechanics/falloutactors.hpp` lacked `#include <vector>` | 4712f41afd |
-| 18 Nov | The first Metal job, PR #249 | the Metal build configured against the desktop OpenSceneGraph | c7e5433945, with `CI/test_metal_include_order.py` |
+| 17 Nov | The first Metal job, PR #249 | the Metal build configured against the desktop OpenSceneGraph | c7e5433945, with `CI/test_metal_include_order.py` |
 | 20 Nov | The packaged-app smoke run, PR #265 | a launcher bug planted on purpose to test the "can we skip the build?" check; the game did not start | experiment, closed |
 
 ### Test bugs
 
 | Date | Test | Cause | Fixed by |
 |---|---|---|---|
-| 13 Nov | `CI/test_check_mac_package.py` (29 tests, Intel runner only, PR #189) | the stand-in signed the launcher before the nested app | 3b7e449c28 |
+| 12 and 13 Nov | `CI/test_check_mac_package.py` (29 tests, Intel runner only, PR #189) | the stand-in signed the launcher before the nested app | 3b7e449c28 |
 | 13 Nov | `test_check_mac_package.ReleaseModeTests.test_item_of_another_team_fails`, on master 514553cd | the check read the real Team ID that master's signing step had set (the log shows it masked as `***`), not the stand-in's | #194 (2d3f4f2546): the tests drop the signing variables |
 | 14 Nov | `testworldcommands.cpp`, `testworldrules.cpp` (MSVC, PR #195) | `M_PI` is not standard | df35a555a4, `std::numbers::pi` |
 | 21 Nov | 9 tests in `apps/components_tests/esm3/testdialogue.cpp`, one in `testsavegamegaps.cpp` | an id keeps the spelling it was first seen with in the process, so the result depended on the tests that ran earlier; found when the components tests first ran as three processes | PR #268 |
