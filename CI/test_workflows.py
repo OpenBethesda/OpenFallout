@@ -208,11 +208,19 @@ class MacWorkflowTest(unittest.TestCase):
         self.assertNotIn("setup", {step["id"] for step in self.python})
 
     def test_the_python_tests_need_nothing_that_the_other_jobs_build(self):
-        self.assertEqual([step["name"] for step in self.python[2:]], ["Run the Python tests on macOS"])
-        run = self.python[2]["run"]
-        self.assertIn("python3 -m unittest discover -s CI -p 'test_*.py' -v", run)
-        self.assertIn("-m unittest discover -s scripts/openfallout -p 'test_*.py' -v", run)
+        names = [step["name"] for step in self.python[2:]]
+        self.assertEqual(names, ["Name the Python version for the wheel cache", "Restore the wheels of the Python test packages",
+                                 "Install the Python test packages", "Keep the wheels of the Python test packages",
+                                 "Run the Python tests on macOS"])
+        # every test file of both folders runs, in parallel, through the runner that counts them
+        run = self.python[6]["run"]
+        self.assertIn("python3 CI/run_python_tests.py CI \"scripts/openfallout=$RUNNER_TEMP/script-tests/bin/python\"", run)
         self.assertNotIn("build", run.replace("unittest", ""))
+        self.assertNotIn("--workers", run)          # the cores of the runner, not a number written here
+        # the wheels of lupa and pillow are cached, and built from source when the cache misses
+        install = self.python[4]["run"]
+        self.assertIn("pip\" wheel --wheel-dir", install)
+        self.assertIn("lupa==2.8 pillow==12.0.0", install)
 
     def test_the_app_job_keeps_everything_that_makes_checks_or_publishes_the_app(self):
         names = [step["name"] for step in self.steps]

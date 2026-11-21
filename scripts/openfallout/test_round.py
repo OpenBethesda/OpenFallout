@@ -453,6 +453,19 @@ class WholeRun(unittest.TestCase):
     """A run against a script that behaves like the engine: it reads --config and --user-data, writes the log there and
     one screenshot per `shot` line, and exits."""
 
+    def setUp(self):
+        # on a Mac the runner rests VARIANT_GAP_SECONDS between two engine starts of a round (10 s in production); the stand-in
+        # engine does not need the rest, so the tests set it to 0 (test_the_runner_rests_between_two_engine_starts proves the
+        # runner still asks for it)
+        patcher = mock.patch.object(round_runner.roundguard, "VARIANT_GAP_SECONDS", 0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # the evidence of a round is copied from the log of runningboardd, a `log show` that takes a second on a Mac for a log
+        # that says nothing about the stand-in engine (the copy is proved by GuardedRun with its stand-in system)
+        patcher = mock.patch.object(round_runner.roundguard.MacSystem, "runningboardd_log", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def make_engine(self, tmp, body):
         engine = tmp / "bin" / "openfallout"
         engine.parent.mkdir()
@@ -525,6 +538,21 @@ class WholeRun(unittest.TestCase):
         self.assertIn("one", (run / "summary.md").read_text())
         self.assertIn("two", (run / "summary.md").read_text())
         self.assertTrue((run / "two" / "report.md").read_text().startswith("# Round fake / two: PASS"))
+
+    def test_the_runner_rests_between_two_engine_starts(self):
+        real_sleep, rests = time.sleep, []
+
+        def sleep(seconds):
+            if seconds == 7:                                   # the rest between two starts; every other wait is real
+                rests.append(seconds)
+            else:
+                real_sleep(seconds)
+        with mock.patch.object(round_runner.roundguard, "VARIANT_GAP_SECONDS", 7), \
+                mock.patch.object(round_runner.time, "sleep", side_effect=sleep):
+            tmp, code = self.run_round(0)
+        self.assertEqual(code, 0)
+        self.assertEqual(rests, [7])                           # two variants, one rest between them
+        self.assertEqual(len(runs_of(tmp)), 1)
 
     def test_the_report_says_which_technique_values_the_round_laid(self):
         # the engine writes `shaders.yaml` again in its own words when it quits, so the report is where a later comparison of
