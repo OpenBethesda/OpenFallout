@@ -56,17 +56,35 @@ jobs:
         sudo apt-get install -y --no-install-recommends luajit
         luajit -v
         python3 -m venv "$RUNNER_TEMP/script-tests"
-        "$RUNNER_TEMP/script-tests/bin/pip" install lupa==2.8 pillow==12.0.0
+        "$RUNNER_TEMP/script-tests/bin/pip" install lupa==2.8 pillow==12.0.0 "clang-format==$(cat CI/clang-format-version.txt)"
+
+    # Every check below runs even when one before it failed (`!cancelled()`), so one run lists every failure; the job
+    # fails if any of them did.
+
+    # The C and C++ lines this change touches, against .clang-format with the pinned clang-format
+    # (CI/check_format_changes.py; the whole tree is not formatted, so only changed lines are held to it). A manual run
+    # has no base commit and checks nothing here.
+    - name: Check the format of the changed lines
+      if: ${{ !cancelled() && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before) != '' }}
+      env:
+        BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+      run: |
+        git fetch --no-tags --depth=1 origin "$BASE"
+        "$RUNNER_TEMP/script-tests/bin/python" CI/check_format_changes.py "$BASE" \
+          --clang-format "$RUNNER_TEMP/script-tests/bin/clang-format"
 
     - name: Test the CI scripts
+      if: ${{ !cancelled() }}
       run: python3 -m unittest discover -s CI -p 'test_*.py' -v
 
     - name: Test the helper scripts and the Lua scripts they read
+      if: ${{ !cancelled() }}
       run: >
         "$RUNNER_TEMP/script-tests/bin/python" -m unittest discover
         -s scripts/openfallout -p 'test_*.py' -v
 
     - name: Test the Lua documentation generator
+      if: ${{ !cancelled() }}
       run: python3 -m unittest discover -s docs -p test_luadoc.py -v
 
   # The jobs that build and test the engine (macos.yml): the packaged app and its checks, the unit tests and coverage, the

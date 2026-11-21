@@ -1,0 +1,42 @@
+amends "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Config.pkl"
+
+// Local git hooks (https://hk.jdx.dev). Install once per clone: `brew install hk pkl uv`, then `hk install`.
+// A hook rather than a line in AGENTS.md, because people and agents skip steps; CI runs the same checks either way.
+// The C and C++ format is .clang-format with the clang-format version pinned in CI/clang-format-version.txt, run
+// through uvx so no one has to install that exact version; only changed lines are held to it (see
+// CI/check_format_changes.py for why).
+
+local clangFormat = "uvx --quiet --from \"clang-format==$(cat CI/clang-format-version.txt)\""
+local cxx = List("c", "cc", "cpp", "cxx", "h", "hpp").flatMap((ext) -> List("apps/**/*.\(ext)", "components/**/*.\(ext)"))
+
+hooks {
+    // Formats the staged lines of the staged C and C++ files and stages the result.
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps {
+            ["clang-format"] {
+                glob = cxx
+                check = "\(clangFormat) git-clang-format --binary clang-format --staged --diff --extensions c,cc,cpp,cxx,h,hpp | grep -qE '^(no modified files to format|clang-format did not modify any files)$'"
+                fix = "\(clangFormat) git-clang-format --binary clang-format --staged --force --extensions c,cc,cpp,cxx,h,hpp"
+                stage = cxx
+            }
+        }
+    }
+    // The fast checks of the Changes job (push.yml) against what the branch adds to origin/master: the format of the
+    // changed lines, the core-and-edges rule and the documentation links. The Python test suites take minutes and run
+    // in CI only.
+    ["pre-push"] {
+        steps {
+            ["format of changed lines"] {
+                check = "\(clangFormat) python3 CI/check_format_changes.py \"$(git merge-base HEAD origin/master)\""
+            }
+            ["core has no Apple code"] {
+                check = "python3 CI/check_core_edges.py"
+            }
+            ["documentation links"] {
+                check = "python3 CI/check_documentation.py"
+            }
+        }
+    }
+}
