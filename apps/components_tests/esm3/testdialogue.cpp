@@ -470,8 +470,8 @@ namespace ESM
 
             std::vector<std::string> ids;
             for (const DialInfo& info : dialogue.mInfo)
-                // An id keeps the spelling it was first seen with in the process, so only its letters, not their case, are the same
-                // whichever tests ran before.
+                // An id keeps the spelling it was first seen with in the process, which depends on the tests that ran
+                // before, so only the letters count.
                 ids.push_back(Misc::StringUtils::lowerCase(info.mId.getRefIdString()));
             return ids;
         }

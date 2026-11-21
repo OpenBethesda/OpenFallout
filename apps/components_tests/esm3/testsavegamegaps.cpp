@@ -4,13 +4,13 @@
 #include <components/esm/luascripts.hpp>
 #include <components/esm/refid.hpp>
 #include <components/esm/stringrefid.hpp>
-#include <components/misc/strings/lower.hpp>
 #include <components/esm3/actoridconverter.hpp>
 #include <components/esm3/effectlist.hpp>
 #include <components/esm3/loadmgef.hpp>
 #include <components/esm3/loadskil.hpp>
 #include <components/esm3/readerscache.hpp>
 #include <components/lua/configuration.hpp>
+#include <components/misc/strings/lower.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -292,7 +292,8 @@ namespace ESM
 
         TEST(Esm3RefIdTest, hasNoTextForAnIdentifierThatIsNotAString)
         {
-            // The spelling is the one the id was first seen with in the process, which depends on the tests that ran before.
+            // The spelling is the one the id was first seen with in the process, which depends on the tests that ran
+            // before.
             EXPECT_EQ(Misc::StringUtils::lowerCase(id("Text").getRefIdString()), "text");
             EXPECT_THAT(RefId().getRefIdString(), IsEmpty());
             EXPECT_THAT([] { RefId::generated(5).getRefIdString(); },
