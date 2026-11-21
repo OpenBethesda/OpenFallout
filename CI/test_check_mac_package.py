@@ -317,6 +317,11 @@ class PackageCheckTests(unittest.TestCase):
 
         subprocess.run(["hdiutil", "create", "-quiet", "-size", "32m", "-fs", "HFS+", "-volname", "OFTest", str(dmg)],
                        check=True)
+        # Spotlight (mds) indexes every volume that mounts, even a -nobrowse one, and has its files open while it does:
+        # `detach -force` of a volume it is reading or that was just written fails with exit 16, "Resource busy" (CI run
+        # 44929975506). A `.metadata_never_index` file at the volume root, which Spotlight reads when the volume mounts,
+        # keeps it away. It is written into the empty image first, so every later mount of the image already has it.
+        edit_image(lambda volume: (volume / ".metadata_never_index").touch())
         edit_image(lambda volume: subprocess.run(["ditto", str(stage), str(volume)], check=True))
         status, output = run_check(dmg, "--smoke", "skip")
         self.assertEqual(status, 1, output)
