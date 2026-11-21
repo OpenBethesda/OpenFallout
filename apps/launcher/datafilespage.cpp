@@ -31,8 +31,6 @@
 #include <components/debug/debuglog.hpp>
 #include <components/files/qtconversion.hpp>
 #include <components/misc/strings/conversion.hpp>
-#include <components/navmeshtool/protocol.hpp>
-#include <components/settings/values.hpp>
 #include <components/vfs/bsaarchive.hpp>
 #include <components/vfs/qtconversion.hpp>
 
@@ -102,54 +100,6 @@ namespace
     }
 }
 
-namespace Launcher
-{
-    namespace
-    {
-        struct HandleNavMeshToolMessage
-        {
-            int mCellsCount;
-            int mExpectedMaxProgress;
-            int mMaxProgress;
-            int mProgress;
-
-            HandleNavMeshToolMessage operator()(NavMeshTool::ExpectedCells&& message) const
-            {
-                return HandleNavMeshToolMessage{ static_cast<int>(message.mCount), mExpectedMaxProgress,
-                    static_cast<int>(message.mCount) * 100, mProgress };
-            }
-
-            HandleNavMeshToolMessage operator()(NavMeshTool::ProcessedCells&& message) const
-            {
-                return HandleNavMeshToolMessage{ mCellsCount, mExpectedMaxProgress, mMaxProgress,
-                    std::max(mProgress, static_cast<int>(message.mCount)) };
-            }
-
-            HandleNavMeshToolMessage operator()(NavMeshTool::ExpectedTiles&& message) const
-            {
-                const int expectedMaxProgress = mCellsCount + static_cast<int>(message.mCount);
-                return HandleNavMeshToolMessage{ mCellsCount, expectedMaxProgress,
-                    std::max(mMaxProgress, expectedMaxProgress), mProgress };
-            }
-
-            HandleNavMeshToolMessage operator()(NavMeshTool::GeneratedTiles&& message) const
-            {
-                int progress = mCellsCount + static_cast<int>(message.mCount);
-                if (mExpectedMaxProgress < mMaxProgress)
-                    progress += static_cast<int>(std::round((mMaxProgress - mExpectedMaxProgress)
-                        * (static_cast<float>(progress) / static_cast<float>(mExpectedMaxProgress))));
-                return HandleNavMeshToolMessage{ mCellsCount, mExpectedMaxProgress, mMaxProgress,
-                    std::max(mProgress, progress) };
-            }
-        };
-
-        int getMaxNavMeshDbFileSizeMiB()
-        {
-            return static_cast<int>(Settings::navigator().mMaxNavmeshdbFileSize / (1024 * 1024));
-        }
-    }
-}
-
 Launcher::DataFilesPage::DataFilesPage(const Files::ConfigurationManager& cfg, Config::GameSettings& gameSettings,
     Config::LauncherSettings& launcherSettings, MainDialog* parent)
     : QWidget(parent)
@@ -158,7 +108,6 @@ Launcher::DataFilesPage::DataFilesPage(const Files::ConfigurationManager& cfg, C
     , mCfgMgr(cfg)
     , mGameSettings(gameSettings)
     , mLauncherSettings(launcherSettings)
-    , mNavMeshToolInvoker(new Process::ProcessInvoker(this))
     , mReloadCellsThread(&DataFilesPage::reloadCells, this)
 {
     ui.setupUi(this);
@@ -257,16 +206,6 @@ void Launcher::DataFilesPage::buildView()
 
     connect(ui.refreshDataFilesAction, &QAction::triggered, this, &DataFilesPage::slotRefreshButtonClicked);
 
-    connect(ui.updateNavMeshButton, &QPushButton::clicked, this, &DataFilesPage::startNavMeshTool);
-    connect(ui.cancelNavMeshButton, &QPushButton::clicked, this, &DataFilesPage::killNavMeshTool);
-
-    connect(mNavMeshToolInvoker->getProcess(), &QProcess::readyReadStandardOutput, this,
-        &DataFilesPage::readNavMeshToolStdout);
-    connect(mNavMeshToolInvoker->getProcess(), &QProcess::readyReadStandardError, this,
-        &DataFilesPage::readNavMeshToolStderr);
-    connect(mNavMeshToolInvoker->getProcess(), qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-        &DataFilesPage::navMeshToolFinished);
-
     buildArchiveContextMenu();
     buildDataFilesContextMenu();
     buildDirectoryPickerContextMenu();
@@ -334,8 +273,6 @@ void Launcher::DataFilesPage::buildDirectoryPickerContextMenu()
 
 bool Launcher::DataFilesPage::loadSettings()
 {
-    ui.navMeshMaxSizeSpinBox->setValue(getMaxNavMeshDbFileSizeMiB());
-
     QStringList profiles = mLauncherSettings.getContentLists();
     QString currentProfile = mLauncherSettings.getCurrentContentListName();
 
@@ -515,9 +452,6 @@ void Launcher::DataFilesPage::populateFileViews(const QString& contentModelName)
 
 void Launcher::DataFilesPage::saveSettings(const QString& profile)
 {
-    Settings::navigator().mMaxNavmeshdbFileSize.set(
-        static_cast<std::uint64_t>(std::max(0, ui.navMeshMaxSizeSpinBox->value())) * 1024 * 1024);
-
     QString profileName = profile;
 
     if (profileName.isEmpty())
@@ -1080,108 +1014,6 @@ void Launcher::DataFilesPage::reloadCells()
 
         lock.lock();
     }
-}
-
-void Launcher::DataFilesPage::startNavMeshTool()
-{
-    mMainDialog->writeSettings();
-
-    ui.navMeshLogPlainTextEdit->clear();
-    ui.navMeshProgressBar->setValue(0);
-    ui.navMeshProgressBar->setMaximum(1);
-    ui.navMeshProgressBar->resetFormat();
-
-    mNavMeshToolProgress = NavMeshToolProgress{};
-
-    QStringList arguments({ "--write-binary-log" });
-    if (ui.navMeshRemoveUnusedTilesCheckBox->checkState() == Qt::Checked)
-        arguments.append("--remove-unused-tiles");
-
-    if (!mNavMeshToolInvoker->startProcess(QLatin1String("openfallout-navmeshtool"), arguments))
-        return;
-
-    ui.cancelNavMeshButton->setEnabled(true);
-    ui.navMeshProgressBar->setEnabled(true);
-}
-
-void Launcher::DataFilesPage::killNavMeshTool()
-{
-    mNavMeshToolInvoker->killProcess();
-}
-
-void Launcher::DataFilesPage::readNavMeshToolStderr()
-{
-    updateNavMeshProgress(4096);
-}
-
-void Launcher::DataFilesPage::updateNavMeshProgress(int minDataSize)
-{
-    if (!mNavMeshToolProgress.mEnabled)
-        return;
-    QProcess& process = *mNavMeshToolInvoker->getProcess();
-    mNavMeshToolProgress.mMessagesData.append(process.readAllStandardError());
-    if (mNavMeshToolProgress.mMessagesData.size() < minDataSize)
-        return;
-    const std::byte* const begin = reinterpret_cast<const std::byte*>(mNavMeshToolProgress.mMessagesData.constData());
-    const std::byte* const end = begin + mNavMeshToolProgress.mMessagesData.size();
-    const std::byte* position = begin;
-    HandleNavMeshToolMessage handle{
-        mNavMeshToolProgress.mCellsCount,
-        mNavMeshToolProgress.mExpectedMaxProgress,
-        ui.navMeshProgressBar->maximum(),
-        ui.navMeshProgressBar->value(),
-    };
-    try
-    {
-        while (true)
-        {
-            NavMeshTool::Message message;
-            const std::byte* const nextPosition = NavMeshTool::deserialize(position, end, message);
-            if (nextPosition == position)
-                break;
-            position = nextPosition;
-            handle = std::visit(handle, NavMeshTool::decode(message));
-        }
-    }
-    catch (const std::exception& e)
-    {
-        Log(Debug::Error) << "Failed to deserialize navmeshtool message: " << e.what();
-        mNavMeshToolProgress.mEnabled = false;
-        ui.navMeshProgressBar->setFormat("Failed to update progress: " + QString(e.what()));
-    }
-    if (position != begin)
-        mNavMeshToolProgress.mMessagesData = mNavMeshToolProgress.mMessagesData.mid(position - begin);
-    mNavMeshToolProgress.mCellsCount = handle.mCellsCount;
-    mNavMeshToolProgress.mExpectedMaxProgress = handle.mExpectedMaxProgress;
-    ui.navMeshProgressBar->setMaximum(handle.mMaxProgress);
-    ui.navMeshProgressBar->setValue(handle.mProgress);
-}
-
-void Launcher::DataFilesPage::readNavMeshToolStdout()
-{
-    QProcess& process = *mNavMeshToolInvoker->getProcess();
-    QByteArray& logData = mNavMeshToolProgress.mLogData;
-    logData.append(process.readAllStandardOutput());
-    const int lineEnd = logData.lastIndexOf('\n');
-    if (lineEnd == -1)
-        return;
-    const int size = logData.size() >= lineEnd && logData[lineEnd - 1] == '\r' ? lineEnd - 1 : lineEnd;
-    ui.navMeshLogPlainTextEdit->appendPlainText(QString::fromUtf8(logData.data(), size));
-    logData = logData.mid(lineEnd + 1);
-}
-
-void Launcher::DataFilesPage::navMeshToolFinished(int exitCode, QProcess::ExitStatus exitStatus)
-{
-    updateNavMeshProgress(0);
-    ui.navMeshLogPlainTextEdit->appendPlainText(
-        QString::fromUtf8(mNavMeshToolInvoker->getProcess()->readAllStandardOutput()));
-    if (exitCode == 0 && exitStatus == QProcess::ExitStatus::NormalExit)
-    {
-        ui.navMeshProgressBar->setValue(ui.navMeshProgressBar->maximum());
-        ui.navMeshProgressBar->resetFormat();
-    }
-    ui.cancelNavMeshButton->setEnabled(false);
-    ui.navMeshProgressBar->setEnabled(false);
 }
 
 bool Launcher::DataFilesPage::eventFilter(QObject* obj, QEvent* event)

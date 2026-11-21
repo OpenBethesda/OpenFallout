@@ -32,9 +32,6 @@ coverage:
 ignore:
   # Fallout 4 archive readers; Fallout 3, New Vegas and Tale of Two Wastelands do not use them.
   - "components/bsa/ba2*"
-  # Morrowind-only importers.
-  - "apps/essimporter/"
-  - "apps/mwiniimporter/"
 
 flag_management:
   default_rules:
@@ -111,7 +108,6 @@ component_management:
         - components/testing/**
         - components/translation/**
         - components/bullethelpers/**
-        - components/navmeshtool/**
     - component_id: engine
       name: OpenFallout engine
       paths:
@@ -121,12 +117,10 @@ component_management:
       paths:
         - apps/launcher/**
     - component_id: tools
-      name: Data and navigation tools
+      name: Data tools
       paths:
         - apps/bsatool/**
-        - apps/bulletobjecttool/**
         - apps/esmtool/**
-        - apps/navmeshtool/**
         - apps/niftest/**
 
 comment:

@@ -4,7 +4,6 @@
 #include "ui_datafilespage.h"
 #include "ui_directorypicker.h"
 
-#include <components/process/processinvoker.hpp>
 
 #include <QDir>
 #include <QMenu>
@@ -97,27 +96,11 @@ namespace Launcher
         void on_cloneProfileAction_triggered();
         void on_deleteProfileAction_triggered();
 
-        void startNavMeshTool();
-        void killNavMeshTool();
-        void readNavMeshToolStdout();
-        void readNavMeshToolStderr();
-        void navMeshToolFinished(int exitCode, QProcess::ExitStatus exitStatus);
-
     public:
         /// Content List that is always present
         const static char* mDefaultContentListName;
 
     private:
-        struct NavMeshToolProgress
-        {
-            bool mEnabled = true;
-            QByteArray mLogData;
-            QByteArray mMessagesData;
-            std::map<std::uint64_t, std::string> mWorldspaces;
-            int mCellsCount = 0;
-            int mExpectedMaxProgress = 0;
-        };
-
         MainDialog* mMainDialog;
         TextInputDialog* mNewProfileDialog;
         TextInputDialog* mCloneProfileDialog;
@@ -132,9 +115,6 @@ namespace Launcher
         QString mDataLocal;
         QStringList mKnownArchives;
         QStringList mNewDataDirs;
-
-        Process::ProcessInvoker* mNavMeshToolInvoker;
-        NavMeshToolProgress mNavMeshToolProgress;
 
         bool mReloadCells = false;
         bool mAbortReloadCells = false;
@@ -161,7 +141,6 @@ namespace Launcher
         void onReloadCellsTimerTimeout();
         void reloadCells();
         void refreshDataFilesView();
-        void updateNavMeshProgress(int minDataSize);
         void slotCopySelectedItemsPaths();
         void slotOpenSelectedItemsPaths();
 
