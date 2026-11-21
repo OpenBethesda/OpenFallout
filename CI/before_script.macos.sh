@@ -114,6 +114,9 @@ declare -a CMAKE_CONF_OPTS=(
 -D CMAKE_CXX_COMPILER="clang++"
 -DOPENFALLOUT_USE_SYSTEM_YAML_CPP=OFF
 -D CMAKE_OSX_DEPLOYMENT_TARGET="26.0"
+# CPack's `preinstall` target would otherwise build `all` again (a 15 s walk of the finished tree in the packaging step,
+# measured on 21 November 2026). Whoever packages builds `all` first (CI/macos/build.sh does it for its default).
+-D CMAKE_SKIP_INSTALL_ALL_DEPENDENCY=ON
 )
 
 declare -a BUILD_OPTS=(
