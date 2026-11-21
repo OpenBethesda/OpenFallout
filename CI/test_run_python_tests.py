@@ -49,6 +49,23 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(status, 0, output)
         self.assertIn("test_script.py has no tests", output)
 
+    def test_a_folder_whose_path_has_spaces_in_every_part_runs_the_same(self):
+        parent = tempfile.TemporaryDirectory(prefix="a folder with spaces ")
+        self.addCleanup(parent.cleanup)
+        folder = Path(parent.name) / "inner folder" / "python tests"
+        folder.mkdir(parents=True)
+        (folder / "test_one.py").write_text(PASSING)
+        (folder / "test_script.py").write_text(NOTHING)
+        (folder / "test_bad.py").write_text(FAILING)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            status = run_python_tests.main([str(folder), "--workers", "2"])
+        output = out.getvalue()
+        self.assertEqual(status, 1, output)
+        self.assertIn("test_script.py has no tests", output)
+        self.assertIn("tests counted by discovery: 3; tests run: 3; files run: 3 of 3", output)
+        self.assertIn("test_bad.py: exit status 1", output)
+
 
 if __name__ == "__main__":
     unittest.main()

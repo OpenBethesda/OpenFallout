@@ -113,9 +113,10 @@ def main(argv=None):
             problems.append(f"{label}: the process printed no test count (exit {result['status']})")
         elif result["ran"] != want:
             problems.append(f"{label}: ran {result['ran']} tests, discovery counted {want}")
-        if want == 0 and result["ran"] == 0 and result["status"] == 5:
-            # unittest's own exit status for "no tests ran": a script that only has a test_ name (CI/test_reports.py), which
-            # the plain command imports and counts for nothing. Said out loud, below; a file that fails to load is not this
+        if want == 0 and result["ran"] == 0 and result["status"] in (0, 5):
+            # no tests ran: a script that only has a test_ name (CI/test_reports.py), which the plain command imports and
+            # counts for nothing. unittest of Python 3.12 and later exits 5 for it, Python 3.11 and earlier exit 0 ("Ran 0
+            # tests ... OK"), so both are this. Said out loud, below; a file that fails to load is not this
             print(f"note: {label} has no tests (discovery counted 0, the process ran 0)")
         elif result["status"] != 0:
             problems.append(f"{label}: exit status {result['status']}")
