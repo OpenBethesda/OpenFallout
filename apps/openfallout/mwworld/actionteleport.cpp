@@ -97,14 +97,7 @@ namespace OFWorld
         {
             OFWorld::Ptr follower = *it;
 
-            const ESM::RefId& script = follower.getClass().getScript(follower);
-
             if (!includeHostiles && follower.getClass().getCreatureStats(follower).getAiSequence().isInCombat(actor))
-                continue;
-
-            if (!toExterior && !script.empty()
-                && follower.getRefData().getLocals().getIntVar(script, "stayoutside") == 1
-                && follower.getCell()->getCell()->isExterior())
                 continue;
 
             if ((follower.getRefData().getPosition().asVec3() - actor.getRefData().getPosition().asVec3()).length2()

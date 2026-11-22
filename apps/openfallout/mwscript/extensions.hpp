@@ -1,11 +1,6 @@
 #ifndef GAME_SCRIPT_EXTENSIONS_H
 #define GAME_SCRIPT_EXTENSIONS_H
 
-namespace Compiler
-{
-    class Extensions;
-}
-
 namespace Interpreter
 {
     class Interpreter;
@@ -13,8 +8,7 @@ namespace Interpreter
 
 namespace OFScript
 {
-    void installOpcodes(Interpreter::Interpreter& interpreter, bool consoleOnly = false);
-    ///< \param consoleOnly include console only opcodes
+    void installOpcodes(Interpreter::Interpreter& interpreter);
 }
 
 #endif

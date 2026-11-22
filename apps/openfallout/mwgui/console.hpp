@@ -5,21 +5,16 @@
 #include <string>
 #include <vector>
 
-#include <components/compiler/errorhandler.hpp>
-#include <components/compiler/extensions.hpp>
-#include <components/compiler/output.hpp>
 #include <components/files/configurationmanager.hpp>
 
 #include "../mwbase/windowmanager.hpp"
-
-#include "../mwscript/compilercontext.hpp"
 
 #include "referenceinterface.hpp"
 #include "windowbase.hpp"
 
 namespace OFGui
 {
-    class Console : public WindowBase, private Compiler::ErrorHandler, public ReferenceInterface
+    class Console : public WindowBase, public ReferenceInterface
     {
     public:
         /// Set the implicit object for script execution
@@ -42,7 +37,7 @@ namespace OFGui
         std::string mEditString;
         std::ofstream mCommandHistoryFile;
 
-        Console(int w, int h, bool consoleOnlyScripts, Files::ConfigurationManager& cfgMgr);
+        Console(int w, int h, Files::ConfigurationManager& cfgMgr);
         ~Console();
 
         void onOpen() override;
@@ -59,8 +54,6 @@ namespace OFGui
         void printError(const std::string& msg);
 
         void execute(const std::string& command);
-
-        void executeFile(const std::filesystem::path& path);
 
         void updateSelectedObjectPtr(const OFWorld::Ptr& currentPtr, const OFWorld::Ptr& newPtr);
 
@@ -103,27 +96,7 @@ namespace OFGui
         bool mCaseSensitiveSearch;
         bool mRegExSearch;
 
-        std::string complete(std::string input, std::vector<std::string>& matches);
-
-        Compiler::Extensions mExtensions;
-        OFScript::CompilerContext mCompilerContext;
-        std::vector<std::string> mNames;
-
-        bool mConsoleOnlyScripts;
         Files::ConfigurationManager& mCfgMgr;
-        bool compile(const std::string& cmd, Compiler::Output& output);
-
-        /// Report error to the user.
-        void report(const std::string& message, const Compiler::TokenLoc& loc, Type type) override;
-
-        /// Report a file related error
-        void report(const std::string& message, Type type) override;
-
-        /// Write all valid identifiers and keywords into mNames and sort them.
-        /// \note If mNames is not empty, this function is a no-op.
-        /// \note The list may contain duplicates (if a name is a keyword and an identifier at the same
-        /// time).
-        void listNames();
 
         void initConsoleHistory();
     };

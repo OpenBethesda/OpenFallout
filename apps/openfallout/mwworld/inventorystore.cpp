@@ -622,14 +622,6 @@ OFWorld::ContainerStoreIterator OFWorld::InventoryStore::unequipSlot(int slot, b
         {
             retval = restack(*it);
 
-            if (getPtr() == OFMechanics::getPlayer())
-            {
-                // Unset OnPCEquip Variable on item's script, if it has a script with that variable declared
-                const ESM::RefId& script = it->getClass().getScript(*it);
-                if (!script.empty())
-                    (*it).getRefData().getLocals().setVarByInt(script, "onpcequip", 0);
-            }
-
             if ((mSelectedEnchantItem != end()) && (mSelectedEnchantItem == it))
             {
                 mSelectedEnchantItem = end();

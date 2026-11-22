@@ -93,8 +93,6 @@
 #include "../mwrender/renderingmanager.hpp"
 #include "../mwrender/vismask.hpp"
 
-#include "../mwscript/globalscripts.hpp"
-
 #include "../mwclass/door.hpp"
 
 #include "../mwphysics/actor.hpp"
@@ -202,7 +200,6 @@ namespace OFWorld
     World::World(Resource::ResourceSystem* resourceSystem, int activationDistanceOverride, const std::string& startCell,
         const std::filesystem::path& userDataPath)
         : mResourceSystem(resourceSystem)
-        , mLocalScripts(mStore)
         , mWorldModel(mStore, mReaders)
         , mTimeManager(std::make_unique<DateTimeManager>())
         , mSky(true)
@@ -341,8 +338,6 @@ namespace OFWorld
         }
         else
         {
-            for (int i = 0; i < 5; ++i)
-                OFBase::Environment::get().getScriptManager()->getGlobalScripts().run();
             if (!getPlayerPtr().isInCell())
             {
                 ESM::Position pos;
@@ -387,8 +382,6 @@ namespace OFWorld
         mWeatherManager->clear();
         mRendering->clear();
         mProjectileManager->clear();
-        mLocalScripts.clear();
-
         mWorldScene->clear();
         mWorldModel.clear();
 
@@ -554,11 +547,6 @@ namespace OFWorld
         return mESMVersions;
     }
 
-    LocalScripts& World::getLocalScripts()
-    {
-        return mLocalScripts;
-    }
-
     void World::setGlobalInt(GlobalVariableName name, int value)
     {
         mTimeManager->updateGlobalInt(name, value);
@@ -622,11 +610,6 @@ namespace OFWorld
         }
 
         return mStore.get<ESM::GameSetting>().find("sDefaultCellname")->mValue.getString();
-    }
-
-    void World::removeRefScript(const OFWorld::CellRef* ref)
-    {
-        mLocalScripts.remove(ref);
     }
 
     Ptr World::searchPtr(const ESM::RefId& name, bool activeOnly, bool searchInContainers)
@@ -728,25 +711,6 @@ namespace OFWorld
         return Ptr();
     }
 
-    void World::addContainerScripts(const Ptr& reference, CellStore* cell)
-    {
-        if (reference.getType() == ESM::Container::sRecordId || reference.getType() == ESM::NPC::sRecordId
-            || reference.getType() == ESM::Creature::sRecordId)
-        {
-            OFWorld::ContainerStore& container = reference.getClass().getContainerStore(reference);
-            for (OFWorld::ContainerStoreIterator it = container.begin(); it != container.end(); ++it)
-            {
-                const auto& script = it->getClass().getScript(*it);
-                if (!script.empty())
-                {
-                    OFWorld::Ptr item = *it;
-                    item.mCell = cell;
-                    mLocalScripts.add(script, item);
-                }
-            }
-        }
-    }
-
     void World::enable(const Ptr& reference)
     {
         if (!reference.isInCell())
@@ -765,24 +729,6 @@ namespace OFWorld
                 int type = mStore.find(reference.getCellRef().getRefId());
                 if (mRendering->pagingEnableObject(type, reference, true))
                     mWorldScene->reloadTerrain();
-            }
-        }
-    }
-
-    void World::removeContainerScripts(const Ptr& reference)
-    {
-        if (reference.getType() == ESM::Container::sRecordId || reference.getType() == ESM::NPC::sRecordId
-            || reference.getType() == ESM::Creature::sRecordId)
-        {
-            OFWorld::ContainerStore& container = reference.getClass().getContainerStore(reference);
-            for (OFWorld::ContainerStoreIterator it = container.begin(); it != container.end(); ++it)
-            {
-                const ESM::RefId& script = it->getClass().getScript(*it);
-                if (!script.empty())
-                {
-                    OFWorld::Ptr item = *it;
-                    mLocalScripts.remove(item);
-                }
             }
         }
     }
@@ -893,9 +839,7 @@ namespace OFWorld
             mCurrentWorldSpace = cellName;
         }
 
-        removeContainerScripts(getPlayerPtr());
         mWorldScene->changeToInteriorCell(cellName, position, adjustPlayerPos, changeEvent);
-        addContainerScripts(getPlayerPtr(), getPlayerPtr().getCell());
     }
 
     void World::changeToCell(
@@ -914,12 +858,10 @@ namespace OFWorld
             mRendering->notifyWorldSpaceChanged();
             mCurrentWorldSpace = destinationCell->getNameId();
         }
-        removeContainerScripts(getPlayerPtr());
         if (exteriorCell)
             mWorldScene->changeToExteriorCell(cellId, position, adjustPlayerPos, changeEvent);
         else
             mWorldScene->changeToInteriorCell(destinationCell->getNameId(), position, adjustPlayerPos, changeEvent);
-        addContainerScripts(getPlayerPtr(), getPlayerPtr().getCell());
     }
 
     float World::getMaxActivationDistance() const
@@ -1003,8 +945,6 @@ namespace OFWorld
                 && ptr.getRefData().isEnabled())
             {
                 mWorldScene->removeObjectFromScene(ptr);
-                mLocalScripts.remove(ptr);
-                removeContainerScripts(ptr);
             }
         }
     }
@@ -1020,10 +960,6 @@ namespace OFWorld
                 && ptr.getRefData().isEnabled())
             {
                 mWorldScene->addObjectToScene(ptr);
-                const auto& script = ptr.getClass().getScript(ptr);
-                if (!script.empty())
-                    mLocalScripts.add(script, ptr);
-                addContainerScripts(ptr, ptr.getCell());
             }
         }
     }
@@ -1052,14 +988,11 @@ namespace OFWorld
 
         if (currCell != newCell)
         {
-            removeContainerScripts(ptr);
-
             if (isPlayer)
             {
                 if (!newCell->isExterior())
                 {
                     changeToInteriorCell(newCell->getCell()->getNameId(), pos, false);
-                    removeContainerScripts(getPlayerPtr());
                 }
                 else
                 {
@@ -1068,7 +1001,6 @@ namespace OFWorld
                     else
                         mWorldScene->changeToExteriorCell(newCell->getCell()->getId(), pos, false);
                 }
-                addContainerScripts(getPlayerPtr(), newCell);
                 newPtr = getPlayerPtr();
             }
             else
@@ -1080,19 +1012,10 @@ namespace OFWorld
                     newPtr = currCell->moveTo(ptr, newCell);
                     if (newPtr.getRefData().isEnabled())
                         mWorldScene->addObjectToScene(newPtr);
-
-                    const auto& script = newPtr.getClass().getScript(newPtr);
-                    if (!script.empty())
-                    {
-                        mLocalScripts.add(script, newPtr);
-                    }
-                    addContainerScripts(newPtr, newCell);
                 }
                 else if (!newCellActive && currCellActive)
                 {
                     mWorldScene->removeObjectFromScene(ptr, keepActive);
-                    mLocalScripts.remove(ptr);
-                    removeContainerScripts(ptr);
                     haveToMove = false;
 
                     newPtr = currCell->moveTo(ptr, newCell);
@@ -1110,20 +1033,10 @@ namespace OFWorld
 
                     OFBase::MechanicsManager* mechMgr = OFBase::Environment::get().getMechanicsManager();
                     mechMgr->updateCell(ptr, newPtr);
-
-                    const auto& script = ptr.getClass().getScript(ptr);
-                    if (!script.empty())
-                    {
-                        mLocalScripts.remove(ptr);
-                        removeContainerScripts(ptr);
-                        mLocalScripts.add(script, newPtr);
-                        addContainerScripts(newPtr, newCell);
-                    }
                 }
             }
 
             OFBase::Environment::get().getWindowManager()->updateConsoleObjectPtr(ptr, newPtr);
-            OFBase::Environment::get().getScriptManager()->getGlobalScripts().updatePtrs(ptr, newPtr);
         }
         if (haveToMove && newPtr.getRefData().getBaseNode())
         {
@@ -1945,15 +1858,6 @@ namespace OFWorld
         return mRendering->toggleBorders();
     }
 
-    void World::PCDropped(const Ptr& item)
-    {
-        const auto& script = item.getClass().getScript(item);
-
-        // Set OnPCDrop Variable on item's script, if it has a script with that variable declared
-        if (!script.empty())
-            item.getRefData().getLocals().setVarByInt(script, "onpcdrop", 1);
-    }
-
     OFWorld::Ptr World::placeObject(const OFWorld::Ptr& object, float cursorX, float cursorY, int amount, bool copy)
     {
         const float maxDist = 200.f;
@@ -1977,9 +1881,6 @@ namespace OFWorld
         // copy the object and set its count
         Ptr dropped
             = copy ? copyObjectToCell(object, cell, pos, amount, true) : moveObjectToCell(object, cell, pos, true);
-
-        // only the player place items in the world, so no need to check actor
-        PCDropped(dropped);
 
         OFBase::Environment::get().getLuaManager()->objectPlaced(
             dropped, getPlayerPtr(), pos.asVec3(), Misc::Convert::makeOsgQuat(pos.rot));
@@ -2050,12 +1951,6 @@ namespace OFWorld
             {
                 mWorldScene->addObjectToScene(object);
             }
-            const auto& script = object.getClass().getScript(object);
-            if (!script.empty())
-            {
-                mLocalScripts.add(script, object);
-            }
-            addContainerScripts(object, &cell);
         }
 
         if (!object.getClass().isActor() && adjustPos && object.getRefData().getBaseNode())
@@ -2102,9 +1997,6 @@ namespace OFWorld
         // copy the object and set its count
         Ptr dropped
             = copy ? copyObjectToCell(object, cell, pos, amount, true) : moveObjectToCell(object, cell, pos, true);
-
-        if (actor == mPlayer->getPlayer()) // Only call if dropped by player
-            PCDropped(dropped);
 
         OFBase::Environment::get().getLuaManager()->objectDropped(
             dropped, actor, pos.asVec3(), Misc::Convert::makeOsgQuat(pos.rot));

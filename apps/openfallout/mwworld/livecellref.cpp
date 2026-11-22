@@ -68,28 +68,8 @@ namespace OFWorld
 
         Ptr ptr(this);
 
-        if (state.mHasLocals)
-        {
-            const ESM::RefId& scriptId = mClass->getScript(ptr);
-            // Make sure we still have a script. It could have been coming from a content file that is no longer active.
-            if (!scriptId.empty())
-            {
-                if (const ESM::Script* script
-                    = OFBase::Environment::get().getESMStore()->get<ESM::Script>().search(scriptId))
-                {
-                    try
-                    {
-                        mData.setLocals(*script);
-                        mData.getLocals().read(state.mLocals, scriptId);
-                    }
-                    catch (const std::exception& exception)
-                    {
-                        Log(Debug::Error) << "Error: failed to load state for local script " << scriptId
-                                          << " because an exception has been thrown: " << exception.what();
-                    }
-                }
-            }
-        }
+        // The local variables of a Morrowind script that an older save holds (state.mHasLocals) are not read:
+        // no script runs any more
 
         mClass->readAdditionalState(ptr, state);
 

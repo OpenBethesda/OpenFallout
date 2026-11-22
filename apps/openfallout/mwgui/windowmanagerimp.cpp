@@ -154,16 +154,14 @@ namespace OFGui
 
     WindowManager::WindowManager(SDL_Window* window, osgViewer::Viewer* viewer, osg::Group* guiRoot,
         Resource::ResourceSystem* resourceSystem, const std::shared_ptr<SceneUtil::WorkQueue>& workQueue,
-        const std::filesystem::path& logpath, bool consoleOnlyScripts, Translation::Storage& translationDataStorage,
-        ToUTF8::FromType encoding, bool exportFonts, const std::string& versionDescription,
-        Files::ConfigurationManager& cfgMgr)
+        const std::filesystem::path& logpath, Translation::Storage& translationDataStorage, ToUTF8::FromType encoding,
+        bool exportFonts, const std::string& versionDescription, Files::ConfigurationManager& cfgMgr)
         : mOldUpdateMask(0)
         , mOldCullMask(0)
         , mStore(nullptr)
         , mResourceSystem(resourceSystem)
         , mWorkQueue(workQueue)
         , mViewer(viewer)
-        , mConsoleOnlyScripts(consoleOnlyScripts)
         , mCurrentModals()
         , mHud(nullptr)
         , mMap(nullptr)
@@ -370,7 +368,7 @@ namespace OFGui
         trackWindow(mTradeWindow, makeBarterWindowSettingValues());
         mGuiModeStates[GM_Barter] = GuiModeState({ mInventoryWindow, mTradeWindow });
 
-        auto console = std::make_unique<Console>(w, h, mConsoleOnlyScripts, mCfgMgr);
+        auto console = std::make_unique<Console>(w, h, mCfgMgr);
         mConsole = console.get();
         mWindows.push_back(std::move(console));
         trackWindow(mConsole, makeConsoleWindowSettingValues());
@@ -1739,11 +1737,6 @@ namespace OFGui
     float WindowManager::getScalingFactor() const
     {
         return mScalingFactor;
-    }
-
-    void WindowManager::executeInConsole(const std::filesystem::path& path)
-    {
-        mConsole->executeFile(path);
     }
 
     std::vector<OFGui::WindowBase*> WindowManager::getGuiModeWindows(GuiMode mode)

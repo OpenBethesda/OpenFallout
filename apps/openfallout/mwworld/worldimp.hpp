@@ -19,7 +19,6 @@
 #include "esmstore.hpp"
 #include "globals.hpp"
 #include "groundcoverstore.hpp"
-#include "localscripts.hpp"
 #include "ptr.hpp"
 #include "scene.hpp"
 #include "timestamp.hpp"
@@ -93,7 +92,6 @@ namespace OFWorld
         ESM::ReadersCache mReaders;
         OFWorld::ESMStore mStore;
         GroundcoverStore mGroundcoverStore;
-        LocalScripts mLocalScripts;
         OFWorld::Globals mGlobalVariables;
         Misc::Rng::Generator mPrng;
         WorldModel mWorldModel;
@@ -159,8 +157,6 @@ namespace OFWorld
 
         OFWorld::Ptr getFocusObject(float maxDistance, bool ignorePlayer = true);
 
-        void PCDropped(const Ptr& item);
-
         bool rotateDoor(const Ptr door, DoorState state, float duration);
 
         void processDoors(float duration);
@@ -193,10 +189,6 @@ namespace OFWorld
     public:
         WorldModel& getWorldModel() { return mWorldModel; }
         Scene& getWorldScene() { return *mWorldScene; }
-
-        // FIXME
-        void addContainerScripts(const Ptr& reference, CellStore* cell) override;
-        void removeContainerScripts(const Ptr& reference) override;
 
         World(Resource::ResourceSystem* resourceSystem, int activationDistanceOverride, const std::string& startCell,
             const std::filesystem::path& userDataPath);
@@ -247,8 +239,6 @@ namespace OFWorld
 
         const std::vector<int>& getESMVersions() const override;
 
-        LocalScripts& getLocalScripts() override;
-
         bool isCellExterior() const override;
 
         bool isCellQuasiExterior() const override;
@@ -281,9 +271,6 @@ namespace OFWorld
         /// \note If cell==0, the cell the player is currently in will be used instead to
         /// generate a name.
         std::string_view getCellName(const OFWorld::Cell& cell) const override;
-
-        void removeRefScript(const OFWorld::CellRef* ref) override;
-        //< Remove the script attached to ref from mLocalScripts
 
         Ptr getPtr(const ESM::RefId& name, bool activeOnly) override;
         ///< Return a pointer to a liveCellRef with the given name.

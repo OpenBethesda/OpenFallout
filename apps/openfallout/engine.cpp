@@ -67,7 +67,6 @@
 #include "mwlua/worker.hpp"
 
 #include "mwscript/falloutscripts.hpp"
-#include "mwscript/interpretercontext.hpp"
 #include "mwscript/scriptmanagerimp.hpp"
 
 #include "mwsound/constants.hpp"
@@ -83,7 +82,6 @@
 
 #include "mwdialogue/dialoguemanagerimp.hpp"
 #include "mwdialogue/journalimp.hpp"
-#include "mwdialogue/scripttest.hpp"
 
 #include "mwmechanics/mechanicsmanagerimp.hpp"
 
@@ -196,19 +194,6 @@ namespace
     }
 }
 
-void OF::Engine::executeLocalScripts()
-{
-    OFWorld::LocalScripts& localScripts = mWorld->getLocalScripts();
-
-    localScripts.startIteration();
-    std::pair<ESM::RefId, OFWorld::Ptr> script;
-    while (localScripts.getNext(script))
-    {
-        OFScript::InterpreterContext interpreterContext(&script.second.getRefData().getLocals(), script.second);
-        mScriptManager->run(script.first, interpreterContext);
-    }
-}
-
 bool OF::Engine::frame(unsigned frameNumber, float frametime)
 {
     const osg::Timer_t frameStart = mViewer->getStartTick();
@@ -274,12 +259,6 @@ bool OF::Engine::frame(unsigned frameNumber, float frametime)
                 {
                     if (mWorld->getScriptsEnabled())
                     {
-                        // local scripts
-                        executeLocalScripts();
-
-                        // global scripts
-                        mScriptManager->getGlobalScripts().run();
-
                         // the compiled scripts of the quests of Fallout
                         mFalloutScripts->update(frametime, paused);
                     }
@@ -401,10 +380,7 @@ OF::Engine::Engine(Files::ConfigurationManager& configurationManager)
     , mStereoManager(nullptr)
     , mSkipMenu(false)
     , mUseSound(true)
-    , mCompileAll(false)
-    , mCompileAllDialogue(false)
     , mWarningsMode(1)
-    , mScriptConsoleMode(false)
     , mActivationDistanceOverride(-1)
     , mGrab(true)
     , mHeadless(false)
@@ -897,7 +873,7 @@ void OF::Engine::prepareEngine()
     rootNode->addChild(guiRoot);
 
     mWindowManager = std::make_unique<OFGui::WindowManager>(mWindow, mViewer, guiRoot, mResourceSystem.get(),
-        mWorkQueue, mCfgMgr.getLogPath(), mScriptConsoleMode, mTranslationDataStorage, mEncoding, mExportFonts,
+        mWorkQueue, mCfgMgr.getLogPath(), mTranslationDataStorage, mEncoding, mExportFonts,
         Version::getOpenmwVersionDescription(), mCfgMgr);
     mEnvironment.setWindowManager(*mWindowManager);
 
@@ -933,8 +909,6 @@ void OF::Engine::prepareEngine()
     mTranslationDataStorage.setEncoder(mEncoder.get());
     for (auto& mContentFile : mContentFiles)
         mTranslationDataStorage.loadTranslationData(mFileCollections, mContentFile);
-
-    Compiler::registerExtensions(mExtensions);
 
     // Create script system
     mScriptContext = std::make_unique<OFScript::CompilerContext>(OFScript::CompilerContext::Type_Full);
@@ -996,22 +970,6 @@ void OF::Engine::prepareEngine()
     mWorld->setRandomSeed(mRandomSeed);
     mWindowManager->initUI();
     mLuaManager->initPostLoad();
-
-    // scripts
-    if (mCompileAll)
-    {
-        std::pair<int, int> result = mScriptManager->compileAll();
-        if (result.first)
-            Log(Debug::Info) << "compiled " << result.second << " of " << result.first << " scripts ("
-                             << 100 * static_cast<double>(result.second) / result.first << "%)";
-    }
-    if (mCompileAllDialogue)
-    {
-        std::pair<int, int> result = OFDialogue::ScriptTest::compileAll(&mExtensions, mWarningsMode);
-        if (result.first)
-            Log(Debug::Info) << "compiled " << result.second << " of " << result.first << " dialogue scripts ("
-                             << 100 * static_cast<double>(result.second) / result.first << "%)";
-    }
 
     // starts a separate lua thread if "lua num threads" > 0
     mLuaWorker = std::make_unique<OFLua::Worker>(*mLuaManager);
@@ -1117,11 +1075,6 @@ void OF::Engine::go()
         mStateManager->newGame(!mNewGame);
     }
 
-    if (!mStartupScript.empty() && mStateManager->getState() == OFState::StateManager::State_Running)
-    {
-        mWindowManager->executeInConsole(mStartupScript);
-    }
-
     // Start the main rendering loop
     OFWorld::DateTimeManager& timeManager = *mWorld->getTimeManager();
     Misc::FrameRateLimiter frameRateLimiter = Misc::makeFrameRateLimiter(mEnvironment.getFrameRateLimit());
@@ -1175,16 +1128,6 @@ void OF::Engine::go()
     mLuaManager->savePermanentStorage(mCfgMgr.getUserConfigPath());
 }
 
-void OF::Engine::setCompileAll(bool all)
-{
-    mCompileAll = all;
-}
-
-void OF::Engine::setCompileAllDialogue(bool all)
-{
-    mCompileAllDialogue = all;
-}
-
 void OF::Engine::setSoundUsage(bool soundUsage)
 {
     mUseSound = soundUsage;
@@ -1193,16 +1136,6 @@ void OF::Engine::setSoundUsage(bool soundUsage)
 void OF::Engine::setEncoding(const ToUTF8::FromType& encoding)
 {
     mEncoding = encoding;
-}
-
-void OF::Engine::setScriptConsoleMode(bool enabled)
-{
-    mScriptConsoleMode = enabled;
-}
-
-void OF::Engine::setStartupScript(const std::filesystem::path& path)
-{
-    mStartupScript = path;
 }
 
 void OF::Engine::setActivationDistanceOverride(int distance)

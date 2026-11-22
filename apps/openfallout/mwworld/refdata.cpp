@@ -142,10 +142,8 @@ namespace OFWorld
         }
     }
 
-    void RefData::write(ESM::ObjectState& objectState, const ESM::RefId& scriptId) const
+    void RefData::write(ESM::ObjectState& objectState, const ESM::RefId& /*scriptId*/) const
     {
-        objectState.mHasLocals = mLocals.write(objectState.mLocals, scriptId);
-
         objectState.mEnabled = mEnabled;
         objectState.mPosition = mPosition;
         objectState.mFlags = mFlags;

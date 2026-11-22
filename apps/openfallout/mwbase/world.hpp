@@ -89,7 +89,6 @@ namespace OFWorld
 {
     class CellStore;
     class Player;
-    class LocalScripts;
     class TimeStamp;
     class ESMStore;
     class RefData;
@@ -159,8 +158,6 @@ namespace OFBase
 
         virtual const std::vector<int>& getESMVersions() const = 0;
 
-        virtual OFWorld::LocalScripts& getLocalScripts() = 0;
-
         virtual bool isCellExterior() const = 0;
 
         virtual bool isCellQuasiExterior() const = 0;
@@ -191,9 +188,6 @@ namespace OFBase
         /// \note If cell==0, the cell the player is currently in will be used instead to
         /// generate a name.
         virtual std::string_view getCellName(const OFWorld::Cell& cell) const = 0;
-
-        virtual void removeRefScript(const OFWorld::CellRef* ref) = 0;
-        //< Remove the script attached to ref from mLocalScripts
 
         virtual OFWorld::Ptr getPtr(const ESM::RefId& name, bool activeOnly) = 0;
         ///< Return a pointer to a liveCellRef with the given name.
@@ -570,9 +564,6 @@ namespace OFBase
         virtual osg::Vec3f aimToTarget(
             const OFWorld::ConstPtr& actor, const OFWorld::ConstPtr& target, bool isRangedCombat)
             = 0;
-
-        virtual void addContainerScripts(const OFWorld::Ptr& reference, OFWorld::CellStore* cell) = 0;
-        virtual void removeContainerScripts(const OFWorld::Ptr& reference) = 0;
 
         virtual bool isPlayerInJail() const = 0;
 

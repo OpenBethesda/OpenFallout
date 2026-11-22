@@ -9,28 +9,16 @@
 #include <fstream>
 #include <regex>
 
-#include <components/compiler/exception.hpp>
-#include <components/compiler/extensions0.hpp>
-#include <components/compiler/lineparser.hpp>
-#include <components/compiler/locals.hpp>
-#include <components/compiler/scanner.hpp>
-#include <components/files/conversion.hpp>
-#include <components/interpreter/interpreter.hpp>
 #include <components/misc/utf8stream.hpp>
 #include <components/settings/values.hpp>
 
 #include "apps/openfallout/mwgui/textcolours.hpp"
 
-#include "../mwscript/extensions.hpp"
-#include "../mwscript/interpretercontext.hpp"
-
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
-#include "../mwbase/scriptmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 
 #include "../mwworld/class.hpp"
-#include "../mwworld/esmstore.hpp"
 
 namespace
 {
@@ -42,123 +30,10 @@ namespace
 
 namespace OFGui
 {
-    class ConsoleInterpreterContext : public OFScript::InterpreterContext
-    {
-        Console& mConsole;
-
-    public:
-        ConsoleInterpreterContext(Console& console, OFWorld::Ptr reference);
-
-        void report(const std::string& message) override;
-    };
-
-    ConsoleInterpreterContext::ConsoleInterpreterContext(Console& console, OFWorld::Ptr reference)
-        : OFScript::InterpreterContext(reference.isEmpty() ? nullptr : &reference.getRefData().getLocals(), reference)
-        , mConsole(console)
-    {
-    }
-
-    void ConsoleInterpreterContext::report(const std::string& message)
-    {
-        mConsole.printOK(message);
-    }
-
-    bool Console::compile(const std::string& cmd, Compiler::Output& output)
-    {
-        try
-        {
-            ErrorHandler::reset();
-
-            std::istringstream input(cmd + '\n');
-
-            Compiler::Scanner scanner(*this, input, mCompilerContext.getExtensions());
-
-            Compiler::LineParser parser(
-                *this, mCompilerContext, output.getLocals(), output.getLiterals(), output.getCode(), true);
-
-            scanner.scan(parser);
-
-            return isGood();
-        }
-        catch (const Compiler::SourceException&)
-        {
-            // error has already been reported via error handler
-        }
-        catch (const std::exception& error)
-        {
-            printError(std::string("Error: ") + error.what());
-        }
-
-        return false;
-    }
-
-    void Console::report(const std::string& message, const Compiler::TokenLoc& loc, Type type)
-    {
-        std::ostringstream error;
-        error << "column " << loc.mColumn << " (" << loc.mLiteral << "):";
-
-        printError(error.str());
-        printError((type == ErrorMessage ? "error: " : "warning: ") + message);
-    }
-
-    void Console::report(const std::string& message, Type type)
-    {
-        printError((type == ErrorMessage ? "error: " : "warning: ") + message);
-    }
-
-    void Console::listNames()
-    {
-        if (mNames.empty())
-        {
-            // keywords
-            std::istringstream input;
-
-            Compiler::Scanner scanner(*this, input, mCompilerContext.getExtensions());
-
-            scanner.listKeywords(mNames);
-
-            // identifier
-            const OFWorld::ESMStore& esmStore = *OFBase::Environment::get().getESMStore();
-            std::vector<ESM::RefId> ids;
-            for (const auto* store : esmStore)
-            {
-                store->listIdentifier(ids);
-                for (auto id : ids)
-                {
-                    if (id.is<ESM::StringRefId>())
-                        mNames.push_back(id.getRefIdString());
-                }
-                ids.clear();
-            }
-
-            // exterior cell names and editor IDs aren't technically identifiers,
-            // but since the COC function accepts them, we should list them too
-            for (auto it = esmStore.get<ESM::Cell>().extBegin(); it != esmStore.get<ESM::Cell>().extEnd(); ++it)
-            {
-                if (!it->mName.empty())
-                    mNames.push_back(it->mName);
-            }
-
-            for (const auto& cell : esmStore.get<ESM4::Cell>())
-            {
-                if (!cell.mEditorId.empty())
-                    mNames.push_back(cell.mEditorId);
-            }
-
-            // sort
-            std::sort(mNames.begin(), mNames.end());
-
-            // remove duplicates
-            mNames.erase(std::unique(mNames.begin(), mNames.end()), mNames.end());
-        }
-    }
-
-    Console::Console(int w, int h, bool consoleOnlyScripts, Files::ConfigurationManager& cfgMgr)
+    Console::Console(int w, int h, Files::ConfigurationManager& cfgMgr)
         : WindowBase("openmw_console.layout")
         , mCaseSensitiveSearch(false)
         , mRegExSearch(false)
-        , mCompilerContext(OFScript::CompilerContext::Type_Console)
-        , mConsoleOnlyScripts(consoleOnlyScripts)
         , mCfgMgr(cfgMgr)
     {
         setCoord(10, 10, w - 10, h / 2);
@@ -184,10 +59,6 @@ namespace OFGui
 
         // Set up the log window
         mHistory->setOverflowToTheLeft(true);
-
-        // compiler
-        Compiler::registerExtensions(mExtensions, mConsoleOnlyScripts);
-        mCompilerContext.setExtensions(&mExtensions);
 
         // command history file
         initConsoleHistory();
@@ -236,46 +107,10 @@ namespace OFGui
             return;
         }
 
-        Compiler::Locals locals;
-        if (!mPtr.isEmpty())
-        {
-            const ESM::RefId& script = mPtr.getClass().getScript(mPtr);
-            if (!script.empty())
-                locals = OFBase::Environment::get().getScriptManager()->getLocals(script);
-        }
-        Compiler::Output output(locals);
-
-        if (compile(command + "\n", output))
-        {
-            try
-            {
-                ConsoleInterpreterContext interpreterContext(*this, mPtr);
-                Interpreter::Interpreter interpreter;
-                OFScript::installOpcodes(interpreter, mConsoleOnlyScripts);
-                const Interpreter::Program program = output.getProgram();
-                interpreter.run(program, interpreterContext);
-            }
-            catch (const std::exception& error)
-            {
-                printError(std::string("Error: ") + error.what());
-            }
-        }
-    }
-
-    void Console::executeFile(const std::filesystem::path& path)
-    {
-        std::ifstream stream(path);
-
-        if (!stream.is_open())
-        {
-            printError("Failed to open script file \"" + Files::pathToUnicodeString(path)
-                + "\": " + std::generic_category().message(errno));
-            return;
-        }
-
-        std::string line;
-        while (std::getline(stream, line))
-            execute(line);
+        // Morrowind script lines are no longer compiled or run
+        printError(
+            "Typed commands are not supported yet. Use the Lua modes: luap (player), luag (global), luas (selected "
+            "object) or luam (menu). The Fallout commands can be called from Lua as debug.scriptCommand.");
     }
 
     void Console::clear()
@@ -313,29 +148,6 @@ namespace OFGui
                     text.erase(0, mCommandLine->getTextCursor());
                     mCommandLine->setOnlyText(text);
                     mCommandLine->setTextCursor(0);
-                }
-            }
-        }
-        else if (key == MyGUI::KeyCode::Tab && mConsoleMode.empty())
-        {
-            std::vector<std::string> matches;
-            listNames();
-            std::string oldCaption = mCommandLine->getOnlyText();
-            std::string newCaption = complete(mCommandLine->getOnlyText(), matches);
-            mCommandLine->setOnlyText(newCaption);
-
-            // List candidates if repeatedly pressing tab
-            if (oldCaption == newCaption && !matches.empty())
-            {
-                int i = 0;
-                printOK({});
-                for (std::string& match : matches)
-                {
-                    if (i == 50)
-                        break;
-
-                    printOK(match);
-                    i++;
                 }
             }
         }
@@ -631,151 +443,6 @@ namespace OFGui
 
         mHistory->setTextSelection(textPosition, textPosition + length);
         mHistory->setVScrollPosition(mHistory->getFontHeight() * lineNumber);
-    }
-
-    std::string Console::complete(std::string input, std::vector<std::string>& matches)
-    {
-        std::string output = input;
-        std::string tmp = input;
-        bool hasFrontQuote = false;
-
-        /* Does the input string contain things that don't have to be completed? If yes erase them. */
-
-        /* Erase a possible call to an explicit reference. */
-        size_t explicitPos = tmp.find("->");
-        if (explicitPos != std::string::npos)
-        {
-            tmp.erase(0, explicitPos + 2);
-        }
-
-        /* Are there quotation marks? */
-        if (tmp.find('"') != std::string::npos)
-        {
-            int numquotes = 0;
-            for (std::string::iterator it = tmp.begin(); it < tmp.end(); ++it)
-            {
-                if (*it == '"')
-                    numquotes++;
-            }
-
-            /* Is it terminated?*/
-            if (numquotes % 2)
-            {
-                tmp.erase(0, tmp.rfind('"') + 1);
-                hasFrontQuote = true;
-            }
-            else
-            {
-                size_t pos;
-                if ((((pos = tmp.rfind(' ')) != std::string::npos)) && (pos > tmp.rfind('"')))
-                {
-                    tmp.erase(0, tmp.rfind(' ') + 1);
-                }
-                else
-                {
-                    tmp.clear();
-                }
-                hasFrontQuote = false;
-            }
-        }
-        /* No quotation marks. Are there spaces?*/
-        else
-        {
-            size_t rpos;
-            if ((rpos = tmp.rfind(' ')) != std::string::npos)
-            {
-                if (rpos == 0)
-                {
-                    tmp.clear();
-                }
-                else
-                {
-                    tmp.erase(0, rpos + 1);
-                }
-            }
-        }
-
-        /* Erase the input from the output string so we can easily append the completed form later. */
-        output.erase(output.end() - tmp.length(), output.end());
-
-        /* Is there still something in the input string? If not just display all commands and return the unchanged
-         * input. */
-        if (tmp.empty())
-        {
-            matches = mNames;
-            return input;
-        }
-
-        /* Iterate through the vector. */
-        for (std::string& name : mNames)
-        {
-            bool stringDifferent = false;
-
-            /* Is the string shorter than the input string? If yes skip it. */
-            if (name.length() < tmp.length())
-                continue;
-
-            /* Is the beginning of the string different from the input string? If yes skip it. */
-            for (std::string::iterator iter = tmp.begin(), iter2 = name.begin(); iter < tmp.end(); ++iter, ++iter2)
-            {
-                if (Misc::StringUtils::toLower(*iter) != Misc::StringUtils::toLower(*iter2))
-                {
-                    stringDifferent = true;
-                    break;
-                }
-            }
-
-            if (stringDifferent)
-                continue;
-
-            /* The beginning of the string matches the input string, save it for the next test. */
-            matches.push_back(name);
-        }
-
-        /* There are no matches. Return the unchanged input. */
-        if (matches.empty())
-        {
-            return input;
-        }
-
-        /* Only one match. We're done. */
-        if (matches.size() == 1)
-        {
-            /* Adding quotation marks when the input string started with a quotation mark or has spaces in it*/
-            if ((matches.front().find(' ') != std::string::npos))
-            {
-                if (!hasFrontQuote)
-                    output += '"';
-                return output.append(matches.front() + std::string("\" "));
-            }
-            else if (hasFrontQuote)
-            {
-                return output.append(matches.front() + std::string("\" "));
-            }
-            else
-            {
-                return output.append(matches.front() + std::string(" "));
-            }
-        }
-
-        /* Check if all matching strings match further than input. If yes complete to this match. */
-        size_t i = tmp.length();
-
-        for (auto iter = matches.front().begin() + tmp.length(); iter < matches.front().end(); ++iter, ++i)
-        {
-            for (std::string& match : matches)
-            {
-                if (Misc::StringUtils::toLower(match[i]) != Misc::StringUtils::toLower(*iter))
-                {
-                    /* Append the longest match to the end of the output string*/
-                    output.append(matches.front().substr(0, i));
-                    return output;
-                }
-            }
-        }
-
-        /* All keywords match with the shortest. Append it to the output string and return it. */
-        return output.append(matches.front());
     }
 
     void Console::updateSelectedObjectPtr(const OFWorld::Ptr& currentPtr, const OFWorld::Ptr& newPtr)

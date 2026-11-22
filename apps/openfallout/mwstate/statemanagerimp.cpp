@@ -48,7 +48,6 @@
 #include "../mwmechanics/npcstats.hpp"
 
 #include "../mwscript/falloutscripts.hpp"
-#include "../mwscript/globalscripts.hpp"
 
 #include "quicksavemanager.hpp"
 
@@ -59,7 +58,6 @@ void OFState::StateManager::cleanup(bool force)
         OFBase::Environment::get().getSoundManager()->clear();
         OFBase::Environment::get().getDialogueManager()->clear();
         OFBase::Environment::get().getJournal()->clear();
-        OFBase::Environment::get().getScriptManager()->clear();
         OFBase::Environment::get().getWindowManager()->clear();
         OFBase::Environment::get().getWorld()->clear();
         OFBase::Environment::get().getInputManager()->clear();
@@ -190,7 +188,6 @@ void OFState::StateManager::newGame(bool bypass)
     try
     {
         Log(Debug::Info) << "Starting a new game";
-        OFBase::Environment::get().getScriptManager()->getGlobalScripts().addStartup();
         auto falloutScripts = OFBase::Environment::get().getFalloutScripts();
         falloutScripts->reset();
         // A game that has the quest of character creation of Fallout starts as the games do: the quest, not the
@@ -330,7 +327,6 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
             + OFBase::Environment::get().getLuaManager()->countSavedGameRecords()
             + OFBase::Environment::get().getWorld()->countSavedGameRecords()
             + OFBase::Environment::get().getFalloutScripts()->countSavedGameRecords()
-            + OFBase::Environment::get().getScriptManager()->getGlobalScripts().countSavedGameRecords()
             + OFBase::Environment::get().getDialogueManager()->countSavedGameRecords()
             + OFBase::Environment::get().getMechanicsManager()->countSavedGameRecords()
             + OFBase::Environment::get().getInputManager()->countSavedGameRecords()
@@ -357,7 +353,6 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
         OFBase::Environment::get().getLuaManager()->write(writer, listener);
         OFBase::Environment::get().getWorld()->write(writer, listener);
         OFBase::Environment::get().getFalloutScripts()->write(writer, listener);
-        OFBase::Environment::get().getScriptManager()->getGlobalScripts().write(writer, listener);
         OFBase::Environment::get().getMechanicsManager()->write(writer, listener);
         OFBase::Environment::get().getInputManager()->write(writer, listener);
         OFBase::Environment::get().getWindowManager()->write(writer, listener);
@@ -613,8 +608,9 @@ void OFState::StateManager::loadGame(
                     break;
 
                 case ESM::REC_GSCR:
-
-                    OFBase::Environment::get().getScriptManager()->getGlobalScripts().readRecord(reader, n.toInt());
+                    // The running Morrowind global scripts of a save made before they were removed: there is nothing
+                    // to restore them into, and nothing else in the file refers to them.
+                    reader.skipRecord();
                     break;
 
                 case ESM::REC_FOSV:
@@ -704,10 +700,6 @@ void OFState::StateManager::loadGame(
         }
 
         OFBase::Environment::get().getWorld()->updateProjectilesCasters();
-
-        // Vanilla MW will restart startup scripts when a save game is loaded. This is unintuitive,
-        // but some mods may be using it as a reload detector.
-        OFBase::Environment::get().getScriptManager()->getGlobalScripts().addStartup();
 
         // Since we passed "changeEvent=false" to changeCell, we shouldn't have triggered the cell change flag.
         // But make sure the flag is cleared anyway in case it was set from an earlier game.

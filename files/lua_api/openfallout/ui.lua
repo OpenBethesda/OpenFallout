@@ -110,8 +110,8 @@
 ---
 -- Set mode of the in-game console.
 -- The mode can be any string, by default is empty.
--- If not empty, then the console doesn't handle mwscript commands and
--- instead passes user input to Lua scripts via `onConsoleCommand` engine handler.
+-- If not empty, then the console passes user input to Lua scripts via `onConsoleCommand` engine handler.
+-- (Input typed in the console without a Lua mode is not run: Morrowind script lines are not supported.)
 -- @function [parent=#ui] setConsoleMode
 -- @param #string mode
 

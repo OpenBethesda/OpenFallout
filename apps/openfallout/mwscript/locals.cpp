@@ -1,5 +1,4 @@
 #include "locals.hpp"
-#include "globalscripts.hpp"
 
 #include <components/compiler/locals.hpp>
 #include <components/debug/debuglog.hpp>
@@ -34,25 +33,14 @@ namespace OFScript
         if (mInitialised)
             return false;
 
-        const GlobalScriptDesc* global
-            = OFBase::Environment::get().getScriptManager()->getGlobalScripts().getScriptIfPresent(script.mId);
-        if (global)
-        {
-            mShorts = global->mLocals.mShorts;
-            mLongs = global->mLocals.mLongs;
-            mFloats = global->mLocals.mFloats;
-        }
-        else
-        {
-            const Compiler::Locals& locals = OFBase::Environment::get().getScriptManager()->getLocals(script.mId);
+        const Compiler::Locals& locals = OFBase::Environment::get().getScriptManager()->getLocals(script.mId);
 
-            mShorts.clear();
-            mShorts.resize(locals.get('s').size(), 0);
-            mLongs.clear();
-            mLongs.resize(locals.get('l').size(), 0);
-            mFloats.clear();
-            mFloats.resize(locals.get('f').size(), 0);
-        }
+        mShorts.clear();
+        mShorts.resize(locals.get('s').size(), 0);
+        mLongs.clear();
+        mLongs.resize(locals.get('l').size(), 0);
+        mFloats.clear();
+        mFloats.resize(locals.get('f').size(), 0);
 
         mScriptId = script.mId;
         mInitialised = true;

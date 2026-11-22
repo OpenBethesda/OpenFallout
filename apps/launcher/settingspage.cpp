@@ -183,23 +183,6 @@ void Launcher::SettingsPage::on_skipMenuCheckBox_stateChanged(int state)
     startDefaultCharacterAtField->setEnabled(state == Qt::Checked);
 }
 
-void Launcher::SettingsPage::on_runScriptAfterStartupBrowseButton_clicked()
-{
-    QString scriptFile = QFileDialog::getOpenFileName(
-        this, QObject::tr("Select script file"), QDir::currentPath(), QString(tr("Text file (*.txt)")));
-
-    if (scriptFile.isEmpty())
-        return;
-
-    QFileInfo info(scriptFile);
-
-    if (!info.exists() || !info.isReadable())
-        return;
-
-    const QString path(QDir::toNativeSeparators(info.absoluteFilePath()));
-    runScriptAfterStartupField->setText(path);
-}
-
 namespace
 {
     constexpr double cellSizeInUnits = 8192;
@@ -410,7 +393,6 @@ bool Launcher::SettingsPage::loadSettings()
         startDefaultCharacterAtField->setEnabled(skipMenu);
 
         startDefaultCharacterAtField->setText(mGameSettings.value("start").value);
-        runScriptAfterStartupField->setText(mGameSettings.value("script-run").value);
     }
     return true;
 }
@@ -685,9 +667,6 @@ void Launcher::SettingsPage::saveSettings()
         {
             mGameSettings.setValue("start", { startCell });
         }
-        QString scriptRun = runScriptAfterStartupField->text();
-        if (scriptRun != mGameSettings.value("script-run").value)
-            mGameSettings.setValue("script-run", { scriptRun });
     }
 }
 

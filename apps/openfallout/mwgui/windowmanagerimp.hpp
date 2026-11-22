@@ -134,7 +134,7 @@ namespace OFGui
 
         WindowManager(SDL_Window* window, osgViewer::Viewer* viewer, osg::Group* guiRoot,
             Resource::ResourceSystem* resourceSystem, const std::shared_ptr<SceneUtil::WorkQueue>& workQueue,
-            const std::filesystem::path& logpath, bool consoleOnlyScripts, Translation::Storage& translationDataStorage,
+            const std::filesystem::path& logpath, Translation::Storage& translationDataStorage,
             ToUTF8::FromType encoding, bool exportFonts, const std::string& versionDescription,
             Files::ConfigurationManager& cfgMgr);
         virtual ~WindowManager();
@@ -311,8 +311,6 @@ namespace OFGui
         void watchActor(const OFWorld::Ptr& ptr) override;
         OFWorld::Ptr getWatchedActor() const override;
 
-        void executeInConsole(const std::filesystem::path& path) override;
-
         void enableRest() override { mRestAllowed = true; }
         bool getRestEnabled() override;
 
@@ -448,8 +446,6 @@ namespace OFGui
         std::unique_ptr<Gui::FontLoader> mFontLoader;
         std::unique_ptr<StatsWatcher> mStatsWatcher;
         std::unique_ptr<FalloutAirMeter> mAirMeter;
-
-        bool mConsoleOnlyScripts;
 
         std::map<MyGUI::Window*, WindowSettingValues> mTrackedWindows;
         void trackWindow(Layout* layout, const WindowSettingValues& settings);
