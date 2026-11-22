@@ -33,9 +33,10 @@ return {
         resaveAfter = 3,
         -- Fallout 3: after the shooting range and the classroom test (CG03 stage 25), back from the escape's stage 21 (the quest
         -- stands there for some 20 s until its gate fires; stage 3 never stands for 5 s on the real data, Mac round 1);
-        -- New Vegas: after the Vigor Tester (VCG01 stage 65, which stands for 2.7 s only: its entry waits 2 s), back when Doc
-        -- is to talk (stage 80, which stands for 79 s)
-        save = { { quest = 'CG03', stage = 25 }, { quest = 'VCG01', stage = 65, after = 2 } },
+        -- New Vegas: after the Vigor Tester (VCG01 stage 79, which stands for 12.3 to 13.4 s in seven Mac runs), back when Doc
+        -- is to talk (stage 80, which stands for 79 s). Not stage 65: it stands for 1.7 to 2.7 s, so a wait short enough to
+        -- fire there either missed it (no save) or saved after the stage had moved on (digest MISMATCH, 65 saved as 70)
+        save = { { quest = 'CG03', stage = 25 }, { quest = 'VCG01', stage = 79 } },
         load = { { quest = 'CG04', stage = 21 }, { quest = 'VCG01', stage = 80 } },
     },
     boxes = {
