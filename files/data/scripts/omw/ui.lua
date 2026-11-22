@@ -222,7 +222,6 @@ return {
         -- @function [parent=#UI] addMode
         -- @param #string mode New mode
         -- @param #table options (optional) Table with keys 'windows' and/or 'target' (see example).
-        -- @usage I.UI.addMode('Journal') -- open journal without dropping active modes.
         -- @usage -- Open barter with an NPC
         -- I.UI.addMode('Barter', {target = actor})
         addMode = addMode,

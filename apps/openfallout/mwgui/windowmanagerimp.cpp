@@ -371,7 +371,7 @@ namespace OFGui
         trackWindow(mConsole, makeConsoleWindowSettingValues());
 
         // GM_Journal has no window: the journal of Morrowind went, and the quests of Fallout are on the DATA page of
-        // the Pip-Boy (the Journal key opens that)
+        // the Pip-Boy (the Journal control opens nothing, playercontrols.lua)
 
         mMessageBoxManager = std::make_unique<MessageBoxManager>(
             mStore->get<ESM::GameSetting>().find("fMessageTimePerChar")->mValue.getFloat());
