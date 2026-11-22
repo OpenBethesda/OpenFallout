@@ -11,11 +11,18 @@
 // call that arrives while the bridge stops is harmless.
 //
 // The attitude is Core Motion's own (CMDeviceMotion.attitude). No personalised spatial audio profile is used.
+//
+// findMotionUsageDescription touches no Core Motion: it only reads an Info.plist, so that the engine never asks for
+// motion when macOS would end it for asking (see the function).
 
 #include "headtracking.hpp"
 
 #include <atomic>
 #include <memory>
+
+#include <dlfcn.h>
+#include <libproc.h>
+#include <unistd.h>
 
 #import <CoreMotion/CoreMotion.h>
 #import <Foundation/Foundation.h>
@@ -192,5 +199,45 @@ namespace OFSound
     std::unique_ptr<HeadMotionSource> makeHeadphoneMotion()
     {
         return std::make_unique<HeadphoneMotion>();
+    }
+
+    MotionUsageDescription findMotionUsageDescription()
+    {
+        @autoreleasepool
+        {
+            // macOS (its privacy service, TCC) charges a request for motion to the responsible process: the app that
+            // started this one from a terminal or another program, or this program itself when it was opened from
+            // Finder or with `open`. It reads NSMotionUsageDescription from that app's Info.plist and ends the
+            // program that asked when the key is missing, whatever this program's own bundle says. There is no
+            // public call that names the responsible process; this one is part of the system library and is looked
+            // up by name, so that a system without it falls back to the program's own bundle.
+            NSBundle* bundle = [NSBundle mainBundle];
+            using Responsible = pid_t (*)(pid_t);
+            const auto responsible
+                = reinterpret_cast<Responsible>(dlsym(RTLD_DEFAULT, "responsibility_get_pid_responsible_for_pid"));
+            if (responsible != nullptr)
+            {
+                const pid_t pid = responsible(getpid());
+                if (pid > 0 && pid != getpid())
+                {
+                    char path[PROC_PIDPATHINFO_MAXSIZE] = {};
+                    if (proc_pidpath(pid, path, sizeof(path)) <= 0)
+                        return { false, "the program that started the game" };
+                    NSString* executable = [NSString stringWithUTF8String:path];
+                    const NSRange contents = [executable rangeOfString:@"/Contents/MacOS/" options:NSBackwardsSearch];
+                    // A program outside an app bundle has no Info.plist that macOS would read
+                    if (contents.location == NSNotFound)
+                        return { false, executable.lastPathComponent.UTF8String };
+                    bundle = [NSBundle bundleWithPath:[executable substringToIndex:contents.location]];
+                    if (bundle == nil)
+                        return { false, executable.lastPathComponent.UTF8String };
+                }
+            }
+            if (bundle == nil)
+                return { false, "the program" };
+            const id text = [bundle objectForInfoDictionaryKey:@"NSMotionUsageDescription"];
+            const bool present = [text isKindOfClass:[NSString class]] && [(NSString*)text length] > 0;
+            return { present, bundle.bundlePath.lastPathComponent.UTF8String };
+        }
     }
 }

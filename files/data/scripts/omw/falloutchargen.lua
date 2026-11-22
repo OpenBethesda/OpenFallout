@@ -831,76 +831,92 @@ local function sync()
     end
 end
 
+-- A button of the pad: the model screens of SPECIAL and the screen of the face take it
+local function padPress(button)
+    special.noteDevice(true)
+    -- A box over the screen has the pad, as it has the keys; so has the pause menu (Escape opens it over the
+    -- Vigor Tester and the book, and the mode is the main menu then)
+    if messageOpen() then
+        return
+    end
+    if special.isOpen() and I.UI.getMode() == 'Interface' then
+        special.pad(button)
+    elseif face.isOpen() and I.UI.getMode() == 'Interface' then
+        face.pad(button)
+    end
+end
+
+-- A key on the screens of this script
+local function keyPress(key)
+    special.noteDevice(false)
+    if messageOpen() then
+        return
+    end
+    if special.isOpen() then
+        if I.UI.getMode() == 'Interface' then
+            special.press(key.code, key.symbol)
+        end
+        return
+    end
+    if face.isOpen() then
+        -- (the pause menu that Escape opens over the screen has the keys then)
+        if I.UI.getMode() == 'Interface' then
+            face.press(key.code, key.symbol, key.withShift)
+        end
+        return
+    end
+    if not shownPage or not (element or shown) then
+        return
+    end
+    if shown and controls and shownPage ~= 'name' and key.code ~= input.KEY.Enter then
+        if key.code == input.KEY.UpArrow then
+            controls.move(-1)
+        elseif key.code == input.KEY.DownArrow then
+            controls.move(1)
+        elseif key.code == input.KEY.LeftArrow then
+            controls.change(-1)
+        elseif key.code == input.KEY.RightArrow or key.code == input.KEY.Space then
+            controls.change(1)
+        end
+        return
+    end
+    if key.code == input.KEY.Enter then
+        if shownPage == 'name' then
+            if chargen.setName(typed or '') ~= '' then finishPage() end
+        elseif (shown or shownPage == 'special') and not doneReady() then
+            -- The Done button of the file is dim until the points are spent or the tags are put: so is Enter (and
+            -- on the stand-in of the SPECIAL page)
+            return
+        else
+            finishPage()
+        end
+    elseif shownPage == 'name' then
+        typeName(key)
+    end
+end
+
 return {
     engineHandlers = {
         -- The game stands still while a screen is open, and the screens of the engine open between frames
         onFrame = sync,
         -- The buttons of a pad on the model screens of SPECIAL
-        onControllerButtonPress = function(button)
-            special.noteDevice(true)
-            -- A box over the screen has the pad, as it has the keys; so has the pause menu (Escape opens it over the
-            -- Vigor Tester and the book, and the mode is the main menu then)
-            if messageOpen() then
-                return
-            end
-            if special.isOpen() and I.UI.getMode() == 'Interface' then
-                special.pad(button)
-            elseif face.isOpen() and I.UI.getMode() == 'Interface' then
-                face.pad(button)
-            end
-        end,
+        onControllerButtonPress = padPress,
         onMouseButtonPress = function()
             special.noteDevice(false)
         end,
-        onKeyPress = function(key)
-            special.noteDevice(false)
-            if messageOpen() then
-                return
-            end
-            if special.isOpen() then
-                if I.UI.getMode() == 'Interface' then
-                    special.press(key.code, key.symbol)
-                end
-                return
-            end
-            if face.isOpen() then
-                -- (the pause menu that Escape opens over the screen has the keys then)
-                if I.UI.getMode() == 'Interface' then
-                    face.press(key.code, key.symbol, key.withShift)
-                end
-                return
-            end
-            if not shownPage or not (element or shown) then
-                return
-            end
-            if shown and controls and shownPage ~= 'name' and key.code ~= input.KEY.Enter then
-                if key.code == input.KEY.UpArrow then
-                    controls.move(-1)
-                elseif key.code == input.KEY.DownArrow then
-                    controls.move(1)
-                elseif key.code == input.KEY.LeftArrow then
-                    controls.change(-1)
-                elseif key.code == input.KEY.RightArrow or key.code == input.KEY.Space then
-                    controls.change(1)
-                end
-                return
-            end
-            if key.code == input.KEY.Enter then
-                if shownPage == 'name' then
-                    if chargen.setName(typed or '') ~= '' then finishPage() end
-                elseif (shown or shownPage == 'special') and not doneReady() then
-                    -- The Done button of the file is dim until the points are spent or the tags are put: so is Enter (and
-                    -- on the stand-in of the SPECIAL page)
-                    return
-                else
-                    finishPage()
-                end
-            elseif shownPage == 'name' then
-                typeName(key)
-            end
-        end,
+        onKeyPress = keyPress,
     },
     eventHandlers = {
+        -- A key (`{ key = <a code of input.KEY>, symbol = <text> }`) or a button of the pad (`{ button = <a value
+        -- of input.CONTROLLER_BUTTON> }`) given by an event goes where the same key or button goes: the rounds, which
+        -- press no keys, drive the screens with it
+        FalloutChargenPress = function(data)
+            if data.button ~= nil then
+                padPress(data.button)
+            elseif data.key ~= nil then
+                keyPress({ code = data.key, symbol = data.symbol or '', withShift = data.withShift == true })
+            end
+        end,
         -- A screen that is left (Escape) is done with what it has so far; the main menu on top of it is not leaving it
         UiModeChanged = function(data)
             if modeOpen and data.oldMode == 'Interface' and data.newMode ~= 'Interface' and data.newMode ~= 'MainMenu' then

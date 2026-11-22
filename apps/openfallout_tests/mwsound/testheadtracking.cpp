@@ -663,4 +663,104 @@ namespace OFSound
         writer.join();
         EXPECT_EQ(box.latest()->mCount, 20000u);
     }
+
+    // Whether head tracking may start: a hidden run never reads headphone motion, and the game never asks macOS for
+    // it on behalf of an app that has no NSMotionUsageDescription, since macOS ends a program that does
+
+    TEST(OFSoundHeadTrackingStartTest, the_setting_on_in_a_visible_run_of_an_app_with_the_text_starts)
+    {
+        EXPECT_EQ(decideHeadTrackingStart(true, false, true), HeadTrackingStart::Start);
+    }
+
+    TEST(OFSoundHeadTrackingStartTest, the_setting_off_never_starts)
+    {
+        EXPECT_EQ(decideHeadTrackingStart(false, false, true), HeadTrackingStart::SettingOff);
+        EXPECT_EQ(decideHeadTrackingStart(false, true, false), HeadTrackingStart::SettingOff);
+    }
+
+    TEST(OFSoundHeadTrackingStartTest, a_headless_run_never_starts_whatever_the_setting_and_the_app_say)
+    {
+        EXPECT_EQ(decideHeadTrackingStart(true, true, true), HeadTrackingStart::HeadlessRun);
+        EXPECT_EQ(decideHeadTrackingStart(true, true, false), HeadTrackingStart::HeadlessRun);
+    }
+
+    TEST(OFSoundHeadTrackingStartTest, an_app_without_the_motion_usage_text_never_starts)
+    {
+        EXPECT_EQ(decideHeadTrackingStart(true, false, false), HeadTrackingStart::NoMotionUsageDescription);
+    }
+
+    namespace
+    {
+        struct AppliedSetting
+        {
+            HeadTrackingStart mStart;
+            bool mSourceStarted;
+            int mAppsLookedAt;
+        };
+
+        AppliedSetting applySetting(bool setting, bool headless, bool described)
+        {
+            auto source = std::make_unique<StandInHeadMotion>();
+            StandInHeadMotion& standIn = *source;
+            HeadTracker tracker(std::move(source));
+            int looked = 0;
+            const HeadTrackingStart start = applyHeadTrackingSetting(tracker, setting, headless, [&] {
+                ++looked;
+                return MotionUsageDescription{ described, "Stand-in.app" };
+            });
+            return { start, standIn.isStarted(), looked };
+        }
+    }
+
+    TEST(OFSoundHeadTrackingStartTest, a_headless_run_never_touches_the_source_nor_looks_at_the_app)
+    {
+        const AppliedSetting applied = applySetting(true, true, true);
+        EXPECT_EQ(applied.mStart, HeadTrackingStart::HeadlessRun);
+        EXPECT_FALSE(applied.mSourceStarted);
+        EXPECT_EQ(applied.mAppsLookedAt, 0);
+    }
+
+    TEST(OFSoundHeadTrackingStartTest, an_app_without_the_text_leaves_the_source_alone)
+    {
+        const AppliedSetting applied = applySetting(true, false, false);
+        EXPECT_EQ(applied.mStart, HeadTrackingStart::NoMotionUsageDescription);
+        EXPECT_FALSE(applied.mSourceStarted);
+        EXPECT_EQ(applied.mAppsLookedAt, 1);
+    }
+
+    TEST(OFSoundHeadTrackingStartTest, an_app_with_the_text_starts_the_source)
+    {
+        const AppliedSetting applied = applySetting(true, false, true);
+        EXPECT_EQ(applied.mStart, HeadTrackingStart::Start);
+        EXPECT_TRUE(applied.mSourceStarted);
+    }
+
+    TEST(OFSoundHeadTrackingStartTest, the_setting_off_looks_at_nothing)
+    {
+        const AppliedSetting applied = applySetting(false, false, true);
+        EXPECT_EQ(applied.mStart, HeadTrackingStart::SettingOff);
+        EXPECT_FALSE(applied.mSourceStarted);
+        EXPECT_EQ(applied.mAppsLookedAt, 0);
+    }
+
+    TEST(OFSoundHeadTrackingStartTest, turning_the_setting_off_stops_a_started_source)
+    {
+        auto source = std::make_unique<StandInHeadMotion>();
+        StandInHeadMotion& standIn = *source;
+        HeadTracker tracker(std::move(source));
+        const auto described = [] { return MotionUsageDescription{ true, "Stand-in.app" }; };
+        applyHeadTrackingSetting(tracker, true, false, described);
+        ASSERT_TRUE(standIn.isStarted());
+        applyHeadTrackingSetting(tracker, false, false, described);
+        EXPECT_FALSE(standIn.isStarted());
+        EXPECT_FALSE(tracker.isEnabled());
+    }
+
+    // The real lookup of the native bridge: it reads only an Info.plist (of the app that started the tests, or of the
+    // tests' own bundle) and names that app for the log, whatever the answer is
+    TEST(OFSoundHeadTrackingStartTest, the_lookup_of_the_usage_description_names_the_app_it_read)
+    {
+        const MotionUsageDescription usage = findMotionUsageDescription();
+        EXPECT_FALSE(usage.mApp.empty());
+    }
 }

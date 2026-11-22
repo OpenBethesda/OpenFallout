@@ -411,6 +411,18 @@ if(OPENFALLOUT_USE_SYSTEM_MYGUI)
 endif()
 find_package(SDL2 2.26 REQUIRED)
 find_package(OpenAL REQUIRED)
+# The engine is built for OpenAL Soft, the library the packaged app ships (CI/check_mac_package.py refuses the system's).
+# Apple's OpenAL framework has no HRTF, none of OpenAL Soft's extensions and no way to write sound to a file, so a build
+# that links it sounds different from what players get. CMake falls back to it when no OpenAL Soft is on the search path.
+if (OPENAL_LIBRARY MATCHES "/OpenAL\\.framework")
+    message(FATAL_ERROR
+        "CMake found Apple's OpenAL framework (${OPENAL_LIBRARY}), which OpenFallout does not support. "
+        "Build against OpenAL Soft: pass -DOPENAL_LIBRARY=<prefix>/lib/libopenal.dylib "
+        "-DOPENAL_INCLUDE_DIR=<prefix>/include/AL, or put its prefix first in CMAKE_PREFIX_PATH. "
+        "The project's dependency set (CI/macos/deps_versions.sh) has it under installed/arm64-osx-dynamic; "
+        "Homebrew's openal-soft is keg-only, so its prefix is $(brew --prefix openal-soft). "
+        "Start from an empty build folder or delete OPENAL_LIBRARY from the cache.")
+endif()
 find_package(ZLIB REQUIRED)
 
 option(USE_LUAJIT "Switch Lua/LuaJit (TRUE is highly recommended)" TRUE)
