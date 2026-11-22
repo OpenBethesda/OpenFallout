@@ -11,7 +11,17 @@ It is a setting, and it is off by default. The owner judges it by ear. If it lag
 - In the launcher: Settings, Audio, **Head Tracking**.
 - In `settings.cfg`, category `[Sound]`: `head tracking = true`. The default is `false`.
 
-With the setting off, the engine does not touch Core Motion at all.
+With the setting off, the engine does not touch Core Motion at all. It does not touch it either, whatever the setting
+says, in two more cases:
+
+- **A headless run** (`--headless` or `OPENFALLOUT_HEADLESS=1`). Nobody watches it, and asking for motion could put
+  macOS's permission box on a screen that belongs to somebody else. The log says
+  `Head tracking off in a headless run: ...`.
+- **When macOS would end the game for asking.** macOS charges a request for motion to the *responsible* app: the game's
+  own app when it is opened from Finder or with `open`, but the terminal (or other program) that started it otherwise.
+  When that app's `Info.plist` has no `NSMotionUsageDescription`, macOS ends the program that asks. The engine reads
+  that `Info.plist` first and leaves head tracking off with a warning that names the app and the key. Terminal has no
+  such key, so a game started from Terminal plays without head tracking. Open the game from OpenFallout.app to use it.
 
 ## What the player needs
 
@@ -64,6 +74,9 @@ With the setting off, the engine does not touch Core Motion at all.
 ## Log lines
 
 - `Head tracking on: waiting for headphones that report motion` and `Head tracking off`: the setting.
+- `Head tracking off in a headless run: ...`: the setting is on in a headless run; Core Motion is not touched.
+- `Head tracking off: macOS charges requests for headphone motion to <app>, whose Info.plist has no
+  NSMotionUsageDescription ...` (a warning): the setting is on, but macOS would end the game for asking.
 - `Head tracking: reading headphone motion through Core Motion (permission ...)`: the bridge started, with macOS's
   answer so far.
 - `Head tracking: Core Motion says headphone motion is not available now; trying again ...`: once, when the bridge
@@ -78,7 +91,10 @@ With the setting off, the engine does not touch Core Motion at all.
 
 - Which headphone models report motion to a Mac. Apple's figure shows AirPods Pro and AirPods Max.
 - Whether macOS asks for permission, and when. The app's property lists carry the motion usage description
-  (`NSMotionUsageDescription`), without which macOS stops an app that starts headphone motion. The hardened runtime has
+  (`NSMotionUsageDescription`), without which macOS stops an app that starts headphone motion (`CI/check_mac_package.py`
+  checks both). Which app is responsible comes from a function of the system library that Apple does not document
+  (`responsibility_get_pid_responsible_for_pid`); it is looked up by name, and without it the engine reads its own
+  bundle. The hardened runtime has
   no entitlement for motion, so none is added.
 - The direction of the axes and of the attitude on real headphones. The listening check tells which, and each wrong
   outcome has its own fix in the bridge (see "What to report" below).

@@ -3,9 +3,11 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
 
 #include <osg/Vec3f>
 
@@ -190,8 +192,43 @@ namespace OFSound
         std::optional<HeadSample> mRateStart;
     };
 
+    /// Whether head tracking starts when the setting is applied, and why not
+    enum class HeadTrackingStart
+    {
+        Start,
+        /// The setting "head tracking" is off
+        SettingOff,
+        /// A headless run (Debug::isHeadlessRun) never reads headphone motion: macOS would put its permission box on
+        /// a screen that belongs to somebody else, or end the run
+        HeadlessRun,
+        /// The app macOS charges the request to has no NSMotionUsageDescription in its Info.plist, and macOS ends a
+        /// program that asks for motion without it
+        NoMotionUsageDescription,
+    };
+
+    /// The decision, in this order: the setting, then the headless run, then the usage description
+    HeadTrackingStart decideHeadTrackingStart(bool setting, bool headless, bool motionUsageDescribed);
+
+    /// Whether the app that macOS charges a request for motion to says what the motion is read for
+    struct MotionUsageDescription
+    {
+        bool mPresent = false;
+        /// The app's name, for the log
+        std::string mApp;
+    };
+
+    /// Applies the setting to the tracker: decides, logs the reason when head tracking stays off, and turns the
+    /// tracker on or off. `findUsage` is asked only when the setting is on in a visible run.
+    HeadTrackingStart applyHeadTrackingSetting(
+        HeadTracker& tracker, bool setting, bool headless, const std::function<MotionUsageDescription()>& findUsage);
+
     /// The headphones' motion through Core Motion (the native bridge, headphonemotion.mm)
     std::unique_ptr<HeadMotionSource> makeHeadphoneMotion();
+
+    /// Looks, without touching Core Motion, at the app macOS charges this process's requests for motion to (the
+    /// responsible app: the one that started the process from a terminal, or the game's own app when it is opened
+    /// from Finder) and whether its Info.plist has NSMotionUsageDescription (native bridge, headphonemotion.mm)
+    MotionUsageDescription findMotionUsageDescription();
 }
 
 #endif
