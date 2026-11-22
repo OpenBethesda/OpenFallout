@@ -626,9 +626,11 @@ def sound_to_file(run_dir, keep=False):
 
 def links_system_openal(engine):
     """Whether the engine program links Apple's OpenAL framework (from `otool -L`) instead of OpenAL Soft; None when the
-    program cannot be read (a script that starts the engine, a missing file)."""
+    program cannot be read (a missing file) or lists no library at all (a script that starts the engine: otool ends well on
+    it and only says that it is no object file)."""
     result = subprocess.run(["/usr/bin/otool", "-L", str(engine)], capture_output=True, text=True)
-    if result.returncode != 0:
+    # every library is a line that begins with a tab, under the line that names the program
+    if result.returncode != 0 or not any(line.startswith("\t") for line in result.stdout.splitlines()):
         return None
     return "/OpenAL.framework/" in result.stdout
 

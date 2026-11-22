@@ -1082,6 +1082,10 @@ class GuardedRun(unittest.TestCase):
             # a program that cannot be read (a script that starts the engine) could start any engine: no sound round on it
             run.return_value = mock.Mock(returncode=1, stdout="")
             self.assertIsNone(round_runner.links_system_openal("/x/openfallout"))
+            # otool ends well on a script and only says that it is no object file
+            run.return_value = mock.Mock(returncode=0, stdout="/x/openfallout: is not an object file\n")
+            self.assertIsNone(round_runner.links_system_openal("/x/openfallout"))
+            self.assertEqual(run.call_args.args[0], ["/usr/bin/otool", "-L", "/x/openfallout"])
             with self.assertRaises(SystemExit) as unknown:
                 round_runner.check_sound_output({"OPENFALLOUT_HEADLESS_SOUND": "1"}, "/x/openfallout")
             self.assertIn("cannot tell", str(unknown.exception))
