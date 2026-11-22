@@ -140,6 +140,9 @@ reference is found and the save is in an interior.
   for its file); with `preload num threads` above 1 and two shots asked for back to back (`r.shot(name, false)`) two writes could swap.
 - It sees what the engine draws, not what the player's eye would: for a look at a screen that a pointer or a key opens (the
   Pip-Boy, a conversation) the scenario must open it through the game's own scripts or events, the way `autoplay` does.
+  The screens of the making of the character (the SPECIAL book, the Vigor Tester, the face) take a key or a pad's button
+  from the event `FalloutChargenPress` sent to the player (`{ key = <scancode> }` or `{ button = <pad button> }`; the
+  triggers are 100 and 101), which goes where the real key or button goes.
 - Sound is off unless `OPENFALLOUT_HEADLESS_SOUND=1`; nobody can hear a round, so sound is checked by its log lines.
 - Software and hardware drawing differ: on a Mac without a GPU (a hosted CI runner, which gives Apple's software renderer)
   the frame times mean nothing, and a driver-specific fault (a texture format) may not show.
