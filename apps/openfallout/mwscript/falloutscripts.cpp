@@ -962,6 +962,7 @@ namespace OFScript
             mConversationVoice = static_cast<int>(VoiceState::None);
         }
         mSayings.clear();
+        mQueuedSayings.clear();
         mSayLogged.clear();
         mNothingSaid.clear();
     }
@@ -4514,9 +4515,30 @@ namespace OFScript
             return false;
         }
         lines.back().mEnd = true;
-        runOnMainThread(
-            [this, reference, lines = std::move(lines)]() mutable { startSaying(reference, std::move(lines)); });
+        queueSaying(reference, std::move(lines));
         return true;
+    }
+
+    void FalloutScripts::queueSaying(FalloutScript::FormId reference, std::vector<SaidLine> lines)
+    {
+        if (std::this_thread::get_id() == mMainThread)
+        {
+            startSaying(reference, std::move(lines));
+            return;
+        }
+        // The response is said (it is marked as said, its begin script ran): the lines wait for the thread of the frame
+        // where a save finds them too. They start in their place among the other actions of the queue
+        const std::uint64_t ticket = mQueuedSayings.push(reference, std::move(lines));
+        runOnMainThread([this, ticket] {
+            if (std::optional<FalloutScript::SayingQueue::Entry> entry = mQueuedSayings.take(ticket))
+                startSaying(entry->mReference, std::move(entry->mLines));
+        });
+    }
+
+    void FalloutScripts::startQueuedSayings()
+    {
+        for (FalloutScript::SayingQueue::Entry& entry : mQueuedSayings.takeAll())
+            startSaying(entry.mReference, std::move(entry.mLines));
     }
 
     void FalloutScripts::converse(
@@ -4854,7 +4876,10 @@ namespace OFScript
                     ? std::numeric_limits<float>::max()
                     : (speaker.getRefData().getPosition().asVec3() - player.getRefData().getPosition().asVec3())
                           .length();
-                if (!voiced || line.mForceSubtitles || mWorldState.alwaysSubtitles(sayerOf(line)) || Settings::gui().mSubtitles)
+                // (a line with no words, the end of what a character that is gone said, shows nothing)
+                if (!line.mText.empty()
+                    && (!voiced || line.mForceSubtitles || mWorldState.alwaysSubtitles(sayerOf(line))
+                        || Settings::gui().mSubtitles))
                 {
                     // The subtitles of the display (the executable's HUD tile `Subtitles`): the line stays as long as
                     // its text takes at fNoticeTextTimePerCharacter (0.06 in the executable, 0.08 in the files), from

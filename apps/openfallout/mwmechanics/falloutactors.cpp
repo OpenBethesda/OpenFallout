@@ -313,6 +313,9 @@ namespace OFMechanics
             }
             // So does why it is done: a package that ran out does not keep a character in its furniture
             state.mExpired = mind.mPackage != nullptr && mind.mExpired;
+            // and that a Dialogue package has spoken: after a load it waits for the lines the save kept, and does not
+            // say them again
+            state.mSpoke = mind.mPackage != nullptr && mind.mSpoke;
             if (mind.mCommanded)
             {
                 state.mFollows = true;
@@ -363,6 +366,7 @@ namespace OFMechanics
                     mind.mDurationHundredths = saved->mDurationHundredths;
                     mind.mStartedHours = saved->mStartedHours;
                     mind.mExpired = saved->mExpired;
+                    mind.mSpoke = saved->mSpoke;
                 }
         }
 
@@ -1953,6 +1957,7 @@ namespace OFMechanics
             }
             mind.mWaitingFor = waitNothing;
             mind.mSpoke = true;
+            keepState(mind);
             Log(Debug::Info) << "Package " << package->mEditorId << " of " << mind.mPtr.getCellRef().getRefId()
                              << ": it talks to " << (mind.mFollowing.mPlayer ? "the player" : "a character");
         }
