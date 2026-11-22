@@ -166,5 +166,93 @@ class BookTest(unittest.TestCase):
         self.assertEqual(self.press("X"), ["increase", "decrease", "exit"])
 
 
+CHARGEN_STUBS = r"""
+local pressed, mode, boxOpen = test_pressed, test_mode, test_box
+
+-- Anything the script asks of the engine that these tests do not look at: a value that can be called, indexed and
+-- added to
+local anything
+anything = setmetatable({}, {
+    __index = function() return anything end,
+    __call = function() return anything end,
+    __add = function() return 0 end,
+    __mul = function() return anything end,
+})
+local function loose(fields)
+    return setmetatable(fields, { __index = function() return anything end })
+end
+
+package.preload['openfallout.core'] = function() return loose({}) end
+package.preload['openfallout.input'] = function()
+    return loose({ KEY = test_keys, CONTROLLER_BUTTON = test_buttons })
+end
+package.preload['openfallout.async'] = function() return loose({}) end
+package.preload['openfallout.ui'] = function() return loose({ _getDefaultFontSize = function() return 16 end }) end
+package.preload['openfallout.util'] = function() return loose({}) end
+package.preload['openfallout.interfaces'] = function()
+    return loose({
+        UI = { getMode = function() return mode[1] end },
+        FalloutMessage = { isOpen = function() return boxOpen[1] end },
+    })
+end
+package.preload['scripts.omw.falloutmenu'] = function() return loose({}) end
+package.preload['scripts.omw.falloutspecialscreen'] = function()
+    return {
+        isOpen = function() return true end,
+        noteDevice = function(pad) pressed[#pressed + 1] = { 'device', pad } end,
+        pad = function(button) pressed[#pressed + 1] = { 'pad', button } end,
+        press = function(code, symbol) pressed[#pressed + 1] = { 'key', code, symbol } end,
+        close = function() end,
+    }
+end
+package.preload['scripts.omw.falloutfacescreen'] = function()
+    return { isOpen = function() return false end }
+end
+"""
+
+
+@unittest.skipUnless(LuaRuntime, "needs lupa")
+class ChargenPressTest(unittest.TestCase):
+    """falloutchargen.lua hands the keys and the pad's buttons to the screen of SPECIAL. An event gives it the same
+    presses, for the rounds, which cannot press a key."""
+
+    def setUp(self):
+        self.lua = LuaRuntime(unpack_returned_tuples=True)
+        self.pressed = self.lua.table()
+        self.mode = self.lua.table_from(["Interface"])
+        self.box = self.lua.table_from([False])
+        self.lua.globals().print = lambda *words: None
+        self.lua.globals().test_pressed = self.pressed
+        self.lua.globals().test_mode = self.mode
+        self.lua.globals().test_box = self.box
+        self.lua.globals().test_keys = self.lua.table_from(KEYS)
+        self.lua.globals().test_buttons = self.lua.table_from(BUTTONS)
+        self.lua.execute(CHARGEN_STUBS)
+        self.script = self.lua.eval("function(source) return load(source, 'falloutchargen')() end")(
+            (SCRIPTS / "falloutchargen.lua").read_text(encoding="utf-8"))
+
+    def presses(self):
+        return [tuple(lua_list(row)) for row in lua_list(self.pressed)]
+
+    def send(self, **data):
+        self.script.eventHandlers.FalloutChargenPress(self.lua.table_from(data))
+
+    def test_a_button_given_by_the_event_reaches_the_screen_as_the_pad_s_button_does(self):
+        self.send(button=BUTTONS["RightTrigger"])
+        self.script.engineHandlers.onControllerButtonPress(BUTTONS["RightTrigger"])
+        self.assertEqual(self.presses(), [("device", True), ("pad", BUTTONS["RightTrigger"])] * 2)
+
+    def test_a_key_given_by_the_event_reaches_the_screen_as_the_key_does(self):
+        self.send(key=KEYS["UpArrow"])
+        self.script.engineHandlers.onKeyPress(self.lua.table_from({"code": KEYS["UpArrow"], "symbol": ""}))
+        self.assertEqual(self.presses(), [("device", False), ("key", KEYS["UpArrow"], "")] * 2)
+
+    def test_the_event_does_nothing_under_a_message_box(self):
+        self.box[1] = True
+        self.send(button=BUTTONS["X"])
+        self.send(key=KEYS["A"])
+        self.assertEqual(self.presses(), [("device", True), ("device", False)])
+
+
 if __name__ == "__main__":
     unittest.main()
