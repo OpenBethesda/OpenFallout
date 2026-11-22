@@ -34,8 +34,10 @@ The engine needs **OpenAL Soft**, the library the packaged app ships. Homebrew d
 
 ```
     -DOPENAL_LIBRARY=<prefix>/lib/libopenal.dylib -DOPENAL_INCLUDE_DIR=<prefix>/include/AL \
-    -DCMAKE_BUILD_RPATH=<prefix>/lib
+    -DCMAKE_BUILD_RPATH=<folder with only OpenAL Soft>
 ```
+
+Homebrew's keg holds only OpenAL Soft, so its `lib` folder can be the run path. The dependency set's `lib` folder cannot: it also holds an OpenSceneGraph for desktop OpenGL, which a run path that comes first makes the Metal build load instead of its own, and the engine stops at start. Link `libopenal*.dylib` and the `libfmt` it needs from there into a folder of their own and use that.
 
 Run the tests from `build/OpenFallout.app/Contents/MacOS/`. This route has not been written out and run as one command here; the options are the ones documented elsewhere on this page and in the CI scripts.
 
