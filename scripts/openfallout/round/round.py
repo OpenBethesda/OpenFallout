@@ -601,9 +601,16 @@ def engine_environment(extra, is_mac, run_dir=None, keep_sound=False):
             (Path(run_dir) / folder).mkdir(parents=True, exist_ok=True)
             env[name] = str(Path(run_dir) / folder)
     env.update(extra or {})
-    if env.get("OPENFALLOUT_HEADLESS_SOUND") == "1" and run_dir is not None:
+    if sound_is_on(env) and run_dir is not None:
         env.update(sound_to_file(run_dir, keep_sound))
     return dict(os.environ, **env)
+
+
+def sound_is_on(env):
+    """Whether the engine of a run will play sound: what the round and the variant say (`env`), or else what the runner's own
+    environment says, since the engine gets that too. A shell that has `OPENFALLOUT_HEADLESS_SOUND=1` switches the sound of a
+    round on as surely as the round file does."""
+    return env.get("OPENFALLOUT_HEADLESS_SOUND", os.environ.get("OPENFALLOUT_HEADLESS_SOUND")) == "1"
 
 
 def sound_to_file(run_dir, keep=False):
@@ -626,7 +633,7 @@ def links_system_openal(engine):
 def check_sound_output(env, engine):
     """Stops a round with sound on an engine that links Apple's OpenAL framework: that library ignores the wave backend's settings
     and would play the round through the speakers or headphones of whoever sits at the computer."""
-    if env.get("OPENFALLOUT_HEADLESS_SOUND") == "1" and links_system_openal(engine):
+    if sound_is_on(env) and links_system_openal(engine):
         raise SystemExit(f"{engine} links Apple's OpenAL framework, which cannot write its sound to a file: a round with sound "
                          "needs an engine built against OpenAL Soft (see docs/openfallout/build-baseline.md)")
 

@@ -1031,6 +1031,28 @@ class GuardedRun(unittest.TestCase):
         self.assertNotIn("ALSOFT_CONF", {k: v for k, v in round_runner.engine_environment({}, True, run_dir).items()
                                          if k not in os.environ})
 
+    def test_sound_switched_on_in_the_runners_own_environment_goes_to_a_file_too(self):
+        # the flag can come from the shell that started the runner, with nothing about sound in the round: the engine gets the
+        # flag either way, so the sound must go to the file either way, and the library check must run
+        run_dir = Path(tempfile.mkdtemp(prefix="round-sound-inherited-"))
+        system = "/x/openfallout:\n\t/System/Library/Frameworks/OpenAL.framework/Versions/A/OpenAL (compatibility version 1.0.0)\n"
+        with mock.patch.dict(os.environ, {"OPENFALLOUT_HEADLESS_SOUND": "1", "ALSOFT_DRIVERS": "coreaudio"}):
+            env = round_runner.engine_environment({}, True, run_dir)
+            self.assertEqual(env["OPENFALLOUT_HEADLESS_SOUND"], "1")
+            self.assertEqual(env["ALSOFT_DRIVERS"], "wave")
+            self.assertTrue(Path(env["ALSOFT_CONF"]).resolve().is_relative_to(run_dir.resolve()))
+            # the run's own folders still stand over what the shell had
+            self.assertEqual(env["PATH"], str(run_dir / "no-programs"))
+            with mock.patch.object(round_runner.subprocess, "run") as run:
+                run.return_value = mock.Mock(returncode=0, stdout=system)
+                with self.assertRaises(SystemExit):
+                    round_runner.check_sound_output({}, "/x/openfallout")
+                # what the round says stands over the shell: a round that switches sound off is silent and is not checked
+                round_runner.check_sound_output({"OPENFALLOUT_HEADLESS_SOUND": "0"}, "/x/openfallout")
+            silent = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "0"}, True, run_dir)
+            self.assertNotIn("ALSOFT_CONF", silent)
+            self.assertEqual(silent["OPENFALLOUT_HEADLESS_SOUND"], "0")
+
     def test_a_round_with_sound_refuses_an_engine_that_links_the_systems_openal(self):
         # Apple's OpenAL framework does not read OpenAL Soft's settings: its sound would go to the speakers
         system = ("/x/openfallout:\n\t/System/Library/Frameworks/OpenAL.framework/Versions/A/OpenAL (compatibility version 1.0.0)\n"
