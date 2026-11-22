@@ -80,9 +80,10 @@ rounds on 2026-11-21, on the main thread in `InputAction::Registry::update` and 
 The rebuild can go once the dependency set itself ships an HRT LuaJIT. The change belongs in `OpenMW/openmw-deps-build`
 (nothing was pushed there): for the macOS triplets, build the `luajit` port with `-DLUAJIT_ENABLE_OSX_HRT` in its C
 flags (for example in the triplet: `if(PORT STREQUAL "luajit") string(APPEND VCPKG_C_FLAGS " -DLUAJIT_ENABLE_OSX_HRT")
-endif()`, with `VCPKG_CXX_FLAGS` set alongside as vcpkg requires) and add the void-return patch to the port (or an
-overlay port) until LuaJIT carries the fix. Then check that the published library imports `pthread_jit_write_protect_np`
-and delete `CI/macos/build_luajit_hrt.sh` and its call.
+endif()`, with `VCPKG_CXX_FLAGS` set alongside as vcpkg requires) and add the void-return and thread-protect patches to
+the port (or an overlay port) until LuaJIT carries the fixes. Then check that the published library imports
+`pthread_jit_write_protect_np` and was built with the thread-protect patch (or a LuaJIT that fixes the same thing), and
+only then delete `CI/macos/build_luajit_hrt.sh` and its call: without the patch the engine crashes again.
 
 A release also needs a Developer ID identity (`OPENFALLOUT_CODESIGN_IDENTITY`): with it, every bundled library carries
 the team's ID and library validation stays on. CI imports it from secrets and notarizes the image: see [mac-release.md](mac-release.md).
