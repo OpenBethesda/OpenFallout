@@ -7,6 +7,8 @@ file(GLOB UNITTEST_SRC_FILES
     options.cpp
     shellinterface.cpp
 
+    macos/testsavedwindowstate.cpp
+
     mwworld/teststore.cpp
     mwworld/testduration.cpp
     mwworld/testtimestamp.cpp

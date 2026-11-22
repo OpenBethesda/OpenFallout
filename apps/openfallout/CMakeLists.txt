@@ -146,6 +146,12 @@ target_sources(openfallout-lib PRIVATE mwsound/headphonemotion.mm)
 set_source_files_properties(mwsound/headphonemotion.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 target_link_libraries(openfallout-lib "-framework CoreMotion" "-framework Foundation")
 
+# The native bridge of start-up (docs/openfallout/core-and-edges.md): tells AppKit that the game restores no saved
+# window state, before SDL makes the application object
+target_sources(openfallout-lib PRIVATE macos/savedwindowstate.mm)
+set_source_files_properties(macos/savedwindowstate.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+target_link_libraries(openfallout-lib "-framework AppKit")
+
 if(BUILD_OPENFALLOUT)
     openfallout_add_executable(openfallout
         main.cpp
