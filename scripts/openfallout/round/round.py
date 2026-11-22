@@ -625,15 +625,25 @@ def sound_to_file(run_dir, keep=False):
 
 
 def links_system_openal(engine):
-    """Whether the engine program links Apple's OpenAL framework (from `otool -L`) instead of OpenAL Soft."""
+    """Whether the engine program links Apple's OpenAL framework (from `otool -L`) instead of OpenAL Soft; None when the
+    program cannot be read (a script that starts the engine, a missing file)."""
     result = subprocess.run(["/usr/bin/otool", "-L", str(engine)], capture_output=True, text=True)
-    return result.returncode == 0 and "/OpenAL.framework/" in result.stdout
+    if result.returncode != 0:
+        return None
+    return "/OpenAL.framework/" in result.stdout
 
 
 def check_sound_output(env, engine):
     """Stops a round with sound on an engine that links Apple's OpenAL framework: that library ignores the wave backend's settings
-    and would play the round through the speakers or headphones of whoever sits at the computer."""
-    if sound_is_on(env) and links_system_openal(engine):
+    and would play the round through the speakers or headphones of whoever sits at the computer. An engine whose libraries
+    cannot be read is stopped too: nobody can say where its sound would go."""
+    if not sound_is_on(env):
+        return
+    system = links_system_openal(engine)
+    if system is None:
+        raise SystemExit(f"cannot tell which OpenAL {engine} links (otool could not read it): a round with sound needs an engine "
+                         "program that is known to link OpenAL Soft")
+    if system:
         raise SystemExit(f"{engine} links Apple's OpenAL framework, which cannot write its sound to a file: a round with sound "
                          "needs an engine built against OpenAL Soft (see docs/openfallout/build-baseline.md)")
 

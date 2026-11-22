@@ -147,7 +147,7 @@ reference is found and the save is in an interior.
   triggers are 100 and 101), which goes where the real key or button goes.
 - Sound is off unless `OPENFALLOUT_HEADLESS_SOUND=1`. Nobody may hear a round: with sound on, the runner sends it to `sound.wav`
   in the run's folder (with `"keep_sound": true` in the round file; otherwise to /dev/null) through OpenAL Soft's wave backend (`ALSOFT_DRIVERS=wave` and a configuration file of the run named by
-  `ALSOFT_CONF`; a round or a variant cannot change either), and it refuses an engine that links Apple's OpenAL framework, which
+  `ALSOFT_CONF`; a round or a variant cannot change either), and it refuses an engine that links Apple's OpenAL framework (or one whose libraries it cannot read), which
   reads neither and would play through the speakers. The file is written in real time; a run the runner stops may leave its header
   sizes unfinished, so read it as a stream after the header.
 - The engine never reads headphone motion in a round: head tracking stays off in a headless run whatever the settings say

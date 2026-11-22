@@ -1079,6 +1079,13 @@ class GuardedRun(unittest.TestCase):
             self.assertIn("OpenAL Soft", str(refused.exception))
             # a silent round does not care which library the engine links
             round_runner.check_sound_output({}, "/x/openfallout")
+            # a program that cannot be read (a script that starts the engine) could start any engine: no sound round on it
+            run.return_value = mock.Mock(returncode=1, stdout="")
+            self.assertIsNone(round_runner.links_system_openal("/x/openfallout"))
+            with self.assertRaises(SystemExit) as unknown:
+                round_runner.check_sound_output({"OPENFALLOUT_HEADLESS_SOUND": "1"}, "/x/openfallout")
+            self.assertIn("cannot tell", str(unknown.exception))
+            round_runner.check_sound_output({}, "/x/openfallout")
 
     def test_the_priority_command_is_found_without_the_engines_path(self):
         with mock.patch.object(round_runner, "IS_MAC", True), \
