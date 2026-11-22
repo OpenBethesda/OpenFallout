@@ -601,7 +601,32 @@ def engine_environment(extra, is_mac, run_dir=None):
             (Path(run_dir) / folder).mkdir(parents=True, exist_ok=True)
             env[name] = str(Path(run_dir) / folder)
     env.update(extra or {})
+    if env.get("OPENFALLOUT_HEADLESS_SOUND") == "1" and run_dir is not None:
+        env.update(sound_to_file(run_dir))
     return dict(os.environ, **env)
+
+
+def sound_to_file(run_dir):
+    """The environment that sends the sound of a run to `sound.wav` in its folder and to no device: OpenAL Soft's wave backend,
+    named by `ALSOFT_DRIVERS` and by a configuration file of the run (`ALSOFT_CONF`). Nobody may hear a round, so a round or a
+    variant cannot change these two. Apple's OpenAL framework reads neither (check_sound_output refuses such an engine)."""
+    conf = Path(run_dir) / "alsoft.conf"
+    conf.write_text(f"[general]\ndrivers = wave\n\n[wave]\nfile = {Path(run_dir) / 'sound.wav'}\n", encoding="utf-8")
+    return {"ALSOFT_DRIVERS": "wave", "ALSOFT_CONF": str(conf)}
+
+
+def links_system_openal(engine):
+    """Whether the engine program links Apple's OpenAL framework (from `otool -L`) instead of OpenAL Soft."""
+    result = subprocess.run(["/usr/bin/otool", "-L", str(engine)], capture_output=True, text=True)
+    return result.returncode == 0 and "/OpenAL.framework/" in result.stdout
+
+
+def check_sound_output(env, engine):
+    """Stops a round with sound on an engine that links Apple's OpenAL framework: that library ignores the wave backend's settings
+    and would play the round through the speakers or headphones of whoever sits at the computer."""
+    if env.get("OPENFALLOUT_HEADLESS_SOUND") == "1" and links_system_openal(engine):
+        raise SystemExit(f"{engine} links Apple's OpenAL framework, which cannot write its sound to a file: a round with sound "
+                         "needs an engine built against OpenAL Soft (see docs/openfallout/build-baseline.md)")
 
 
 # Seconds an engine whose scenario has ended is given to end on its own before the runner stops it
@@ -818,6 +843,8 @@ def run_variant(profile, config, variant, out_dir, save, priority="low", guard=N
     prepare_run(profile, config, variant, run_dir, save)
     command = engine_command(profile, config, run_dir, save, extra=variant.get("extra_args", []))
     env = {**config.get("env", {}), **variant.get("env", {})}
+    if IS_MAC:
+        check_sound_output(env, absolute(profile["engine"]))
     began = time.time()
     status, seconds, sampler, timed_out, ended_early, tripped = run_engine(command, run_dir, config["limit"] + 30, env, priority, guard)
     log = run_dir / "config" / "openfallout.log"

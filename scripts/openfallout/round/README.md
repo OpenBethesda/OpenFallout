@@ -140,7 +140,11 @@ reference is found and the save is in an interior.
   for its file); with `preload num threads` above 1 and two shots asked for back to back (`r.shot(name, false)`) two writes could swap.
 - It sees what the engine draws, not what the player's eye would: for a look at a screen that a pointer or a key opens (the
   Pip-Boy, a conversation) the scenario must open it through the game's own scripts or events, the way `autoplay` does.
-- Sound is off unless `OPENFALLOUT_HEADLESS_SOUND=1`; nobody can hear a round, so sound is checked by its log lines.
+- Sound is off unless `OPENFALLOUT_HEADLESS_SOUND=1`. Nobody may hear a round: with sound on, the runner sends it to `sound.wav`
+  in the run's folder through OpenAL Soft's wave backend (`ALSOFT_DRIVERS=wave` and a configuration file of the run named by
+  `ALSOFT_CONF`; a round or a variant cannot change either), and it refuses an engine that links Apple's OpenAL framework, which
+  reads neither and would play through the speakers. The file is written in real time; a run the runner stops may leave its header
+  sizes unfinished, so read it as a stream after the header.
 - Software and hardware drawing differ: on a Mac without a GPU (a hosted CI runner, which gives Apple's software renderer)
   the frame times mean nothing, and a driver-specific fault (a texture format) may not show.
 - The first time on a Mac, whether a hidden window really stays off the desktop and never takes the focus is what the focus
