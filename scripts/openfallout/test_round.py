@@ -814,6 +814,16 @@ class GuardedRun(unittest.TestCase):
     """The guards around a whole round: the heartbeat, the kill switch, the lock, the pre-flight, one engine at a time."""
     ENGINE = WholeRun.ENGINE
     make_engine = WholeRun.make_engine
+
+    def setUp(self):
+        # what the shell that runs the tests says about sound is not part of any test here: a test that is about an inherited
+        # value sets it itself
+        patch = mock.patch.dict(os.environ)
+        patch.start()
+        self.addCleanup(patch.stop)
+        for name in ("OPENFALLOUT_HEADLESS_SOUND", "ALSOFT_DRIVERS", "ALSOFT_CONF"):
+            os.environ.pop(name, None)
+
     HANGING = """
         import pathlib, sys, time
         args = sys.argv[1:]
