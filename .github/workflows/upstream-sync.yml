@@ -1,0 +1,132 @@
+name: Upstream sync
+
+# Once a week, pull the OpenMW changes that still apply to OpenFallout into one branch and open a draft pull request
+# with them. CI/upstream_sync.py decides, unit by unit, what applies (docs/openfallout/upstream-sync.md). Nothing is
+# merged here: a person reviews the pull request, marks it ready and merges it.
+on:
+  schedule:
+    # Monday 09:00 UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Number of upstream merge requests to look at, oldest first. Empty means all of them.'
+        type: string
+        default: ''
+
+# One run at a time. A second run would fight over the same branch, and the ledger is only correct when the runs go in
+# order, so a queued run waits for the running one and nothing is cancelled.
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Upstream sync
+    # Forks have no reason to run this job, and their token could not push to the repository anyway.
+    if: ${{ github.repository == 'OpenBethesda/OpenFallout' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The job pushes a branch and opens a pull request, and nothing else.
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    # The tool needs the whole history back to the fork point (f90f239d91), so the checkout is not shallow. Always
+    # master, also for a manual run started from another branch: the pull request below goes to master.
+    - uses: actions/checkout@v7
+      with:
+        ref: master
+        fetch-depth: 0
+
+    # People may have pushed hand ports to upstream-sync/auto while their pull request was open. A second run would
+    # overwrite them (the force push below), so the run does nothing while such a pull request is open. Its branch is
+    # only replaced once no open pull request uses it.
+    - name: Stop while the previous sync pull request is open
+      id: open
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        open=$(gh pr list --head upstream-sync/auto --state open --json number --jq length)
+        if [ "$open" != "0" ]; then
+          echo "the previous upstream sync pull request is still open; merge or close it first" >> "$GITHUB_STEP_SUMMARY"
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Create the sync branch from master
+      if: ${{ steps.open.outputs.skip == 'false' }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git switch -C upstream-sync/auto
+
+    # The pinned clang-format reformats the C++ lines that the tool changes (the same pin as the format check in
+    # push.yml). A venv under $RUNNER_TEMP keeps the runner's Python untouched.
+    - name: Install the pinned clang-format
+      if: ${{ steps.open.outputs.skip == 'false' }}
+      run: |
+        python3 -m venv "$RUNNER_TEMP/upstream-sync"
+        "$RUNNER_TEMP/upstream-sync/bin/pip" install "clang-format==$(cat CI/clang-format-version.txt)"
+
+    # The tool exits with 0 even when units conflict, so a non-zero exit means the tool itself could not work and the
+    # job fails. The limit comes in through env, never through the script text.
+    - name: Sync the upstream merge requests
+      if: ${{ steps.open.outputs.skip == 'false' }}
+      env:
+        LIMIT: ${{ inputs.limit }}
+      run: |
+        limit_args=()
+        if [ -n "$LIMIT" ]; then
+          case "$LIMIT" in
+            *[!0-9]*) echo "::error::the limit must be a whole number, not '$LIMIT'"; exit 1 ;;
+          esac
+          limit_args=(--limit "$LIMIT")
+        fi
+        python3 CI/upstream_sync.py sync --fetch \
+          --report "$RUNNER_TEMP/report.md" \
+          --summary "$RUNNER_TEMP/summary.json" \
+          --clang-format "$RUNNER_TEMP/upstream-sync/bin/clang-format" \
+          "${limit_args[@]}"
+
+    # The report is the body of the pull request, and it goes into the job summary too, so a run that proposes nothing
+    # still says what it looked at.
+    - name: Show the report and count what was proposed
+      id: count
+      if: ${{ steps.open.outputs.skip == 'false' }}
+      run: |
+        if [ -f "$RUNNER_TEMP/report.md" ]; then
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        taken=$(jq -r '.taken' "$RUNNER_TEMP/summary.json")
+        conflict=$(jq -r '.conflict' "$RUNNER_TEMP/summary.json")
+        echo "taken=$taken" >> "$GITHUB_OUTPUT"
+        echo "conflict=$conflict" >> "$GITHUB_OUTPUT"
+        if [ "$taken" = "0" ] && [ "$conflict" = "0" ]; then
+          echo "propose=false" >> "$GITHUB_OUTPUT"
+          echo "Nothing to propose. The units are looked at again next week." >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "propose=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    # Force is safe: the step above proved that no open pull request uses this branch, so nothing is overwritten that a
+    # person has put there for review.
+    - name: Push the sync branch and open a draft pull request
+      if: ${{ steps.open.outputs.skip == 'false' && steps.count.outputs.propose == 'true' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAKEN: ${{ steps.count.outputs.taken }}
+        CONFLICT: ${{ steps.count.outputs.conflict }}
+      run: |
+        git push --force origin upstream-sync/auto
+
+        # A pull request opened with the workflow's own token does not start other workflows, and in this repository a
+        # draft runs no CI at all. Marking it ready for review is done by a person, and that event starts the normal CI.
+        if ! gh pr create --draft --base master --head upstream-sync/auto \
+            --title "Upstream sync: $TAKEN merge requests from OpenMW, $CONFLICT need a hand port" \
+            --body-file "$RUNNER_TEMP/report.md"; then
+          echo "::error::gh pr create failed. Check the repository setting 'Allow GitHub Actions to create and approve pull requests' (Settings, Actions, General, Workflow permissions). Open the pull request by hand: https://github.com/OpenBethesda/OpenFallout/compare/master...upstream-sync/auto?expand=1"
+          exit 1
+        fi
