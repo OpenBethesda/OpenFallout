@@ -95,9 +95,19 @@ namespace FalloutScript::SpecialScreen
         , mFacePad(pad)
     {
         // The Vigor Tester opens on its first attribute with the turn that leads to it playing (the cover is reached
-        // only by going back); the book opens on its cover with its own clip
-        mSequence = "Forward";
-        mPage = kind == Kind::Tester ? 1 : 0;
+        // only by going back). The book opens closed, on its cover, as the turn back to the cover leaves it: the turn
+        // to the first page ends with the book open, which would hide the cover and its button on page 0
+        if (kind == Kind::Tester)
+        {
+            mSequence = "Forward";
+            mPage = 1;
+        }
+        else
+        {
+            mSequence = bookBack[0];
+            mPage = 0;
+            mElapsed = duration();
+        }
     }
 
     int Screen::total() const
