@@ -446,7 +446,8 @@ class AutoplayRounds(unittest.TestCase):
     SAVE_FAULTS = ("AUTOPLAY\tdigest\tcheck MISMATCH",
                    "AUTOPLAY\tload\tautoplay-save\tno slot",
                    "AUTOPLAY\tload\terror\tcannot load",
-                   "AUTOPLAY\tsave\tautoplay-again\tdisk full\tdir=Player\tfiles=")
+                   "AUTOPLAY\tsave\tautoplay-again\tdisk full\tdir=Player\tfiles=",
+                   "Failed to save game: Write operation failed (file stream): No space left on device")
 
     def outcome(self, name, text, status=0, timed_out=False):
         config = self.config(name)
@@ -493,6 +494,10 @@ class AutoplayRounds(unittest.TestCase):
             # a check before the load it is about is not the probe's sequence
             out_of_order = (self.SAVED[0], self.SAVED[2], self.SAVED[4], self.SAVED[1], self.SAVED[3], self.SAVED[5]) + self.PLAYED
             self.assertTrue(any(line.startswith("no log line matches `(?s)") for line in self.outcome(name, self.log(*out_of_order))))
+            # the engine's saveGame catches a failed write and returns, so the probe logs `ok` with no file: that is no save
+            unwritten = self.SAVED[:5] + ("AUTOPLAY\tsave\tautoplay-again\tok\tdir=Player\tfiles=",) + self.PLAYED
+            self.assertIn("no log line matches `AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+`",
+                          self.outcome(name, self.log(*unwritten)))
             twice = self.SAVED + self.SAVED[2:] + self.PLAYED
             self.assertIn("`AUTOPLAY\\tload\\tautoplay-save\\t` matches 2 log line(s), expected 1", self.outcome(name, self.log(*twice)))
 

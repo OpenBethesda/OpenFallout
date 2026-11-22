@@ -151,8 +151,10 @@ table (`AUTOPLAY intro over`), so each round says `"expect_exit": 0` and is judg
   own time limit), `level stuck`, `screens error`, `talk wait error`, `fire error`, `fire done` for `time`, `ammo` or `error`, and a
   `gate` line that does not end in `ok`;
 - the save/load rounds also expect `digest saved`, `save autoplay-save ok`, `digest loaded`, `digest check ok` and
-  `save autoplay-again ok`, in that order and before `intro over`, the save, the load, the check and the second save once each,
-  and forbid `digest check MISMATCH`, a load with `no slot` or an `error`, and a save that does not say `ok`.
+  `save autoplay-again ok`, in that order and before `intro over`, the save, the load, the check and the second save once each;
+  each save line must name the file it wrote (`files=` not empty: the engine catches a failed write itself, so the probe's
+  `pcall` says `ok` either way). They forbid `digest check MISMATCH`, a load with `no slot` or an `error`, a save that does not
+  say `ok`, and the engine's `Failed to save game:`.
 
 A crash (any exit status but 0), an engine still running at the round's `limit` (the intro stood still), or any of these lines
 fails the round; nothing has to be read by hand. The error `Unable to attach OpenGL debug callback.` that a run with

@@ -28,13 +28,13 @@
   "expect_exit": 0,
   "expect_log": [
     "AUTOPLAY\\tdigest\\tsaved\\t",
-    "AUTOPLAY\\tsave\\tautoplay-save\\tok\\t",
+    "AUTOPLAY\\tsave\\tautoplay-save\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+",
     "AUTOPLAY\\tdigest\\tloaded\\t",
     "AUTOPLAY\\tdigest\\tcheck ok",
-    "AUTOPLAY\\tsave\\tautoplay-again\\tok\\t",
+    "AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+",
     "AUTOPLAY\\tintro done\\t",
     "AUTOPLAY\\tintro over\\t",
-    "(?s)AUTOPLAY\\tdigest\\tsaved\\t.*AUTOPLAY\\tsave\\tautoplay-save\\tok\\t.*AUTOPLAY\\tload\\tautoplay-save\\t.*AUTOPLAY\\tdigest\\tloaded\\t.*AUTOPLAY\\tdigest\\tcheck ok.*AUTOPLAY\\tsave\\tautoplay-again\\tok\\t.*AUTOPLAY\\tintro over\\t"
+    "(?s)AUTOPLAY\\tdigest\\tsaved\\t.*AUTOPLAY\\tsave\\tautoplay-save\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+.*AUTOPLAY\\tload\\tautoplay-save\\t.*AUTOPLAY\\tdigest\\tloaded\\t.*AUTOPLAY\\tdigest\\tcheck ok.*AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+.*AUTOPLAY\\tintro over\\t"
   ],
   "expect_count": {
     "AUTOPLAY\\tdigest\\tsaved\\t": 1,
@@ -47,6 +47,7 @@
     "AUTOPLAY\\tload\\tautoplay-save\\tno slot",
     "AUTOPLAY\\tload\\terror\\t",
     "AUTOPLAY\\tsave\\tautoplay-(save|again)\\t(?!ok\\t)",
+    "Failed to save game: ",
     "AUTOPLAY\\ttime is up",
     "AUTOPLAY\\tlevel stuck",
     "AUTOPLAY\\tscreens error\\t",
