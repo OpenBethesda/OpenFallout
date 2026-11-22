@@ -799,7 +799,10 @@ class Sync:
             *(["  - " + sanitize(r["entry"]["note"])] if r["entry"].get("note") else []),
             "  - `python3 CI/upstream_sync.py pick %s`" % r["unit"]["sha"]])
         section("Check failed", "check-failed", lambda r: [
-            "- " + link(r), "", "  ```", *("  " + line for line in sanitize(r["entry"]["note"]).split("\n")), "  ```"])
+            # A check that prints nothing leaves no note (make_entry drops empty keys).
+            "- " + link(r), "", "  ```",
+            *("  " + line for line in sanitize(r["entry"].get("note") or "(the check printed nothing)").split("\n")),
+            "  ```"])
         section("Not applicable", "not-applicable", lambda r: ["- " + link(r)])
         section("Already present", "already-present", lambda r: ["- " + link(r)])
         return "\n".join(lines).rstrip("\n") + "\n"

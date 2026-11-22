@@ -606,6 +606,15 @@ class CheckCommandTest(WorldTest):
         self.assertEqual((data["check_failed"], data["taken"], data["conflict"], data["commits"]), (1, 4, 3, 5))
 
 
+    def test_a_check_that_fails_without_a_word_still_gets_a_report(self):
+        # A build whose output goes to a log file prints nothing: the unit has no note, and the report must not need one.
+        report = Path(self.root) / "r.md"
+        status, _, err = self.tool("sync", "--check-cmd", "! grep -rq BREAK new", "--report", str(report))
+        self.assertEqual(status, 0, err)
+        text = report.read_text(encoding="utf-8")
+        self.assertIn("## Check failed (1)", text)
+        self.assertIn("(the check printed nothing)", text)
+
 class SanitizeTest(unittest.TestCase):
     def test_nothing_in_upstream_text_links_or_notifies_on_github(self):
         cases = {
