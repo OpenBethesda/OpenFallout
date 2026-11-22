@@ -82,15 +82,22 @@ namespace FalloutScript
                 const std::uint8_t flags = in.u8();
                 line.mEnd = (flags & lineEnds) != 0;
                 line.mForceSubtitles = (flags & lineForcesSubtitles) != 0;
-                // The other character of an exchange whose plugin is gone says nothing; the end of what was said is
-                // kept for the line before
+                // The other character of an exchange whose plugin is gone says nothing. What the end of its line does
+                // is still done, in its place among the lines: the line is kept with no words, no voice and no time
+                // (and is said by the character the lines were given to), so the end script of its response runs and
+                // the script of that character is told that it is done when it would have been
                 if (!speaker)
                 {
-                    if (line.mEnd && !saying.mLines.empty())
-                        saying.mLines.back().mEnd = true;
-                    continue;
+                    if (!line.mEnd && line.mEndInfo == 0)
+                        continue;
+                    line.mVoice.clear();
+                    line.mText.clear();
+                    line.mSeconds = 0;
+                    line.mForceSubtitles = false;
+                    line.mSpeaker = 0;
                 }
-                line.mSpeaker = *speaker;
+                else
+                    line.mSpeaker = *speaker;
                 saying.mLines.push_back(std::move(line));
             }
             if (reference && !saying.mLines.empty())

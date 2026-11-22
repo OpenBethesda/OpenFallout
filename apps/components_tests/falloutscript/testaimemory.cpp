@@ -123,6 +123,62 @@ namespace
         EXPECT_FALSE(loaded.find(clerk)->mExpired);
     }
 
+    TEST(FalloutScriptAiMemoryTest, a_dialogue_package_that_has_spoken_is_known_as_one_after_a_saved_game)
+    {
+        // The guard's Dialogue package has said its lines when the game is saved: after the load it waits for them to
+        // end instead of saying them again
+        AiMemory memory;
+        AiState spoke;
+        spoke.mPackage = greet;
+        spoke.mSpoke = true;
+        memory.set(guard, spoke);
+        memory.set(clerk, stateWithPackages());
+        EXPECT_FALSE(*memory.find(clerk) == spoke);
+
+        SaveWriter out;
+        FalloutScript::writeAi(memory, out);
+        const std::string bytes = out.take();
+        AiMemory loaded;
+        SaveReader in(bytes);
+        FalloutScript::readAi(loaded, in, FalloutScript::aiSectionVersion);
+        EXPECT_TRUE(in.atEnd());
+        ASSERT_TRUE(loaded.find(guard).has_value());
+        EXPECT_EQ(*loaded.find(guard), spoke);
+        EXPECT_FALSE(loaded.find(clerk)->mSpoke);
+
+        // Having spoken is something to keep on its own
+        AiState only;
+        only.mSpoke = true;
+        EXPECT_FALSE(only.empty());
+    }
+
+    TEST(FalloutScriptAiMemoryTest, a_saved_game_from_before_the_speaking_was_kept_has_no_package_that_has_spoken)
+    {
+        // Version 3: the reason a package is done is there and whether it has spoken is not
+        SaveWriter out;
+        out.count(1);
+        out.form(guard);
+        out.count(0);
+        out.form(greet);
+        out.boolean(false);
+        out.boolean(false);
+        out.boolean(false);
+        out.form(0);
+        out.f32(0.f);
+        out.f64(0.0);
+        out.f64(0.0);
+        out.boolean(false);
+        const std::string bytes = out.take();
+
+        AiMemory loaded;
+        SaveReader in(bytes);
+        FalloutScript::readAi(loaded, in, 3);
+        EXPECT_TRUE(in.atEnd());
+        ASSERT_TRUE(loaded.find(guard).has_value());
+        EXPECT_EQ(loaded.find(guard)->mPackage, greet);
+        EXPECT_FALSE(loaded.find(guard)->mSpoke);
+    }
+
     TEST(FalloutScriptAiMemoryTest, a_saved_game_from_before_the_reason_was_kept_has_no_package_that_ran_out)
     {
         // Version 2: the duration is there and the reason is not

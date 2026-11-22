@@ -681,15 +681,60 @@ namespace
         });
         const FalloutScript::SavedSayings saved = FalloutScript::readSayings(in, 1);
         EXPECT_TRUE(in.atEnd());
-        // The character of the plugin is left out; the line of the other one is too, and the end of what was said
-        // goes to the line before it. A topic and a response that are gone are none
+        // The character of the plugin is left out. The line of the other one says nothing and takes no time, and is
+        // kept for its end: the end of what was said. A topic and a response that are gone are none
         ASSERT_EQ(saved.mSayings.size(), 1u);
-        EXPECT_EQ(saved.mSayings.front().mReference, doctor);
-        EXPECT_THAT(textsOf(saved.mSayings.front()), ElementsAre("mine"));
-        EXPECT_TRUE(saved.mSayings.front().mLines.front().mEnd);
-        EXPECT_EQ(saved.mSayings.front().mLines.front().mTopic, 0u);
-        EXPECT_EQ(saved.mSayings.front().mLines.front().mEndInfo, 0u);
+        const Saying& loaded = saved.mSayings.front();
+        EXPECT_EQ(loaded.mReference, doctor);
+        EXPECT_THAT(textsOf(loaded), ElementsAre("mine", ""));
+        EXPECT_FALSE(loaded.mLines[0].mEnd);
+        EXPECT_EQ(loaded.mLines[0].mTopic, 0u);
+        EXPECT_EQ(loaded.mLines[0].mEndInfo, 0u);
+        EXPECT_TRUE(loaded.mLines[1].mEnd);
+        EXPECT_EQ(loaded.mLines[1].mSpeaker, 0u);
+        EXPECT_TRUE(loaded.mLines[1].mVoice.empty());
+        EXPECT_EQ(loaded.mLines[1].mSeconds, 0.f);
         EXPECT_THAT(saved.mNothingSaid, ElementsAre(std::make_pair(doctor, topicA)));
+    }
+
+    TEST(FalloutScriptSaveWorldTest, theEndOfALineOfAnotherCharacterThatIsGoneIsKeptWhenItIsTheOnlyLineLeft)
+    {
+        // The game was saved while the other character of an exchange said the last line, the end of a response and of
+        // what the doctor was told to say; that character's plugin is gone at the load
+        constexpr FormId goneSpeaker = 0x05ff0001;
+        Saying exchange;
+        exchange.mReference = doctor;
+        exchange.mLines = { saidLine("mine", topicA), saidLine("theirs", topicA, 0x3001, true),
+            saidLine("not said by a gone one", topicB) };
+        exchange.mLines[1].mSpeaker = goneSpeaker;
+        exchange.mLines[1].mForceSubtitles = true;
+        exchange.mLines[2].mSpeaker = goneSpeaker;
+        exchange.mNext = 1;
+        SaveWriter out;
+        FalloutScript::writeSayings({ exchange }, {}, out);
+
+        SaveReader in(out.bytes(), [](FormId saved) -> std::optional<FormId> {
+            if ((saved >> 24) == 5)
+                return std::nullopt;
+            return saved;
+        });
+        const FalloutScript::SavedSayings saved = FalloutScript::readSayings(in, 1);
+        EXPECT_TRUE(in.atEnd());
+        // One line is left, with nothing to say or show: when it is over the end script of the response runs and the
+        // doctor's script is told that it is done (the line after it, which ends nothing, is not kept)
+        ASSERT_EQ(saved.mSayings.size(), 1u);
+        const Saying& loaded = saved.mSayings.front();
+        EXPECT_EQ(loaded.mReference, doctor);
+        ASSERT_EQ(loaded.mLines.size(), 1u);
+        const SaidLine& line = loaded.mLines.front();
+        EXPECT_TRUE(line.mText.empty());
+        EXPECT_TRUE(line.mVoice.empty());
+        EXPECT_EQ(line.mSeconds, 0.f);
+        EXPECT_FALSE(line.mForceSubtitles);
+        EXPECT_EQ(line.mSpeaker, 0u);
+        EXPECT_TRUE(line.mEnd);
+        EXPECT_EQ(line.mEndInfo, 0x3001u);
+        EXPECT_EQ(line.mTopic, topicA);
     }
 
     TEST(FalloutScriptSaveWorldTest, aCutShortSayingsSectionIsAnError)

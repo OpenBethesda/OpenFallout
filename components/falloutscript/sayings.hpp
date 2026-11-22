@@ -68,8 +68,9 @@ namespace FalloutScript
     void writeSayings(
         const std::vector<Saying>& sayings, const std::vector<std::pair<FormId, FormId>>& nothingSaid, SaveWriter& out);
     /// What the section holds, the line that was being said first, none of them started. A character whose plugin is
-    /// no longer loaded is left out, and so is a line of another character of an exchange whose plugin is gone. A
-    /// topic or a response of a plugin that is gone is 0: there is no end script to run for it.
+    /// no longer loaded is left out. A line of another character of an exchange whose plugin is gone has no words, no
+    /// voice and no time, and is kept only when its end does something (the end of what was said, the end of a
+    /// response). A topic or a response of a plugin that is gone is 0: there is no end script to run for it.
     SavedSayings readSayings(SaveReader& in, std::uint32_t version);
 }
 

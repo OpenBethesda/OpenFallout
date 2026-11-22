@@ -4,7 +4,7 @@ namespace FalloutScript
 {
     bool AiState::empty() const
     {
-        return mDone.empty() && mPackage == 0 && !mChangeTold && !mFollows && mDurationHundredths <= 0;
+        return mDone.empty() && mPackage == 0 && !mChangeTold && !mFollows && mDurationHundredths <= 0 && !mSpoke;
     }
 
     bool AiState::operator==(const AiState& other) const
@@ -13,7 +13,7 @@ namespace FalloutScript
             && mFollows == other.mFollows && mFollowsPlayer == other.mFollowsPlayer
             && mFollowTarget == other.mFollowTarget && mFollowDistance == other.mFollowDistance
             && mDurationHundredths == other.mDurationHundredths && mStartedHours == other.mStartedHours
-            && mExpired == other.mExpired;
+            && mExpired == other.mExpired && mSpoke == other.mSpoke;
     }
 
     void AiMemory::clear()
@@ -73,6 +73,7 @@ namespace FalloutScript
             out.f64(state.mDurationHundredths);
             out.f64(state.mStartedHours);
             out.boolean(state.mExpired);
+            out.boolean(state.mSpoke);
         }
     }
 
@@ -104,6 +105,9 @@ namespace FalloutScript
             // (a game saved before the reason for a done package was kept has none that ran out)
             if (version >= 3)
                 state.mExpired = in.boolean();
+            // (nor before it kept whether a Dialogue package had spoken)
+            if (version >= 4)
+                state.mSpoke = in.boolean();
             // The one it followed is gone with its plugin: it follows no one
             if (state.mFollows && !state.mFollowsPlayer && !target)
                 state.mFollows = false;

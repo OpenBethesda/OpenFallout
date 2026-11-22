@@ -1119,6 +1119,9 @@ namespace OFScript
         section(
             "sayings", FalloutScript::sayingsSectionVersion,
             [this](FalloutScript::SaveWriter& out) {
+                // A response said from another thread since the last frame is marked as said already: its lines are
+                // taken in before they are written, or the save would have the one without the other
+                startQueuedSayings();
                 std::vector<std::pair<FalloutScript::FormId, FalloutScript::FormId>> nothingSaid;
                 {
                     const std::lock_guard lock(mDialogueMutex);

@@ -35,6 +35,9 @@ namespace FalloutScript
         /// The package it follows is done because its duration ran out and not because it did what it came to do (a
         /// character in a piece of furniture does not stay there for it)
         bool mExpired = false;
+        /// The package it follows is a Dialogue package that has said what it came to say: it is done when the lines
+        /// are over, and does not say them again (a saved game keeps the lines being said)
+        bool mSpoke = false;
 
         /// Whether there is nothing to keep
         bool empty() const;
@@ -64,8 +67,9 @@ namespace FalloutScript
 
     /// The section of a saved game that holds the AI state
     /// (version 2 adds the duration of the package that is followed; a saved game of version 1 has none. Version 3 adds
-    /// whether the package is done because its duration ran out; before it none is.)
-    constexpr std::uint32_t aiSectionVersion = 3;
+    /// whether the package is done because its duration ran out; before it none is. Version 4 adds whether a Dialogue
+    /// package has spoken; before it none has.)
+    constexpr std::uint32_t aiSectionVersion = 4;
     void writeAi(const AiMemory& memory, SaveWriter& out);
     /// A character or a package whose plugin is no longer loaded is left out
     void readAi(AiMemory& memory, SaveReader& in, std::uint32_t version);
