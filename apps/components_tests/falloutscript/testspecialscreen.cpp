@@ -44,9 +44,28 @@ namespace
     {
         Screen screen(Kind::Book, 40, fives);
         EXPECT_EQ(screen.page(), 0);
-        EXPECT_EQ(screen.sequence(), "Forward");
         EXPECT_EQ(screen.opening(), Sound::None);
         EXPECT_TRUE(screen.ready());
+    }
+
+    TEST(FalloutScriptSpecialScreenTest, theClosedBookShowsItsCoverAsTheTurnBackToTheCoverLeavesIt)
+    {
+        // The model shows the cover only at the end of the clip that turns back to it; the clip that turns to the
+        // first page ends with the book open, which on page 0 hid the cover and its button
+        Screen back(Kind::Book, 40, fives);
+        settle(back);
+        back.next();
+        settle(back);
+        back.previous();
+        settle(back);
+        ASSERT_EQ(back.page(), 0);
+
+        Screen screen(Kind::Book, 40, fives);
+        EXPECT_EQ(screen.sequence(), back.sequence());
+        EXPECT_FLOAT_EQ(screen.sequenceTime(), back.sequenceTime());
+        settle(screen);
+        EXPECT_EQ(screen.sequence(), back.sequence());
+        EXPECT_FLOAT_EQ(screen.sequenceTime(), back.sequenceTime());
     }
 
     TEST(FalloutScriptSpecialScreenTest, aPageTurnsOnlyWhenTheClipIsDoneAndPlaysTheClipOfThePageItGoesTo)

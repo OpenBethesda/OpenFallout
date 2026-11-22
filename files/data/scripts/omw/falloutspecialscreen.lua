@@ -53,8 +53,11 @@ local KINDS = {
     book = {
         file = 'chargen/specialbookmenu.xml',
         halfWidth = 0.2925,
-        -- +90 degrees about X (the sign is assumed, it is to be seen in a render)
-        rows = { 1, 0, 0, 0, 0, -1, 0, 1, 0 },
+        -- Rx(1.5708) as the rows of a matrix that turns a column vector, in the convention of the games' engine that the
+        -- tester's rows have too (Rx(a) has the rows (1, 0, 0), (0, cos a, sin a), (0, -sin a, cos a)): the front of the
+        -- model (its -Y, the side its own lamp is on) faces the camera and its +Z is up in the picture. The other sign
+        -- turned the book upside down, with its back to the camera and its lamp behind it.
+        rows = { 1, 0, 0, 0, 0, 1, 0, -1, 0 },
         scale = 0.05,
         models = { { name = 'book', path = 'meshes/terminals/babybook02.nif' } },
         ambient = v3(0.25, 0.25, 0.25),
@@ -329,7 +332,8 @@ function module.press(code, symbol)
 end
 
 -- A button of the pad, as the file ties them: the right and left of the pad raise and lower the attribute, up and down
--- move the cursor of the index, the shoulders turn the pages, X leaves
+-- move the cursor of the index, the triggers turn the pages (the faces of the model show them), X leaves. The shoulders
+-- turn the pages too, as they do on the Pip-Boy.
 function module.pad(button)
     if not open then return false end
     usePad(true)
@@ -342,9 +346,9 @@ function module.pad(button)
         handle(open.screen:moveCursor(-1))
     elseif button == B.DPadDown then
         handle(open.screen:moveCursor(1))
-    elseif button == B.RightShoulder then
+    elseif button == B.RightTrigger or button == B.RightShoulder then
         handle(open.screen:next())
-    elseif button == B.LeftShoulder then
+    elseif button == B.LeftTrigger or button == B.LeftShoulder then
         handle(open.screen:previous())
     elseif button == B.X then
         handle(open.screen:exit())

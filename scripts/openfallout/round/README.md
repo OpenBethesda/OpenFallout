@@ -142,6 +142,9 @@ reference is found and the save is in an interior.
   for its file); with `preload num threads` above 1 and two shots asked for back to back (`r.shot(name, false)`) two writes could swap.
 - It sees what the engine draws, not what the player's eye would: for a look at a screen that a pointer or a key opens (the
   Pip-Boy, a conversation) the scenario must open it through the game's own scripts or events, the way `autoplay` does.
+  The screens of the making of the character (the SPECIAL book, the Vigor Tester, the face) take a key or a pad's button
+  from the event `FalloutChargenPress` sent to the player (`{ key = <scancode> }` or `{ button = <pad button> }`; the
+  triggers are 100 and 101), which goes where the real key or button goes.
 - Sound is off unless `OPENFALLOUT_HEADLESS_SOUND=1`. Nobody may hear a round: with sound on, the runner sends it to `sound.wav`
   in the run's folder (with `"keep_sound": true` in the round file; otherwise to /dev/null) through OpenAL Soft's wave backend (`ALSOFT_DRIVERS=wave` and a configuration file of the run named by
   `ALSOFT_CONF`; a round or a variant cannot change either), and it refuses an engine that links Apple's OpenAL framework, which
