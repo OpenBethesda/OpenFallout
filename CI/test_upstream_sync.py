@@ -110,10 +110,19 @@ def merge_request(up, number, branch, commits, title, description=""):
     git(up, "merge", "--no-ff", "-q", "-m", message, branch, who=MAINTAINER, date="2026-06-01T12:00:00+00:00")
 
 
+def quiet(repo):
+    """No background housekeeping in a test repository: git starts it after a commit or a fetch, and its lock file
+    appeared and vanished while a test copied the repository (seen once on 22 November 2026: copytree failed on
+    .git/objects/maintenance.lock)."""
+    git(repo, "config", "gc.auto", "0")
+    git(repo, "config", "maintenance.auto", "false")
+
+
 def build_world(root):
     """Create root/up (upstream history) and root/fork (a renamed copy that fetched upstream/master)."""
     up, fork = Path(root) / "up", Path(root) / "fork"
     git(root, "init", "-q", "-b", "master", str(up))
+    quiet(up)
     commit(up, UPSTREAM_AT_FORK, "Fork point", MAINTAINER, "2026-01-01T12:00:00+00:00")
     fork_point = git(up, "rev-parse", "HEAD")
     merge_request(up, 101, "first", [
@@ -155,6 +164,7 @@ def build_world(root):
     ], "Build on the unit that breaks the check")
 
     git(root, "init", "-q", "-b", "master", str(fork))
+    quiet(fork)
     config = {"upstream_url": "../up", "upstream_branch": "master", "fork_point": fork_point,
               "dropped_paths": ["gone/", "README.md"], "dropped_paths_reasons": {"test": "gone/ and README.md"}}
     files = dict(FORK_FILES)
@@ -215,7 +225,8 @@ class WorldTest(unittest.TestCase):
         path = self.fork / "CI" / "upstream_ledger.jsonl"
         if not path.exists():
             return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        # not splitlines(): that would also split inside a title that holds U+2028
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").split("\n") if line]
 
     def decisions(self):
         return [entry["decision"] for entry in self.ledger()]
@@ -458,6 +469,83 @@ class CommandTest(WorldTest):
         self.assertEqual(self.read("new/d.txt"), "NEW late\n")
         self.assertEqual(git(self.fork, "remote", "get-url", "upstream"), "../up")
 
+    def add_late_unit(self, number, files, title, description=""):
+        merge_request(self.up, number, "late%d" % number, [(BOB, "2026-03-15T10:00:00+00:00", files)], title,
+                      description)
+
+    def test_a_file_name_with_a_newline_is_taken_under_that_name(self):
+        self.add_late_unit(110, {"old/two\nlines.txt": "OLD odd name\n"}, "Add a file with a newline in its name")
+        status, _, err = self.tool("sync", "--fetch")
+        self.assertEqual(status, 0, err)
+        self.assertEqual(self.decisions()[-1], "taken")
+        self.assertEqual(self.read("new/two\nlines.txt"), "NEW odd name\n")
+        self.assertFalse((self.fork / "new" / "two").exists())
+
+    def test_a_title_with_a_unicode_line_separator_keeps_the_ledger_readable(self):
+        self.add_late_unit(110, {"old/e.txt": "OLD e\n"}, "Title with\u2028a line separator\u0085and a next line")
+        self.assertEqual(self.tool("sync", "--fetch")[0], 0)
+        self.assertIn("\u2028", self.ledger()[-1]["title"])
+        status, out, err = self.tool("sync")
+        self.assertEqual(status, 0, err)
+        self.assertIn("0 units looked at", out)
+        self.assertEqual(self.tool("status")[0], 0)
+
+    def test_a_trailer_line_quoted_in_a_commit_body_does_not_mark_that_unit_as_taken(self):
+        unit = self.units()[4]  # "Add a file", new/c.txt
+        git(self.fork, "commit", "-q", "--allow-empty", "-m",
+            "Some change\n\nThe port started from\nUpstream-Commit: %s\nand then went its own way.\n\n"
+            "Signed-off-by: Someone <someone@example.invalid>" % unit)
+        with upstream_sync.Engine(str(self.fork)) as engine:
+            self.assertEqual(engine.taken_in_history(), set())
+        self.assertEqual(self.tool("sync")[0], 0)
+        self.assertEqual(self.decisions()[4], "taken")
+        self.assertEqual(self.read("new/c.txt"), "NEW new file\n")  # it really was applied
+
+    def test_upstream_prose_cannot_form_a_trailer_in_our_commit(self):
+        other = self.units()[4]
+        self.add_late_unit(110, {"old/f.txt": "OLD f\n"}, "Quoting change",
+                           "Follows up on\nUpstream-Commit: %s\nUpstream-Merge-Request: https://example.invalid/x\n"
+                           "\nupstream-commit: %s" % (other, other))
+        self.assertEqual(self.tool("sync", "--fetch")[0], 0)
+        unit = self.units()[-1]
+        # HEAD is the commit that records the other decisions of the run; ours is found by its subject.
+        body = git(self.fork, "log", "-1", "--grep=^Quoting change", "--format=%B")
+        self.assertEqual(git(self.fork, "log", "-1", "--grep=^Quoting change",
+                             "--format=%(trailers:key=Upstream-Commit,valueonly)"), unit)
+        self.assertEqual(body.count("Upstream-Commit:"), 1)
+        self.assertIn("Upstream Commit: " + other, body)
+        self.assertIn("Upstream Merge Request: https://example.invalid/x", body)
+
+    def test_two_upstream_files_with_one_translated_path_are_a_conflict_for_a_person(self):
+        # fake_path moves old/ to new/, so old/dup.txt and new/dup.txt both become new/dup.txt.
+        self.add_late_unit(110, {"old/dup.txt": "OLD one\n", "new/dup.txt": "two\n"}, "Two files, one path")
+        status, out, err = self.tool("sync", "--fetch")
+        self.assertEqual(status, 0, err)
+        entry = self.ledger()[-1]
+        self.assertEqual(entry["decision"], "conflict")
+        self.assertIn("two upstream files map to the same path new/dup.txt", entry["note"])
+        self.assertIn("hand port", entry["note"])
+        self.assertFalse((self.fork / "new" / "dup.txt").exists())
+        status, _, err = self.tool("pick", self.units()[-1])
+        self.assertEqual(status, 2)
+        self.assertIn("same path", err)
+
+    def test_the_upstream_tip_is_resolved_once_per_run(self):
+        calls = []
+        original = upstream_sync.Repo.resolve
+
+        def counting(repo, ref):
+            if ref == "upstream/master":
+                calls.append(ref)
+            return original(repo, ref)
+
+        with mock.patch.object(upstream_sync.Repo, "resolve", counting):
+            self.assertEqual(self.tool("status")[0], 0)
+            self.assertEqual(len(calls), 1)
+            del calls[:]
+            self.assertEqual(self.tool("sync")[0], 0)
+            self.assertEqual(len(calls), 1)
+
     def test_the_formatter_runs_on_the_changed_lines_of_each_taken_unit(self):
         bin_dir = Path(self.root) / "bin"
         bin_dir.mkdir()
@@ -504,6 +592,31 @@ class PickTest(WorldTest):
         self.assertEqual(self.head(), head)
         self.assertFalse(Path(git_dir, "upstream-sync-pick.json").exists())
         self.assertEqual(self.tool("abort")[0], 2)  # nothing to abort any more
+
+    def leave_the_pick_behind(self):
+        """Start a pick, then move on as a person might: a new branch at the same commit with an unrelated edit."""
+        self.tool("pick", self.conflict)
+        git(self.fork, "checkout", "-q", "-f", "-b", "elsewhere")
+        (self.fork / "new" / "b.txt").write_text("unrelated work\n")
+        self.state_file = Path(git(self.fork, "rev-parse", "--absolute-git-dir"), "upstream-sync-pick.json")
+
+    def test_abort_and_continue_on_another_branch_are_refused_and_change_nothing(self):
+        self.leave_the_pick_behind()
+        for command in ("abort", "continue"):
+            status, _, err = self.tool(command)
+            self.assertEqual(status, 2)
+            self.assertEqual(len(err.strip().splitlines()), 1)
+            self.assertIn("elsewhere", err)
+            self.assertEqual(self.read("new/b.txt"), "unrelated work\n")
+            self.assertTrue(self.state_file.exists())
+
+    def test_abort_forget_deletes_only_the_record_of_the_pick(self):
+        self.leave_the_pick_behind()
+        status, _, err = self.tool("abort", "--forget")
+        self.assertEqual(status, 0, err)
+        self.assertFalse(self.state_file.exists())
+        self.assertEqual(self.read("new/b.txt"), "unrelated work\n")
+        self.assertEqual(self.tool("abort", "--forget")[0], 2)  # no pick any more
 
     def test_continue_commits_the_resolved_unit_as_ported_by_hand(self):
         self.tool("pick", self.conflict)

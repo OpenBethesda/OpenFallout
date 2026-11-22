@@ -67,7 +67,8 @@ _MW = re.compile(
     rb"\bMW(" + _NAMESPACES + rb")\b|\bMW(" + _NAMESPACES + rb"|Script)(?=[A-Za-z]*Tests?\b)")
 # `MWScript` names the Morrowind script language and was kept (`MusicType::MWScript`, comments, Lua docs), except where
 # it is the C++ namespace of the script engine.
-_MW_SCRIPT = re.compile(rb"(?<![\w:])MWScript(?=::)|(?<=namespace )MWScript\b")
+# A globally qualified use (`::MWScript::Compiler`) is the namespace too; `Class::MWScript` without a following `::` is not.
+_MW_SCRIPT = re.compile(rb"(?<![\w:])MWScript(?=::)|(?<![\w:]::)(?<=::)MWScript(?=::)|(?<=namespace )MWScript\b")
 # `OMW` became `OF`: `OMW::Engine`, and the l10n contexts and Lua events of the engine (`OMWEngine`, `OMWConsolePrint`).
 # Not renamed: GLSL names (`OMW_HDR`), the names of file formats (`OMWFX`, `OMWScripts`, `OMWAddon`), the storage
 # section `OMWInputBindings` (renaming it would drop the key bindings people saved), and names that only contain the
@@ -101,7 +102,9 @@ _KEEP = (
 # The bug tracker in the crash messages and dialogs moved to OpenFallout's repository (a link without the `/-/` of
 # GitLab), while the links to single OpenMW issues in comments stayed.
 _ISSUES = rb"https://gitlab\.com/OpenMW/openmw/issues(?![\w/-])"
-_ISSUES_NEW = b"https://github.com/Elemperor1/OpenFallout/issues"
+# This is the address the tree has NOW (the repository moved to OpenBethesda after the rename, whose day-one value was
+# Elemperor1/OpenFallout): the translation is merged onto the current tree, so it must produce what that tree says.
+_ISSUES_NEW = b"https://github.com/OpenBethesda/OpenFallout/issues"
 _REPLACEMENT = {"up": b"OPENFALLOUT", "camel": b"OpenFallout", "low": b"openfallout", "issues": _ISSUES_NEW}
 # OpenMW as a word (not `TestingOpenMW`, `OpenMWs` or `OpenMW_Tests`: the rename matched whole words), the CMake
 # variables and include names that are built from it, and openmw as a lower-case name (not `openmwluadocumentor`).
@@ -149,7 +152,11 @@ _CI_STEP = re.compile(rb"^(\s*- name:.*)$", re.M)
 _CPP = (".cpp", ".hpp", ".h", ".cc", ".c", ".inl", ".mm")
 # In C++ the rename touched what a person sees (string literals) and left comments and identifiers alone, except for
 # these: the paths of includes, the names `openmw.cfg` and `openmw.log`, and identifiers such as `openmwCfgFile`.
-_STRING = re.compile(rb'(?P<raw>R"(?P<delim>[^()\s\\]{0,16})\((?s:.*?)\)(?P=delim)")|"(?:[^"\\\n]|\\.)*"')
+# A character literal (`'"'`, `'\\''`) is one token that is skipped, so its quote does not start a string. A quote right
+# after a word character or a quote is a digit separator (`1'000'000`), not a character literal.
+_STRING = re.compile(
+    rb"(?P<chr>(?<![\w'])(?:u8|[uUL])?'(?:\\[^\n'][^'\n]{0,8}|\\'|[^'\\\n])')"
+    rb'|(?P<raw>R"(?P<delim>[^()\s\\]{0,16})\((?s:.*?)\)(?P=delim)")|"(?:[^"\\\n]|\\.)*"')
 _APPS = re.compile(rb"(?P<url>https?://[^\s\"')>\]`]*)|\bapps/openmw(?P<tests>_tests)?(?![A-Za-z0-9_-])")
 _FILE = re.compile(rb"\bopenmw(?=(?:-cs)?\.(?:cfg|log)\b)")
 _IDENT = re.compile(rb"\bopenmw(?=[A-Z])")
@@ -173,6 +180,8 @@ def _rename_apps(match):
 
 
 def _rename_in_strings(match):
+    if match.group("chr"):
+        return match.group(0)
     tokens = _TOKENS_RAW if match.group("raw") else _TOKENS
     return tokens.sub(_rename, match.group(0))
 

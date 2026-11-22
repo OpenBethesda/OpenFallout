@@ -55,6 +55,9 @@ jobs:
         else
           echo "skip=false" >> "$GITHUB_OUTPUT"
         fi
+        # Where the branch is now on GitHub (empty when it does not exist). The push at the end replaces the branch
+        # only if it is still there: a person can reopen the old pull request and push a hand port while this job runs.
+        echo "tip=$(git ls-remote origin refs/heads/upstream-sync/auto | cut -f1)" >> "$GITHUB_OUTPUT"
 
     - name: Create the sync branch from master
       if: ${{ steps.open.outputs.skip == 'false' }}
@@ -111,16 +114,18 @@ jobs:
           echo "propose=true" >> "$GITHUB_OUTPUT"
         fi
 
-    # Force is safe: the step above proved that no open pull request uses this branch, so nothing is overwritten that a
-    # person has put there for review.
+    # Force is safe: the first step proved that no open pull request uses this branch, and the lease names the commit
+    # the branch had at that moment (an empty lease means the branch must not exist), so a push that arrived since then
+    # makes this push fail and nothing a person has put there is overwritten.
     - name: Push the sync branch and open a draft pull request
       if: ${{ steps.open.outputs.skip == 'false' && steps.count.outputs.propose == 'true' }}
       env:
         GH_TOKEN: ${{ github.token }}
         TAKEN: ${{ steps.count.outputs.taken }}
         CONFLICT: ${{ steps.count.outputs.conflict }}
+        TIP: ${{ steps.open.outputs.tip }}
       run: |
-        git push --force origin upstream-sync/auto
+        git push "--force-with-lease=refs/heads/upstream-sync/auto:$TIP" origin upstream-sync/auto
 
         # A pull request opened with the workflow's own token does not start other workflows, and in this repository a
         # draft runs no CI at all. Marking it ready for review is done by a person, and that event starts the normal CI.

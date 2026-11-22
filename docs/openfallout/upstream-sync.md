@@ -52,7 +52,8 @@ The job does the following:
 - If nothing was taken and nothing conflicted, it stops without pushing. The decisions of that run are then not kept,
   so the units are looked at again next week.
 - Otherwise it force-pushes `upstream-sync/auto` and opens a **draft** pull request to master. The force push is safe
-  because the job has just checked that no open pull request uses the branch.
+  because the job has checked that no open pull request uses the branch, and the push only replaces the commit the
+  branch had at that check: a push that arrived in between makes it fail.
 
 The pull request is a draft for two reasons. A pull request opened with the workflow's own token does not start other
 workflows, and in this repository a draft runs no CI. When a person marks the pull request ready for review, that event
@@ -66,10 +67,12 @@ The ledger reaches master only when the pull request is merged. A closed pull re
 
 ## Running it by hand on a Mac
 
-Run the commands from the repository root, on a branch with a clean working tree. `sync` needs both.
+Run the commands from the repository root, on a branch with a clean working tree. `sync` needs both. The tool needs
+Git 2.43 or newer (it merges with `git merge-tree --write-tree --merge-base`) and Python 3.11 or newer.
 
 ```
 git remote add upstream https://github.com/OpenMW/openmw.git
+git fetch --no-tags upstream master
 python3 CI/upstream_sync.py status
 python3 CI/upstream_sync.py status --json
 python3 CI/upstream_sync.py sync --fetch --check-cmd "<the build command>"
@@ -101,7 +104,9 @@ python3 CI/upstream_sync.py continue
 ```
 
 `pick` puts the unit into the working tree with conflict markers. `continue` commits it, once the conflicts are resolved
-and staged. To give up on the pick instead, run `python3 CI/upstream_sync.py abort`, which undoes it.
+and staged. To give up on the pick instead, run `python3 CI/upstream_sync.py abort`, which undoes it. `abort` and
+`continue` refuse to work on another branch or commit than the one the pick started on, so they cannot throw away
+unrelated work; `abort --forget` then only forgets the pick and touches no file.
 
 To leave the unit out:
 

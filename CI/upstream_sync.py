@@ -37,12 +37,16 @@ Usage (run from the repository, or give --repo DIR):
                                      [--clang-format PATH] [--check-cmd CMD]
     python3 CI/upstream_sync.py pick SHA        # merge one unit into the working tree and stop at the conflicts
     python3 CI/upstream_sync.py continue        # commit the resolved pick, ledger line "taken", note "ported by hand"
-    python3 CI/upstream_sync.py abort           # undo a pick in progress
+    python3 CI/upstream_sync.py abort [--forget]  # undo a pick in progress; --forget only drops the pick's record
     python3 CI/upstream_sync.py skip SHA --reason TEXT
 
 `status` changes nothing. `sync` needs a clean working tree on a branch and never fetches unless --fetch is given. The
 exit status is 0 even when units conflict; it is non-zero only when the tool cannot work (dirty tree, missing ref, bad
 configuration, a --check-cmd that already fails before the first unit).
+
+`pick` records the branch and HEAD it started on. `continue` and `abort` refuse (and change nothing) when the current
+branch or HEAD is another one, so a person who moved on cannot lose unrelated edits to the hard reset of `abort`;
+`abort --forget` then deletes only the record and touches no file of the working tree.
 """
 
 import argparse
@@ -157,8 +161,10 @@ class Repo:
         """Write a tree from (mode, sha, path) entries through a temporary index and return its id."""
         env = {"GIT_INDEX_FILE": os.path.join(self.scratch(), "index")}
         self.run("read-tree", "--empty", env=env)
-        lines = "".join("%s %s\t%s\n" % (mode, sha, path) for mode, sha, path in entries)
-        self.run("update-index", "--add", "--index-info", input=lines.encode("utf-8", "surrogateescape"), env=env)
+        # NUL-terminated (-z): a path with a newline in it would be read as two records otherwise.
+        records = "".join("%s %s\t%s\0" % (mode, sha, path) for mode, sha, path in entries)
+        self.run("update-index", "--add", "-z", "--index-info", input=records.encode("utf-8", "surrogateescape"),
+                 env=env)
         tree = self.out("write-tree", env=env)
         os.unlink(env["GIT_INDEX_FILE"])
         return tree
@@ -197,6 +203,10 @@ def sanitize(text):
     text = re.sub(r"\bGH-(\d+)\b", r"upstream issue \1", text)
     # `@name` notifies a person; an address like a@b.example has a word character before the `@` and is left alone.
     text = re.sub(r"(?<![\w@`])@(?=\w)", "", text)
+    # A line "Upstream-Commit: <sha>" quoted in upstream prose must never become a trailer of ours (it would mark
+    # another unit as taken), so the key loses its hyphen.
+    text = re.sub(r"(?mi)^([ \t]*)Upstream-(Commit|Merge-Request):",
+                  lambda m: "%sUpstream %s:" % (m.group(1), m.group(2).replace("-", " ")), text)
     return text
 
 
@@ -257,7 +267,8 @@ def read_ledger(repo_path):
     entries = {}
     if not path.exists():
         return entries
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    # Only "\n" ends a line: json.dumps(ensure_ascii=False) leaves U+2028, U+0085 and the like raw inside strings.
+    for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
         if not line.strip():
             continue
         try:
@@ -289,6 +300,10 @@ def make_entry(sha, title, decision, paths=None, note=None):
 
 # ---------------------------------------------------------------------------------------------------------------------
 # the engine
+
+
+class DuplicatePath(Exception):
+    """Two upstream files of one unit translate to the same path of the fork."""
 
 
 class Prepared:
@@ -328,14 +343,18 @@ class Engine:
         self.upstream_ref = upstream or "upstream/" + self.config["upstream_branch"]
         self._translated = {}
         self._order = None
+        self._tip = None
 
     # -- the units ------------------------------------------------------------------------------------------------
 
     def upstream_tip(self):
-        tip = self.repo.resolve(self.upstream_ref)
-        if not tip:
-            raise ToolError("there is no upstream ref %s (fetch it, or use sync --fetch)" % self.upstream_ref)
-        return tip
+        """The upstream commit of this run, resolved once so the units and the report agree on it."""
+        if self._tip is None:
+            tip = self.repo.resolve(self.upstream_ref)
+            if not tip:
+                raise ToolError("there is no upstream ref %s (fetch it, or use sync --fetch)" % self.upstream_ref)
+            self._tip = tip
+        return self._tip
 
     def units(self):
         """The first-parent commits after the fork point, oldest first: dicts with sha, parents and message."""
@@ -374,8 +393,10 @@ class Engine:
 
     def taken_in_history(self):
         """Upstream shas named by an `Upstream-Commit:` trailer somewhere in HEAD's history."""
-        text = self.repo.out("log", "--format=%B", "-E", "--grep=^Upstream-Commit: [0-9a-f]{40}", "HEAD")
-        return set(re.findall(r"(?m)^Upstream-Commit: ([0-9a-f]{40})\s*$", text))
+        # Only the real trailer block of a commit counts: the body may quote upstream prose with such a line in it.
+        text = self.repo.out("log", "--format=%(trailers:key=Upstream-Commit,valueonly)", "-E",
+                             "--grep=^Upstream-Commit: [0-9a-f]{40}", "HEAD")
+        return set(re.findall(r"(?m)^([0-9a-f]{40})\s*$", text))
 
     # -- translation ----------------------------------------------------------------------------------------------
 
@@ -410,10 +431,16 @@ class Engine:
         """Build the synthetic commits B (the unit's first parent) and T (the unit) restricted to the files the fork
         carries, translated. None when the unit has no such file."""
         base, theirs, expected, modified = [], [], [], []
+        sources = {}
         for old_mode, old_sha, new_mode, new_sha, path in files:
             if is_dropped(path, self.dropped):
                 continue
             target = upstream_translate.translate_path(path)
+            # One index path can hold one blob: the second file would silently replace the first.
+            if target in sources:
+                raise DuplicatePath("two upstream files map to the same path %s (%s and %s); it needs a hand port"
+                                    % (target, sources[target], path))
+            sources[target] = path
             expected.append(target)
             had = old_mode not in ("000000", "160000")
             has = new_mode not in ("000000", "160000")  # a submodule pointer cannot be merged as a file
@@ -437,7 +464,10 @@ class Engine:
         if unit["sha"] in in_history:
             return Outcome("taken", note="found by its Upstream-Commit trailer in the history"), None
         files = self.changed_files(unit)
-        prepared = self.prepare(unit, files)
+        try:
+            prepared = self.prepare(unit, files)
+        except DuplicatePath as error:
+            return Outcome("conflict", note=str(error), files=len(files)), None
         if prepared is None:
             note = ("it changes no files" if not files
                     else "every file it changes is one the fork does not carry (dropped_paths)")
@@ -876,7 +906,10 @@ def command_pick(args):
         require_ready(engine)
         unit = engine.find_unit(args.sha)
         require_not_taken(engine, unit, ("conflict", "check-failed", "skipped"))
-        prepared = engine.prepare(unit, engine.changed_files(unit))
+        try:
+            prepared = engine.prepare(unit, engine.changed_files(unit))
+        except DuplicatePath as error:
+            raise ToolError("%s: %s" % (unit["sha"][:10], error))
         if prepared is None:
             raise ToolError("every file of %s is one the fork does not carry (dropped_paths); nothing to merge"
                             % unit["sha"][:10])
@@ -885,7 +918,7 @@ def command_pick(args):
         if result.returncode not in (0, 1) or (result.returncode == 1 and not conflicted):
             engine.undo()
             raise ToolError("git cherry-pick failed: " + (result.stderr or result.stdout).decode("utf-8", "replace"))
-        state = {"upstream": unit["sha"], "head": engine.repo.resolve("HEAD")}
+        state = {"upstream": unit["sha"], "head": engine.repo.resolve("HEAD"), "branch": engine.repo.branch()}
         pick_state_path(engine).write_text(json.dumps(state), encoding="utf-8")
         print("%s %s" % (unit["sha"][:10], unit["title"]))
         if conflicted:
@@ -904,12 +937,21 @@ def load_pick_state(engine):
     return path, json.loads(path.read_text(encoding="utf-8"))
 
 
+def require_same_place(engine, state, command):
+    """continue and abort act on the working tree, so they only run where the pick was started."""
+    repo = engine.repo
+    if repo.branch() != state.get("branch") or repo.resolve("HEAD") != state["head"]:
+        raise ToolError("the pick was started on branch %s at %s, and this is %s at %s; `%s` changed nothing "
+                        "(`abort --forget` drops the pick's record without touching any file)"
+                        % (state.get("branch") or "(detached)", state["head"][:10], repo.branch() or "(detached)",
+                           (repo.resolve("HEAD") or "")[:10], command))
+
+
 def command_continue(args):
     with Engine(args.repo, args.upstream) as engine:
         path, state = load_pick_state(engine)
         repo = engine.repo
-        if repo.resolve("HEAD") != state["head"]:
-            raise ToolError("HEAD moved since the pick started; run `abort`")
+        require_same_place(engine, state, "continue")
         if repo.out("diff", "--name-only", "--diff-filter=U"):
             raise ToolError("there are still conflicted files; resolve them and `git add` them")
         if repo.out("diff", "--name-only"):
@@ -928,7 +970,12 @@ def command_continue(args):
 
 def command_abort(args):
     with Engine(args.repo, args.upstream) as engine:
-        path, _ = load_pick_state(engine)
+        path, state = load_pick_state(engine)
+        if args.forget:
+            path.unlink()
+            print("the pick's record was deleted; no file was touched")
+            return 0
+        require_same_place(engine, state, "abort")
         engine.undo()
         path.unlink()
         print("the pick was undone")
@@ -986,7 +1033,9 @@ def build_parser():
     p.add_argument("sha")
     p = command("continue", command_continue, "commit a resolved pick")
     p.add_argument("--clang-format", help="clang-format binary; reformat the lines the pick changed")
-    command("abort", command_abort, "undo a pick in progress")
+    p = command("abort", command_abort, "undo a pick in progress (only on the branch and commit it was started on)")
+    p.add_argument("--forget", action="store_true",
+                   help="only delete the record of the pick and touch no file (you have moved on already)")
     p = command("skip", command_skip, "record a unit as skipped")
     p.add_argument("sha")
     p.add_argument("--reason", required=True)

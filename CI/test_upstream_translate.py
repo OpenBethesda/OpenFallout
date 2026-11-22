@@ -108,6 +108,8 @@ class NamesTest(unittest.TestCase):
         self.assertEqual(content("x.cpp", "namespace MWScript\n{\n}\nMWScript::Compiler c;\n"),
                          "namespace OFScript\n{\n}\nOFScript::Compiler c;\n")
         # The language, the enum value, a Lua type and a comment keep the name.
+        self.assertEqual(content("x.cpp", "::MWScript::Compiler c; Some::MWScript x;\n"),
+                         "::OFScript::Compiler c; Some::MWScript x;\n")
         self.assertEqual(content("x.cpp", "type = MusicType::MWScript; // MWScript's SkipAnim\n"),
                          "type = MusicType::MWScript; // MWScript's SkipAnim\n")
         self.assertEqual(content("files/lua_api/openmw/world.lua", "-- @type MWScript\n"), "-- @type MWScript\n")
@@ -221,15 +223,21 @@ class KeptNamesTest(unittest.TestCase):
     def test_the_bug_tracker_link_moved_but_issue_links_stay(self):
         self.assertEqual(content("components/crashcatcher/crashcatcher.cpp",
                                  'std::string m = "report this to https://gitlab.com/OpenMW/openmw/issues !";\n'),
-                         'std::string m = "report this to https://github.com/Elemperor1/OpenFallout/issues !";\n')
+                         'std::string m = "report this to https://github.com/OpenBethesda/OpenFallout/issues !";\n')
         self.assertEqual(content("apps/wizard/conclusionpage.cpp",
                                  '"<a href=\\"https://gitlab.com/OpenMW/openmw/issues\\">x</a>"\n'),
-                         '"<a href=\\"https://github.com/Elemperor1/OpenFallout/issues\\">x</a>"\n')
+                         '"<a href=\\"https://github.com/OpenBethesda/OpenFallout/issues\\">x</a>"\n')
         issue = "// Ref https://gitlab.com/OpenMW/openmw/-/issues/6013\n"
         self.assertEqual(content("apps/openmw/mwrender/screenshotmanager.cpp", issue), issue)
 
 
 class CppTest(unittest.TestCase):
+    def test_character_literals_do_not_start_strings(self):
+        self.assertEqual(content("x.cpp", "emit('\"', \"OpenMW\");\n"), "emit('\"', \"OpenFallout\");\n")
+        self.assertEqual(content("x.cpp", "f('\\'', '\\\\', \"OpenMW\");\n"), "f('\\'', '\\\\', \"OpenFallout\");\n")
+        self.assertEqual(content("x.cpp", "int n = 1'000'000; auto s = \"OpenMW\"; // don't\n"),
+                         "int n = 1'000'000; auto s = \"OpenFallout\"; // don't\n")
+
     def test_strings_are_renamed_and_comments_and_identifiers_are_not(self):
         self.assertEqual(content("apps/openmw/engine.cpp", 'mWindow = SDL_CreateWindow("OpenMW", 1);\n'),
                          'mWindow = SDL_CreateWindow("OpenFallout", 1);\n')
@@ -421,6 +429,7 @@ class MeasureTest(unittest.TestCase):
         self.git("config", "user.email", "t@example.org")
         self.git("config", "user.name", "t")
         self.git("config", "commit.gpgsign", "false")
+        self.git("config", "tag.gpgSign", "false")
         self.write("apps/openmw/a.cpp", b"namespace MWWorld {}\nauto s = \"OpenMW\";\n")
         self.write("apps/openmw/b.cpp", b"namespace MWGui {}\n")
         self.write("apps/openmw/c.cpp", b"namespace MWGui {}\n")
