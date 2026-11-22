@@ -4,6 +4,7 @@
 #include <components/falloutscript/dialogue.hpp>
 #include <components/falloutscript/savestate.hpp>
 #include <components/falloutscript/saveworld.hpp>
+#include <components/falloutscript/sayings.hpp>
 #include <components/falloutscript/triggervolumes.hpp>
 
 #include <gmock/gmock.h>
@@ -469,5 +470,238 @@ namespace
         OpenStates loaded;
         SaveReader in(bytes);
         EXPECT_THROW(FalloutScript::readOpenStates(loaded, in, 1), FalloutScript::SaveError);
+    }
+
+    // ---- What characters were saying outside of a conversation (Say, SayTo) ----
+
+    using FalloutScript::SaidLine;
+    using FalloutScript::Saying;
+
+    constexpr FormId doctor = 0x00ff0400;
+    constexpr FormId doctorBase = 0x00003400;
+    constexpr FormId psychTopic = 0x00002010;
+    constexpr FormId psychResponse = 0x00003010;
+
+    SaidLine saidLine(std::string text, FormId topic, FormId endInfo = 0, bool end = false)
+    {
+        SaidLine line;
+        line.mVoice = "sound/voice/test/" + text + ".ogg";
+        line.mText = std::move(text);
+        line.mSeconds = 2.5f;
+        line.mTopic = topic;
+        line.mEndInfo = endInfo;
+        line.mSpeakerBase = doctorBase;
+        line.mEnd = end;
+        return line;
+    }
+
+    std::vector<std::string> textsOf(const Saying& saying)
+    {
+        std::vector<std::string> result;
+        for (const SaidLine& line : saying.mLines)
+            result.push_back(line.mText);
+        return result;
+    }
+
+    TEST(FalloutScriptSaveWorldTest, theLinesACharacterWasSayingComeBackFromTheOneItWasAt)
+    {
+        // The doctor has said his first line, is half way through the second (its response ends with it), and has a
+        // third to say; a radio in his room plays a line too
+        Saying doctorSays;
+        doctorSays.mReference = doctor;
+        doctorSays.mLines = { saidLine("first", topicA), saidLine("second", topicA, 0x3001),
+            saidLine("third", topicA, 0x3002, true) };
+        doctorSays.mLines[2].mForceSubtitles = true;
+        doctorSays.mLines[2].mSpeaker = guard; // the other character of an exchange says it
+        doctorSays.mNext = 1;
+        doctorSays.mStarted = true;
+        doctorSays.mWait = 1.25f;
+        Saying radio;
+        radio.mReference = lever;
+        radio.mLines = { saidLine("news", topicB, 0, true) };
+        radio.mLines[0].mRadio = true;
+        radio.mStarted = true;
+
+        SaveWriter out;
+        FalloutScript::writeSayings({ doctorSays, radio }, { { raider, topicC } }, out);
+        SaveReader in(out.bytes());
+        const FalloutScript::SavedSayings saved = FalloutScript::readSayings(in, FalloutScript::sayingsSectionVersion);
+        EXPECT_TRUE(in.atEnd());
+
+        // The line that was being said is said again from its start, and the lines before it are not; the radio starts
+        // over from what the radio keeps, not from here
+        ASSERT_EQ(saved.mSayings.size(), 1u);
+        const Saying& loaded = saved.mSayings.front();
+        EXPECT_EQ(loaded.mReference, doctor);
+        EXPECT_THAT(textsOf(loaded), ElementsAre("second", "third"));
+        EXPECT_EQ(loaded.mNext, 0u);
+        EXPECT_FALSE(loaded.mStarted);
+        EXPECT_EQ(loaded.mWait, 0.f);
+        const SaidLine& second = loaded.mLines[0];
+        EXPECT_EQ(second.mVoice, "sound/voice/test/second.ogg");
+        EXPECT_EQ(second.mSeconds, 2.5f);
+        EXPECT_EQ(second.mTopic, topicA);
+        EXPECT_EQ(second.mEndInfo, 0x3001u);
+        EXPECT_EQ(second.mSpeakerBase, doctorBase);
+        EXPECT_EQ(second.mSpeaker, 0u);
+        EXPECT_FALSE(second.mEnd);
+        EXPECT_FALSE(second.mForceSubtitles);
+        const SaidLine& third = loaded.mLines[1];
+        EXPECT_EQ(third.mEndInfo, 0x3002u);
+        EXPECT_EQ(third.mSpeaker, guard);
+        EXPECT_TRUE(third.mEnd);
+        EXPECT_TRUE(third.mForceSubtitles);
+        EXPECT_FALSE(third.mRadio);
+        // The script that was to be told at the next frame that nothing could be said is told after the load
+        EXPECT_THAT(saved.mNothingSaid, ElementsAre(std::make_pair(raider, topicC)));
+
+        // A game saved again right after the load holds the same
+        SaveWriter again;
+        FalloutScript::writeSayings(saved.mSayings, saved.mNothingSaid, again);
+        SaveWriter expected;
+        Saying fromSecond = doctorSays;
+        fromSecond.mLines.erase(fromSecond.mLines.begin());
+        fromSecond.mNext = 0;
+        FalloutScript::writeSayings({ fromSecond }, { { raider, topicC } }, expected);
+        EXPECT_EQ(again.bytes(), expected.bytes());
+    }
+
+    TEST(FalloutScriptSaveWorldTest, theEndOfAResponseThatWasBeingSaidWhenTheGameWasSavedRunsAfterTheLoad)
+    {
+        // As the doctor of Goodsprings: a response said once, whose end script moves the quest on, is being said when
+        // the game is saved
+        const auto setUp = [](Dialogue& game, std::vector<std::string>& logged) {
+            game.mInterpreter.setHandler("Log", [&logged](FalloutScript::CallContext& call) {
+                logged.push_back(call.mArguments.at(0).mText);
+                return 0.0;
+            });
+            game.mRecords.addTopic(psychTopic, "Psych");
+            ESM4::DialogInfo& response = game.mRecords.addInfo(psychResponse, psychTopic, "the test");
+            response.mInfoFlags = ESM4::INFO_SayOnce;
+            ScriptBuilder end;
+            end.code(command(OpLog, arguments(1).text("the quest goes on")));
+            response.mEndScript = end.definition();
+            game.mQuests.reset();
+            game.mDialogue.reset();
+        };
+        const DialogueSpeaker who{ doctor, doctorBase };
+        Dialogue game;
+        std::vector<std::string> logged;
+        setUp(game, logged);
+        const FalloutScript::DialogueView view = game.mDialogue.say(who, psychTopic, 0, false, true);
+        ASSERT_EQ(view.mLines.size(), 1u);
+        Saying saying;
+        saying.mReference = doctor;
+        saying.mLines = { saidLine("the test", psychTopic, view.mLines.back().mInfo, true) };
+        saying.mStarted = true;
+        saying.mWait = 1.f;
+        EXPECT_THAT(logged, IsEmpty());
+
+        SaveWriter dialogue;
+        FalloutScript::writeDialogue(game.mDialogue, dialogue);
+        SaveWriter sayings;
+        FalloutScript::writeSayings({ saying }, {}, sayings);
+
+        Dialogue loaded;
+        std::vector<std::string> loadedLog;
+        setUp(loaded, loadedLog);
+        SaveReader dialogueIn(dialogue.bytes());
+        FalloutScript::readDialogue(loaded.mDialogue, dialogueIn, FalloutScript::dialogueSectionVersion);
+        SaveReader sayingsIn(sayings.bytes());
+        const FalloutScript::SavedSayings saved
+            = FalloutScript::readSayings(sayingsIn, FalloutScript::sayingsSectionVersion);
+
+        // The response is not said again, and the line that was being said is: when it is over the host finishes
+        // the response, and its end script runs
+        EXPECT_TRUE(loaded.mDialogue.wasSaid(psychResponse, doctor));
+        ASSERT_EQ(saved.mSayings.size(), 1u);
+        const SaidLine& line = saved.mSayings.front().mLines.front();
+        EXPECT_EQ(line.mEndInfo, psychResponse);
+        EXPECT_TRUE(line.mEnd);
+        loaded.mDialogue.finishSaid({ doctor, line.mSpeakerBase }, line.mEndInfo, line.mTopic);
+        EXPECT_THAT(loadedLog, ElementsAre("the quest goes on"));
+    }
+
+    TEST(FalloutScriptSaveWorldTest, aSaveMadeBeforeTheLinesWereKeptLoadsAsItDid)
+    {
+        // A save of before the section has the responses that were said and nothing of the line being said: the game
+        // loads as it did, with nobody saying anything, and the end of that response never comes
+        Dialogue game;
+        std::vector<std::string> logged;
+        game.mInterpreter.setHandler("Log", [&logged](FalloutScript::CallContext& call) {
+            logged.push_back(call.mArguments.at(0).mText);
+            return 0.0;
+        });
+        game.mRecords.addTopic(psychTopic, "Psych");
+        ESM4::DialogInfo& response = game.mRecords.addInfo(psychResponse, psychTopic, "the test");
+        response.mInfoFlags = ESM4::INFO_SayOnce;
+        ScriptBuilder end;
+        end.code(command(OpLog, arguments(1).text("the quest goes on")));
+        response.mEndScript = end.definition();
+        game.mQuests.reset();
+        game.mDialogue.reset();
+        ASSERT_EQ(game.mDialogue.say({ doctor, doctorBase }, psychTopic, 0, false, true).mLines.size(), 1u);
+
+        SaveWriter old;
+        FalloutScript::writeDialogue(game.mDialogue, old);
+        SaveReader in(old.bytes());
+        FalloutScript::readDialogue(game.mDialogue, in, 1);
+        EXPECT_TRUE(in.atEnd());
+        EXPECT_TRUE(game.mDialogue.wasSaid(psychResponse, doctor));
+        EXPECT_THAT(logged, IsEmpty());
+
+        // and a section with nothing in it reads as nothing
+        SaveWriter empty;
+        FalloutScript::writeSayings({}, {}, empty);
+        SaveReader emptyIn(empty.bytes());
+        const FalloutScript::SavedSayings saved = FalloutScript::readSayings(emptyIn, 1);
+        EXPECT_TRUE(emptyIn.atEnd());
+        EXPECT_THAT(saved.mSayings, IsEmpty());
+        EXPECT_THAT(saved.mNothingSaid, IsEmpty());
+    }
+
+    TEST(FalloutScriptSaveWorldTest, theLinesOfAPluginThatIsGoneAreLeftOut)
+    {
+        constexpr FormId goneSpeaker = 0x05ff0001;
+        constexpr FormId goneResponse = 0x05003001;
+        Saying gone;
+        gone.mReference = goneSpeaker;
+        gone.mLines = { saidLine("gone", topicA, 0, true) };
+        Saying exchange;
+        exchange.mReference = doctor;
+        exchange.mLines = { saidLine("mine", goneTopic, goneResponse), saidLine("theirs", topicA, 0, true) };
+        exchange.mLines[1].mSpeaker = goneSpeaker;
+        SaveWriter out;
+        FalloutScript::writeSayings({ gone, exchange }, { { goneSpeaker, topicA }, { doctor, topicA } }, out);
+
+        SaveReader in(out.bytes(), [](FormId saved) -> std::optional<FormId> {
+            if ((saved >> 24) == 5)
+                return std::nullopt;
+            return saved;
+        });
+        const FalloutScript::SavedSayings saved = FalloutScript::readSayings(in, 1);
+        EXPECT_TRUE(in.atEnd());
+        // The character of the plugin is left out; the line of the other one is too, and the end of what was said
+        // goes to the line before it. A topic and a response that are gone are none
+        ASSERT_EQ(saved.mSayings.size(), 1u);
+        EXPECT_EQ(saved.mSayings.front().mReference, doctor);
+        EXPECT_THAT(textsOf(saved.mSayings.front()), ElementsAre("mine"));
+        EXPECT_TRUE(saved.mSayings.front().mLines.front().mEnd);
+        EXPECT_EQ(saved.mSayings.front().mLines.front().mTopic, 0u);
+        EXPECT_EQ(saved.mSayings.front().mLines.front().mEndInfo, 0u);
+        EXPECT_THAT(saved.mNothingSaid, ElementsAre(std::make_pair(doctor, topicA)));
+    }
+
+    TEST(FalloutScriptSaveWorldTest, aCutShortSayingsSectionIsAnError)
+    {
+        Saying saying;
+        saying.mReference = doctor;
+        saying.mLines = { saidLine("line", topicA, 0x3001, true) };
+        SaveWriter out;
+        FalloutScript::writeSayings({ saying }, {}, out);
+        std::string bytes = out.bytes();
+        bytes.resize(bytes.size() - 6);
+        SaveReader in(bytes);
+        EXPECT_THROW(FalloutScript::readSayings(in, 1), FalloutScript::SaveError);
     }
 }

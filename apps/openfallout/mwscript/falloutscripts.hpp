@@ -105,6 +105,9 @@
 #include <components/falloutscript/wear.hpp>
 #include <components/falloutscript/worldcommands.hpp>
 
+// What characters say outside of a conversation, which a saved game keeps
+#include <components/falloutscript/sayings.hpp>
+
 #include <osg/Node>
 #include <osg/Vec3f>
 #include <osg/observer_ptr>
@@ -2354,40 +2357,10 @@ namespace OFScript
         std::string voiceFile(FalloutScript::FormId speaker, const FalloutScript::DialogueLine& line);
         const FalloutScript::VoiceIndex& voices();
         static float lineSeconds(const std::string& text);
-        /// A line said to the player outside of a conversation, one after the other for a character
-        struct SaidLine
-        {
-            std::string mVoice;
-            std::string mText;
-            float mSeconds = 0;
-            /// The last line of what one Say or SayTo said: the script of the speaker is told when it is over
-            bool mEnd = false;
-            /// The topic that was said, which the script of the speaker is told of (Begin SayToDone Topic)
-            FalloutScript::FormId mTopic = 0;
-            /// The response that this is the last line of: its end script runs, and the topics it adds are given, when
-            /// the line is over (and before the script of the speaker is told that it has said what it was told to)
-            FalloutScript::FormId mEndInfo = 0;
-            /// The record of the speaker, kept with the line: a speaker that was made while the game runs and has left
-            /// the loaded cells has no reference to tell it by when the response ends
-            FalloutScript::FormId mSpeakerBase = 0;
-            /// The character that says the line when it is not the one the lines were given to (0 for that one): in an
-            /// exchange of two characters they take turns
-            FalloutScript::FormId mSpeaker = 0;
-            /// The script asked for the text to be shown even with subtitles off
-            bool mForceSubtitles = false;
-            /// A line of a radio that is not the Pip-Boy's (a thing in a room, a character's): it follows the radio's
-            /// volume, and a song of it is left out when the radio is set to dialogue only
-            bool mRadio = false;
-            bool mSong = false;
-        };
-        struct Saying
-        {
-            FalloutScript::FormId mReference = 0;
-            std::vector<SaidLine> mLines;
-            std::size_t mNext = 0;
-            float mWait = 0;
-            bool mStarted = false;
-        };
+        /// A line said to the player outside of a conversation, one after the other for a character, and what a
+        /// character says (a saved game keeps them: the sayings section)
+        using SaidLine = FalloutScript::SaidLine;
+        using Saying = FalloutScript::Saying;
         void startSaying(FalloutScript::FormId reference, std::vector<SaidLine> lines);
         /// What a character is saying stops, with what it had left to say (a radio that is turned off, a conversation that
         /// is asked for)
