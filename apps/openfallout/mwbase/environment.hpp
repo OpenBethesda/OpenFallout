@@ -30,9 +30,7 @@ namespace OFScript
 namespace OFBase
 {
     class World;
-    class ScriptManager;
     class DialogueManager;
-    class Journal;
     class SoundManager;
     class MechanicsManager;
     class InputManager;
@@ -53,12 +51,10 @@ namespace OFBase
         OFWorld::Scene* mWorldScene = nullptr;
         OFWorld::ESMStore* mESMStore = nullptr;
         SoundManager* mSoundManager = nullptr;
-        ScriptManager* mScriptManager = nullptr;
         OFScript::FalloutScripts* mFalloutScripts = nullptr;
         WindowManager* mWindowManager = nullptr;
         MechanicsManager* mMechanicsManager = nullptr;
         DialogueManager* mDialogueManager = nullptr;
-        Journal* mJournal = nullptr;
         InputManager* mInputManager = nullptr;
         StateManager* mStateManager = nullptr;
         LuaManager* mLuaManager = nullptr;
@@ -83,8 +79,6 @@ namespace OFBase
 
         void setSoundManager(SoundManager& value) { mSoundManager = &value; }
 
-        void setScriptManager(ScriptManager& value) { mScriptManager = &value; }
-
         void setFalloutScripts(OFScript::FalloutScripts& value) { mFalloutScripts = &value; }
         /// The engine calls this before it destroys the scripts: what is destroyed after them (the world and what
         /// it draws) asks hasFalloutScripts() before it tells them anything, and must hear "no"
@@ -95,8 +89,6 @@ namespace OFBase
         void setMechanicsManager(MechanicsManager& value) { mMechanicsManager = &value; }
 
         void setDialogueManager(DialogueManager& value) { mDialogueManager = &value; }
-
-        void setJournal(Journal& value) { mJournal = &value; }
 
         void setInputManager(InputManager& value) { mInputManager = &value; }
 
@@ -115,8 +107,6 @@ namespace OFBase
 
         Misc::NotNullPtr<SoundManager> getSoundManager() const { return mSoundManager; }
 
-        Misc::NotNullPtr<ScriptManager> getScriptManager() const { return mScriptManager; }
-
         /// The compiled scripts of Fallout 3 and New Vegas
         Misc::NotNullPtr<OFScript::FalloutScripts> getFalloutScripts() const { return mFalloutScripts; }
         /// Whether the game has the scripts of the Fallout games yet (the getter above is not for a question: it
@@ -128,8 +118,6 @@ namespace OFBase
         Misc::NotNullPtr<MechanicsManager> getMechanicsManager() const { return mMechanicsManager; }
 
         Misc::NotNullPtr<DialogueManager> getDialogueManager() const { return mDialogueManager; }
-
-        Misc::NotNullPtr<Journal> getJournal() const { return mJournal; }
 
         Misc::NotNullPtr<InputManager> getInputManager() const { return mInputManager; }
 

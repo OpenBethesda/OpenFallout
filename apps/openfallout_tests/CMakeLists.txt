@@ -45,7 +45,6 @@ file(GLOB UNITTEST_SRC_FILES
 
     mwscript/testactorvaluetext.cpp
     mwscript/testgameoptions.cpp
-    mwscript/testscripts.cpp
 
     mwsound/testfalloutsound.cpp
     mwsound/testfalloutmusic.cpp

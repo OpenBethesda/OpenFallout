@@ -104,8 +104,6 @@
 #include "itemview.hpp"
 #include "itemwidget.hpp"
 #include "jailscreen.hpp"
-#include "journalviewmodel.hpp"
-#include "journalwindow.hpp"
 #include "keyboardnavigation.hpp"
 #include "levelupdialog.hpp"
 #include "loadingscreen.hpp"
@@ -204,7 +202,6 @@ namespace OFGui
         , mForceHidden(GW_None)
         , mAllowed(GW_ALL)
         , mRestAllowed(true)
-        , mEncoding(encoding)
         , mVersionDescription(versionDescription)
         , mWindowVisible(true)
         , mCfgMgr(cfgMgr)
@@ -373,11 +370,8 @@ namespace OFGui
         mWindows.push_back(std::move(console));
         trackWindow(mConsole, makeConsoleWindowSettingValues());
 
-        constexpr VFS::Path::NormalizedView menubookOptionsOverTexture("textures/tx_menubook_options_over.dds");
-        const bool questList = mResourceSystem->getVFS()->exists(menubookOptionsOverTexture);
-        auto journal = JournalWindow::create(JournalViewModel::create(), questList, mEncoding);
-        mGuiModeStates[GM_Journal] = GuiModeState(journal.get());
-        mWindows.push_back(std::move(journal));
+        // GM_Journal has no window: the journal of Morrowind went, and the quests of Fallout are on the DATA page of
+        // the Pip-Boy (the Journal key opens that)
 
         mMessageBoxManager = std::make_unique<MessageBoxManager>(
             mStore->get<ESM::GameSetting>().find("fMessageTimePerChar")->mValue.getFloat());

@@ -443,10 +443,6 @@ namespace OFClass
         else if (!stats.getKnockedDown())
             return std::make_unique<OFWorld::ActionTalk>(ptr);
 
-        // Tribunal and some mod companions oddly enough must use open action as fallback
-        if (!getScript(ptr).empty() && ptr.getRefData().getLocals().getIntVar(getScript(ptr), "companion"))
-            return std::make_unique<OFWorld::ActionOpen>(ptr);
-
         return std::make_unique<OFWorld::FailedAction>();
     }
 

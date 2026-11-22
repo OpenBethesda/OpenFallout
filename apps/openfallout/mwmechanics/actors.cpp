@@ -27,7 +27,6 @@
 #include "../mwworld/scene.hpp"
 #include "../mwworld/worldmodel.hpp"
 
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
@@ -419,36 +418,6 @@ namespace OFMechanics
         calculateRestoration(ptr, duration);
     }
 
-    void Actors::playIdleDialogue(const OFWorld::Ptr& actor) const
-    {
-        if (!actor.getClass().isActor() || actor == getPlayer()
-            || OFBase::Environment::get().getSoundManager()->sayActive(actor))
-            return;
-
-        const CreatureStats& stats = actor.getClass().getCreatureStats(actor);
-        if (stats.getAiSetting(AiSetting::Hello).getModified() == 0)
-            return;
-
-        const OFMechanics::AiSequence& seq = stats.getAiSequence();
-        if (seq.isInCombat() || seq.hasPackage(AiPackageTypeId::Follow) || seq.hasPackage(AiPackageTypeId::Escort))
-            return;
-
-        const osg::Vec3f playerPos(getPlayer().getRefData().getPosition().asVec3());
-        const osg::Vec3f actorPos(actor.getRefData().getPosition().asVec3());
-        OFBase::World* const world = OFBase::Environment::get().getWorld();
-        if (world->isSwimming(actor) || (playerPos - actorPos).length2() >= 3000 * 3000)
-            return;
-
-        // Our implementation is not FPS-dependent unlike Morrowind's so it needs to be recalibrated.
-        // We chose to use the chance MW would have when run at 60 FPS with the default value of the GMST.
-        const float delta = OFBase::Environment::get().getFrameDuration() * 6.f;
-        static const float fVoiceIdleOdds
-            = world->getStore().get<ESM::GameSetting>().find("fVoiceIdleOdds")->mValue.getFloat();
-        if (Misc::Rng::rollProbability(world->getPrng()) * 10000.f < fVoiceIdleOdds * delta
-            && world->getLOS(getPlayer(), actor))
-            OFBase::Environment::get().getDialogueManager()->say(actor, ESM::RefId::stringRefId("idle"));
-    }
-
     void Actors::updateMovementSpeed(const OFWorld::Ptr& actor) const
     {
         if (Settings::game().mSmoothMovement)
@@ -542,9 +511,9 @@ namespace OFMechanics
             constexpr int initialDelay = 2;
             if (greetingTimer >= initialDelay)
             {
-                greetingState = GreetingState::InProgress;
-                if (!OFBase::Environment::get().getDialogueManager()->say(actor, ESM::RefId::stringRefId("hello")))
-                    greetingState = GreetingState::Done;
+                // The greeting was a Morrowind voice line ("Hello" topic), which Fallout data does not have: it is
+                // over as soon as it would start
+                greetingState = GreetingState::Done;
                 greetingTimer = 0;
             }
         }
@@ -1640,7 +1609,6 @@ namespace OFMechanics
                             {
                                 stats.getAiSequence().execute(actor.getPtr(), ctrl, duration);
                                 updateGreetingState(actor.getPtr(), actor, mTimerUpdateHello > 0);
-                                playIdleDialogue(actor.getPtr());
                                 updateMovementSpeed(actor.getPtr());
                             }
                         }
@@ -1820,11 +1788,6 @@ namespace OFMechanics
             CharacterController::KillResult killResult = actor.getCharacterController().kill();
             if (killResult == CharacterController::Result_DeathAnimStarted)
             {
-                // Play dying words
-                // Note: It's not known whether the soundgen tags scream, roar, and moan are reliable
-                // for NPCs since some of the npc death animation files are missing them.
-                OFBase::Environment::get().getDialogueManager()->say(actor.getPtr(), ESM::RefId::stringRefId("hit"));
-
                 // Apply soultrap
                 if (actor.getPtr().getType() == ESM::Creature::sRecordId)
                     soulTrap(actor.getPtr());

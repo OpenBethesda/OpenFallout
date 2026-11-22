@@ -1047,10 +1047,6 @@
 -- for _, journalRecord in pairs(core.dialogue.journal.records) do
 --     print(journalRecord.id)
 -- end
--- @usage --print quest names for all quests the player has inside a player script
--- for _, quest in pairs(types.Player.quests(self)) do
---     print(quest.id, core.dialogue.journal.records[quest.id].questName)
--- end
 
 ---
 -- @{#DialogueRecords} functions for topic read-only records.
@@ -3445,7 +3441,7 @@
 -- local bb = core.dialogue.voice.records['flee'].infos[149].sound
 
 ---
--- Quest stage (same as in @{openfallout_types#PLAYERQuest.stage}) this info entry is associated with.
+-- Quest stage this info entry is associated with.
 -- Non-nil only for journal records.
 -- @field [parent=#DialogueRecordInfo] #number questStage
 

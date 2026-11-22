@@ -5,7 +5,6 @@
 #include <components/esm/refid.hpp>
 #include <components/esm3/animationstate.hpp>
 
-#include "../mwscript/locals.hpp"
 #include "../mwworld/customdata.hpp"
 
 #include <osg/ref_ptr>
@@ -20,7 +19,6 @@ namespace SceneUtil
 
 namespace ESM
 {
-    class Script;
     class CellRef;
     struct ObjectState;
 }
@@ -45,7 +43,6 @@ namespace OFWorld
     {
         osg::ref_ptr<SceneUtil::PositionAttitudeTransform> mBaseNode;
 
-        OFScript::Locals mLocals;
         std::shared_ptr<OFLua::LocalScripts> mLuaScripts;
         ESM::Position mPosition;
         ESM::AnimationState mAnimationState;
@@ -103,8 +100,6 @@ namespace OFWorld
         /// Set base node (can be a null pointer).
         void setBaseNode(osg::ref_ptr<SceneUtil::PositionAttitudeTransform> base);
 
-        void setLocals(const ESM::Script& script);
-
         OFLua::LocalScripts* getLuaScripts() const { return mLuaScripts.get(); }
         void setLuaScripts(std::shared_ptr<OFLua::LocalScripts>&&);
 
@@ -114,8 +109,6 @@ namespace OFWorld
 
         /// Returns true if the object was deleted by a content file.
         bool isDeletedByContentFile() const;
-
-        OFScript::Locals& getLocals();
 
         bool isEnabled() const;
 

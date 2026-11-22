@@ -15,24 +15,6 @@
 -- @field [parent=#world] openfallout.core#ObjectList players
 
 ---
--- The global variables of the game (see @{#MWScriptFunctions}). Morrowind scripts are not run any more.
--- @field [parent=#world] #MWScriptFunctions mwscript
-
----
--- Functions for the global variables.
--- @type MWScriptFunctions
-
----
--- @type MWScriptVariables
--- @map <#string, #number>
-
----
--- Returns mutable global variables. In multiplayer, these may be specific to the provided player.
--- @function [parent=#MWScriptFunctions] getGlobalVariables
--- @param openfallout.core#GameObject player (optional) Will be used in multiplayer mode to get the globals if there is a separate instance for each player. Currently has no effect.
--- @return #MWScriptVariables
-
----
 -- The quests of Fallout 3 and New Vegas (see @{#QuestFunctions}). Empty of quests in a game without them.
 -- @field [parent=#world] #QuestFunctions quests
 

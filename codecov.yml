@@ -78,8 +78,6 @@ component_management:
         - components/config/**
         - components/settings/**
         - components/sqlite3/**
-        - components/compiler/**
-        - components/interpreter/**
         - components/lua/**
         - components/detournavigator/**
         - components/misc/**

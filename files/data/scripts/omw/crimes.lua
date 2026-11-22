@@ -3,14 +3,8 @@ local world = require('openfallout.world')
 local I = require('openfallout.interfaces')
 
 local function isAllowedToOpen(player, lockable)
-    -- Lockables are always allowed when their global variable is non-zero
-    if lockable.globalVariable then
-        local value = world.mwscript.getGlobalVariables()[lockable.globalVariable]
-        if value and value ~= 0 then
-            return true
-        end
-    end
-
+    -- (A Morrowind reference could name a global variable that allowed it to be opened when non-zero. Fallout
+    -- references have none: lockable.globalVariable is always nil on Fallout data.)
     local owner = lockable.owner
     local isOwned = false
     local isFactionOwned = false

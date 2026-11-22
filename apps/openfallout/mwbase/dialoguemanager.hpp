@@ -2,22 +2,13 @@
 #define GAME_MWBASE_DIALOGUEMANAGER_H
 
 #include <list>
-#include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
-
-#include <cstdint>
-
-namespace Loading
-{
-    class Listener;
-}
 
 namespace ESM
 {
-    class ESMReader;
-    class ESMWriter;
     class RefId;
 }
 
@@ -28,7 +19,11 @@ namespace OFWorld
 
 namespace OFBase
 {
-    /// \brief Interface for dialogue manager (implemented in OFDialogue)
+    /// \brief What the dialogue window of Morrowind asks about a Morrowind conversation (implemented in OFDialogue)
+    ///
+    /// The conversations of Fallout run in OFScript::FalloutScripts and the interface of the Lua scripts. The window
+    /// of Morrowind (topics, persuasion, services) is still built and still holds the GM_Dialogue mode of a Fallout
+    /// conversation, so it keeps asking these questions; the engine has no Morrowind conversation to answer them with.
     class DialogueManager
     {
         DialogueManager(const DialogueManager&);
@@ -47,26 +42,15 @@ namespace OFBase
 
         DialogueManager() {}
 
-        virtual void clear() = 0;
-
         virtual ~DialogueManager() {}
 
         virtual bool isInChoice() const = 0;
 
         virtual bool startDialogue(const OFWorld::Ptr& actor, ResponseCallback* callback) = 0;
 
-        virtual bool inJournal(const ESM::RefId& topicId, const ESM::RefId& infoId) const = 0;
-
-        virtual void addTopic(const ESM::RefId& topic) = 0;
-
-        virtual void addChoice(std::string_view text, int choice) = 0;
         virtual const std::vector<std::pair<std::string, int>>& getChoices() const = 0;
 
         virtual bool isGoodbye() const = 0;
-
-        virtual void goodbye() = 0;
-
-        virtual bool say(const OFWorld::Ptr& actor, const ESM::RefId& topic) = 0;
 
         virtual void keywordSelected(std::string_view keyword, ResponseCallback* callback) = 0;
         virtual void goodbyeSelected() = 0;
@@ -96,30 +80,6 @@ namespace OFBase
         virtual bool checkServiceRefused(ResponseCallback* callback, ServiceType service = ServiceType::Any) = 0;
 
         virtual void persuade(int type, ResponseCallback* callback) = 0;
-
-        /// @note Controlled by an option, gets discarded when dialogue ends by default
-        virtual void applyBarterDispositionChange(int delta) = 0;
-
-        virtual size_t countSavedGameRecords() const = 0;
-
-        virtual void write(ESM::ESMWriter& writer, Loading::Listener& progress) const = 0;
-
-        virtual void readRecord(ESM::ESMReader& reader, uint32_t type) = 0;
-
-        /// Changes faction1's opinion of faction2 by \a diff.
-        virtual void modFactionReaction(const ESM::RefId& faction1, const ESM::RefId& faction2, int diff) = 0;
-
-        /// Set faction1's opinion of faction2.
-        virtual void setFactionReaction(const ESM::RefId& faction1, const ESM::RefId& faction2, int absolute) = 0;
-
-        /// @return faction1's opinion of faction2
-        virtual int getFactionReaction(const ESM::RefId& faction1, const ESM::RefId& faction2) const = 0;
-
-        /// @return all faction's opinion overrides
-        virtual const std::map<ESM::RefId, int>* getFactionReactionOverrides(const ESM::RefId& faction) const = 0;
-
-        /// Removes the last added topic response for the given actor from the journal
-        virtual void clearInfoActor(const OFWorld::Ptr& actor) const = 0;
     };
 }
 

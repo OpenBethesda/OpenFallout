@@ -7,7 +7,6 @@
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
-#include "../mwbase/scriptmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
@@ -17,8 +16,6 @@
 #include "../mwmechanics/aipackage.hpp"
 #include "../mwmechanics/creaturestats.hpp"
 #include "../mwmechanics/summoning.hpp"
-
-#include "../mwscript/interpretercontext.hpp"
 
 #include "containeritemmodel.hpp"
 #include "countdialog.hpp"

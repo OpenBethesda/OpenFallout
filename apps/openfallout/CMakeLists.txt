@@ -29,13 +29,13 @@ add_openfallout_dir (mwinput
 
 add_openfallout_dir (mwgui
     layout textinput widgets race class birth review windowmanagerimp console dialogue
-    windowbase statswindow messagebox journalwindow charactercreation
+    windowbase statswindow messagebox charactercreation
     mapwindow windowpinnablebase tooltips scrollwindow bookwindow resourceskin
     formatting inventorywindow container hud countdialog tradewindow settingswindow
     confirmationdialog alchemywindow referenceinterface spellwindow mainmenu quickkeysmenu menuscenes
     itemselection spellbuyingwindow loadingscreen falloutloading falloutairmeter falloutmenuresources levelupdialog waitdialog spellcreationdialog
     enchantingdialog trainingwindow travelwindow exposedwindow cursor spellicons
-    merchantrepair repair soulgemdialog companionwindow bookpage journalviewmodel journalbooks
+    merchantrepair repair soulgemdialog companionwindow bookpage
     itemmodel containeritemmodel inventoryitemmodel sortfilteritemmodel itemview
     tradeitemmodel companionitemmodel pickpocketitemmodel controllers savegamedialog
     recharge mode videowidget backgroundimage itemwidget screenfader debugwindow spellmodel spellview
@@ -44,11 +44,10 @@ add_openfallout_dir (mwgui
     )
 
 add_openfallout_dir (mwdialogue
-    dialoguemanagerimp journalimp journalentry quest topic filter selectwrapper keywordsearch
+    dialoguemanagerimp keywordsearch
     )
 
 add_openfallout_dir (mwscript
-    locals scriptmanagerimp compilercontext interpretercontext extensions
     falloutscripts falloutprogress falloutreputation falloutobjectstate falloutdetection falloutinterface falloutpresentation falloutpipboy falloutinteraction falloutmusic falloutambient falloutradio falloutcrafting falloutbarter falloutrepair falloutlook falloutmods falloutcompanion falloutcasino falloutcaravan fallouthotkeys falloutregionline falloutvats falloutsave falloutdamage falloutchallenges falloutperks falloutdebug
     falloutvatscommands
     falloutmines
@@ -66,7 +65,7 @@ set(OPENFALLOUT_FILES_BEFORE_LUA ${OPENFALLOUT_FILES})
 add_openfallout_dir (mwlua
     objectcache luamanagerimp object objectlists userdataserializer luaevents engineevents objectvariant loadscripts contentbindings
     context menuscripts globalscripts localscripts playerscripts luabindings objectbindings cellbindings coremwscriptbindings
-    mwscriptbindings questbindings conversationbindings chargenbindings messagebindings menuscenebindings lockpickbindings specialscreenbindings combatbindings casinobindings spawnbindings hudbindings menubindings interactbindings pipboybindings vatsbindings camerabindings vfsbindings uibindings soundbindings inputbindings nearbybindings dialoguebindings
+    questbindings conversationbindings chargenbindings messagebindings menuscenebindings lockpickbindings specialscreenbindings combatbindings casinobindings spawnbindings hudbindings menubindings interactbindings pipboybindings vatsbindings camerabindings vfsbindings uibindings soundbindings inputbindings nearbybindings dialoguebindings
     falloutworldbindings
     actorstatusbindings
     postprocessingbindings stats recordstore debugbindings corebindings worldbindings worker landbindings magicbindings factionbindings
@@ -124,7 +123,7 @@ add_openfallout_dir (mwstate
     )
 
 add_openfallout_dir (mwbase
-    environment world scriptmanager dialoguemanager journal soundmanager mechanicsmanager
+    environment world dialoguemanager soundmanager mechanicsmanager
     inputmanager windowmanager statemanager luamanager
     )
 

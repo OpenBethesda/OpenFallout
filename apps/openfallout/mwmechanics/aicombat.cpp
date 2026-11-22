@@ -13,7 +13,6 @@
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
 
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
@@ -274,7 +273,6 @@ namespace OFMechanics
             if (currentAction->isFleeing())
             {
                 storage.startFleeing();
-                OFBase::Environment::get().getDialogueManager()->say(actor, ESM::RefId::stringRefId("flee"));
                 return false;
             }
             else
@@ -348,7 +346,6 @@ namespace OFMechanics
                     currentAction = std::make_unique<ActionFlee>();
                     actionCooldown = currentAction->getActionCooldown();
                     storage.startFleeing();
-                    OFBase::Environment::get().getDialogueManager()->say(actor, ESM::RefId::stringRefId("flee"));
                 }
             }
             else
@@ -679,26 +676,6 @@ namespace OFMechanics
                 mStrength = Misc::Rng::rollClosedProbability(prng);
 
                 const OFWorld::ESMStore& store = *OFBase::Environment::get().getESMStore();
-
-                bool canShout = true;
-                ESM::RefId spellId = mCurrentAction->getSpell();
-                if (!spellId.empty())
-                {
-                    const ESM::Spell* spell = store.get<ESM::Spell>().find(spellId);
-                    if (spell->mEffects.mList.empty() || spell->mEffects.mList[0].mData.mRange != ESM::RT_Target)
-                        canShout = false;
-                }
-
-                if (canShout)
-                {
-                    // Say a provoking combat phrase
-                    const int iVoiceAttackOdds
-                        = store.get<ESM::GameSetting>().find("iVoiceAttackOdds")->mValue.getInteger();
-                    if (Misc::Rng::roll0to99(prng) < iVoiceAttackOdds)
-                    {
-                        OFBase::Environment::get().getDialogueManager()->say(actor, ESM::RefId::stringRefId("attack"));
-                    }
-                }
 
                 if (mCurrentAction->getActionCooldown() > 0.f)
                 {

@@ -6,7 +6,6 @@
 #include <components/lua/luastate.hpp>
 #include <components/lua/util.hpp>
 
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 
 #include "../mwworld/store.hpp"
@@ -448,16 +447,6 @@ namespace OFLua
                     sol::table res(lua, sol::create);
                     for (const auto& [factionId, reaction] : rec.mReactions)
                         res[factionId] = reaction;
-
-                    const auto* overrides
-                        = OFBase::Environment::get().getDialogueManager()->getFactionReactionOverrides(rec.mId);
-
-                    if (overrides != nullptr)
-                    {
-                        for (const auto& [factionId, reaction] : *overrides)
-                            res[factionId] = reaction;
-                    }
-
                     return res;
                 });
                 record["attributes"] = sol::readonly_property([lua = lua.lua_state()](const ESM::Faction& rec) {

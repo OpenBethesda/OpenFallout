@@ -31,8 +31,6 @@
 #include <components/resource/scenemanager.hpp>
 #include <components/resource/stats.hpp>
 
-#include <components/compiler/extensions0.hpp>
-
 #include <components/stereo/stereomanager.hpp>
 
 #include <components/sceneutil/gldialect.hpp>
@@ -67,7 +65,6 @@
 #include "mwlua/worker.hpp"
 
 #include "mwscript/falloutscripts.hpp"
-#include "mwscript/scriptmanagerimp.hpp"
 
 #include "mwsound/constants.hpp"
 #include "mwsound/soundmanagerimp.hpp"
@@ -81,7 +78,6 @@
 #include "mwclass/classes.hpp"
 
 #include "mwdialogue/dialoguemanagerimp.hpp"
-#include "mwdialogue/journalimp.hpp"
 
 #include "mwmechanics/mechanicsmanagerimp.hpp"
 
@@ -380,7 +376,6 @@ OF::Engine::Engine(Files::ConfigurationManager& configurationManager)
     , mStereoManager(nullptr)
     , mSkipMenu(false)
     , mUseSound(true)
-    , mWarningsMode(1)
     , mActivationDistanceOverride(-1)
     , mGrab(true)
     , mHeadless(false)
@@ -418,13 +413,11 @@ OF::Engine::~Engine()
 
     mMechanicsManager = nullptr;
     mDialogueManager = nullptr;
-    mJournal = nullptr;
     mWindowManager = nullptr;
     // The world is destroyed after the scripts, and the bodies it draws tell the scripts when they go: they must find
     // no scripts, not the place where the scripts were
     mEnvironment.forgetFalloutScripts();
     mFalloutScripts = nullptr;
-    mScriptManager = nullptr;
     mWorld = nullptr;
     mStereoManager = nullptr;
     mSoundManager = nullptr;
@@ -433,8 +426,6 @@ OF::Engine::~Engine()
     mLuaWorker = nullptr;
     mLuaManager = nullptr;
     mL10nManager = nullptr;
-
-    mScriptContext = nullptr;
 
     mUnrefQueue = nullptr;
     mWorkQueue = nullptr;
@@ -910,22 +901,12 @@ void OF::Engine::prepareEngine()
     for (auto& mContentFile : mContentFiles)
         mTranslationDataStorage.loadTranslationData(mFileCollections, mContentFile);
 
-    // Create script system
-    mScriptContext = std::make_unique<OFScript::CompilerContext>(OFScript::CompilerContext::Type_Full);
-    mScriptContext->setExtensions(&mExtensions);
-
-    mScriptManager = std::make_unique<OFScript::ScriptManager>(mWorld->getStore(), *mScriptContext, mWarningsMode);
-    mEnvironment.setScriptManager(*mScriptManager);
-
     // Create game mechanics system
     mMechanicsManager = std::make_unique<OFMechanics::MechanicsManager>();
     mEnvironment.setMechanicsManager(*mMechanicsManager);
 
-    // Create dialog system
-    mJournal = std::make_unique<OFDialogue::Journal>();
-    mEnvironment.setJournal(*mJournal);
-
-    mDialogueManager = std::make_unique<OFDialogue::DialogueManager>(mExtensions, mTranslationDataStorage);
+    // The Morrowind dialogue window still asks about a Morrowind conversation, and there is none
+    mDialogueManager = std::make_unique<OFDialogue::DialogueManager>();
     mEnvironment.setDialogueManager(*mDialogueManager);
 
     mLuaManager->loadPermanentStorage(mCfgMgr.getUserConfigPath());
@@ -1141,11 +1122,6 @@ void OF::Engine::setEncoding(const ToUTF8::FromType& encoding)
 void OF::Engine::setActivationDistanceOverride(int distance)
 {
     mActivationDistanceOverride = distance;
-}
-
-void OF::Engine::setWarningsMode(int mode)
-{
-    mWarningsMode = mode;
 }
 
 void OF::Engine::enableFontExport(bool exportFonts)
