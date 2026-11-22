@@ -588,6 +588,17 @@ function handlers.ai(args)
     return { on = debug.isAIEnabled() }
 end
 
+-- The pause menu, opened the way Escape opens it (the window manager's main menu over the game) or closed
+function handlers.pauseMenu(args)
+    if args.open ~= false then
+        core.pipboy.openMainMenu()
+    else
+        I.UI.removeMode('MainMenu')
+    end
+    log('pausemenu', args.open ~= false and 'open' or 'close', 'ui=' .. tostring(I.UI.getMode()))
+    return {}
+end
+
 -- The head-up display and the crosshair, shown or hidden together
 function handlers.hud(args)
     local visible = args.visible ~= false

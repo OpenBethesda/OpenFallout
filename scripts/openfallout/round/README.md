@@ -67,6 +67,7 @@ round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas fol
 | `expect_exit` | the engine ends by itself with this exit status; the scenario then need not run (a refused start save: `--missing-content=refuse` ends with 4) |
 | `expect_log`, `forbid_log` | regular expressions: each of `expect_log` must match a line of the log, none of `forbid_log` may; otherwise the round fails (`(?s)` lets one pattern span lines, to say what comes after what) |
 | `expect_count` | `{"<regular expression>": n}`: exactly `n` lines of the log match, otherwise the round fails |
+| `keep_sound` | `true`: a run with sound (`OPENFALLOUT_HEADLESS_SOUND=1`) keeps it in `sound.wav` in its folder (32-bit float, about 23 MB a minute), for a script that measures it; without it the sound goes to /dev/null. Never to a device (see "What it cannot do") |
 | `allow_missing_content` | accept a save that wants a game plugin (`.esm`, `.esp`) the run does not load; without it such a round fails (a missing `.omwscripts`, such as the plugin of a play session, is a note) |
 
 ## The scenario (Lua)
@@ -99,6 +100,7 @@ as well.
 | `r.fight(actor, target[, label])`, `r.peace(actor)`, `r.state(label, actor)`, `r.track({{label, actor}...}, every)`, `r.untrack()` | start or end a fight of the engine (the player is `0x14`, as in the games), say what an actor is doing, sample the animation groups that play on actors now and then |
 | `r.pause(on)`, `r.gameTimeScale(scale)`, `r.simulationTime()`, `r.weather(form)` | hold a scene still: the world paused (the simulation stops, the engine goes on drawing, and the scenario goes on), the speed of the game's clock (0 stops the sun), the simulation time that water, clouds, particles and animations follow, a weather (`"FormId:0x..."`) there at once and held over the region's (`ForceWeather <form> 1`) |
 | `r.ai(on)`, `r.hud(visible)`, `r.view{ pos, yaw, pitch, forward, label }` | the characters' AI off or on, the head-up display and crosshair hidden or shown, a fixed view: the camera in its static mode at `pos` or `forward` units ahead of the player's eye along `yaw`, turned to `yaw` and `pitch` (radians). Used by the picture comparison (`docs/openfallout/picture-comparison.md`) |
+| `r.pauseMenu([false])` | the pause menu opened the way Escape opens it (the window manager's main menu over the game), or closed with `false` |
 | `r.vatsInfo(label[, actor])`, `r.vats([button])`, `r.messages(label)` | V.A.T.S.: its state, whether an actor can be a target and whether the ray to its head is clear (`clear` in the answer), open it or press its pad buttons, the notices the HUD gave |
 
 `scenarios/m14_fight.lua` (`rounds/m14-fight.json`) is the survey of moving and fighting in New Vegas (first and third person, a fight with two
@@ -141,7 +143,7 @@ reference is found and the save is in an interior.
 - It sees what the engine draws, not what the player's eye would: for a look at a screen that a pointer or a key opens (the
   Pip-Boy, a conversation) the scenario must open it through the game's own scripts or events, the way `autoplay` does.
 - Sound is off unless `OPENFALLOUT_HEADLESS_SOUND=1`. Nobody may hear a round: with sound on, the runner sends it to `sound.wav`
-  in the run's folder through OpenAL Soft's wave backend (`ALSOFT_DRIVERS=wave` and a configuration file of the run named by
+  in the run's folder (with `"keep_sound": true` in the round file; otherwise to /dev/null) through OpenAL Soft's wave backend (`ALSOFT_DRIVERS=wave` and a configuration file of the run named by
   `ALSOFT_CONF`; a round or a variant cannot change either), and it refuses an engine that links Apple's OpenAL framework, which
   reads neither and would play through the speakers. The file is written in real time; a run the runner stops may leave its header
   sizes unfinished, so read it as a stream after the header.

@@ -1012,7 +1012,7 @@ class GuardedRun(unittest.TestCase):
     def test_a_round_with_sound_writes_it_to_a_file_of_the_run_and_never_plays_it(self):
         # nobody may hear a round: OpenAL Soft's wave backend writes what would be played to sound.wav in the run's folder
         run_dir = Path(tempfile.mkdtemp(prefix="round-sound-"))
-        env = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "1"}, True, run_dir)
+        env = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "1"}, True, run_dir, keep_sound=True)
         self.assertEqual(env["ALSOFT_DRIVERS"], "wave")
         conf = Path(env["ALSOFT_CONF"])
         self.assertTrue(conf.resolve().is_relative_to(run_dir.resolve()))
@@ -1021,8 +1021,12 @@ class GuardedRun(unittest.TestCase):
         self.assertIn(f"file = {run_dir / 'sound.wav'}", text)
         # the round or the variant cannot send it anywhere else
         env = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "1", "ALSOFT_DRIVERS": "coreaudio",
-                                               "ALSOFT_CONF": "/elsewhere.conf"}, True, run_dir)
+                                               "ALSOFT_CONF": "/elsewhere.conf"}, True, run_dir, keep_sound=True)
         self.assertEqual((env["ALSOFT_DRIVERS"], env["ALSOFT_CONF"]), ("wave", str(conf)))
+        # unless the round keeps it (`"keep_sound": true`), a long round does not fill the disk: the file is /dev/null
+        env = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "1"}, True, run_dir)
+        self.assertEqual(env["ALSOFT_DRIVERS"], "wave")
+        self.assertIn("file = /dev/null", Path(env["ALSOFT_CONF"]).read_text(encoding="utf-8"))
         # a silent round (the default) is left as it was
         self.assertNotIn("ALSOFT_CONF", {k: v for k, v in round_runner.engine_environment({}, True, run_dir).items()
                                          if k not in os.environ})
