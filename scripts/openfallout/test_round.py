@@ -490,6 +490,9 @@ class AutoplayRounds(unittest.TestCase):
         for name in ("saveload-nv", "saveload-fo3"):
             without_check = tuple(line for line in self.SAVED if "check ok" not in line)
             self.assertIn("no log line matches `AUTOPLAY\\tdigest\\tcheck ok`", self.outcome(name, self.log(*without_check, *self.PLAYED)))
+            # a check before the load it is about is not the probe's sequence
+            out_of_order = (self.SAVED[0], self.SAVED[2], self.SAVED[4], self.SAVED[1], self.SAVED[3], self.SAVED[5]) + self.PLAYED
+            self.assertTrue(any(line.startswith("no log line matches `(?s)") for line in self.outcome(name, self.log(*out_of_order))))
             twice = self.SAVED + self.SAVED[2:] + self.PLAYED
             self.assertIn("`AUTOPLAY\\tload\\tautoplay-save\\t` matches 2 log line(s), expected 1", self.outcome(name, self.log(*twice)))
 

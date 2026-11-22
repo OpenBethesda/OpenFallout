@@ -34,7 +34,7 @@
     "AUTOPLAY\\tsave\\tautoplay-again\\tok\\t",
     "AUTOPLAY\\tintro done\\t",
     "AUTOPLAY\\tintro over\\t",
-    "(?s)AUTOPLAY\\tdigest\\tsaved\\t.*AUTOPLAY\\tload\\tautoplay-save\\t.*AUTOPLAY\\tdigest\\tcheck ok.*AUTOPLAY\\tsave\\tautoplay-again\\tok\\t.*AUTOPLAY\\tintro over\\t"
+    "(?s)AUTOPLAY\\tdigest\\tsaved\\t.*AUTOPLAY\\tsave\\tautoplay-save\\tok\\t.*AUTOPLAY\\tload\\tautoplay-save\\t.*AUTOPLAY\\tdigest\\tloaded\\t.*AUTOPLAY\\tdigest\\tcheck ok.*AUTOPLAY\\tsave\\tautoplay-again\\tok\\t.*AUTOPLAY\\tintro over\\t"
   ],
   "expect_count": {
     "AUTOPLAY\\tdigest\\tsaved\\t": 1,
