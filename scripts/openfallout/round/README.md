@@ -147,6 +147,11 @@ reference is found and the save is in an interior.
   `ALSOFT_CONF`; a round or a variant cannot change either), and it refuses an engine that links Apple's OpenAL framework, which
   reads neither and would play through the speakers. The file is written in real time; a run the runner stops may leave its header
   sizes unfinished, so read it as a stream after the header.
+- The engine never reads headphone motion in a round: head tracking stays off in a headless run whatever the settings say
+  (a request for motion could show macOS's permission box, or macOS could end the run). The log says so.
+- An engine that died early once (at launch, in the loader) could make macOS offer to reopen its windows at the next start.
+  The engine tells AppKit to ignore saved window state for itself before anything makes its application object; the log
+  line `Saved window state: ignored (told before any application object existed)` shows it.
 - Software and hardware drawing differ: on a Mac without a GPU (a hosted CI runner, which gives Apple's software renderer)
   the frame times mean nothing, and a driver-specific fault (a texture format) may not show.
 - The first time on a Mac, whether a hidden window really stays off the desktop and never takes the focus is what the focus
