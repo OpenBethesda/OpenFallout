@@ -271,6 +271,8 @@ end
 -- `yaw` (so that the player's own body is behind it), turned to `yaw` and `pitch` (radians, pitch positive down)
 function r.ai(on) return ask('ai', { on = on }) end
 function r.hud(visible) return ask('hud', { visible = visible }) end
+-- The pause menu open (as Escape opens it) or closed (`false`)
+function r.pauseMenu(open) return ask('pauseMenu', { open = open ~= false }) end
 function r.view(o) return ask('view', o or {}) end
 
 -- ---- M16 additions: waiting, sleeping, travelling, the needs -------------------------------------------------------------------

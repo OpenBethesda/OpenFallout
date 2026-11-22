@@ -814,6 +814,16 @@ class GuardedRun(unittest.TestCase):
     """The guards around a whole round: the heartbeat, the kill switch, the lock, the pre-flight, one engine at a time."""
     ENGINE = WholeRun.ENGINE
     make_engine = WholeRun.make_engine
+
+    def setUp(self):
+        # what the shell that runs the tests says about sound is not part of any test here: a test that is about an inherited
+        # value sets it itself
+        patch = mock.patch.dict(os.environ)
+        patch.start()
+        self.addCleanup(patch.stop)
+        for name in ("OPENFALLOUT_HEADLESS_SOUND", "ALSOFT_DRIVERS", "ALSOFT_CONF"):
+            os.environ.pop(name, None)
+
     HANGING = """
         import pathlib, sys, time
         args = sys.argv[1:]
@@ -1008,6 +1018,78 @@ class GuardedRun(unittest.TestCase):
         # the round or the variant has the last word
         self.assertEqual(round_runner.engine_environment({"PATH": "/x", "TMPDIR": "/y"}, True, run_dir)["PATH"], "/x")
         self.assertEqual(round_runner.engine_environment({"PATH": "/x", "TMPDIR": "/y"}, True, run_dir)["TMPDIR"], "/y")
+
+    def test_a_round_with_sound_writes_it_to_a_file_of_the_run_and_never_plays_it(self):
+        # nobody may hear a round: OpenAL Soft's wave backend writes what would be played to sound.wav in the run's folder
+        run_dir = Path(tempfile.mkdtemp(prefix="round-sound-"))
+        env = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "1"}, True, run_dir, keep_sound=True)
+        self.assertEqual(env["ALSOFT_DRIVERS"], "wave")
+        conf = Path(env["ALSOFT_CONF"])
+        self.assertTrue(conf.resolve().is_relative_to(run_dir.resolve()))
+        text = conf.read_text(encoding="utf-8")
+        self.assertIn("[wave]", text)
+        self.assertIn(f"file = {run_dir / 'sound.wav'}", text)
+        # the round or the variant cannot send it anywhere else
+        env = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "1", "ALSOFT_DRIVERS": "coreaudio",
+                                               "ALSOFT_CONF": "/elsewhere.conf"}, True, run_dir, keep_sound=True)
+        self.assertEqual((env["ALSOFT_DRIVERS"], env["ALSOFT_CONF"]), ("wave", str(conf)))
+        # unless the round keeps it (`"keep_sound": true`), a long round does not fill the disk: the file is /dev/null
+        env = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "1"}, True, run_dir)
+        self.assertEqual(env["ALSOFT_DRIVERS"], "wave")
+        self.assertIn("file = /dev/null", Path(env["ALSOFT_CONF"]).read_text(encoding="utf-8"))
+        # a silent round (the default) is left as it was
+        self.assertNotIn("ALSOFT_CONF", {k: v for k, v in round_runner.engine_environment({}, True, run_dir).items()
+                                         if k not in os.environ})
+
+    def test_sound_switched_on_in_the_runners_own_environment_goes_to_a_file_too(self):
+        # the flag can come from the shell that started the runner, with nothing about sound in the round: the engine gets the
+        # flag either way, so the sound must go to the file either way, and the library check must run
+        run_dir = Path(tempfile.mkdtemp(prefix="round-sound-inherited-"))
+        system = "/x/openfallout:\n\t/System/Library/Frameworks/OpenAL.framework/Versions/A/OpenAL (compatibility version 1.0.0)\n"
+        with mock.patch.dict(os.environ, {"OPENFALLOUT_HEADLESS_SOUND": "1", "ALSOFT_DRIVERS": "coreaudio"}):
+            env = round_runner.engine_environment({}, True, run_dir)
+            self.assertEqual(env["OPENFALLOUT_HEADLESS_SOUND"], "1")
+            self.assertEqual(env["ALSOFT_DRIVERS"], "wave")
+            self.assertTrue(Path(env["ALSOFT_CONF"]).resolve().is_relative_to(run_dir.resolve()))
+            # the run's own folders still stand over what the shell had
+            self.assertEqual(env["PATH"], str(run_dir / "no-programs"))
+            with mock.patch.object(round_runner.subprocess, "run") as run:
+                run.return_value = mock.Mock(returncode=0, stdout=system)
+                with self.assertRaises(SystemExit):
+                    round_runner.check_sound_output({}, "/x/openfallout")
+                # what the round says stands over the shell: a round that switches sound off is silent and is not checked
+                round_runner.check_sound_output({"OPENFALLOUT_HEADLESS_SOUND": "0"}, "/x/openfallout")
+            silent = round_runner.engine_environment({"OPENFALLOUT_HEADLESS_SOUND": "0"}, True, run_dir)
+            self.assertNotIn("ALSOFT_CONF", silent)
+            self.assertEqual(silent["OPENFALLOUT_HEADLESS_SOUND"], "0")
+
+    def test_a_round_with_sound_refuses_an_engine_that_links_the_systems_openal(self):
+        # Apple's OpenAL framework does not read OpenAL Soft's settings: its sound would go to the speakers
+        system = ("/x/openfallout:\n\t/System/Library/Frameworks/OpenAL.framework/Versions/A/OpenAL (compatibility version 1.0.0)\n"
+                  "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0)\n")
+        soft = "/x/openfallout:\n\t@rpath/libopenal.1.dylib (compatibility version 1.0.0)\n"
+        with mock.patch.object(round_runner.subprocess, "run") as run:
+            run.return_value = mock.Mock(returncode=0, stdout=system)
+            self.assertTrue(round_runner.links_system_openal("/x/openfallout"))
+            run.return_value = mock.Mock(returncode=0, stdout=soft)
+            self.assertFalse(round_runner.links_system_openal("/x/openfallout"))
+            run.return_value = mock.Mock(returncode=0, stdout=system)
+            with self.assertRaises(SystemExit) as refused:
+                round_runner.check_sound_output({"OPENFALLOUT_HEADLESS_SOUND": "1"}, "/x/openfallout")
+            self.assertIn("OpenAL Soft", str(refused.exception))
+            # a silent round does not care which library the engine links
+            round_runner.check_sound_output({}, "/x/openfallout")
+            # a program that cannot be read (a script that starts the engine) could start any engine: no sound round on it
+            run.return_value = mock.Mock(returncode=1, stdout="")
+            self.assertIsNone(round_runner.links_system_openal("/x/openfallout"))
+            # otool ends well on a script and only says that it is no object file
+            run.return_value = mock.Mock(returncode=0, stdout="/x/openfallout: is not an object file\n")
+            self.assertIsNone(round_runner.links_system_openal("/x/openfallout"))
+            self.assertEqual(run.call_args.args[0], ["/usr/bin/otool", "-L", "/x/openfallout"])
+            with self.assertRaises(SystemExit) as unknown:
+                round_runner.check_sound_output({"OPENFALLOUT_HEADLESS_SOUND": "1"}, "/x/openfallout")
+            self.assertIn("cannot tell", str(unknown.exception))
+            round_runner.check_sound_output({}, "/x/openfallout")
 
     def test_the_priority_command_is_found_without_the_engines_path(self):
         with mock.patch.object(round_runner, "IS_MAC", True), \

@@ -10,6 +10,7 @@
 
 #include <osg/Matrixf>
 
+#include <components/debug/debugging.hpp>
 #include <components/debug/debuglog.hpp>
 #include <components/esm3/loadcrea.hpp>
 #include <components/esm3/loaddial.hpp>
@@ -183,7 +184,8 @@ namespace OFSound
             Log(Debug::Info) << stream.str();
         }
 
-        // Nothing of Core Motion is touched while the setting is off
+        // Nothing of Core Motion is touched while the setting is off, in a headless run, or when macOS would end the
+        // program for asking (applyHeadTrackingSetting)
         mHeadTracker = std::make_unique<HeadTracker>(makeHeadphoneMotion());
         setHeadTracking(Settings::sound().mHeadTracking);
 
@@ -219,10 +221,12 @@ namespace OFSound
 
     void SoundManager::setHeadTracking(bool enabled)
     {
-        if (enabled && Settings::sound().mHrtfEnable != Settings::HrtfMode::Enable)
+        // A headless run, or an app that macOS would end for asking, never touches Core Motion
+        const HeadTrackingStart start
+            = applyHeadTrackingSetting(*mHeadTracker, enabled, Debug::isHeadlessRun(), findMotionUsageDescription);
+        if (start == HeadTrackingStart::Start && Settings::sound().mHrtfEnable != Settings::HrtfMode::Enable)
             Log(Debug::Warning) << "Head tracking turns the listener, which is heard only when HRTF is on: set "
                                    "'hrtf enable = 1' (the line 'Enabled HRTF' or 'HRTF disabled' above says which)";
-        mHeadTracker->setEnabled(enabled);
     }
 
     // Buffered decoders only read cached data.

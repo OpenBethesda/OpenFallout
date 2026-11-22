@@ -533,7 +533,8 @@ yaw, pitch = 0, 0
 camera_mode, static_position, crosshair, hud_visible, ai_enabled = 1, nil, true, true, true
 package.preload['openfallout.core'] = function()
     return { getRealTime = function() return clock end, getRealFrameDuration = function() return 0.0001 end,
-             sendGlobalEvent = function(name, data) answers[#answers + 1] = { name = name, data = data } end }
+             sendGlobalEvent = function(name, data) answers[#answers + 1] = { name = name, data = data } end,
+             pipboy = { openMainMenu = function() ui_mode = 'MainMenu' end } }
 end
 package.preload['openfallout.self'] = function()
     return { position = vec(100, 200, 300), cell = { isExterior = true, gridX = 1, gridY = 2, worldSpaceId = 'w' }, object = {} }
@@ -558,7 +559,8 @@ package.preload['openfallout.input'] = function() return { CONTROLLER_BUTTON = {
 package.preload['openfallout.animation'] = function() return { BONE_GROUP = {} } end
 package.preload['openfallout.types'] = function() return { Actor = {} } end
 package.preload['openfallout.interfaces'] = function()
-    return { UI = { getMode = function() return 'none' end, setHudVisibility = function(v) hud_visible = v end },
+    return { UI = { getMode = function() return ui_mode end, setHudVisibility = function(v) hud_visible = v end,
+                    removeMode = function(m) if ui_mode == m then ui_mode = nil end end },
              Controls = { overrideMovementControls = function() end } }
 end
 function load_player() return load(player_source)() end
@@ -717,6 +719,13 @@ class PlayerScript(unittest.TestCase):
         self.assertFalse(self.lua.eval("hud_visible"))
         self.assertFalse(self.lua.eval("crosshair"))
         self.assertEqual(self.lines(), ["ROUND\thud\tfalse"])
+
+    def test_the_pause_menu_opens_as_escape_opens_it_and_closes(self):
+        self.ask("pauseMenu", open=True)
+        self.assertEqual(self.lua.eval("ui_mode"), "MainMenu")
+        self.ask("pauseMenu", open=False)
+        self.assertIsNone(self.lua.eval("ui_mode"))
+        self.assertEqual(self.lines(), ["ROUND\tpausemenu\topen\tui=MainMenu", "ROUND\tpausemenu\tclose\tui=nil"])
 
     def test_a_fixed_view_puts_the_camera_at_a_place_or_ahead_of_the_eye(self):
         import math

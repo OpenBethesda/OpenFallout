@@ -17,6 +17,7 @@
 #include "mwscript/falloutscripts.hpp"
 
 #include "engine.hpp"
+#include "macos/savedwindowstate.hpp"
 #include "options.hpp"
 
 #include <boost/program_options/variables_map.hpp>
@@ -35,6 +36,9 @@
 
 namespace
 {
+    // What main found when it told AppKit to ignore saved window state, for the log once it is open
+    OFMac::SavedWindowState sSavedWindowState;
+
     // OPENFALLOUT_HEADLESS_POLICY=accessory or =prohibited sets the activation policy of the application
     // (NSApplication), for a headless run on macOS: an application that is neither of the foreground nor able to be
     // activated is never made the frontmost application, whatever SDL does with its window. It is done through the
@@ -118,6 +122,11 @@ bool parseOptions(int argc, char** argv, OF::Engine& engine, Files::Configuratio
 
     Debug::setupLogging(cfgMgr.getLogPath(), "OpenFallout");
     Log(Debug::Info) << Version::getOpenmwVersionDescription();
+    // main did it before SDL started (the engine starts SDL when it is made, above)
+    Log(Debug::Info) << "Saved window state: " << (sSavedWindowState.mIgnored ? "ignored" : "NOT ignored")
+                     << (sSavedWindowState.mApplicationExisted
+                                ? " (told after the application object was made: too late for this run)"
+                                : " (told before any application object existed)");
 
     Settings::Manager::load(cfgMgr);
 
@@ -420,5 +429,8 @@ int runApplication(int argc, char* argv[])
 
 int main(int argc, char** argv)
 {
+    // First of all, before SDL or a box of an error makes the application object: macOS must never offer to reopen
+    // windows, also not in the copy of the program that reports a crash (savedwindowstate.hpp)
+    sSavedWindowState = OFMac::ignoreSavedWindowState();
     return Debug::wrapApplication(&runApplication, argc, argv, "OpenFallout");
 }

@@ -1113,6 +1113,39 @@ namespace OFScript
                 const std::lock_guard lock(mDialogueMutex);
                 FalloutScript::readDialogue(mDialogue, in, version);
             });
+        // What characters were saying outside of a conversation (Say, SayTo): a quest that goes on from the end of a
+        // line goes on after a load (the doctor of Goodsprings sets the stage after his talk about the test only when
+        // its last line is over). After the responses that were said, which the lines name.
+        section(
+            "sayings", FalloutScript::sayingsSectionVersion,
+            [this](FalloutScript::SaveWriter& out) {
+                // A response said from another thread since the last frame is marked as said already: its lines are
+                // taken in before they are written, or the save would have the one without the other
+                startQueuedSayings();
+                std::vector<std::pair<FalloutScript::FormId, FalloutScript::FormId>> nothingSaid;
+                {
+                    const std::lock_guard lock(mDialogueMutex);
+                    nothingSaid = mNothingSaid;
+                }
+                FalloutScript::writeSayings(mSayings, nothingSaid, out);
+            },
+            [this](FalloutScript::SaveReader& in, std::uint32_t version) {
+                FalloutScript::SavedSayings saved = FalloutScript::readSayings(in, version);
+                const std::lock_guard lock(mDialogueMutex);
+                // The line that was being said is said again from its start: a voice cannot be picked up half way
+                for (const Saying& saying : saved.mSayings)
+                {
+                    const SaidLine& line = saying.mLines.front();
+                    const ESM4::Dialogue* topic = mDialogue.topic(line.mTopic);
+                    Log(Debug::Info) << "Say: " << std::hex << saying.mReference << std::dec << " was saying topic "
+                                     << (topic != nullptr ? topic->mEditorId : std::string("(not there)")) << " ("
+                                     << std::hex << line.mTopic << std::dec
+                                     << ") when the game was saved: " << saying.mLines.size()
+                                     << " line(s) to say again";
+                }
+                mSayings = std::move(saved.mSayings);
+                mNothingSaid = std::move(saved.mNothingSaid);
+            });
         section(
             "triggers", FalloutScript::triggersSectionVersion,
             [this](FalloutScript::SaveWriter& out) {

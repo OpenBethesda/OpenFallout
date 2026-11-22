@@ -28,7 +28,18 @@ cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_LAUNCHER=OFF \
 cmake --build build --target openfallout components-tests openfallout-tests
 ```
 
-Add the Homebrew prefix to `CMAKE_PREFIX_PATH`, as in the `esmtool` section. Run the tests from `build/OpenFallout.app/Contents/MacOS/`. This route has not been written out and run as one command here; the options are the ones documented elsewhere on this page and in the CI scripts.
+Add the Homebrew prefix to `CMAKE_PREFIX_PATH`, as in the `esmtool` section.
+
+The engine needs **OpenAL Soft**, the library the packaged app ships. Homebrew does not put it on the search path (its `openal-soft` formula is keg-only), and without it CMake would find Apple's OpenAL framework, which has no HRTF and none of OpenAL Soft's extensions. The configure stops with an error when that happens. Pass OpenAL Soft by hand, from Homebrew (`brew --prefix openal-soft`) or from the project's dependency set (`CI/macos/deps_versions.sh`, folder `installed/arm64-osx-dynamic`), and give the build a run path to it so the engine and the tests load it:
+
+```
+    -DOPENAL_LIBRARY=<prefix>/lib/libopenal.dylib -DOPENAL_INCLUDE_DIR=<prefix>/include/AL \
+    -DCMAKE_BUILD_RPATH=<folder with only OpenAL Soft>
+```
+
+Homebrew's keg holds only OpenAL Soft, so its `lib` folder can be the run path. The dependency set's `lib` folder cannot: it also holds an OpenSceneGraph for desktop OpenGL, which a run path that comes first makes the Metal build load instead of its own, and the engine stops at start. Link `libopenal*.dylib` and the `libfmt` it needs from there into a folder of their own and use that.
+
+Run the tests from `build/OpenFallout.app/Contents/MacOS/`. This route has not been written out and run as one command here; the options are the ones documented elsewhere on this page and in the CI scripts.
 
 ### Ubuntu (history)
 

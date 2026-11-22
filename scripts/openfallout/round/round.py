@@ -584,7 +584,7 @@ def stop_engine(process, guard=None, patience=30.0):
     return kill_engine(process), None
 
 
-def engine_environment(extra, is_mac, run_dir=None):
+def engine_environment(extra, is_mac, run_dir=None, keep_sound=False):
     """The environment of the engine: the environment of the runner, a headless run that asks the window system for as little as it
     can (SDL is told to leave the screensaver alone, which on macOS is a power assertion `PreventUserIdleDisplaySleep` held for the whole
     run; the application is an accessory one: no Dock icon, no menu bar, never frontmost), and what the round and the variant say
@@ -601,20 +601,66 @@ def engine_environment(extra, is_mac, run_dir=None):
             (Path(run_dir) / folder).mkdir(parents=True, exist_ok=True)
             env[name] = str(Path(run_dir) / folder)
     env.update(extra or {})
+    if sound_is_on(env) and run_dir is not None:
+        env.update(sound_to_file(run_dir, keep_sound))
     return dict(os.environ, **env)
+
+
+def sound_is_on(env):
+    """Whether the engine of a run will play sound: what the round and the variant say (`env`), or else what the runner's own
+    environment says, since the engine gets that too. A shell that has `OPENFALLOUT_HEADLESS_SOUND=1` switches the sound of a
+    round on as surely as the round file does."""
+    return env.get("OPENFALLOUT_HEADLESS_SOUND", os.environ.get("OPENFALLOUT_HEADLESS_SOUND")) == "1"
+
+
+def sound_to_file(run_dir, keep=False):
+    """The environment that sends the sound of a run to a file and to no device: OpenAL Soft's wave backend, named by
+    `ALSOFT_DRIVERS` and by a configuration file of the run (`ALSOFT_CONF`). Nobody may hear a round, so a round or a variant
+    cannot change these two. The file is `sound.wav` in the run's folder when the round keeps it (`"keep_sound": true`; about
+    23 MB a minute) and /dev/null otherwise. Apple's OpenAL framework reads neither (check_sound_output refuses such an engine)."""
+    conf = Path(run_dir) / "alsoft.conf"
+    target = Path(run_dir) / "sound.wav" if keep else "/dev/null"
+    conf.write_text(f"[general]\ndrivers = wave\n\n[wave]\nfile = {target}\n", encoding="utf-8")
+    return {"ALSOFT_DRIVERS": "wave", "ALSOFT_CONF": str(conf)}
+
+
+def links_system_openal(engine):
+    """Whether the engine program links Apple's OpenAL framework (from `otool -L`) instead of OpenAL Soft; None when the
+    program cannot be read (a missing file) or lists no library at all (a script that starts the engine: otool ends well on
+    it and only says that it is no object file)."""
+    result = subprocess.run(["/usr/bin/otool", "-L", str(engine)], capture_output=True, text=True)
+    # every library is a line that begins with a tab, under the line that names the program
+    if result.returncode != 0 or not any(line.startswith("\t") for line in result.stdout.splitlines()):
+        return None
+    return "/OpenAL.framework/" in result.stdout
+
+
+def check_sound_output(env, engine):
+    """Stops a round with sound on an engine that links Apple's OpenAL framework: that library ignores the wave backend's settings
+    and would play the round through the speakers or headphones of whoever sits at the computer. An engine whose libraries
+    cannot be read is stopped too: nobody can say where its sound would go."""
+    if not sound_is_on(env):
+        return
+    system = links_system_openal(engine)
+    if system is None:
+        raise SystemExit(f"cannot tell which OpenAL {engine} links (otool could not read it): a round with sound needs an engine "
+                         "program that is known to link OpenAL Soft")
+    if system:
+        raise SystemExit(f"{engine} links Apple's OpenAL framework, which cannot write its sound to a file: a round with sound "
+                         "needs an engine built against OpenAL Soft (see docs/openfallout/build-baseline.md)")
 
 
 # Seconds an engine whose scenario has ended is given to end on its own before the runner stops it
 ENDING_GRACE = 2.0
 
 
-def run_engine(command, run_dir, limit, env_extra=None, priority="low", guard=None):
+def run_engine(command, run_dir, limit, env_extra=None, priority="low", guard=None, keep_sound=False):
     """Starts the engine at low priority and waits for it; gives (exit status, seconds, focus sampler, timed out, ended early,
     guard reason). The run ends when the engine does, when the scenario ended and its pictures are written (`ended early`: the runner
     stops the engine, which would otherwise wait out a delay made for slow pictures), when `limit` seconds are over, or when the guard
     says so (the window system stopped answering, the kill switch, the wall-time limit of the round): then the engine is killed at once."""
     import pty
-    env = engine_environment(env_extra, IS_MAC, run_dir)
+    env = engine_environment(env_extra, IS_MAC, run_dir, keep_sound)
     prefix = priority_prefix(priority)
     # The engine shows a dialog instead of logging a fatal error when stdin is not a terminal, and a dialog is a window
     master, slave = pty.openpty()
@@ -818,8 +864,11 @@ def run_variant(profile, config, variant, out_dir, save, priority="low", guard=N
     prepare_run(profile, config, variant, run_dir, save)
     command = engine_command(profile, config, run_dir, save, extra=variant.get("extra_args", []))
     env = {**config.get("env", {}), **variant.get("env", {})}
+    if IS_MAC:
+        check_sound_output(env, absolute(profile["engine"]))
     began = time.time()
-    status, seconds, sampler, timed_out, ended_early, tripped = run_engine(command, run_dir, config["limit"] + 30, env, priority, guard)
+    status, seconds, sampler, timed_out, ended_early, tripped = run_engine(command, run_dir, config["limit"] + 30, env, priority, guard,
+                                                                           config.get("keep_sound", False))
     log = run_dir / "config" / "openfallout.log"
     text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
     (run_dir / "openfallout.log").write_text(text, encoding="utf-8")

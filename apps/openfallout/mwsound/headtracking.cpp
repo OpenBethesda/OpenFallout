@@ -307,4 +307,42 @@ namespace OFSound
             return ListenerAxes{ forward, up };
         return turnListener(forward, up, *head);
     }
+
+    HeadTrackingStart decideHeadTrackingStart(bool setting, bool headless, bool motionUsageDescribed)
+    {
+        if (!setting)
+            return HeadTrackingStart::SettingOff;
+        if (headless)
+            return HeadTrackingStart::HeadlessRun;
+        if (!motionUsageDescribed)
+            return HeadTrackingStart::NoMotionUsageDescription;
+        return HeadTrackingStart::Start;
+    }
+
+    HeadTrackingStart applyHeadTrackingSetting(
+        HeadTracker& tracker, bool setting, bool headless, const std::function<MotionUsageDescription()>& findUsage)
+    {
+        MotionUsageDescription usage;
+        if (setting && !headless)
+            usage = findUsage();
+        const HeadTrackingStart start = decideHeadTrackingStart(setting, headless, usage.mPresent);
+        switch (start)
+        {
+            case HeadTrackingStart::Start:
+            case HeadTrackingStart::SettingOff:
+                break;
+            case HeadTrackingStart::HeadlessRun:
+                Log(Debug::Info) << "Head tracking off in a headless run: the setting is on, but a hidden run never "
+                                    "reads headphone motion";
+                break;
+            case HeadTrackingStart::NoMotionUsageDescription:
+                Log(Debug::Warning) << "Head tracking off: macOS charges requests for headphone motion to "
+                                    << usage.mApp
+                                    << ", whose Info.plist has no NSMotionUsageDescription, and ends a program that "
+                                       "asks without it. Open the game from OpenFallout.app to use head tracking";
+                break;
+        }
+        tracker.setEnabled(start == HeadTrackingStart::Start);
+        return start;
+    }
 }

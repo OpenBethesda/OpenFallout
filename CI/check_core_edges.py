@@ -47,7 +47,7 @@ EDGES = (
     ("apps/openfallout/mwsound/headphonemotion.mm", "native bridge: Core Motion headphone motion"),
     ("apps/openfallout/mwrender/", "drawing: the OpenGL path (the Metal renderer goes here too)"),
     # packaging, native bridges, start-up
-    ("apps/openfallout/macos/", "packaging: the nested engine app and its start-up shim"),
+    ("apps/openfallout/macos/", "packaging and start-up: the nested engine app, its shim, saved window state"),
     ("apps/openfallout/main.cpp", "engine start-up: reaches AppKit to name the app and set its activation"),
     ("apps/launcher/", "launcher: the Qt front screen of the packaged app"),
     # crash handling, Mac paths, thread priority
