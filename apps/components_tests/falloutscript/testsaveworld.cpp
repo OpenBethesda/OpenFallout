@@ -11,7 +11,9 @@
 #include <gtest/gtest.h>
 
 #include <deque>
+#include <functional>
 #include <map>
+#include <optional>
 #include <ostream>
 #include <set>
 #include <string>
@@ -735,6 +737,46 @@ namespace
         EXPECT_TRUE(line.mEnd);
         EXPECT_EQ(line.mEndInfo, 0x3001u);
         EXPECT_EQ(line.mTopic, topicA);
+    }
+
+    TEST(FalloutScriptSaveWorldTest, linesQueuedFromAnotherThreadStartInTheirPlaceAmongTheOtherActions)
+    {
+        // A script on another thread says A, activates an object and says C. The frame's queue of actions holds, in
+        // that order, the start of A, the activation (whose OnActivate says B on the frame's thread, which starts at
+        // once) and the start of C
+        FalloutScript::SayingQueue queue;
+        std::vector<std::string> started;
+        const auto start = [&started](std::optional<FalloutScript::SayingQueue::Entry> entry) {
+            if (entry)
+                started.push_back(entry->mLines.front().mText);
+        };
+        std::vector<std::function<void()>> actions;
+        const std::uint64_t a = queue.push(doctor, { saidLine("A", topicA, 0, true) });
+        actions.push_back([&, a] { start(queue.take(a)); });
+        actions.push_back([&] { started.push_back("B"); });
+        const std::uint64_t c = queue.push(doctor, { saidLine("C", topicB, 0, true) });
+        actions.push_back([&, c] { start(queue.take(c)); });
+        for (const auto& action : actions)
+            action();
+        EXPECT_THAT(started, ElementsAre("A", "B", "C"));
+        EXPECT_THAT(queue.takeAll(), IsEmpty());
+    }
+
+    TEST(FalloutScriptSaveWorldTest, aSaveTakesTheQueuedLinesFirstAndTheirActionsThenDoNothing)
+    {
+        FalloutScript::SayingQueue queue;
+        const std::uint64_t a = queue.push(doctor, { saidLine("A", topicA, 0, true) });
+        const std::uint64_t c = queue.push(guard, { saidLine("C", topicB, 0, true) });
+        const std::vector<FalloutScript::SayingQueue::Entry> all = queue.takeAll();
+        ASSERT_EQ(all.size(), 2u);
+        EXPECT_EQ(all[0].mReference, doctor);
+        EXPECT_EQ(all[1].mReference, guard);
+        EXPECT_FALSE(queue.take(a).has_value());
+        EXPECT_FALSE(queue.take(c).has_value());
+        // A line queued after the save starts from its own action, not from an older one's
+        const std::uint64_t d = queue.push(doctor, { saidLine("D", topicC, 0, true) });
+        EXPECT_FALSE(queue.take(a).has_value());
+        ASSERT_TRUE(queue.take(d).has_value());
     }
 
     TEST(FalloutScriptSaveWorldTest, aCutShortSayingsSectionIsAnError)

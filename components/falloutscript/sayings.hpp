@@ -3,6 +3,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +50,32 @@ namespace FalloutScript
         std::size_t mNext = 0;
         float mWait = 0;
         bool mStarted = false;
+    };
+
+    /// What a character is given to say from a thread that is not the frame's, until the frame starts it. Each push
+    /// gives a ticket that the frame's queue of actions takes the entry back with (take), so the entries start in the
+    /// order of the actions around them; a save takes them all first (takeAll), and a ticket whose entry is gone then
+    /// takes nothing. It can be used from any thread.
+    class SayingQueue
+    {
+    public:
+        struct Entry
+        {
+            FormId mReference = 0;
+            std::vector<SaidLine> mLines;
+        };
+
+        std::uint64_t push(FormId reference, std::vector<SaidLine> lines);
+        /// The entry of the ticket, when it is still queued
+        std::optional<Entry> take(std::uint64_t ticket);
+        /// All the entries, the oldest first
+        std::vector<Entry> takeAll();
+        void clear();
+
+    private:
+        std::mutex mMutex;
+        std::deque<std::pair<std::uint64_t, Entry>> mEntries;
+        std::uint64_t mNext = 0;
     };
 
     /// The section of a saved game that holds what characters were saying outside of a conversation when the game was

@@ -1,5 +1,6 @@
 #include "sayings.hpp"
 
+#include <algorithm>
 #include <optional>
 
 namespace FalloutScript
@@ -24,6 +25,43 @@ namespace FalloutScript
                     lines.push_back(&saying.mLines[i]);
             return lines;
         }
+    }
+
+    std::uint64_t SayingQueue::push(FormId reference, std::vector<SaidLine> lines)
+    {
+        const std::lock_guard lock(mMutex);
+        const std::uint64_t ticket = mNext++;
+        mEntries.push_back({ ticket, Entry{ reference, std::move(lines) } });
+        return ticket;
+    }
+
+    std::optional<SayingQueue::Entry> SayingQueue::take(std::uint64_t ticket)
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = std::find_if(mEntries.begin(), mEntries.end(),
+            [ticket](const std::pair<std::uint64_t, Entry>& entry) { return entry.first == ticket; });
+        if (found == mEntries.end())
+            return std::nullopt;
+        Entry entry = std::move(found->second);
+        mEntries.erase(found);
+        return entry;
+    }
+
+    std::vector<SayingQueue::Entry> SayingQueue::takeAll()
+    {
+        const std::lock_guard lock(mMutex);
+        std::vector<Entry> all;
+        all.reserve(mEntries.size());
+        for (auto& [ticket, entry] : mEntries)
+            all.push_back(std::move(entry));
+        mEntries.clear();
+        return all;
+    }
+
+    void SayingQueue::clear()
+    {
+        const std::lock_guard lock(mMutex);
+        mEntries.clear();
     }
 
     void writeSayings(

@@ -2365,7 +2365,7 @@ namespace OFScript
         /// What a response that was said gives a character to say: started at once on the thread of the frame, queued
         /// from another thread (a save takes the queued ones in first, see startQueuedSayings)
         void queueSaying(FalloutScript::FormId reference, std::vector<SaidLine> lines);
-        /// Starts what was queued from other threads (the thread of the frame only)
+        /// Starts all that was queued from other threads, the oldest first (the thread of the frame only: a save)
         void startQueuedSayings();
         /// What a character is saying stops, with what it had left to say (a radio that is turned off, a conversation that
         /// is asked for)
@@ -2904,8 +2904,7 @@ namespace OFScript
         /// The characters that say lines outside of a conversation (the thread of the frame only)
         std::vector<Saying> mSayings;
         /// What responses said from other threads gave characters to say, until the thread of the frame starts it
-        std::mutex mQueuedSayingsMutex;
-        std::vector<std::pair<FalloutScript::FormId, std::vector<SaidLine>>> mQueuedSayings;
+        FalloutScript::SayingQueue mQueuedSayings;
         /// The speakers and topics that sayTopic has logged, with whether the last call found nothing to say. The first
         /// call is logged, and each later one that finds a line where the last found none (or the other way round),
         /// under mDialogueMutex
