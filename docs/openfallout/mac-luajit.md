@@ -47,14 +47,43 @@ install name. The dependency cache key includes the script and its patch.
 function on the HRT path). The patch changes it to `return;`. The line is the same at the dependency set's commit and
 on LuaJIT's `v2.1` branch as of 2026-11-11 (`63c8f1a9`); the script skips the patch once it no longer applies.
 
+`CI/macos/luajit-osx-hrt-thread-protect.patch` (added 2026-11-21): on the HRT path `mcode_protect` sets the write
+protection every time instead of only when its cached value `J->mcprot` differs. `pthread_jit_write_protect_np` switches
+all `MAP_JIT` memory for the calling thread only, but the cache is one per Lua state, and the engine runs its state on
+two threads (the main thread's `synchronizedUpdate`, the Lua worker's `update` and GC steps). When a new mcode area does
+not fit the jump range (common on macOS, LuaJIT issue #1520), each failed `mmap` probe in `mcode_alloc_at` turns write
+mode on for the thread without touching the cache, the trace aborts with error 27 and `lj_mcode_abort` sees the cache at
+"run" and does nothing: that thread stays in write mode, where `MAP_JIT` code cannot run. The traces are flushed, the
+other thread compiles the next ones, and the first time the stuck thread enters one it dies with `SIGBUS`, `si_code`
+`BUS_ADRALN` (the crash handler prints "Invalid address alignment"), the pc in machine code under `lua_pcall`. One
+thread alone never sees it, because it compiles again (and leaves write mode) before any new trace exists. The script
+stops when this patch does not apply. The cost is one `pthread_jit_write_protect_np` call per protect (no measurable
+change in the probe below).
+
+Probe: a program on the static HRT library where two threads take turns on one `lua_State` under a mutex, each turn
+running a hot handler and then one freshly loaded hot loop (100 iterations, so an aborted compile is the last one of its
+turn); every run signed hardened with `allow-jit` (Apple M-series, macOS 27.2):
+
+| LuaJIT | Load | Runs ending in SIGBUS |
+| --- | --- | --- |
+| commit `707c12bf` + void-return patch | 200000 turns | 4 of 10 |
+| the same, one thread does every turn | 200000 turns | 0 of 5 |
+| the same, the ±160 MB around the mcode filled after 50 turns | 20000 turns | 10 of 10 |
+| + thread-protect patch | 200000 turns | 0 of 10 (26 to 440 error-27 aborts per run) |
+| + thread-protect patch, filled as above | 20000 turns | 0 of 10 (85 error-27 aborts in a run that counted them) |
+
+The faults were `SIGBUS` `si_code 1` at an address in machine code, like the game's crashes (three of eight long hidden
+rounds on 2026-11-21, on the main thread in `InputAction::Registry::update` and on the worker in `onUpdate`).
+
 ### What a release needs outside this repository
 
 The rebuild can go once the dependency set itself ships an HRT LuaJIT. The change belongs in `OpenMW/openmw-deps-build`
 (nothing was pushed there): for the macOS triplets, build the `luajit` port with `-DLUAJIT_ENABLE_OSX_HRT` in its C
 flags (for example in the triplet: `if(PORT STREQUAL "luajit") string(APPEND VCPKG_C_FLAGS " -DLUAJIT_ENABLE_OSX_HRT")
-endif()`, with `VCPKG_CXX_FLAGS` set alongside as vcpkg requires) and add the void-return patch to the port (or an
-overlay port) until LuaJIT carries the fix. Then check that the published library imports `pthread_jit_write_protect_np`
-and delete `CI/macos/build_luajit_hrt.sh` and its call.
+endif()`, with `VCPKG_CXX_FLAGS` set alongside as vcpkg requires) and add the void-return and thread-protect patches to
+the port (or an overlay port) until LuaJIT carries the fixes. Then check that the published library imports
+`pthread_jit_write_protect_np` and was built with the thread-protect patch (or a LuaJIT that fixes the same thing), and
+only then delete `CI/macos/build_luajit_hrt.sh` and its call: without the patch the engine crashes again.
 
 A release also needs a Developer ID identity (`OPENFALLOUT_CODESIGN_IDENTITY`): with it, every bundled library carries
 the team's ID and library validation stays on. CI imports it from secrets and notarizes the image: see [mac-release.md](mac-release.md).
@@ -157,7 +186,7 @@ start the package only when the static steps pass.
 
 - A Developer ID signature with library validation on, and notarization (no certificate on the test Mac).
 - A full CI run of the script on a hosted runner; it was run locally on an unpacked copy of the dependency set.
-- Longer play: the smoke run compiles one hot loop. LuaJIT switches write protection per thread; the engine's Lua
-  worker thread was not exercised beyond the smoke run.
+- Longer play with the thread-protect patch: the probe above shows the fix; long hidden game rounds on a CI build
+  with it are still to be run.
 - LuaJIT commit `716f74a6` (2026-10-18, "macOS: Avoid collision of mcode with xzone malloc reclaim ring") is newer than
   the dependency set's commit and is not in this build.

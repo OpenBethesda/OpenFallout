@@ -41,6 +41,7 @@ KEY_FILES = frozenset((
     "CI/macos/fetch_deps_manifest.sh",
     "CI/macos/build_luajit_hrt.sh",
     "CI/macos/luajit-osx-hrt-void-return.patch",
+    "CI/macos/luajit-osx-hrt-thread-protect.patch",
     # The ANGLE libraries a bundle-angle run configures against.
     "CI/macos/angle/angle.json",
     # The timestamp reconciliation (restore/snapshot) and this fingerprint: a change here changes what a restored

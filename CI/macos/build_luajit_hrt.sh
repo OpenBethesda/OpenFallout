@@ -13,6 +13,9 @@
 # The LuaJIT commit is the one the dependency set was built from (its vcpkg SBOM), so a dependency update moves this
 # build along with it. luajit-osx-hrt-void-return.patch fixes the one line that keeps the flag from compiling with
 # current clang ("void function should not return a value"); it is skipped once LuaJIT carries the fix.
+# luajit-osx-hrt-thread-protect.patch makes LuaJIT set the write protection every time instead of trusting its one
+# cached value: the switch is per thread, the cache is per Lua state, and the engine runs one state on two threads
+# (crash "Invalid address alignment" in compiled Lua code). It must apply; the build stops when it does not.
 # Remove this script once the dependency set itself is built with the flag (see the documentation).
 
 DEPS_ROOT="${1:-/tmp/openmw-deps}"
@@ -34,6 +37,8 @@ curl --fail --retry 3 -sSL "https://github.com/LuaJIT/LuaJIT/archive/$COMMIT.tar
 if patch -d "$WORK" -p1 --forward --dry-run -s < "$HERE/luajit-osx-hrt-void-return.patch" > /dev/null 2>&1; then
     patch -d "$WORK" -p1 --forward -s < "$HERE/luajit-osx-hrt-void-return.patch"
 fi
+patch -d "$WORK" -p1 --forward -s < "$HERE/luajit-osx-hrt-thread-protect.patch" \
+    || { echo "luajit-osx-hrt-thread-protect.patch does not apply to LuaJIT $COMMIT" >&2; exit 1; }
 make -C "$WORK" -j"$(sysctl -n hw.ncpu)" XCFLAGS=-DLUAJIT_ENABLE_OSX_HRT > "$WORK/build.log" 2>&1 || { cat "$WORK/build.log"; exit 1; }
 
 BUILT="$WORK/src/libluajit.so"
