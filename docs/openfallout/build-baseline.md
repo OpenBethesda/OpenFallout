@@ -57,7 +57,7 @@ Program and test names in this section are the ones at that commit, before renam
 | Build | 973 steps, no errors, about 20 minutes on a cold ccache, 0.5 GB of build output |
 | `components-tests` | 1,595 tests, all pass |
 | `openmw-tests` | 529 tests, all pass |
-| Binaries produced | `openmw`, `esmtool`, `bsatool`, `niftest`, `openmw-essimporter`, `openmw-iniimporter`, `openmw-navmeshtool`, `openmw-bulletobjecttool` and the two test programs |
+| Binaries produced | `openmw`, `esmtool`, `bsatool`, `niftest` and the two test programs (the four Morrowind-only tools that the baseline built are gone; see the roadmap) |
 
 With the census change and reader fixes from this document applied, the whole tree still builds and `components-tests` runs 1,602 tests (the seven new ones included), all passing; `openmw-tests` is unchanged at 529. The setup script was run from scratch into an empty prefix and its printed CMake command configured successfully.
 

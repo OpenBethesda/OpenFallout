@@ -126,7 +126,7 @@ There are no per-flag coverage thresholds. Every status it defines is informatio
 so Codecov shows the numbers and cannot turn a PR red: the project total, a patch
 status for new code under `components/` (target 80%, which the 5% threshold lets
 pass down to 75%), a patch status for `apps/` and a project status for each component. It also ignores the Fallout 4 archive
-readers (`components/bsa/ba2*`) and the two Morrowind-only importers. The targets
+readers (`components/bsa/ba2*`). The targets
 behind this, and how to turn the statuses into gates, are in
 [Test coverage targets](coverage-targets.md). Test Analytics needs successive
 uploads to establish timing, failure-rate, and flakiness history.

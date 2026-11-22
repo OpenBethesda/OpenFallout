@@ -44,11 +44,7 @@ resources
 /openfallout
 /niftest
 /bsatool
-/openfallout-essimporter
-/openfallout-iniimporter
 /openfallout-launcher
-/openfallout-navmeshtool
-/openfallout-bulletobjecttool
 /openfallout-tests
 /openfallout_*_benchmark
 

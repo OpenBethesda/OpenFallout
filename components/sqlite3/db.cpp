@@ -16,7 +16,7 @@ namespace Sqlite3
     Db makeDb(std::string_view path, const char* schema)
     {
         sqlite3* handle = nullptr;
-        // All uses of NavMeshDb are protected by a mutex (navmeshtool) or serialized in a single thread (DbWorker)
+        // All uses of NavMeshDb are protected by a mutex or serialized in a single thread (DbWorker)
         // so additional synchronization between threads is not required and SQLITE_OPEN_NOMUTEX can be used.
         // This is unsafe to use NavMeshDb without external synchronization because of internal state.
         const int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX;

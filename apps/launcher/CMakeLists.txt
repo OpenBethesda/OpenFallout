@@ -5,7 +5,6 @@ set(LAUNCHER
     main.cpp
     maindialog.cpp
     textslotmsgbox.cpp
-    importpage.cpp
     settingspage.cpp
 
     utils/cellnameloader.cpp
@@ -21,7 +20,6 @@ set(LAUNCHER_HEADER
     sdlinit.hpp
     maindialog.hpp
     textslotmsgbox.hpp
-    importpage.hpp
     settingspage.hpp
 
     utils/cellnameloader.hpp

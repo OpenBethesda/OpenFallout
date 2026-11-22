@@ -99,7 +99,6 @@
    <addaction name="dataAction"/>
    <addaction name="graphicsAction"/>
    <addaction name="settingsAction"/>
-   <addaction name="importAction"/>
   </widget>
   <action name="dataAction">
    <property name="checkable">
@@ -150,21 +149,6 @@
    </property>
    <property name="toolTip">
     <string>Allows to tweak engine settings</string>
-   </property>
-  </action>
-  <action name="importAction">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../../../files/launcher/launcher.qrc">
-     <normaloff>:/images/preferences-advanced.png</normaloff>:/images/preferences-advanced.png</iconset>
-   </property>
-   <property name="text">
-    <string>Import</string>
-   </property>
-   <property name="toolTip">
-    <string>Allows to import data from original engine</string>
    </property>
   </action>
  </widget>

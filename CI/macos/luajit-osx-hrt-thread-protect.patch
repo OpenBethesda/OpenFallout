@@ -1,0 +1,20 @@
+diff --git a/src/lj_mcode.c b/src/lj_mcode.c
+--- a/src/lj_mcode.c
++++ b/src/lj_mcode.c
+@@ -251,10 +251,16 @@
+ /* Change protection of MCode area. */
+ static void mcode_protect(jit_State *J, int prot)
+ {
++#if MCMAP_CREATE
++  /* The hardened-runtime switch is per thread, J->mcprot is not: always set. */
++  mcode_setprot(J, J->mcarea, J->szmcarea, prot);
++  J->mcprot = prot;
++#else
+   if (J->mcprot != prot) {
+     mcode_setprot(J, J->mcarea, J->szmcarea, prot);
+     J->mcprot = prot;
+   }
++#endif
+ }
+ 
+ #endif
