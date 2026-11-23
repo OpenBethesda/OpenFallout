@@ -141,8 +141,8 @@ Launcher::FirstRunDialogResult Launcher::MainDialog::showFirstRunDialog()
             cfgError(tr("Error creating OpenFallout configuration directory: code %0").arg(ec.value()),
                 tr("<br><b>Could not create directory %0</b><br><br>"
                    "%1<br>")
-                    .arg(Files::pathToQString(userConfigDir))
-                    .arg(QString(ec.message().c_str())));
+                    .arg(Files::pathToQString(userConfigDir).toHtmlEscaped())
+                    .arg(QString::fromStdString(ec.message()).toHtmlEscaped()));
             return FirstRunDialogResultFailure;
         }
     }
@@ -287,8 +287,8 @@ bool Launcher::MainDialog::setupLauncherSettings()
             tr("<br><b>Could not open %0 for reading:</b><br><br>%1<br><br>"
                "Please make sure you have the right permissions "
                "and try again.<br>")
-                .arg(file.fileName())
-                .arg(file.errorString()));
+                .arg(file.fileName().toHtmlEscaped())
+                .arg(file.errorString().toHtmlEscaped()));
         return false;
     }
 
@@ -317,7 +317,7 @@ bool Launcher::MainDialog::setupGameSettings()
                     tr("<br><b>Could not open %0 for reading</b><br><br>"
                        "Please make sure you have the right permissions "
                        "and try again.<br>")
-                        .arg(file.fileName()));
+                        .arg(file.fileName().toHtmlEscaped()));
                 return {};
             }
             QTextStream stream(&file);
@@ -396,7 +396,7 @@ bool Launcher::MainDialog::setupGraphicsSettings()
         cfgError(tr("Error reading OpenFallout configuration files"),
             tr("<br>The problem may be due to an incomplete installation of OpenFallout.<br>"
                "Reinstalling OpenFallout may resolve the problem.<br>")
-                + e.what());
+                + QString::fromUtf8(e.what()).toHtmlEscaped());
         return false;
     }
 }
@@ -437,8 +437,8 @@ bool Launcher::MainDialog::writeSettings()
             cfgError(tr("Error creating OpenFallout configuration directory: code %0").arg(ec.value()),
                 tr("<br><b>Could not create directory %0</b><br><br>"
                    "%1<br>")
-                    .arg(Files::pathToQString(userPath))
-                    .arg(QString(ec.message().c_str())));
+                    .arg(Files::pathToQString(userPath).toHtmlEscaped())
+                    .arg(QString::fromStdString(ec.message()).toHtmlEscaped()));
             return false;
         }
     }
@@ -453,7 +453,7 @@ bool Launcher::MainDialog::writeSettings()
             tr("<br><b>Could not open or create %0 for writing</b><br><br>"
                "Please make sure you have the right permissions "
                "and try again.<br>")
-                .arg(file.fileName()));
+                .arg(file.fileName().toHtmlEscaped()));
         return false;
     }
 
@@ -468,9 +468,10 @@ bool Launcher::MainDialog::writeSettings()
     }
     catch (std::exception& e)
     {
-        std::string msg = "<br><b>Error writing settings.cfg</b><br><br>" + Files::pathToUnicodeString(settingsPath)
-            + "<br><br>" + e.what();
-        cfgError(tr("Error writing user settings file"), tr(msg.c_str()));
+        const QString msg = QStringLiteral("<br><b>Error writing settings.cfg</b><br><br>%1<br><br>%2")
+                                .arg(Files::pathToQString(settingsPath).toHtmlEscaped())
+                                .arg(QString::fromUtf8(e.what()).toHtmlEscaped());
+        cfgError(tr("Error writing user settings file"), msg);
         return false;
     }
 
@@ -484,7 +485,7 @@ bool Launcher::MainDialog::writeSettings()
             tr("<br><b>Could not open or create %0 for writing</b><br><br>"
                "Please make sure you have the right permissions "
                "and try again.<br>")
-                .arg(file.fileName()));
+                .arg(file.fileName().toHtmlEscaped()));
         return false;
     }
 
