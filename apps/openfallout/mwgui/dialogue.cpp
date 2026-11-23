@@ -898,13 +898,11 @@ namespace OFGui
         return isCompanion(mPtr);
     }
 
-    bool DialogueWindow::isCompanion(const OFWorld::Ptr& actor)
+    bool DialogueWindow::isCompanion(const OFWorld::Ptr& /*actor*/)
     {
-        if (actor.isEmpty())
-            return false;
-
-        return !actor.getClass().getScript(actor).empty()
-            && actor.getRefData().getLocals().getIntVar(actor.getClass().getScript(actor), "companion");
+        // A Morrowind companion was one whose Morrowind script set its variable "companion", and OpenFallout no longer
+        // has those scripts. The companions of Fallout have their wheel of commands (OFScript::FalloutScripts).
+        return false;
     }
 
     void DialogueWindow::setControllerFocus(size_t index, bool focused)

@@ -144,9 +144,9 @@ local function onUiModeChangedEvent(data)
     end
     -- Sounds are processed in the event handler rather than in engine handler
     -- in order to allow them to be overridden in mods.
-    if data.newMode == MODE.Journal or data.newMode == MODE.Book then
+    if data.newMode == MODE.Book then
         ambient.playSound('book open', {scale = false})
-    elseif data.oldMode == MODE.Journal or data.oldMode == MODE.Book then
+    elseif data.oldMode == MODE.Book then
         if not ambient.isSoundPlaying('item book up') then
             ambient.playSound('book close', {scale = false})
         end
@@ -222,7 +222,6 @@ return {
         -- @function [parent=#UI] addMode
         -- @param #string mode New mode
         -- @param #table options (optional) Table with keys 'windows' and/or 'target' (see example).
-        -- @usage I.UI.addMode('Journal') -- open journal without dropping active modes.
         -- @usage -- Open barter with an NPC
         -- I.UI.addMode('Barter', {target = actor})
         addMode = addMode,

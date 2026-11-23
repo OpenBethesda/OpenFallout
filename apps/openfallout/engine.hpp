@@ -4,7 +4,6 @@
 #include <filesystem>
 #include <memory>
 
-#include <components/compiler/extensions.hpp>
 #include <components/debug/debuglog.hpp>
 #include <components/esm/refid.hpp>
 #include <components/esm3/missingcontent.hpp>
@@ -99,7 +98,6 @@ namespace OFWorld
 
 namespace OFScript
 {
-    class ScriptManager;
     class FalloutScripts;
 }
 
@@ -111,11 +109,6 @@ namespace OFMechanics
 namespace OFDialogue
 {
     class DialogueManager;
-}
-
-namespace OFDialogue
-{
-    class Journal;
 }
 
 namespace L10n
@@ -137,12 +130,10 @@ namespace OF
         std::unique_ptr<SceneUtil::UnrefQueue> mUnrefQueue;
         std::unique_ptr<OFWorld::World> mWorld;
         std::unique_ptr<OFSound::SoundManager> mSoundManager;
-        std::unique_ptr<OFScript::ScriptManager> mScriptManager;
         std::unique_ptr<OFScript::FalloutScripts> mFalloutScripts;
         std::unique_ptr<OFGui::WindowManager> mWindowManager;
         std::unique_ptr<OFMechanics::MechanicsManager> mMechanicsManager;
         std::unique_ptr<OFDialogue::DialogueManager> mDialogueManager;
-        std::unique_ptr<OFDialogue::Journal> mJournal;
         std::unique_ptr<OFInput::InputManager> mInputManager;
         std::unique_ptr<OFState::StateManager> mStateManager;
         std::unique_ptr<OFLua::LuaManager> mLuaManager;
@@ -169,7 +160,6 @@ namespace OF
 
         bool mSkipMenu;
         bool mUseSound;
-        int mWarningsMode;
         std::string mFocusName;
         int mActivationDistanceOverride;
         std::filesystem::path mSaveGameFile;
@@ -184,9 +174,6 @@ namespace OF
         bool mExportFonts;
         unsigned int mRandomSeed;
         Debug::Level mMaxRecastLogLevel = Debug::Error;
-
-        Compiler::Extensions mExtensions;
-        std::unique_ptr<Compiler::Context> mScriptContext;
 
         Files::Collections mFileCollections;
         Translation::Storage mTranslationDataStorage;
@@ -262,8 +249,6 @@ namespace OF
 
         /// Override the game setting specified activation distance.
         void setActivationDistanceOverride(int distance);
-
-        void setWarningsMode(int mode);
 
         void enableFontExport(bool exportFonts);
 

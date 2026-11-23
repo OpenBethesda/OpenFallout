@@ -391,18 +391,6 @@ add_component_dir (files
 
 set_source_files_properties(files/configfileparser.cpp PROPERTIES COMPILE_FLAGS -Wno-shadow)
 
-add_component_dir (compiler
-    context controlparser errorhandler exception exprparser extensions fileparser generator
-    lineparser literals locals output parser scanner scriptparser skipparser streamerrorhandler
-    stringparser tokenloc opcodes extensions0 declarationparser
-    quickfileparser discardparser junkparser
-    )
-
-add_component_dir (interpreter
-    context controlopcodes genericopcodes installopcodes interpreter localopcodes mathopcodes
-    miscopcodes opcodes program runtime types defines
-    )
-
 add_component_dir (translation
     translation
     )

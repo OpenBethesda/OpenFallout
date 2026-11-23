@@ -25,8 +25,6 @@ namespace OFGui
     public:
         explicit CompanionWindow(DragAndDrop& dragAndDrop, ItemTransfer& itemTransfer, MessageBoxManager* manager);
 
-        bool exit() override;
-
         void resetReference() override;
 
         void setPtr(const OFWorld::Ptr& actor) override;
@@ -57,15 +55,12 @@ namespace OFGui
         MyGUI::EditBox* mFilterEdit;
         MyGUI::TextBox* mProfitLabel;
         Widgets::MWDynamicStat* mEncumbranceBar;
-        MessageBoxManager* mMessageBoxManager;
 
         void onItemSelected(int index);
         void onNameFilterChanged(MyGUI::EditBox* sender);
         void onBackgroundSelected();
         void dragItem(MyGUI::Widget* sender, std::size_t count);
         void transferItem(MyGUI::Widget* sender, std::size_t count);
-
-        void onMessageBoxButtonClicked(int button);
 
         void updateEncumbranceBar();
 

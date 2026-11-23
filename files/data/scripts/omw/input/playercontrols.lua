@@ -76,11 +76,6 @@ local function checkNotWerewolf()
     end
 end
 
-local function isJournalAllowed()
-    -- During chargen journal is not allowed until magic window is allowed
-    return I.UI.getWindowsForMode(I.UI.MODE.Interface)[I.UI.WINDOW.Magic]
-end
-
 local movementControlsOverridden = false
 
 local autoMove = false
@@ -207,16 +202,8 @@ input.registerTriggerHandler('Inventory', async:callback(function()
 end))
 
 input.registerTriggerHandler('Journal', async:callback(function()
-    if not uiAllowed() then return end
-    -- Fallout has no journal: its quests are on the DATA page of the Pip-Boy (the left bumper of a pad and the J key
-    -- would open the book of Morrowind)
-    if core.pipboy and core.pipboy.available() then return end
-
-    if I.UI.getMode() == I.UI.MODE.Journal then
-        I.UI.removeMode(I.UI.MODE.Journal)
-    elseif isJournalAllowed() then
-        I.UI.addMode(I.UI.MODE.Journal)
-    end
+    -- Fallout has no journal: its quests are on the DATA page of the Pip-Boy. The journal book of Morrowind that this
+    -- control opened is gone (the Journal mode has no window), so the control opens nothing.
 end))
 
 input.registerTriggerHandler('QuickKeysMenu', async:callback(function()

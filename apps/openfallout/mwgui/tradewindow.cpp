@@ -10,7 +10,6 @@
 #include <components/misc/strings/format.hpp>
 #include <components/widgets/numericeditbox.hpp>
 
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 #include "../mwbase/inputmanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
@@ -444,16 +443,9 @@ namespace OFGui
             }
         }
 
+        // (The disposition change of a haggle was the business of a Morrowind conversation, which OpenFallout no
+        // longer has)
         bool offerAccepted = haggle(player, mPtr, mCurrentBalance, mCurrentMerchantOffer);
-
-        // apply disposition change if merchant is NPC
-        if (mPtr.getClass().isNpc())
-        {
-            int dispositionDelta = offerAccepted ? gmst.find("iBarterSuccessDisposition")->mValue.getInteger()
-                                                 : gmst.find("iBarterFailDisposition")->mValue.getInteger();
-
-            OFBase::Environment::get().getDialogueManager()->applyBarterDispositionChange(dispositionDelta);
-        }
 
         // display message on haggle failure
         if (!offerAccepted)

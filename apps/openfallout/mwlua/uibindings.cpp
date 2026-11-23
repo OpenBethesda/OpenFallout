@@ -48,7 +48,6 @@ namespace OFLua
             { OFGui::GM_Container, "Container" },
             { OFGui::GM_Companion, "Companion" },
             { OFGui::GM_MainMenu, "MainMenu" },
-            { OFGui::GM_Journal, "Journal" },
             { OFGui::GM_Scroll, "Scroll" },
             { OFGui::GM_Book, "Book" },
             { OFGui::GM_Alchemy, "Alchemy" },

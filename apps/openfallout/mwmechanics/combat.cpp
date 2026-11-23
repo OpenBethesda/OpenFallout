@@ -12,7 +12,6 @@
 #include <components/esm3/loadmgef.hpp>
 #include <components/esm3/loadsoun.hpp>
 
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
@@ -798,8 +797,6 @@ namespace OFMechanics
         if (statsTarget.getFriendlyHits() >= 4)
             return false;
 
-        if (complain)
-            OFBase::Environment::get().getDialogueManager()->say(target, ESM::RefId::stringRefId("hit"));
         return true;
     }
 

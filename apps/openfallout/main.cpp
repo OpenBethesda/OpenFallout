@@ -323,8 +323,6 @@ bool parseOptions(int argc, char** argv, OF::Engine& engine, Files::Configuratio
     if (!variables["skip-menu"].as<bool>() && variables["new-game"].as<bool>())
         Log(Debug::Warning) << "Warning: new-game used without skip-menu -> ignoring it";
 
-    // scripts
-    engine.setWarningsMode(variables["script-warn"].as<int>());
     engine.setSaveGameFile(variables["load-savegame"].as<Files::MaybeQuotedPath>().u8string());
     engine.setMissingContentAnswer(OpenMW::readMissingContentAnswer(variables));
 

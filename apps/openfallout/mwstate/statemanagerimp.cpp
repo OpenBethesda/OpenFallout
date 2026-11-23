@@ -25,13 +25,10 @@
 
 #include <osgDB/Registry>
 
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 #include "../mwbase/inputmanager.hpp"
-#include "../mwbase/journal.hpp"
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
-#include "../mwbase/scriptmanager.hpp"
 #include "../mwbase/soundmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
@@ -56,8 +53,6 @@ void OFState::StateManager::cleanup(bool force)
     if (mState != State_NoGame || force)
     {
         OFBase::Environment::get().getSoundManager()->clear();
-        OFBase::Environment::get().getDialogueManager()->clear();
-        OFBase::Environment::get().getJournal()->clear();
         OFBase::Environment::get().getWindowManager()->clear();
         OFBase::Environment::get().getWorld()->clear();
         OFBase::Environment::get().getInputManager()->clear();
@@ -323,11 +318,9 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
         writer.setDescription("");
 
         size_t recordCount = 1 // saved game header
-            + OFBase::Environment::get().getJournal()->countSavedGameRecords()
             + OFBase::Environment::get().getLuaManager()->countSavedGameRecords()
             + OFBase::Environment::get().getWorld()->countSavedGameRecords()
             + OFBase::Environment::get().getFalloutScripts()->countSavedGameRecords()
-            + OFBase::Environment::get().getDialogueManager()->countSavedGameRecords()
             + OFBase::Environment::get().getMechanicsManager()->countSavedGameRecords()
             + OFBase::Environment::get().getInputManager()->countSavedGameRecords()
             + OFBase::Environment::get().getWindowManager()->countSavedGameRecords();
@@ -346,8 +339,6 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
         slot->mProfile.save(writer);
         writer.endRecord(ESM::REC_SAVE);
 
-        OFBase::Environment::get().getJournal()->write(writer, listener);
-        OFBase::Environment::get().getDialogueManager()->write(writer, listener);
         // LuaManager::write should be called before World::write because world also saves
         // local scripts that depend on LuaManager.
         OFBase::Environment::get().getLuaManager()->write(writer, listener);
@@ -559,17 +550,6 @@ void OFState::StateManager::loadGame(
                 }
                 break;
 
-                case ESM::REC_JOUR:
-                case ESM::REC_QUES:
-
-                    OFBase::Environment::get().getJournal()->readRecord(reader, n.toInt());
-                    break;
-
-                case ESM::REC_DIAS:
-
-                    OFBase::Environment::get().getDialogueManager()->readRecord(reader, n.toInt());
-                    break;
-
                 case ESM::REC_ALCH:
                 case ESM::REC_MISC:
                 case ESM::REC_ACTI:
@@ -610,6 +590,12 @@ void OFState::StateManager::loadGame(
                 case ESM::REC_GSCR:
                     // The running Morrowind global scripts of a save made before they were removed: there is nothing
                     // to restore them into, and nothing else in the file refers to them.
+                case ESM::REC_JOUR:
+                case ESM::REC_QUES:
+                case ESM::REC_DIAS:
+                    // The Morrowind journal (its entries and quests) and the Morrowind dialogue state (known topics,
+                    // changed faction reactions) of a save made before they were removed: Fallout keeps its quests
+                    // and conversations in the record of its scripts (FOSV), and nothing reads these any more.
                     reader.skipRecord();
                     break;
 

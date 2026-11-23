@@ -84,7 +84,6 @@ namespace OFMechanics
         /// Removes an actor from combat and makes all of their allies stop fighting the actor's targets
         void stopCombat(const OFWorld::Ptr& ptr) const;
 
-        void playIdleDialogue(const OFWorld::Ptr& actor) const;
         void updateMovementSpeed(const OFWorld::Ptr& actor) const;
         void updateGreetingState(const OFWorld::Ptr& actor, Actor& actorState, bool turnOnly);
         void turnActorToFacePlayer(const OFWorld::Ptr& actor, Actor& actorState, const osg::Vec3f& dir) const;

@@ -39,7 +39,6 @@
 #include "animationbindings.hpp"
 #include "context.hpp"
 #include "corebindings.hpp"
-#include "mwscriptbindings.hpp"
 #include "questbindings.hpp"
 
 namespace OFLua
@@ -163,7 +162,6 @@ namespace OFLua
         addCoreTimeBindings(api, context);
         addWorldTimeBindings(api, context);
         addCellGetters(api, context);
-        api["mwscript"] = initMWScriptBindings(context);
         addQuestBindings(api, context);
 
         ObjectLists* objectLists = context.mObjectLists;

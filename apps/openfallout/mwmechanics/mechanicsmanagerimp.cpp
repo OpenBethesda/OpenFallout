@@ -9,6 +9,7 @@
 #include <components/esm/records.hpp>
 #include <components/esm/refid.hpp>
 #include <components/esm3/esmwriter.hpp>
+#include <components/esm3/loadfact.hpp>
 #include <components/esm3/loadgmst.hpp>
 #include <components/esm3/loadmgef.hpp>
 #include <components/esm3/stolenitems.hpp>
@@ -22,7 +23,6 @@
 #include "../mwworld/player.hpp"
 #include "../mwworld/ptr.hpp"
 
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 #include "../mwbase/soundmanager.hpp"
 #include "../mwbase/statemanager.hpp"
@@ -44,6 +44,18 @@
 
 namespace
 {
+    /// The reaction of a Morrowind faction to another in its record. (The changes a Morrowind script made with
+    /// ModFactionReaction went with the scripts; Fallout factions have their own relations.)
+    int getFactionReaction(const ESM::RefId& faction1, const ESM::RefId& faction2)
+    {
+        const ESM::Faction* faction = OFBase::Environment::get().getESMStore()->get<ESM::Faction>().find(faction1);
+        for (const auto& [other, reaction] : faction->mReactions)
+        {
+            if (other == faction2)
+                return reaction;
+        }
+        return 0;
+    }
 
     void getPersuasionRatings(
         const OFMechanics::NpcStats& stats, float& rating1, float& rating2, float& rating3, bool player)
@@ -517,8 +529,7 @@ namespace OFMechanics
             if (!playerStats.getExpelled(npcFaction))
             {
                 // faction reaction towards itself. yes, that exists
-                reaction = static_cast<float>(
-                    OFBase::Environment::get().getDialogueManager()->getFactionReaction(npcFaction, npcFaction));
+                reaction = static_cast<float>(getFactionReaction(npcFaction, npcFaction));
 
                 rank = playerStats.getFactionRanks().find(npcFaction)->second;
             }
@@ -534,8 +545,7 @@ namespace OFMechanics
                 if (playerStats.getExpelled(itFaction))
                     continue;
 
-                int itReaction
-                    = OFBase::Environment::get().getDialogueManager()->getFactionReaction(npcFaction, itFaction);
+                int itReaction = getFactionReaction(npcFaction, itFaction);
                 if (playerFactionIt == playerStats.getFactionRanks().begin() || itReaction < reaction)
                 {
                     reaction = static_cast<float>(itReaction);
@@ -1224,10 +1234,6 @@ namespace OFMechanics
                 || (OFBase::Environment::get().getWorld()->getLOS(player, neighbor)
                     && awarenessCheck(player, neighbor)))
             {
-                // NPC will complain about theft even if he will do nothing about it
-                if (type == OT_Theft || type == OT_Pickpocket)
-                    OFBase::Environment::get().getDialogueManager()->say(neighbor, ESM::RefId::stringRefId("thief"));
-
                 crimeSeen = true;
             }
         }
@@ -1368,9 +1374,6 @@ namespace OFMechanics
             if (actor.getClass().getCreatureStats(actor).getAiSetting(AiSetting::Alarm).getBase() >= 100)
             {
                 reported = true;
-
-                if (type == OT_Trespassing)
-                    OFBase::Environment::get().getDialogueManager()->say(actor, ESM::RefId::stringRefId("intruder"));
             }
         }
 
@@ -1574,29 +1577,14 @@ namespace OFMechanics
             // Note: accidental or collateral damage attacks are ignored.
             if (!target.getClass().getCreatureStats(target).getAiSequence().isInPursuit())
             {
-                // If an actor has OnPCHitMe declared in his script, his Fight = 0 and the attacker is player,
-                // he will attack the player only if we will force him (e.g. via StartCombat console command)
-                bool peaceful = false;
-                const ESM::RefId& script = target.getClass().getScript(target);
-                if (!script.empty() && target.getRefData().getLocals().hasVar(script, "onpchitme")
-                    && attacker == player)
+                SidingCache cachedAllies{ mActors, false };
+                const std::set<OFWorld::Ptr>& attackerAllies = cachedAllies.getActorsSidingWith(attacker);
+                startCombat(target, attacker, &attackerAllies);
+                // Force friendly actors into combat to prevent infighting between followers
+                for (const auto& follower : cachedAllies.getActorsSidingWith(target))
                 {
-                    const int fight
-                        = target.getClass().getCreatureStats(target).getAiSetting(AiSetting::Fight).getModified();
-                    peaceful = (fight == 0);
-                }
-
-                if (!peaceful)
-                {
-                    SidingCache cachedAllies{ mActors, false };
-                    const std::set<OFWorld::Ptr>& attackerAllies = cachedAllies.getActorsSidingWith(attacker);
-                    startCombat(target, attacker, &attackerAllies);
-                    // Force friendly actors into combat to prevent infighting between followers
-                    for (const auto& follower : cachedAllies.getActorsSidingWith(target))
-                    {
-                        if (follower != attacker && follower != player)
-                            startCombat(follower, attacker, &attackerAllies);
-                    }
+                    if (follower != attacker && follower != player)
+                        startCombat(follower, attacker, &attackerAllies);
                 }
             }
         }
@@ -1732,39 +1720,11 @@ namespace OFMechanics
         // The target is somehow the same as the actor. Early-out.
         if (ptr == target)
         {
-            // We don't care about dialogue filters since the target is invalid.
-            // We still want to play the combat taunt.
-            OFBase::Environment::get().getDialogueManager()->say(ptr, ESM::RefId::stringRefId("attack"));
             if (!stats.getAiSequence().isInCombat())
                 stats.resetFriendlyHits();
             return;
         }
 
-        const bool inCombat = stats.getAiSequence().isInCombat();
-        bool shout = !inCombat;
-        if (inCombat)
-        {
-            const auto isInCombatWithOneOf = [&](const auto& allies) {
-                for (const OFWorld::Ptr& ally : allies)
-                {
-                    if (stats.getAiSequence().isInCombat(ally))
-                        return true;
-                }
-                return false;
-            };
-            if (targetAllies)
-                shout = !isInCombatWithOneOf(*targetAllies);
-            else
-            {
-                shout = stats.getAiSequence().isInCombat(target);
-                if (!shout)
-                {
-                    std::set<OFWorld::Ptr> sidingActors;
-                    getActorsSidingWith(target, sidingActors);
-                    shout = !isInCombatWithOneOf(sidingActors);
-                }
-            }
-        }
         stats.getAiSequence().stack(OFMechanics::AiCombat(target), ptr);
         if (target == getPlayer())
         {
@@ -1793,10 +1753,6 @@ namespace OFMechanics
                 }
             }
         }
-
-        // Must be done after the target is set up, so that CreatureTargetted dialogue filter works properly
-        if (shout)
-            OFBase::Environment::get().getDialogueManager()->say(ptr, ESM::RefId::stringRefId("attack"));
     }
 
     void MechanicsManager::stopCombat(const OFWorld::Ptr& actor)

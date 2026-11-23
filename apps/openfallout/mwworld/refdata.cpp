@@ -35,7 +35,6 @@ namespace OFWorld
     void RefData::copy(const RefData& refData)
     {
         mBaseNode = refData.mBaseNode;
-        mLocals = refData.mLocals;
         mEnabled = refData.mEnabled;
         mPosition = refData.mPosition;
         mChanged = refData.mChanged;
@@ -196,12 +195,6 @@ namespace OFWorld
         return mBaseNode;
     }
 
-    void RefData::setLocals(const ESM::Script& script)
-    {
-        if (mLocals.configure(script) && !mLocals.isEmpty())
-            mChanged = true;
-    }
-
     void RefData::setDeletedByContentFile(bool deleted)
     {
         mDeletedByContentFile = deleted;
@@ -210,11 +203,6 @@ namespace OFWorld
     bool RefData::isDeletedByContentFile() const
     {
         return mDeletedByContentFile;
-    }
-
-    OFScript::Locals& RefData::getLocals()
-    {
-        return mLocals;
     }
 
     bool RefData::isEnabled() const

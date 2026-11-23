@@ -12,6 +12,7 @@
 #include <components/esm3/journalentry.hpp>
 #include <components/esm3/loadmgef.hpp>
 #include <components/esm3/projectilestate.hpp>
+#include <components/esm3/queststate.hpp>
 #include <components/esm3/savedgame.hpp>
 #include <components/esm3/selectiongroup.hpp>
 #include <components/esm3/spellstate.hpp>
@@ -739,6 +740,71 @@ namespace ESM
             ASSERT_EQ(reader.getRecName().toInt(), static_cast<std::uint32_t>(REC_GSCR));
             reader.getRecHeader();
             reader.skipRecord();
+
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), fakeRecordId);
+            reader.getRecHeader();
+            GlobalScript result;
+            result.load(reader);
+            EXPECT_EQ(result.mId, next.mId);
+            EXPECT_FALSE(result.mRunning);
+            EXPECT_FALSE(reader.hasMoreRecs());
+        }
+
+        TEST_P(Esm3SaveGameRecordTest, theJournalAndDialogueRecordsOfAnOldSaveAreSkippedAndTheRecordAfterThemStillLoads)
+        {
+            // The engine no longer has the Morrowind journal and dialogue: when it loads a save that holds their
+            // records (a journal entry REC_JOUR, a quest REC_QUES, the dialogue state REC_DIAS, which every save of
+            // the engine before wrote) it skips them (StateManager::loadGame), and the record after them must be read
+            // as if they were never there.
+            JournalEntry entry;
+            entry.mType = JournalEntry::Type_Journal;
+            entry.mTopic = id("myquest");
+            entry.mInfo = id("info1");
+            entry.mText = "I found the vault";
+            entry.mDay = 12;
+            entry.mMonth = 3;
+            entry.mDayOfMonth = 7;
+
+            QuestState quest;
+            quest.mTopic = id("myquest");
+            quest.mState = 20;
+            quest.mFinished = 1;
+
+            DialogueState dialogue;
+            dialogue.mKnownTopics = { id("vault") };
+            dialogue.mChangedFactionReaction[id("ncr")][id("legion")] = -20;
+
+            GlobalScript next;
+            next.mId = id("nextscript");
+            next.mRunning = false;
+
+            ESMWriter writer;
+            auto stream = std::make_unique<std::stringstream>();
+            writer.setFormatVersion(GetParam());
+            writer.save(*stream);
+            writer.startRecord(REC_JOUR);
+            entry.save(writer);
+            writer.endRecord(REC_JOUR);
+            writer.startRecord(REC_QUES);
+            quest.save(writer);
+            writer.endRecord(REC_QUES);
+            writer.startRecord(REC_DIAS);
+            dialogue.save(writer);
+            writer.endRecord(REC_DIAS);
+            writer.startRecord(fakeRecordId);
+            next.save(writer);
+            writer.endRecord(fakeRecordId);
+
+            ESMReader reader;
+            reader.open(std::move(stream), "stream");
+            for (const RecNameInts skipped : { REC_JOUR, REC_QUES, REC_DIAS })
+            {
+                ASSERT_TRUE(reader.hasMoreRecs());
+                ASSERT_EQ(reader.getRecName().toInt(), static_cast<std::uint32_t>(skipped));
+                reader.getRecHeader();
+                reader.skipRecord();
+            }
 
             ASSERT_TRUE(reader.hasMoreRecs());
             ASSERT_EQ(reader.getRecName().toInt(), fakeRecordId);

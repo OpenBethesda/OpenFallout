@@ -98,7 +98,6 @@ namespace OFGui
     class StatsWindow;
     class InventoryWindow;
     class MenuScenes;
-    struct JournalWindow;
     class TextInputDialog;
     class InfoBoxDialog;
     class SettingsWindow;
@@ -573,8 +572,6 @@ namespace OFGui
         void updateVisible(); // Update visibility of all windows based on mode, shown and allowed settings
 
         void updateMap();
-
-        ToUTF8::FromType mEncoding;
 
         std::string mVersionDescription;
 

@@ -10,7 +10,6 @@
 
 #include <components/debug/debuglog.hpp>
 #include <components/fontloader/fontloader.hpp>
-#include <components/interpreter/defines.hpp>
 #include <components/misc/resourcehelpers.hpp>
 #include <components/misc/strings/algorithm.hpp>
 #include <components/resource/resourcesystem.hpp>
@@ -18,7 +17,6 @@
 #include <components/vfs/manager.hpp>
 
 #include "../mwbase/environment.hpp"
-#include "../mwscript/interpretercontext.hpp"
 
 namespace OFGui::Formatting
 {
@@ -30,10 +28,8 @@ namespace OFGui::Formatting
         , mIgnoreLineEndings(true)
         , mClosingTag(false)
     {
-        OFScript::InterpreterContext interpreterContext(
-            nullptr, OFWorld::Ptr()); // empty arguments, because there is no locals or actor
-        mText = Interpreter::fixDefinesBook(mText, interpreterContext);
-
+        // (The %-escapes of Morrowind books, such as %PCName, went with the Morrowind script interpreter. The texts of
+        // Fallout write their few names as &...; tokens.)
         Misc::StringUtils::replaceAll(mText, "\r", {});
 
         if (shrinkTextAtLastTag)

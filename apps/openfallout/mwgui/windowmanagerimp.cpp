@@ -104,8 +104,6 @@
 #include "itemview.hpp"
 #include "itemwidget.hpp"
 #include "jailscreen.hpp"
-#include "journalviewmodel.hpp"
-#include "journalwindow.hpp"
 #include "keyboardnavigation.hpp"
 #include "levelupdialog.hpp"
 #include "loadingscreen.hpp"
@@ -204,7 +202,6 @@ namespace OFGui
         , mForceHidden(GW_None)
         , mAllowed(GW_ALL)
         , mRestAllowed(true)
-        , mEncoding(encoding)
         , mVersionDescription(versionDescription)
         , mWindowVisible(true)
         , mCfgMgr(cfgMgr)
@@ -373,11 +370,8 @@ namespace OFGui
         mWindows.push_back(std::move(console));
         trackWindow(mConsole, makeConsoleWindowSettingValues());
 
-        constexpr VFS::Path::NormalizedView menubookOptionsOverTexture("textures/tx_menubook_options_over.dds");
-        const bool questList = mResourceSystem->getVFS()->exists(menubookOptionsOverTexture);
-        auto journal = JournalWindow::create(JournalViewModel::create(), questList, mEncoding);
-        mGuiModeStates[GM_Journal] = GuiModeState(journal.get());
-        mWindows.push_back(std::move(journal));
+        // GM_Journal has no window: the journal of Morrowind went, and the quests of Fallout are on the DATA page of
+        // the Pip-Boy (the Journal control opens nothing, playercontrols.lua)
 
         mMessageBoxManager = std::make_unique<MessageBoxManager>(
             mStore->get<ESM::GameSetting>().find("fMessageTimePerChar")->mValue.getFloat());
@@ -1501,6 +1495,14 @@ namespace OFGui
     {
         if (mode == GM_Inventory && mAllowed == GW_None)
             return;
+        // The journal of Morrowind is gone and its mode has no window: entered, it would be a blank mode that takes the
+        // input of the menus
+        if (mode == GM_Journal)
+        {
+            Log(Debug::Warning) << "Warning: the Journal mode has no window (Fallout's quests are on the Pip-Boy DATA "
+                                   "page), not entered";
+            return;
+        }
 
         if (mGuiModes.empty() || mGuiModes.back() != mode)
         {

@@ -23,25 +23,11 @@
 #include "tooltips.hpp"
 #include "widgets.hpp"
 
-namespace
-{
-
-    int getProfit(const OFWorld::Ptr& actor)
-    {
-        const ESM::RefId& script = actor.getClass().getScript(actor);
-        if (!script.empty())
-        {
-            return actor.getRefData().getLocals().getIntVar(script, "minimumprofit");
-        }
-        return 0;
-    }
-
-}
-
 namespace OFGui
 {
 
-    CompanionWindow::CompanionWindow(DragAndDrop& dragAndDrop, ItemTransfer& itemTransfer, MessageBoxManager* manager)
+    CompanionWindow::CompanionWindow(
+        DragAndDrop& dragAndDrop, ItemTransfer& itemTransfer, MessageBoxManager* /*manager*/)
         : WindowBase("openmw_companion_window.layout")
         , mSortModel(nullptr)
         , mModel(nullptr)
@@ -49,7 +35,6 @@ namespace OFGui
         , mUpdateNextFrame(false)
         , mDragAndDrop(&dragAndDrop)
         , mItemTransfer(&itemTransfer)
-        , mMessageBoxManager(manager)
     {
         getWidget(mCloseButton, "CloseButton");
         getWidget(mProfitLabel, "ProfitLabel");
@@ -176,43 +161,14 @@ namespace OFGui
         float encumbrance = std::ceil(mPtr.getClass().getEncumbrance(mPtr));
         mEncumbranceBar->setValue(static_cast<int>(encumbrance), capacity);
 
-        if (mModel && mModel->hasProfit(mPtr))
-        {
-            mProfitLabel->setCaptionWithReplacing("#{sProfitValue} " + MyGUI::utility::toString(getProfit(mPtr)));
-        }
-        else
-            mProfitLabel->setCaption({});
+        // The profit of a Morrowind companion was a variable of its Morrowind script, which OpenFallout no longer has
+        mProfitLabel->setCaption({});
     }
 
     void CompanionWindow::onCloseButtonClicked(MyGUI::Widget* /*sender*/)
     {
         if (exit())
             OFBase::Environment::get().getWindowManager()->removeGuiMode(GM_Companion);
-    }
-
-    bool CompanionWindow::exit()
-    {
-        if (mModel && mModel->hasProfit(mPtr) && getProfit(mPtr) < 0)
-        {
-            std::vector<std::string> buttons;
-            buttons.emplace_back("#{sCompanionWarningButtonOne}");
-            buttons.emplace_back("#{sCompanionWarningButtonTwo}");
-            mMessageBoxManager->createInteractiveMessageBox("#{sCompanionWarningMessage}", buttons);
-            mMessageBoxManager->eventButtonPressed
-                += MyGUI::newDelegate(this, &CompanionWindow::onMessageBoxButtonClicked);
-            return false;
-        }
-        return true;
-    }
-
-    void CompanionWindow::onMessageBoxButtonClicked(int button)
-    {
-        if (button == 0)
-        {
-            OFBase::Environment::get().getWindowManager()->removeGuiMode(GM_Companion);
-            // Important for Calvus' contract script to work properly
-            OFBase::Environment::get().getWindowManager()->exitCurrentGuiMode();
-        }
     }
 
     void CompanionWindow::onReferenceUnavailable()

@@ -71,12 +71,6 @@ namespace OpenMW
 
         addOption("no-sound", bpo::value<bool>()->implicit_value(true)->default_value(false), "disable all sounds");
 
-        addOption("script-warn", bpo::value<int>()->implicit_value(1)->default_value(1),
-            "handling of warnings when compiling scripts\n"
-            "\t0 - ignore warnings\n"
-            "\t1 - show warnings but consider script as correctly compiled anyway\n"
-            "\t2 - treat warnings as errors");
-
         addOption("load-savegame", bpo::value<Files::MaybeQuotedPath>()->default_value(Files::MaybeQuotedPath(), ""),
             "load a save game file on game startup (specify an absolute filename or a filename relative to the current "
             "working directory)");

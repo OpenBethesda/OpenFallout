@@ -82,12 +82,6 @@ Command line options
       --groundcover arg                     groundcover content file(s): esm/esp,
                                             or omwgame/omwaddon
       --no-sound [=arg(=1)] (=0)            disable all sounds
-      --script-warn [=arg(=1)] (=1)         handling of warnings when compiling
-                                            scripts
-                                            0 - ignore warnings
-                                            1 - show warnings but consider script as
-                                            correctly compiled anyway
-                                            2 - treat warnings as errors
       --load-savegame arg                   load a save game file on game startup
                                             (specify an absolute filename or a
                                             filename relative to the current

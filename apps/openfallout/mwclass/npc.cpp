@@ -22,7 +22,6 @@
 #include <components/settings/values.hpp>
 #include <components/vfs/pathutil.hpp>
 
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
@@ -726,15 +725,12 @@ namespace OFClass
         if (ptr == OFMechanics::getPlayer() && OFBase::Environment::get().getWorld()->getGodModeState())
             return;
 
-        bool hasDamage = false;
         bool hasHealthDamage = false;
         float healthDamage = 0.f;
         for (auto& [stat, damage] : damages)
         {
             if (damage < 0.001f)
                 continue;
-            hasDamage = true;
-
             if (stat == "health")
             {
                 hasHealthDamage = true;
@@ -755,17 +751,6 @@ namespace OFClass
                 magicka.setCurrent(magicka.getCurrent() - damage);
                 stats.setMagicka(magicka);
             }
-        }
-
-        if (hasDamage && !attacker.isEmpty())
-        {
-            // 'ptr' is losing health. Play a 'hit' voiced dialog entry if not already saying
-            // something, alert the character controller, scripts, etc.
-            const OFWorld::ESMStore& store = *OFBase::Environment::get().getESMStore();
-            int chance = store.get<ESM::GameSetting>().find("iVoiceHitOdds")->mValue.getInteger();
-            auto& prng = OFBase::Environment::get().getWorld()->getPrng();
-            if (Misc::Rng::roll0to99(prng) < chance)
-                OFBase::Environment::get().getDialogueManager()->say(ptr, ESM::RefId::stringRefId("hit"));
         }
 
         if (hasHealthDamage && healthDamage > 0.0f)
