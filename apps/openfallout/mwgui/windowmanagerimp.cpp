@@ -1495,6 +1495,14 @@ namespace OFGui
     {
         if (mode == GM_Inventory && mAllowed == GW_None)
             return;
+        // The journal of Morrowind is gone and its mode has no window: entered, it would be a blank mode that takes the
+        // input of the menus
+        if (mode == GM_Journal)
+        {
+            Log(Debug::Warning) << "Warning: the Journal mode has no window (Fallout's quests are on the Pip-Boy DATA "
+                                   "page), not entered";
+            return;
+        }
 
         if (mGuiModes.empty() || mGuiModes.back() != mode)
         {
