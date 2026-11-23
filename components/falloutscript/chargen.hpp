@@ -20,8 +20,9 @@ namespace FalloutScript
     class SaveWriter;
     class SaveReader;
 
-    /// The version of the section of a save that holds the sex, race and look of the player
-    constexpr std::uint32_t chargenSectionVersion = 1;
+    /// The version of the section of a save that holds the sex, race, look and name of the player (version 2 added the
+    /// name)
+    constexpr std::uint32_t chargenSectionVersion = 2;
 
     class Interpreter;
 
@@ -209,12 +210,13 @@ namespace FalloutScript
         std::vector<FormId> givenTraits() const;
         void setGivenTraits(std::vector<FormId> traits);
 
-        /// What the player picked of its sex, race and look, for a save (the name, the points and the tags are kept
-        /// elsewhere: in the actor values, the perks and the record of the player)
+        /// What the player picked of its sex, race, look and name, for a save (the points and the tags are kept
+        /// elsewhere: in the actor values and the perks)
         void write(SaveWriter& out) const;
         void read(SaveReader& in, std::uint32_t version);
 
     private:
+        static void writeLook(const FaceLook& look, SaveWriter& out);
         /// The screen at the front has just become the one the player is on: it sets what it gives out
         void activate();
         int taggedCount() const;

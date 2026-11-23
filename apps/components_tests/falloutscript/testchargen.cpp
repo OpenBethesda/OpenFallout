@@ -836,6 +836,54 @@ namespace
         EXPECT_EQ(*loaded.look(), look);
     }
 
+    TEST(FalloutScriptChargenTest, the_name_is_saved_and_comes_back_with_or_without_a_look)
+    {
+        // The name typed at the start is what &PCName; puts in the text of messages and lines: a game loaded from a
+        // save made after it was typed (New Vegas, VCG01 stage 60, Mac round vigor-master-saveload60-nv) still has it
+        Chargen named(Game::NewVegas);
+        ASSERT_EQ(named.setName("Courier Six"), "Courier Six");
+        FalloutScript::SaveWriter out;
+        named.write(out);
+        Chargen loaded(Game::NewVegas);
+        loaded.setName("Someone Else");
+        FalloutScript::SaveReader in(out.bytes());
+        loaded.read(in, FalloutScript::chargenSectionVersion);
+        EXPECT_TRUE(in.atEnd());
+        EXPECT_EQ(loaded.name(), "Courier Six");
+        EXPECT_FALSE(loaded.look().has_value());
+
+        FalloutScript::FaceLook look;
+        look.mRace = 0x19;
+        named.setLook(look);
+        FalloutScript::SaveWriter withLook;
+        named.write(withLook);
+        Chargen again(Game::NewVegas);
+        FalloutScript::SaveReader inAgain(withLook.bytes());
+        again.read(inAgain, FalloutScript::chargenSectionVersion);
+        EXPECT_TRUE(inAgain.atEnd());
+        EXPECT_EQ(again.name(), "Courier Six");
+        ASSERT_TRUE(again.look().has_value());
+        EXPECT_EQ(*again.look(), look);
+    }
+
+    TEST(FalloutScriptChargenTest, a_save_of_version_1_has_no_name_and_still_loads)
+    {
+        // Version 1 ended with the look: the flags of the sex, the race and no look here
+        FalloutScript::SaveWriter old;
+        old.boolean(true);
+        old.boolean(true);
+        old.form(0x19);
+        old.boolean(false);
+        Chargen loaded(Game::NewVegas);
+        loaded.setName("From Before");
+        FalloutScript::SaveReader in(old.bytes());
+        loaded.read(in, 1);
+        EXPECT_TRUE(in.atEnd());
+        EXPECT_EQ(loaded.female(), std::optional<bool>(true));
+        EXPECT_EQ(loaded.race(), 0x19u);
+        EXPECT_EQ(loaded.name(), "");
+    }
+
     TEST(FalloutScriptChargenTest, a_form_of_a_plugin_that_is_not_loaded_is_lost_and_a_hairless_look_is_not)
     {
         Chargen chargen(Game::NewVegas);
