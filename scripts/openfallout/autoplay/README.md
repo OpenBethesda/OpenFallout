@@ -88,3 +88,10 @@ python3 scripts/openfallout/savediff.py autoplay_save.omwsave autoplay_again.omw
 the same bytes in every section except for what really changed in between: the clock and the timers of the quests, and what the
 `OnLoad` blocks of the scripts do when their cells are loaded again (the scripts of the games run those on every load, so a
 karma or an item they give is given again).
+
+## Rounds
+
+On the Mac, `scripts/openfallout/round/rounds/autoplay-nv.json`, `autoplay-fo3.json`, `autoplay-ttw.json`, `saveload-nv.json` and
+`saveload-fo3.json` run the tool in a hidden engine (`round.py run <round file>`) and give a PASS or a FAIL from the exit status
+and the `AUTOPLAY` lines: the end of the intro, the save, the load and the check, and none of the lines by which the tool gives
+up. `scripts/openfallout/round/README.md`, "The autoplay rounds", lists them.

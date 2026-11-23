@@ -17,7 +17,8 @@ errors, whether the engine ever became the frontmost application (macOS), the sc
     round.py ack-panic                                     after somebody has looked at a panic: the pre-flight stops warning about it
 
 The round file is JSON: `name`, `game` (nv, fo3 or ttw: a key of the profile's `games`), `scenario` (a Lua file, relative to
-the round file), `save` (a file, "latest" for the newest save of the profile's `saves` folder, or none: then `start` is a cell
+the round file; none for a round that is judged by how the engine ends, `expect_exit`), `data` (data folders of the run, relative
+to the round file), `save` (a file, "latest" for the newest save of the profile's `saves` folder, or none: then `start` is a cell
 for `--start`), `settings` ({"Section": {"key": "value"}} merged over the profile's settings file), `resolution`,
 `framerate`, `limit` (seconds), `env` (environment variables of the engine), `variants` (a list of {"name", "settings", "env"}: one
 engine start each) and `extra_args`.
@@ -300,18 +301,34 @@ def load_round(path, args):
     for name in ("game", "save", "start", "limit", "name"):
         if getattr(args, name, None) not in (None, ""):
             config[name] = getattr(args, name)
+    config.setdefault("variants", [{"name": "run"}])
     scenario = args.scenario or config.get("scenario")
     if scenario is None:
-        sys.exit("no scenario: name one in the round file (\"scenario\") or with --scenario")
-    scenario_path = Path(scenario)
-    if not scenario_path.is_absolute():
-        scenario_path = (base / scenario_path) if (base / scenario_path).exists() else (HERE / scenario_path)
-    config["scenario"] = scenario_path.resolve()
-    config.setdefault("name", scenario_path.stem)
+        # A round that is judged by how the engine ends (`expect_exit`) and by its log needs no scenario: then the scenario player
+        # (round.omwscripts) is not loaded either, since with nothing to play it would quit the game at once
+        if not ends_by_itself(config):
+            sys.exit("no scenario: name one in the round file (\"scenario\") or with --scenario, or say with \"expect_exit\" "
+                     "how the engine ends by itself")
+        config["scenario"] = None
+        config.setdefault("name", Path(path).stem if path else "round")
+    else:
+        scenario_path = Path(scenario)
+        if not scenario_path.is_absolute():
+            scenario_path = (base / scenario_path) if (base / scenario_path).exists() else (HERE / scenario_path)
+        config["scenario"] = scenario_path.resolve()
+        config.setdefault("name", scenario_path.stem)
+    # Data folders of the round (the folder of a tool the run loads, such as scripts/openfallout/autoplay), relative to the round
+    # file so that the file names no folder of one computer
+    config["data"] = [Path(os.path.abspath(base / Path(folder).expanduser())) for folder in config.get("data", [])]
     config.setdefault("game", "nv")
     config.setdefault("limit", 300)
-    config.setdefault("variants", [{"name": "run"}])
     return config
+
+
+def ends_by_itself(config):
+    """Whether every variant of the round says with what exit status the engine ends by itself (`expect_exit`, the round file's or
+    the variant's own)."""
+    return all(variant.get("expect_exit", config.get("expect_exit")) is not None for variant in config.get("variants") or [{}])
 
 
 def absolute(path):
@@ -409,11 +426,14 @@ def engine_command(profile, config, run_dir, save, extra=()):
     for data in game.get("data", []):
         command += ["--data", str(absolute(data))]
     command += ["--data", str(HERE), "--data", str(run_dir / "data")]
+    for folder in config.get("data", []):
+        command += ["--data", str(absolute(folder))]
     # The plugins of the profile are the whole list (the player's own configuration is not read, see `prepare_run`); with no list
     # the engine takes the plugins the selected game makes active, as the game itself does.
     for content in game.get("content", []):
         command += ["--content", content]
-    command += ["--content", "round.omwscripts"]
+    if config.get("scenario") is not None:
+        command += ["--content", "round.omwscripts"]
     # `"load_save": false`: the save is copied into the run's user data but not named, and the engine stays at the main menu,
     # where a menu script of the round loads it (`--skip-menu` with no save to load would start a new game)
     at_menu = not config.get("load_save", True)
@@ -492,7 +512,8 @@ def prepare_run(profile, config, variant, run_dir, save):
             saves = saves / "round"
             saves.mkdir(exist_ok=True)
         shutil.copy(save, saves / save.name)
-    shutil.copy(config["scenario"], run_dir / "data" / "scripts" / "roundscenario.lua")
+    if config.get("scenario") is not None:
+        shutil.copy(config["scenario"], run_dir / "data" / "scripts" / "roundscenario.lua")
 
 
 def priority_prefix(priority):
@@ -818,9 +839,10 @@ def write_report(run_dir, config, variant, status, seconds, sampler, timed_out, 
               "shots": [{"n": n, "name": shot, "file": str(path) if path else None} for n, shot, path in shots],
               "round_lines": lines, "command": command}
     (run_dir / "report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+    scenario_text = ("no scenario (judged by how the engine ends and by its log)" if config.get("scenario") is None and not lines
+                     else f"scenario {'finished' if finished else 'NOT finished'}")
     out = [f"# Round {config['name']} / {name}: {verdict}", "",
-           f"- exit status {status}{' (timed out and stopped)' if timed_out else ''}, {seconds:.0f} s, "
-           f"scenario {'finished' if finished else 'NOT finished'}",
+           f"- exit status {status}{' (timed out and stopped)' if timed_out else ''}, {seconds:.0f} s, {scenario_text}",
            f"- focus: {focus}",
            *([f"- STOPPED BY A GUARD, the engine was killed: {guard_reason}"] if guard_reason else []),
            *([f"- WindowServer same pid: {window_server_text(window_server)}"] if window_server else []),
@@ -838,7 +860,8 @@ def write_report(run_dir, config, variant, status, seconds, sampler, timed_out, 
            "", "## Scenario lines", "", "```"] + lines[:400] + ["```", ""]
     if tail and not finished:
         # What the engine was doing when it stopped answering: a round that never began is told by its last lines
-        out += ["## Last lines of the log (the scenario did not finish)", "", "```"] + list(tail) + ["```", ""]
+        why = "the round has no scenario" if config.get("scenario") is None else "the scenario did not finish"
+        out += [f"## Last lines of the log ({why})", "", "```"] + list(tail) + ["```", ""]
     if problems:
         out += ["## First warnings and errors", ""] + [f"- {level} x{count}: {message}" for level, message, count in problems] + [""]
     out += ["## Screenshots", ""] + [f"- {n:02d} {shot}: {path.name if path else 'MISSING'}" for n, shot, path in shots] + [""]
@@ -1057,7 +1080,8 @@ def command_check(args):
     save = resolve_save(config, profile)
     probe = Path(tempfile.mkdtemp(prefix="round-check-"))
     command = engine_command(profile, config, probe, save)
-    print(json.dumps({"round": config["name"], "scenario": str(config["scenario"]), "save": str(save) if save else None,
+    scenario = str(config["scenario"]) if config["scenario"] else None
+    print(json.dumps({"round": config["name"], "scenario": scenario, "save": str(save) if save else None,
                       "variants": [v.get("name") for v in config["variants"]], "command": command}, indent=1))
     shutil.rmtree(probe, ignore_errors=True)
     return 0

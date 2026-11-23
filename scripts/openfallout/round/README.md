@@ -25,7 +25,8 @@ scripts/openfallout/round/round.py preflight                                what
    view, terrain and the rest) under the run's itself.
 2. Starts the engine at low priority (`taskpolicy -b` on macOS, `nice -n 10` elsewhere) with `OPENFALLOUT_HEADLESS=1`, the
    game's data folders and plugins of the profile, `--skip-menu --headless --no-grab`, `--load-savegame <the copy>` (or
-   `--start <cell>`), and the content file `round.omwscripts` (the scenario player). With `"load_save": false` it gives neither
+   `--start <cell>`), the round's own `data` folders, and the content file `round.omwscripts` (the scenario player; a round with no
+   scenario does not load it). With `"load_save": false` it gives neither
    `--skip-menu` nor `--load-savegame`: the engine stays at the main menu with the copy in its list of saves, for a menu script.
 3. On macOS it asks `lsappinfo` every 5 s which application is frontmost: a run in which the engine ever was fails, because
    that is what takes the keyboard of the person at the computer.
@@ -54,7 +55,8 @@ round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas fol
 |---|---|
 | `name` | name of the round (the folder of the results) |
 | `game` | `nv`, `fo3` or `ttw`: a key of the profile's `games` |
-| `scenario` | the Lua file of the scenario, relative to the round file or to this folder |
+| `scenario` | the Lua file of the scenario, relative to the round file or to this folder. A round whose every variant has `expect_exit` may have none: the scenario player (`round.omwscripts`) is then not loaded either (with nothing to play it would quit the game at once), and the round is judged by how the engine ends and by its log. The autoplay rounds below are such rounds |
+| `data` | data folders of the run, relative to the round file (so that the file names no folder of one computer), each given to the engine with `--data` after the game's; `["../../autoplay"]` loads the autoplay tool |
 | `save` | a file, or `"latest"`; without it `start` (a cell for `--start`, with `new_game` for `--new-game`) |
 | `load_save` | `false`: the save is copied into a character folder of the run (`saves/round/`, where the engine's list of saves finds it) but not loaded; the engine starts at the main menu (no `--skip-menu`, which with no save would start a new game), where a menu script of the round loads it. The scenario runs once a game is loaded; until then the round waits, up to its `limit` |
 | `settings` | `{"Section": {"key": "value"}}` for every variant, for example `{"Terrain": {"game lod": "true"}}` |
@@ -64,7 +66,7 @@ round's). Edit it by hand for Tale of Two Wastelands (`data` = the New Vegas fol
 | `shader_values` | `{"technique": {"uniform": number or boolean}}`: the values of the uniforms of post-processing techniques, laid in the run's own `shaders.yaml` (where the engine reads the values a player chose; the engine's techniques have no uniform that a script may set, so a scenario cannot do it). The technique still has to be turned on, by `[Post Processing] chain`. The run's `report.json` records the values (the engine writes the file again in its own words when it quits). Used by the picture comparison |
 | `variants` | a list of `{"name", "settings"}`: one engine start each, one after the other (never two engines at a time; `--parallel` above 1 is ignored), `--variant name` only that one; a variant can also have its own `env`, `extra_args` and expectations (below) |
 | `extra_args` | more arguments for the engine (a variant's come after the round's) |
-| `expect_exit` | the engine ends by itself with this exit status; the scenario then need not run (a refused start save: `--missing-content=refuse` ends with 4) |
+| `expect_exit` | the engine ends by itself with this exit status; the scenario then need not run, and may be left out (a refused start save: `--missing-content=refuse` ends with 4; an autoplay that played to its end: 0). An engine that is still running at the `limit` fails such a round |
 | `expect_log`, `forbid_log` | regular expressions: each of `expect_log` must match a line of the log, none of `forbid_log` may; otherwise the round fails (`(?s)` lets one pattern span lines, to say what comes after what) |
 | `expect_count` | `{"<regular expression>": n}`: exactly `n` lines of the log match, otherwise the round fails |
 | `keep_sound` | `true`: a run with sound (`OPENFALLOUT_HEADLESS_SOUND=1`) keeps it in `sound.wav` in its folder (32-bit float, about 23 MB a minute), for a script that measures it; without it the sound goes to /dev/null. Never to a device (see "What it cannot do") |
@@ -133,6 +135,43 @@ distant land of New Vegas in seven variants of `game lod debug`. Its places are 
 the scenario takes the worldspace from the cell of a reference that lives there (`anchor` lines say which one was found and which
 worldspace it names; `eye` lines name the worldspace the pictures were taken in). It stops with a `ROUND error` when no such
 reference is found and the save is in an interior.
+
+## The autoplay rounds
+
+`rounds/autoplay-nv.json`, `rounds/autoplay-fo3.json` and `rounds/autoplay-ttw.json` play the New Game of each game with the
+autoplay tool (`scripts/openfallout/autoplay`, its README says what it does) through the intro to the first stages of the main
+quest; `rounds/saveload-nv.json` and `rounds/saveload-fo3.json` do the same with its probe of the saves (`autoplaysaves.omwscripts`: the game is saved where the
+`saves` table of `autoplaygates.lua` says, loaded back in the same engine, checked and saved again, and the intro then plays on to
+its end). They have no scenario: the tool ends the game itself (`core.quit()`) when the run reaches the stages of its `finish`
+table (`AUTOPLAY intro over`), so each round says `"expect_exit": 0` and is judged by the end of the engine and by the
+`AUTOPLAY` lines of the log:
+
+- every round expects `AUTOPLAY intro done` (the intro reached its last stage) and `AUTOPLAY intro over` (the run reached its
+  `finish` stage and the tool quit the game), and forbids the lines by which the tool gives up or cannot go on: `time is up` (its
+  own time limit), `level stuck`, `screens error`, `talk wait error`, `fire error`, `fire done` for `time`, `ammo` or `error`, and a
+  `gate` line that does not end in `ok`;
+- the save/load rounds also expect `digest saved`, `save autoplay-save ok`, `digest loaded`, `digest check ok` and
+  `save autoplay-again ok`, in that order and before `intro over`, the save, the load, the check and the second save once each;
+  each save line must name the file it wrote (`files=` not empty: the engine catches a failed write itself, so the probe's
+  `pcall` says `ok` either way). They forbid `digest check MISMATCH`, a load with `no slot` or an `error`, a save that does not
+  say `ok`, and the engine's `Failed to save game:`.
+
+A crash (any exit status but 0), an engine still running at the round's `limit` (the intro stood still), or any of these lines
+fails the round; nothing has to be read by hand. The error `Unable to attach OpenGL debug callback.` that a run with
+`OPENFALLOUT_DEBUG_OPENGL=1` logs on macOS (its OpenGL has no debug output) does not decide a round: the verdict counts the log's
+warnings and errors but does not fail on them, it fails on `ROUND error` lines of a scenario and on the expectations. The
+autoplay rounds do not set the variable.
+
+The rounds name the master of the game (`--content FalloutNV.esm`, `--content Fallout3.esm`; none for Tale of Two Wastelands,
+whose plugins the game makes active), so the profile's `content` for `nv` and `fo3` must be empty for them (a master named twice
+stops the engine). The tool is the one of the checkout the round file is in: run the round from a checkout of the commit the
+engine was built from, since the `saves` table and the gates go with the engine. They run with sound sent to /dev/null, as the
+Mac runs that made the tool's tables did, and take minutes: New Vegas about 15, Fallout 3 and Tale of Two Wastelands 25 to 40
+(the `limit`s are 1,800 and 3,300 s; `--wall` and any wall limit around round.py must be longer).
+
+```
+scripts/openfallout/round/round.py run scripts/openfallout/round/rounds/saveload-nv.json
+```
 
 ## What it cannot do
 

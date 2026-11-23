@@ -372,6 +372,135 @@ class Commands(unittest.TestCase):
         with self.assertRaises(SystemExit):
             round_runner.load_round(self.round_file, self.Args())
 
+    def test_a_round_that_ends_by_itself_needs_no_scenario_and_loads_no_scenario_player(self):
+        # the scenario player quits the game at once when it has nothing to play, so a round with no scenario must not load it
+        (self.tmp / "tool").mkdir()
+        self.round_file.write_text(json.dumps({"name": "t", "expect_exit": 0, "data": ["tool"],
+                                               "extra_args": ["--new-game", "--content", "tool.omwscripts"]}))
+        config = round_runner.load_round(self.round_file, self.Args())
+        self.assertIsNone(config["scenario"])
+        command = round_runner.engine_command(self.profile, config, self.tmp / "run", None)
+        self.assertNotIn("round.omwscripts", command)
+        self.assertIn(str(self.tmp.resolve() / "tool"), [str(Path(word).resolve()) for word in command])
+        self.assertEqual(command[-3:], ["--new-game", "--content", "tool.omwscripts"])
+        round_runner.prepare_run(self.profile, config, config["variants"][0], self.tmp / "run", None)
+        self.assertFalse((self.tmp / "run" / "data" / "scripts" / "roundscenario.lua").exists())
+
+    def test_a_round_with_no_scenario_needs_an_exit_status_for_every_variant(self):
+        self.round_file.write_text(json.dumps({"name": "t", "variants": [{"name": "a", "expect_exit": 0}, {"name": "b"}]}))
+        with self.assertRaises(SystemExit) as stop:
+            round_runner.load_round(self.round_file, self.Args())
+        self.assertIn("expect_exit", str(stop.exception))
+        self.round_file.write_text(json.dumps({"name": "t", "variants": [{"name": "a", "expect_exit": 0}, {"name": "b", "expect_exit": 4}]}))
+        self.assertIsNone(round_runner.load_round(self.round_file, self.Args())["scenario"])
+
+    def test_the_data_folders_of_a_round_are_relative_to_the_round_file(self):
+        # a round file names no folder of one computer: `data` is read from where the file is, not from the current folder
+        self.round_file.write_text(json.dumps({"name": "t", "scenario": "s.lua", "data": ["../elsewhere", "here"]}))
+        cwd = Path.cwd()
+        os.chdir(tempfile.gettempdir())
+        try:
+            config = round_runner.load_round(self.round_file, self.Args())
+        finally:
+            os.chdir(cwd)
+        here = self.tmp.resolve()
+        self.assertEqual(config["data"], [here.parent / "elsewhere", here / "here"])
+        command = round_runner.engine_command(self.profile, config, self.tmp / "run", None)
+        for folder in config["data"]:
+            self.assertEqual(command[command.index(str(folder)) - 1], "--data")
+        self.assertIn("round.omwscripts", command)
+
+
+class AutoplayRounds(unittest.TestCase):
+    """The committed rounds of the autoplay tool (rounds/autoplay-*.json, rounds/saveload-*.json): no folder of one computer, the
+    tool's own folder as data, and expectations that pass the lines of a run that played to the end and fail every line by which
+    the tool gives up."""
+
+    ROUNDS = HERE / "round" / "rounds"
+    NAMES = ("autoplay-nv", "autoplay-fo3", "autoplay-ttw", "saveload-nv", "saveload-fo3")
+
+    def config(self, name):
+        return round_runner.load_round(self.ROUNDS / f"{name}.json", Commands.Args())
+
+    @staticmethod
+    def log(*lines):
+        return "".join(f"[10:00:{n:02d}.000 I] Global[scripts/autoplayworld.lua]:\t{line}\n" for n, line in enumerate(lines))
+
+    PLAYED = ("AUTOPLAY\tgate\twalk\tVCG01\tstage=55 ref=104C16 try=1\tok",
+              "AUTOPLAY\tfire done\tdead\tshots=3 real=20.3",
+              "AUTOPLAY\tintro done\tVCG01\treal=225.9",
+              "AUTOPLAY\tintro over\tVMQ01\treal=348.2")
+    SAVED = ("AUTOPLAY\tdigest\tsaved\tVCG01=79/r",
+             "AUTOPLAY\tsave\tautoplay-save\tok\tdir=Player\tfiles=autoplay_save.omwsave",
+             "AUTOPLAY\tload\tautoplay-save\tautoplay_save.omwsave",
+             "AUTOPLAY\tdigest\tloaded\tVCG01=79/r",
+             "AUTOPLAY\tdigest\tcheck ok",
+             "AUTOPLAY\tsave\tautoplay-again\tok\tdir=Player\tfiles=autoplay_again.omwsave")
+    GIVE_UP = ("AUTOPLAY\ttime is up",
+               "AUTOPLAY\tlevel stuck",
+               "AUTOPLAY\tscreens error\tattempt to index a nil value",
+               "AUTOPLAY\ttalk wait error\tCG04\tstage=21\tno such object",
+               "AUTOPLAY\tfire error\tno weapon",
+               "AUTOPLAY\tfire done\ttime\tshots=1 real=30.0",
+               "AUTOPLAY\tgate\tactivate\tCG04\tstage=21 ref=02B793 try=2\tno such object")
+    SAVE_FAULTS = ("AUTOPLAY\tdigest\tcheck MISMATCH",
+                   "AUTOPLAY\tload\tautoplay-save\tno slot",
+                   "AUTOPLAY\tload\terror\tcannot load",
+                   "AUTOPLAY\tsave\tautoplay-again\tdisk full\tdir=Player\tfiles=",
+                   "Failed to save game: Write operation failed (file stream): No space left on device")
+
+    def outcome(self, name, text, status=0, timed_out=False):
+        config = self.config(name)
+        return round_runner.expectations(text, status, timed_out, round_runner.outcome_expectations(config, config["variants"][0]))
+
+    def test_the_rounds_name_no_folder_of_one_computer_and_load_the_tool_folder(self):
+        for name in self.NAMES:
+            raw = (self.ROUNDS / f"{name}.json").read_text()
+            self.assertNotIn("/Users/", raw, name)
+            self.assertNotIn("OPENFALLOUT_DEBUG_OPENGL", raw, name)
+            config = self.config(name)
+            self.assertIsNone(config["scenario"], name)
+            self.assertEqual(config["data"], [round_runner.absolute(HERE / "autoplay")], name)
+            tool = config["extra_args"][-1]
+            self.assertTrue((HERE / "autoplay" / tool).is_file(), name)
+            self.assertEqual(tool, "autoplaysaves.omwscripts" if name.startswith("saveload") else "autoplay.omwscripts")
+            self.assertEqual(config["expect_exit"], 0, name)
+
+    def test_a_run_that_played_to_the_end_passes(self):
+        for name in self.NAMES:
+            lines = self.SAVED + self.PLAYED if name.startswith("saveload") else self.PLAYED
+            self.assertEqual(self.outcome(name, self.log(*lines)), [], name)
+
+    def test_a_run_that_did_not_end_by_itself_fails(self):
+        for name in self.NAMES:
+            lines = self.SAVED + self.PLAYED[:-1] if name.startswith("saveload") else self.PLAYED[:-1]
+            failed = self.outcome(name, self.log(*lines), timed_out=True)
+            self.assertIn("timed out, expected the engine to end with status 0", failed, name)
+            self.assertIn("no log line matches `AUTOPLAY\\tintro over\\t`", failed, name)
+            self.assertIn("exit status -9, expected 0", self.outcome(name, self.log(*lines), status=-9), name)
+
+    def test_every_line_by_which_the_tool_gives_up_fails_the_round(self):
+        for name in self.NAMES:
+            base = self.SAVED + self.PLAYED if name.startswith("saveload") else self.PLAYED
+            faults = self.GIVE_UP + (self.SAVE_FAULTS if name.startswith("saveload") else ())
+            for fault in faults:
+                failed = self.outcome(name, self.log(*base, fault))
+                self.assertTrue(any("forbidden" in line for line in failed), (name, fault, failed))
+
+    def test_a_save_that_was_never_checked_or_loaded_twice_fails(self):
+        for name in ("saveload-nv", "saveload-fo3"):
+            without_check = tuple(line for line in self.SAVED if "check ok" not in line)
+            self.assertIn("no log line matches `AUTOPLAY\\tdigest\\tcheck ok`", self.outcome(name, self.log(*without_check, *self.PLAYED)))
+            # a check before the load it is about is not the probe's sequence
+            out_of_order = (self.SAVED[0], self.SAVED[2], self.SAVED[4], self.SAVED[1], self.SAVED[3], self.SAVED[5]) + self.PLAYED
+            self.assertTrue(any(line.startswith("no log line matches `(?s)") for line in self.outcome(name, self.log(*out_of_order))))
+            # the engine's saveGame catches a failed write and returns, so the probe logs `ok` with no file: that is no save
+            unwritten = self.SAVED[:5] + ("AUTOPLAY\tsave\tautoplay-again\tok\tdir=Player\tfiles=",) + self.PLAYED
+            self.assertIn("no log line matches `AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+`",
+                          self.outcome(name, self.log(*unwritten)))
+            twice = self.SAVED + self.SAVED[2:] + self.PLAYED
+            self.assertIn("`AUTOPLAY\\tload\\tautoplay-save\\t` matches 2 log line(s), expected 1", self.outcome(name, self.log(*twice)))
+
 
 class OtherSystemRun(unittest.TestCase):
     def test_run_says_that_it_needs_macos_elsewhere(self):
@@ -672,6 +801,40 @@ class WholeRun(unittest.TestCase):
         self.assertEqual((report["verdict"], report["exit_status"], report["expectations_failed"]), ("PASS", 4, []))
         self.assertIn("--missing-content=refuse", report["command"])
         self.assertIn("ended with the expected status 4", (run / "one" / "report.md").read_text())
+
+    def test_a_round_with_no_scenario_is_judged_by_the_end_of_the_engine_and_its_log(self):
+        # an autoplay round: no scenario, the tool of the round ends the game by itself
+        tmp = Path(tempfile.mkdtemp(prefix="round-run-"))
+        engine = self.make_engine(tmp, """
+            import pathlib, sys
+            args = sys.argv[1:]
+            assert "round.omwscripts" not in args and "--new-game" in args
+            config = pathlib.Path(args[args.index("--config") + 1])
+            (config / "openfallout.log").write_text("[10:00:00.000 E] Unable to attach OpenGL debug callback.\\n"
+                                                    "[10:00:01.000 I] Global: AUTOPLAY\\tintro over\\tVMQ01\\treal=9.0\\n")
+            sys.exit(int(args[-1]))
+        """)
+        (tmp / "tool").mkdir()
+        profile = {"engine": str(engine), "resources": str(tmp), "games": {"nv": {"data": [str(tmp)], "content": []}},
+                   "out": str(tmp / "out")}
+        (tmp / "profile.json").write_text(json.dumps(profile))
+        (tmp / "r.json").write_text(json.dumps({"name": "tool", "data": ["tool"], "expect_exit": 0,
+                                                "expect_log": [r"AUTOPLAY\tintro over\t"], "forbid_log": [r"AUTOPLAY\ttime is up"],
+                                                "variants": [{"name": "ok", "extra_args": ["--new-game", "0"]},
+                                                             {"name": "crash", "extra_args": ["--new-game", "6"]},
+                                                             {"name": "impossible", "extra_args": ["--new-game", "0"],
+                                                              "expect_log": ["never written"]}]}))
+        code = round_runner.main(["--profile", str(tmp / "profile.json"), "run", str(tmp / "r.json")])
+        self.assertEqual(code, 1)
+        (run,) = runs_of(tmp)
+        reports = {name: json.loads((run / name / "report.json").read_text()) for name in ("ok", "crash", "impossible")}
+        # an error line of the log is counted but does not decide the round: the expectations do
+        self.assertEqual((reports["ok"]["verdict"], reports["ok"]["errors"], reports["ok"]["expectations_failed"]), ("PASS", 1, []))
+        self.assertEqual((reports["crash"]["verdict"], reports["crash"]["expectations_failed"]), ("FAIL", ["exit status 6, expected 0"]))
+        self.assertEqual((reports["impossible"]["verdict"], reports["impossible"]["expectations_failed"]),
+                         ("FAIL", ["no log line matches `never written`"]))
+        self.assertFalse((run / "ok" / "data" / "scripts" / "roundscenario.lua").exists())
+        self.assertIn("no scenario (judged by how the engine ends and by its log)", (run / "ok" / "report.md").read_text())
 
     def test_another_status_than_the_expected_one_fails(self):
         tmp, code = self.run_round(0, done=True, round_extra={"expect_exit": 4}, variants=[{"name": "one"}])
