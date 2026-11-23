@@ -42,3 +42,4 @@
 {"decision": "taken", "title": "Make downloads in CMake optional", "upstream": "f5f869f83159c47991302a605c7e9d7ffe066494"}
 {"decision": "taken", "title": "Remove Soul Trap from targets it can't trap", "upstream": "f2f1f457477a4779456083a0d15c625d92dce72b"}
 {"decision": "skipped", "note": "Dependency versions are the fork's own choice: the other half of this change is in CI/, which the fork does not take, so only the fallback download in extern/CMakeLists.txt would move.", "title": "[DEPS] Update to 2026-11-05, update osg commit", "upstream": "b8285cc95d19e080fe0532f9f5154b0c3f727735"}
+{"decision": "taken", "title": "Reduce drive write load to navmesh.db", "upstream": "06a88fe9926a7dcd6336054ecf199344e1f25d87"}
