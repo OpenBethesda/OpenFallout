@@ -34,6 +34,9 @@ namespace OFMechanics
     // Undoes permanent effects created by ESM::MagicEffect::AppliedOnce
     void onMagicEffectRemoved(
         const OFWorld::Ptr& target, ActiveSpells::ActiveSpellParams& spell, const ESM::ActiveEffect& effect);
+
+    // Restarts the Sound effect's looping SFX, which is only started when the effect is first applied
+    void restoreMagicSound(const OFWorld::Ptr& player);
 }
 
 #endif

@@ -424,6 +424,12 @@ namespace
             },
             target);
     }
+
+    void playMagicSound(const OFWorld::Ptr& target, float magnitude)
+    {
+        OFBase::Environment::get().getSoundManager()->playSound3D(target, ESM::RefId::stringRefId("magic sound"),
+            std::clamp(magnitude / 100.f, 0.f, 1.f), 1.f, OFSound::Type::Sfx, OFSound::PlayMode::LoopNoEnv);
+    }
 }
 
 namespace OFMechanics
@@ -617,12 +623,7 @@ namespace OFMechanics
                 if (target == getPlayer())
                 {
                     const auto& magnitudes = target.getClass().getCreatureStats(target).getMagicEffects();
-                    float volume = std::clamp(
-                        (magnitudes.getOrDefault(effect.mEffectId).getModifier() + effect.mMagnitude) / 100.f, 0.f,
-                        1.f);
-                    OFBase::Environment::get().getSoundManager()->playSound3D(target,
-                        ESM::RefId::stringRefId("magic sound"), volume, 1.f, OFSound::Type::Sfx,
-                        OFSound::PlayMode::LoopNoEnv);
+                    playMagicSound(target, magnitudes.getOrDefault(effect.mEffectId).getModifier() + effect.mMagnitude);
                 }
             }
             else if (effect.mEffectId == ESM::MagicEffect::SummonScamp
@@ -1415,4 +1416,11 @@ namespace OFMechanics
         }
     }
 
+    void restoreMagicSound(const OFWorld::Ptr& player)
+    {
+        const auto& magnitudes = player.getClass().getCreatureStats(player).getMagicEffects();
+        const float modifier = magnitudes.getOrDefault(ESM::MagicEffect::Sound).getModifier();
+        if (modifier > 0.f)
+            playMagicSound(player, modifier);
+    }
 }
