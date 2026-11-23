@@ -235,6 +235,7 @@ namespace OFScript
                     /// \todo write to log
                 }
             }
+            ++index;
         }
     }
 }
