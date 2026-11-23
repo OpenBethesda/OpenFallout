@@ -937,7 +937,10 @@ namespace OFGui
 
         mWindowModeList->setIndexSelected(windowModeIndex);
 
-        if (windowMode != Settings::WindowMode::Windowed && windowModeIndex != MyGUI::ITEM_NONE)
+        mWindowBorderButton->setEnabled(windowMode == Settings::WindowMode::Windowed);
+
+        // Windowed fullscreen uses the desktop size, which need not match an exclusive fullscreen mode.
+        if (windowMode == Settings::WindowMode::Fullscreen)
         {
             // check if this resolution is supported in fullscreen
             if (mResolutionList->getIndexSelected() != MyGUI::ITEM_NONE)
@@ -978,8 +981,6 @@ namespace OFGui
                     Settings::video().mResolutionY.set(fallbackY);
                 }
             }
-
-            mWindowBorderButton->setEnabled(false);
         }
 
         if (windowMode == Settings::WindowMode::WindowedFullscreen)
