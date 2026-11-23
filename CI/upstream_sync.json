@@ -47,7 +47,8 @@
     ".gitlab/",
     "CI/",
     "README.md",
-    "CONTRIBUTING.md"
+    "CONTRIBUTING.md",
+    "CHANGELOG.md"
   ],
   "dropped_paths_reasons": {
     "OpenMW-CS editor": "apps/opencs/, apps/opencs_tests/, files/opencs/, docs/source/manuals/openmw-cs/, files/mac/openmw-cs*, files/openmw-cs.cfg and files/org.openmw.cs.desktop: the fork has no content editor, and none of these exist in it",
@@ -57,6 +58,6 @@
     "Windows": "files/windows/ and the Windows-only sources (crash catcher, path helpers, windows.hpp, the Win32 file backend, platform.* which only raises the file handle limit on Windows): the fork is macOS-only (floor macOS 26, Apple Silicon)",
     "Android and Linux": "androidmain.cpp, androidpath.*, gl4esinit.* (gl4es is a GLES wrapper for Android), linuxpath.*, the Linux desktop entries and appdata file: the fork is macOS-only",
     "Upstream's packaging and test scaffolding": "docker/, manual/ (upstream's documentation build), scripts/data/ and scripts/integration_tests.py (integration tests that need Morrowind data), scripts/preprocessed_file_size_stats*.py (used only by upstream's GitLab CI)",
-    "Upstream's own CI and hosting files": ".github/ (the fork has its own workflows, and the sync job's token may not push changes to workflow files), .gitlab-ci.yml, .gitlab/, CI/ (the fork's own scripts live there), README.md and CONTRIBUTING.md (the fork has its own)"
+    "Upstream's own CI and hosting files": ".github/ (the fork has its own workflows, and the sync job's token may not push changes to workflow files), .gitlab-ci.yml, .gitlab/, CI/ (the fork's own scripts live there), README.md and CONTRIBUTING.md (the fork has its own); CHANGELOG.md is the list of what OpenMW's releases fix, and it names fixes whose merge requests the fork did not take, so taking it would describe a tree the fork does not have"
   }
 }
