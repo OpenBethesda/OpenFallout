@@ -64,6 +64,8 @@ requests**. When it is off, `gh pr create` fails. The job then prints an error t
 compare link `https://github.com/OpenBethesda/OpenFallout/compare/master...upstream-sync/auto?expand=1`, and it fails.
 
 The ledger reaches master only when the pull request is merged. A closed pull request takes its decisions with it.
+Merge a sync pull request with a merge commit, as the merge queue does, and never squash it: each taken unit is its
+own commit with upstream's author and its `Upstream-Commit:` trailer, and a squash would lose both.
 
 ## Running it by hand on a Mac
 
