@@ -218,7 +218,7 @@ namespace DetourNavigator
                     "The navmesh database file \"{0}\" is damaged or is not a navmesh database. Please close "
                     "OpenFallout "
                     "and delete it, along with \"{0}-wal\" and \"{0}-shm\" if they exist. The file will be recreated "
-                    "automatically the next time OpenFallout starts or if you rerun openfallout-navmeshtool.",
+                    "automatically the next time OpenFallout starts.",
                     path);
             case SQLITE_CANTOPEN:
             case SQLITE_PERM:
@@ -237,8 +237,7 @@ namespace DetourNavigator
             case SQLITE_LOCKED:
                 return std::format(
                     "The navmesh database file \"{}\" is in use by another process, such as another running "
-                    "OpenFallout or "
-                    "openfallout-navmeshtool. Close it and start OpenFallout again.",
+                    "OpenFallout. Close it and start OpenFallout again.",
                     path);
             default:
                 break;
