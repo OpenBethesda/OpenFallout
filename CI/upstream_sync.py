@@ -5,8 +5,9 @@ OpenFallout started as a copy of OpenMW and renamed paths and identifiers on 4 O
 CI/upstream_translate.py) and deleted the parts it does not carry (the editor, the installation wizard, Windows and
 Linux support). `git merge upstream/master` is therefore impossible, and nothing had been taken from upstream since.
 This script does by machine what a person would do by hand with `git cherry-pick`: for every merge request upstream
-merged after the fork point it translates the change into OpenFallout's names, applies it, and commits it with the
-real author. A merge request that does not apply is not lost: the ledger, CI/upstream_ledger.jsonl, holds one line for
+merged after the fork point it translates the change into OpenFallout's names, applies it, and commits it. The commit
+is authored by whoever runs the tool (git's own identity, at the time of the run) and names the upstream authors in
+`Upstream-Author: <name>` lines, without email addresses, so that GitHub does not list them as contributors. A merge request that does not apply is not lost: the ledger, CI/upstream_ledger.jsonl, holds one line for
 every upstream commit that was looked at, with the reason it was or was not taken, so the next run starts where the
 last one ended and a person can see what still needs a hand port.
 
@@ -29,7 +30,9 @@ Git's rename detection can move an upstream change into a similar file of ours w
 a unit is taken but its ledger line and the report list the other files under "landed in another file".
 
 Commit messages quote upstream text, so `#123` becomes "upstream issue 123", `!123` becomes a GitLab link and `@name`
-loses its `@`: GitHub would otherwise close or notify OUR issues and people. The same cleaning applies to the report.
+loses its `@`: GitHub would otherwise close or notify OUR issues and people. Trailer lines that credit a person
+(`Co-authored-by:`, `Signed-off-by:` and the like) and email addresses in angle brackets are removed from upstream text
+too. The same cleaning applies to the report.
 
 Usage (run from the repository, or give --repo DIR):
     python3 CI/upstream_sync.py status [--upstream REF] [--json]
@@ -210,9 +213,22 @@ def sanitize(text):
     text = re.sub(r"(?<![\w@`])@(?=\w)", "", text)
     # A line "Upstream-Commit: <sha>" quoted in upstream prose must never become a trailer of ours (it would mark
     # another unit as taken), so the key loses its hyphen.
-    text = re.sub(r"(?mi)^([ \t]*)Upstream-(Commit|Merge-Request):",
+    text = re.sub(r"(?mi)^([ \t]*)Upstream-(Commit|Merge-Request|Author):",
                   lambda m: "%sUpstream %s:" % (m.group(1), m.group(2).replace("-", " ")), text)
+    # Lines that make GitHub credit a person (Co-authored-by, ...) and any email address in angle brackets go; the
+    # upstream authors are named in our own Upstream-Author lines, by name only.
+    text = re.sub(r"(?mi)^[ \t]*(?:Co-authored-by|Signed-off-by|Reviewed-by|Acked-by|Tested-by|Reported-by|"
+                  r"Suggested-by):.*(?:\n|$)", "", text)
+    text = re.sub(r"[ \t]*<[^<>\s]*@[^<>\s]*>", "", text)
     return text
+
+
+def clean_name(name):
+    """An upstream author's name without an email address or angle brackets (a name alone credits, never links)."""
+    name = re.sub(r"<[^<>]*@[^<>]*>", "", name)
+    name = re.sub(r"\S*@\S*", "", name)
+    name = re.sub(r"[<>]", "", name)
+    return " ".join(name.split())
 
 
 def parse_message(raw, is_merge):
@@ -516,10 +532,10 @@ class Engine:
     # -- the commit of a taken unit --------------------------------------------------------------------------------
 
     def authors(self, unit):
-        """(author, date, co-authors): the person who wrote most of a merge request, not the one who pressed merge.
+        """(author, date, co-author names): who wrote most of a merge request, not the one who pressed merge.
 
         The author is the one with the most non-merge commits between the first parent and the other parents
-        (ties go to the one who wrote last); the date is that author's last commit; the others become co-authors.
+        (ties go to the one who wrote last); the date is that author's last commit; the others are listed after them.
         A unit without such commits, and a plain commit, uses its own author.
         """
         own = self.repo.out("log", "-1", "--date=raw", "--format=%an%x1f%ae%x1f%ad", unit["sha"]).split("\x1f")
@@ -538,17 +554,21 @@ class Engine:
             last.setdefault(key, (name, email, date))
         ranked = sorted(counts, key=lambda key: (-counts[key], -int(last[key][2].split()[0])))
         name, email, date = last[ranked[0]]
-        co_authors = ["%s <%s>" % (last[key][0], last[key][1]) for key in ranked[1:]]
+        co_authors = [last[key][0] for key in ranked[1:]]
         return {"name": name, "email": email, "date": date}, co_authors
 
-    def message(self, unit, co_authors):
+    def message(self, unit, names):
         parts = [unit["title"]]
         if unit["description"]:
             parts.append(unit["description"])
         trailers = ["Upstream-Commit: " + unit["sha"]]
         if unit["mr_url"]:
             trailers.append("Upstream-Merge-Request: " + unit["mr_url"])
-        trailers += ["Co-authored-by: " + who for who in co_authors]
+        credited = []
+        for name in map(clean_name, names):
+            if name and name not in credited:
+                credited.append(name)
+        trailers += ["Upstream-Author: " + name for name in credited]
         parts.append("\n".join(trailers))
         return "\n\n".join(parts) + "\n"
 
@@ -579,7 +599,7 @@ class Engine:
             raise ToolError("git clang-format failed: " + (result.stdout + result.stderr).strip())
 
     def commit_taken(self, unit, entry, paths, clang_format=None):
-        """Commit what is staged in the working tree as the unit, with its author and its ledger line."""
+        """Commit what is staged in the working tree as the unit, with its ledger line; the author is whoever runs the tool."""
         if clang_format:
             self.format_changes(clang_format)
         entries = read_ledger(self.repo.path)
@@ -590,10 +610,8 @@ class Engine:
         self.repo.run("add", "--", LEDGER_FILE)
         self.repo.run("add", "-u")
         author, co_authors = self.authors(unit)
-        env = {"GIT_AUTHOR_NAME": author["name"], "GIT_AUTHOR_EMAIL": author["email"],
-               "GIT_AUTHOR_DATE": author["date"]}
-        self.repo.run("commit", "--no-verify", "--quiet", "-F", "-", input=self.message(unit, co_authors).encode(),
-                      env=env)
+        names = [author["name"]] + co_authors
+        self.repo.run("commit", "--no-verify", "--quiet", "-F", "-", input=self.message(unit, names).encode())
         return self.repo.out("rev-parse", "HEAD")
 
     def undo(self):

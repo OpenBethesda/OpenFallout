@@ -275,22 +275,22 @@ class AfterFullSyncTest(WorldTest):
         for line in text.splitlines():
             self.assertEqual(line, json.dumps(json.loads(line), sort_keys=True, ensure_ascii=False))
 
-    def test_a_clean_unit_is_committed_with_the_real_author_and_the_trailers(self):
+    def test_a_clean_unit_is_committed_by_the_running_identity_with_the_upstream_authors_named(self):
         first = self.units()[0]
         commit_id = git(self.fork, "log", "--format=%H", "--grep=Upstream-Commit: " + first, "HEAD")
         self.assertTrue(commit_id)
-        fields = git(self.fork, "log", "-1", "--format=%an|%ae|%at|%cn|%s", commit_id).split("|")
-        # Alice wrote two of the three commits; her last one is on 3 March. Bob only has one.
-        self.assertEqual(fields[:3], ["Alice Author", "alice@example.invalid",
-                                      git(self.fork, "log", "-1", "--format=%at", "--grep=work on first",
-                                          "--author=alice", "upstream/master")])
-        self.assertEqual(git(self.fork, "log", "-1", "--format=%aI", commit_id)[:10], "2026-03-03")
-        self.assertNotIn("Maintainer", fields[3])
+        fields = git(self.fork, "log", "-1", "--format=%an|%ae|%cn|%ce|%s", commit_id).split("|")
+        self.assertEqual(fields[:4], ["Syncer", "syncer@example.invalid", "Syncer", "syncer@example.invalid"])
         self.assertEqual(fields[4], "Fix the first thing (upstream issue 77)")
+        # the date is the time of the run, not the day upstream wrote the change (3 March 2026)
+        self.assertNotEqual(git(self.fork, "log", "-1", "--format=%aI", commit_id)[:10], "2026-03-03")
         body = git(self.fork, "log", "-1", "--format=%B", commit_id)
         self.assertIn("Upstream-Commit: " + first, body)
         self.assertIn("Upstream-Merge-Request: https://gitlab.com/OpenMW/openmw/-/merge_requests/101", body)
-        self.assertIn("Co-authored-by: Bob Builder <bob@example.invalid>", body)
+        # Alice wrote two of the three commits, so she is first; Bob follows. Names only, no address.
+        self.assertTrue(body.rstrip().endswith("Upstream-Author: Alice Author\nUpstream-Author: Bob Builder"), body)
+        self.assertNotIn("Co-authored-by", body)
+        self.assertNotIn("example.invalid", body)
         self.assertNotIn("Claude", body)
         self.assertNotIn("Anthropic", body)
         # the change itself, translated, and the ledger line in the same commit
@@ -306,7 +306,7 @@ class AfterFullSyncTest(WorldTest):
         self.assertIn("Fixes upstream issue 123 and %s, thanks carol." % merge_request_45, body)
         self.assertIn("Closes upstream issue 283", body)
         self.assertNotIn("#", body)
-        self.assertNotIn("@", body.replace("@example.invalid", ""))
+        self.assertNotIn("@", body)
         self.assertNotIn("See merge request", body)
 
     def test_a_unit_that_touches_only_dropped_paths_is_not_applicable(self):
@@ -335,12 +335,15 @@ class AfterFullSyncTest(WorldTest):
     def test_a_change_the_fork_already_has_is_recorded_as_already_present(self):
         self.assertEqual(self.ledger()[5]["decision"], "already-present")
 
-    def test_a_unit_without_a_merge_commit_is_committed_with_its_own_author_and_subject(self):
+    def test_a_unit_without_a_merge_commit_is_committed_by_the_running_identity_and_names_its_author(self):
         direct = self.units()[6]
         commit_id = git(self.fork, "log", "--format=%H", "--grep=Upstream-Commit: " + direct, "HEAD")
         self.assertEqual(git(self.fork, "log", "-1", "--format=%an|%s", commit_id),
-                         "Dave Direct|Direct commit without a merge")
-        self.assertNotIn("Upstream-Merge-Request", git(self.fork, "log", "-1", "--format=%B", commit_id))
+                         "Syncer|Direct commit without a merge")
+        body = git(self.fork, "log", "-1", "--format=%B", commit_id)
+        self.assertNotIn("Upstream-Merge-Request", body)
+        self.assertIn("Upstream-Author: Dave Direct", body)
+        self.assertNotIn("example.invalid", body)
 
     def test_a_change_to_a_file_the_fork_deleted_stays_a_conflict_with_a_note(self):
         entry = self.ledger()[7]
@@ -650,9 +653,13 @@ class PickTest(WorldTest):
         status, out, err = self.tool("continue")
         self.assertEqual(status, 0, err)
         self.assertEqual(git(self.fork, "status", "--porcelain"), "")
-        self.assertEqual(git(self.fork, "log", "-1", "--format=%an|%s"),
-                         "Alice Author|Change the line the fork changed")
-        self.assertIn("Upstream-Commit: " + self.conflict, git(self.fork, "log", "-1", "--format=%B"))
+        self.assertEqual(git(self.fork, "log", "-1", "--format=%an|%cn|%s"),
+                         "Syncer|Syncer|Change the line the fork changed")
+        body = git(self.fork, "log", "-1", "--format=%B")
+        self.assertIn("Upstream-Commit: " + self.conflict, body)
+        self.assertTrue(body.rstrip().endswith("Upstream-Author: Alice Author"), body)
+        self.assertNotIn("Co-authored-by", body)
+        self.assertNotIn("example.invalid", body)
         entry = self.ledger()[3]
         self.assertEqual((entry["decision"], entry["note"]), ("taken", "ported by hand"))
         self.assertNotIn("paths", entry)
@@ -763,6 +770,25 @@ class SanitizeTest(unittest.TestCase):
         for text, expected in cases.items():
             with self.subTest(text=text):
                 self.assertEqual(upstream_sync.sanitize(text), expected)
+
+    def test_upstream_text_cannot_credit_a_person_or_carry_an_address(self):
+        raw = ("Merge branch 'x' into 'master'\n\nThe title\n\nThanks <y@example.org> for the idea.\n"
+               "Co-authored-by: X <x@example.org>\n  signed-off-by: Z <z@example.org>\nREVIEWED-BY: R\n"
+               "Acked-by: A\nTested-by: T\nReported-by: P\nSuggested-by: S\n"
+               "Upstream-Author: Fake Person\n\nSee merge request OpenMW/openmw!5\n")
+        _, description, _ = upstream_sync.parse_message(raw, True)
+        self.assertEqual(description, "Thanks for the idea.\nUpstream Author: Fake Person")
+        for text in ("a <b@example.org> c", "a\tCo-Authored-By: Q <q@example.org>\nb"):
+            self.assertNotIn("@", upstream_sync.sanitize(text))
+        self.assertEqual(upstream_sync.clean_name("Eve <eve@example.org>"), "Eve")
+        self.assertEqual(upstream_sync.clean_name("eve@example.org"), "")
+        self.assertEqual(upstream_sync.clean_name("  <Eve>  Smith "), "Eve Smith")
+
+    def test_the_message_of_a_taken_unit_lists_cleaned_author_names_once_after_the_other_trailers(self):
+        unit = {"sha": "a" * 40, "title": "T", "description": "D", "mr_url": "https://gitlab.com/OpenMW/openmw/-/merge_requests/5"}
+        message = upstream_sync.Engine.message(None, unit, ["Eve <eve@example.org>", "Bob", "Bob", "x@example.org"])
+        self.assertEqual(message, "T\n\nD\n\nUpstream-Commit: %s\nUpstream-Merge-Request: %s\n"
+                                  "Upstream-Author: Eve\nUpstream-Author: Bob\n" % (unit["sha"], unit["mr_url"]))
 
     def test_title_description_and_merge_request_of_a_gitlab_merge_commit(self):
         raw = ("Merge branch 'x' into 'master'\n\nThe title\n\nThe description\nwith two lines\n\n"

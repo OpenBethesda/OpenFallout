@@ -22,7 +22,7 @@ Each unit gets one of six decisions:
 
 | Decision | Meaning |
 |---|---|
-| `taken` | The change applied and has one commit. The commit has upstream's author and the trailer `Upstream-Commit: <sha>`. |
+| `taken` | The change applied and has one commit. The commit has the trailer `Upstream-Commit: <sha>`. It is authored by whoever runs the tool and names the upstream authors in `Upstream-Author: <name>` lines, without email addresses, so that GitHub does not list them as contributors. |
 | `already-present` | The fork already has this change. |
 | `not-applicable` | The change does not apply to OpenFallout, for example because it only touches parts the fork does not carry. |
 | `conflict` | The merge did not apply cleanly. A person ports the change by hand. |
@@ -64,8 +64,8 @@ requests**. When it is off, `gh pr create` fails. The job then prints an error t
 compare link `https://github.com/OpenBethesda/OpenFallout/compare/master...upstream-sync/auto?expand=1`, and it fails.
 
 The ledger reaches master only when the pull request is merged. A closed pull request takes its decisions with it.
-Merge a sync pull request with a merge commit, as the merge queue does, and never squash it: each taken unit is its
-own commit with upstream's author and its `Upstream-Commit:` trailer, and a squash would lose both.
+Merge a sync pull request with a merge commit, as the merge queue does, and never squash it: each taken unit keeps
+its own commit and its `Upstream-Commit:` trailer, and a squash would lose both.
 
 ## Running it by hand on a Mac
 
