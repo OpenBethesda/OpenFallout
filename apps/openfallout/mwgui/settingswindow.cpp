@@ -670,6 +670,7 @@ namespace OFGui
 
         Settings::shaders().mForcePerPixelLighting.reset();
         Settings::shaders().mClassicFalloff.reset();
+        Settings::shaders().mParticlePointLighting.reset();
         Settings::shaders().mClampLighting.reset();
         Settings::shaders().mMatchSunlightToSun.reset();
         Settings::shaders().mLightRadiusMultiplier.reset();

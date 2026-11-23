@@ -31,5 +31,6 @@
 {"decision": "taken", "title": "Lowercase global variable names in Lua writes", "upstream": "25ae8f2b7e8f97dd05240a05a3c9033ca64896d5"}
 {"decision": "taken", "title": "Move misplaced NPC record fields out of CreatureRecord docs", "upstream": "a0dcc1de6a008999075c2fb5244f90a030d1ba63"}
 {"decision": "taken", "title": "Fix setting sliders skipping values", "upstream": "4e718b500ffee6657db90297d7b8a08a57d439bc"}
+{"decision": "taken", "title": "Apply lighting settings reset to Particle Point Lighting", "upstream": "93d2136e5dd0d2f3a706a7f785b3a69f3bcbba34"}
 {"decision": "skipped", "note": "Council review of the first import: it registers references by FormId at cell load, before the fork's Fallout script host has applied its queued enable and disable toggles (falloutscripts.cpp), so GetDisabled could read the wrong state. Needs a hand port with a play test.", "title": "Formid registry disabled refs", "upstream": "d0c0fc0e600703f979e110caf92cf869b6552114"}
 {"decision": "skipped", "note": "Dependency versions are the fork's own choice: the other half of this change is in CI/, which the fork does not take, so only the fallback download in extern/CMakeLists.txt would move.", "title": "[DEPS] Update to 2026-11-05, update osg commit", "upstream": "b8285cc95d19e080fe0532f9f5154b0c3f727735"}
