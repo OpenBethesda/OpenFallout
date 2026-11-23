@@ -64,8 +64,9 @@ namespace OFMechanics
             const OFWorld::Ptr& target);
         void updateCombatMove(float duration);
         void stopCombatMove();
-        void updateAttack(const OFWorld::Ptr& actor, CharacterController& characterController,
-            const ESM::Weapon* weapon, bool distantCombat, float duration);
+        void startAttackIfReady(const OFWorld::Ptr& actor, CharacterController& characterController,
+            const ESM::Weapon* weapon, bool distantCombat);
+        void updateAttack(const OFWorld::Ptr& actor, CharacterController& characterController);
         void stopAttack();
 
         void startFleeing();
