@@ -2,6 +2,7 @@
 
 #include <components/falloutscript/animationcommands.hpp>
 #include <components/falloutscript/dialogue.hpp>
+#include <components/falloutscript/savescripts.hpp>
 #include <components/falloutscript/savestate.hpp>
 #include <components/falloutscript/saveworld.hpp>
 #include <components/falloutscript/sayings.hpp>
@@ -622,6 +623,61 @@ namespace
         EXPECT_TRUE(line.mEnd);
         loaded.mDialogue.finishSaid({ doctor, line.mSpeakerBase }, line.mEndInfo, line.mTopic);
         EXPECT_THAT(loadedLog, ElementsAre("the quest goes on"));
+    }
+
+    TEST(FalloutScriptSaveWorldTest, theObjectiveThatTheEndOfALineShowsIsShownAfterALoadInTheMiddleOfTheLine)
+    {
+        // New Vegas, VCG01 stage 60: Doc Mitchell's line of VCG01Intro shows objective 30 with its end script, and the
+        // Vigor Tester's OnActivate does something only once that objective is shown. A game saved while the line was
+        // being said had the objective hidden and, before the lines were kept, never got it: the tester stayed shut
+        // (Mac round s2a-fix2-saveload-nv)
+        const auto setUp = [](Dialogue& game) {
+            FalloutScript::addQuestCommands(game.mInterpreter, game.mQuests);
+            game.mRecords.addTopic(psychTopic, "Intro");
+            ESM4::DialogInfo& response = game.mRecords.addInfo(psychResponse, psychTopic, "go and try the tester");
+            ScriptBuilder end;
+            const std::uint16_t slot = end.form(quest);
+            end.code(command(OpSetObjectiveDisplayed, arguments(3).add(refArg(slot)).add(intArg(30)).add(intArg(1))));
+            response.mEndScript = end.definition();
+            game.mQuests.reset();
+            game.mDialogue.reset();
+        };
+        const DialogueSpeaker who{ doctor, doctorBase };
+        Dialogue game;
+        setUp(game);
+        const FalloutScript::DialogueView view = game.mDialogue.say(who, psychTopic, 0, false, true);
+        ASSERT_EQ(view.mLines.size(), 1u);
+        Saying saying;
+        saying.mReference = doctor;
+        saying.mLines = { saidLine("go and try the tester", psychTopic, view.mLines.back().mInfo, true) };
+        saying.mStarted = true;
+        saying.mWait = 1.f;
+        ASSERT_FALSE(game.mQuests.objectiveDisplayed(quest, 30));
+
+        SaveWriter quests;
+        FalloutScript::writeQuests(game.mQuests, quests);
+        SaveWriter dialogue;
+        FalloutScript::writeDialogue(game.mDialogue, dialogue);
+        SaveWriter sayings;
+        FalloutScript::writeSayings({ saying }, {}, sayings);
+
+        Dialogue loaded;
+        setUp(loaded);
+        SaveReader questsIn(quests.bytes());
+        FalloutScript::readQuests(loaded.mQuests, questsIn, FalloutScript::questsSectionVersion);
+        SaveReader dialogueIn(dialogue.bytes());
+        FalloutScript::readDialogue(loaded.mDialogue, dialogueIn, FalloutScript::dialogueSectionVersion);
+        SaveReader sayingsIn(sayings.bytes());
+        const FalloutScript::SavedSayings saved
+            = FalloutScript::readSayings(sayingsIn, FalloutScript::sayingsSectionVersion);
+
+        // The objective is still hidden after the load, and is shown when the line that comes back is over
+        EXPECT_FALSE(loaded.mQuests.objectiveDisplayed(quest, 30));
+        ASSERT_EQ(saved.mSayings.size(), 1u);
+        const SaidLine& line = saved.mSayings.front().mLines.front();
+        ASSERT_EQ(line.mEndInfo, psychResponse);
+        loaded.mDialogue.finishSaid({ doctor, line.mSpeakerBase }, line.mEndInfo, line.mTopic);
+        EXPECT_TRUE(loaded.mQuests.objectiveDisplayed(quest, 30));
     }
 
     TEST(FalloutScriptSaveWorldTest, aSaveMadeBeforeTheLinesWereKeptLoadsAsItDid)

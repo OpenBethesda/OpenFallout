@@ -568,9 +568,14 @@ namespace FalloutScript
         out.boolean(mFemale.value_or(false));
         out.form(mRace);
         out.boolean(mLook.has_value());
-        if (!mLook)
-            return;
-        const FaceLook& look = *mLook;
+        if (mLook)
+            writeLook(*mLook, out);
+        // Version 2: the name the player typed, which the text of messages and lines puts in for &PCName;
+        out.string(mName);
+    }
+
+    void Chargen::writeLook(const FaceLook& look, SaveWriter& out)
+    {
         out.form(look.mRace);
         out.boolean(look.mFemale);
         out.form(look.mHair);
@@ -589,7 +594,7 @@ namespace FalloutScript
         }
     }
 
-    void Chargen::read(SaveReader& in, std::uint32_t)
+    void Chargen::read(SaveReader& in, std::uint32_t version)
     {
         std::optional<bool> female;
         const bool hasFemale = in.boolean();
@@ -641,11 +646,16 @@ namespace FalloutScript
             }
             look = std::move(read);
         }
+        // A save of before version 2 has no name: the game loads with none, as it did
+        std::string name;
+        if (version >= 2)
+            name = in.string();
         const std::lock_guard lock(mMutex);
         mFemale = female;
         mRace = race;
         mLook = std::move(look);
         mLostForms = lost;
+        mName = std::move(name);
         ++mRevision;
     }
 

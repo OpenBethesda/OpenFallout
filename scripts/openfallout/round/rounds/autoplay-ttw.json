@@ -1,0 +1,45 @@
+{
+  "name": "autoplay-ttw",
+  "game": "ttw",
+  "resolution": [
+    1280,
+    720
+  ],
+  "framerate": 20,
+  "limit": 3300,
+  "settings": {
+    "Sound": {
+      "master volume": "0"
+    }
+  },
+  "env": {
+    "OPENFALLOUT_HEADLESS_SOUND": "1"
+  },
+  "data": [
+    "../../autoplay"
+  ],
+  "extra_args": [
+    "--new-game",
+    "--content",
+    "autoplay.omwscripts"
+  ],
+  "expect_exit": 0,
+  "expect_log": [
+    "AUTOPLAY\\tintro done\\t",
+    "AUTOPLAY\\tintro over\\t"
+  ],
+  "forbid_log": [
+    "AUTOPLAY\\ttime is up",
+    "AUTOPLAY\\tlevel stuck",
+    "AUTOPLAY\\tscreens error\\t",
+    "AUTOPLAY\\ttalk wait error\\t",
+    "AUTOPLAY\\tfire error\\t",
+    "AUTOPLAY\\tfire done\\t(time|ammo|error)\\t",
+    "AUTOPLAY\\tgate\\t.*\\t(?!ok$)[^\\t]*$"
+  ],
+  "variants": [
+    {
+      "name": "plain"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "name": "saveload-fo3",
+  "game": "fo3",
+  "resolution": [
+    1280,
+    720
+  ],
+  "framerate": 20,
+  "limit": 3300,
+  "settings": {
+    "Sound": {
+      "master volume": "0"
+    }
+  },
+  "env": {
+    "OPENFALLOUT_HEADLESS_SOUND": "1"
+  },
+  "data": [
+    "../../autoplay"
+  ],
+  "extra_args": [
+    "--new-game",
+    "--content",
+    "Fallout3.esm",
+    "--content",
+    "autoplaysaves.omwscripts"
+  ],
+  "expect_exit": 0,
+  "expect_log": [
+    "AUTOPLAY\\tdigest\\tsaved\\t",
+    "AUTOPLAY\\tsave\\tautoplay-save\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+",
+    "AUTOPLAY\\tdigest\\tloaded\\t",
+    "AUTOPLAY\\tdigest\\tcheck ok",
+    "AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+",
+    "AUTOPLAY\\tintro done\\t",
+    "AUTOPLAY\\tintro over\\t",
+    "(?s)AUTOPLAY\\tdigest\\tsaved\\t.*AUTOPLAY\\tsave\\tautoplay-save\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+.*AUTOPLAY\\tload\\tautoplay-save\\t.*AUTOPLAY\\tdigest\\tloaded\\t.*AUTOPLAY\\tdigest\\tcheck ok.*AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+.*AUTOPLAY\\tintro over\\t"
+  ],
+  "expect_count": {
+    "AUTOPLAY\\tdigest\\tsaved\\t": 1,
+    "AUTOPLAY\\tload\\tautoplay-save\\t": 1,
+    "AUTOPLAY\\tdigest\\tcheck ok": 1,
+    "AUTOPLAY\\tsave\\tautoplay-again\\tok\\t": 1
+  },
+  "forbid_log": [
+    "AUTOPLAY\\tdigest\\tcheck MISMATCH",
+    "AUTOPLAY\\tload\\tautoplay-save\\tno slot",
+    "AUTOPLAY\\tload\\terror\\t",
+    "AUTOPLAY\\tsave\\tautoplay-(save|again)\\t(?!ok\\t)",
+    "Failed to save game: ",
+    "AUTOPLAY\\ttime is up",
+    "AUTOPLAY\\tlevel stuck",
+    "AUTOPLAY\\tscreens error\\t",
+    "AUTOPLAY\\ttalk wait error\\t",
+    "AUTOPLAY\\tfire error\\t",
+    "AUTOPLAY\\tfire done\\t(time|ammo|error)\\t",
+    "AUTOPLAY\\tgate\\t.*\\t(?!ok$)[^\\t]*$"
+  ],
+  "variants": [
+    {
+      "name": "plain"
+    }
+  ]
+}
