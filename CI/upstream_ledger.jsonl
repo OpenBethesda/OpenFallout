@@ -47,3 +47,4 @@
 {"decision": "taken", "title": "Provide more useful errors for navmesh.db failures", "upstream": "110cd9cb839ea61ac749ce82c674af4fab103636"}
 {"decision": "taken", "title": "Speed up saving by writing ESM records in one go", "upstream": "086836dd7678d71eb8ac7160cebcdea8119a5810"}
 {"decision": "taken", "title": "Improve CellRef's internal consistency", "upstream": "787892c6322c5a094c7780df66e760d9e7f5f786"}
+{"decision": "taken", "title": "Preload clothing and armor of NPCs without an inventory yet", "upstream": "7ef584c4d78c3b197864f105a78b6cc68f5dc85d"}
