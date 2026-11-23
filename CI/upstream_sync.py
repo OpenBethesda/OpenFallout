@@ -197,6 +197,11 @@ def sanitize(text):
     # `!123` is a GitLab merge request, but GitHub would not link it; a URL keeps the pointer.
     text = re.sub(r"(?<![\w!])!(\d+)\b", lambda m: "%s/%s/-/merge_requests/%s" % (GITLAB, GITLAB_PROJECT, m.group(1)),
                   text)
+    # A full GitHub address of an issue or a pull request links like `#123` and closes with "Fixes" before it, in any
+    # repository the person who merges may close issues in, ours included.
+    text = re.sub(r"https?://(?:www\.)?github\.com/([\w.-]+/[\w.-]+)/(issues|pull)/(\d+)(?:[/#?][\w/#?=&-]*)?",
+                  lambda m: "%s %s of %s" % ("issue" if m.group(2) == "issues" else "pull request", m.group(3),
+                                             m.group(1)), text)
     # `#123`, `owner/repo#123` and `GH-123` all link to (and "Closes" can close) an issue of THIS repository.
     text = re.sub(r"[\w.-]+/[\w.-]+#(\d+)\b", r"upstream issue \1", text)
     text = re.sub(r"(?<![\w&])#(\d+)\b", r"upstream issue \1", text)
@@ -580,7 +585,10 @@ class Engine:
         entries = read_ledger(self.repo.path)
         entries[unit["sha"]] = entry
         write_ledger(self.repo.path, entries, self.order())
-        self.repo.run("add", "-A", "--", LEDGER_FILE, *paths)
+        # The merge is staged already, deletions too, so the unit's paths are not named again: `git add` stops on a
+        # path the unit deleted. What is left to stage is the ledger and what the formatter rewrote in tracked files.
+        self.repo.run("add", "--", LEDGER_FILE)
+        self.repo.run("add", "-u")
         author, co_authors = self.authors(unit)
         env = {"GIT_AUTHOR_NAME": author["name"], "GIT_AUTHOR_EMAIL": author["email"],
                "GIT_AUTHOR_DATE": author["date"]}

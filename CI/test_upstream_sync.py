@@ -481,6 +481,18 @@ class CommandTest(WorldTest):
         self.assertEqual(self.read("new/two\nlines.txt"), "NEW odd name\n")
         self.assertFalse((self.fork / "new" / "two").exists())
 
+    def test_a_unit_that_deletes_a_file_we_carry_is_taken(self):
+        # The merge has already removed the file from the index and the working tree when the commit is made; naming
+        # the path to `git add` again stopped the whole sync ("pathspec did not match any files").
+        self.add_late_unit(110, {"docs/y.md": None, "old/b.txt": lines("b", 5, {5: "b 5 OLD changed"})},
+                           "Remove a page and change a line")
+        status, _, err = self.tool("sync", "--fetch")
+        self.assertEqual(status, 0, err)
+        self.assertEqual(self.decisions()[-1], "taken")
+        self.assertFalse((self.fork / "docs" / "y.md").exists())
+        self.assertIn("b 5 NEW changed", self.read("new/b.txt"))
+        self.assertEqual(git(self.fork, "status", "--porcelain"), "")
+
     def test_a_title_with_a_unicode_line_separator_keeps_the_ledger_readable(self):
         self.add_late_unit(110, {"old/e.txt": "OLD e\n"}, "Title with\u2028a line separator\u0085and a next line")
         self.assertEqual(self.tool("sync", "--fetch")[0], 0)
@@ -732,6 +744,9 @@ class SanitizeTest(unittest.TestCase):
     def test_nothing_in_upstream_text_links_or_notifies_on_github(self):
         cases = {
             "Closes #283": "Closes upstream issue 283",
+            "Fixes https://github.com/OpenBethesda/OpenFallout/issues/5.": "Fixes issue 5 of OpenBethesda/OpenFallout.",
+            "see https://github.com/OpenMW/openmw/pull/12#issuecomment-3": "see pull request 12 of OpenMW/openmw",
+            "code at https://github.com/OpenMW/openmw/commit/abc123": "code at https://github.com/OpenMW/openmw/commit/abc123",
             "Fixes #1, #2": "Fixes upstream issue 1, upstream issue 2",
             "see !5794 now": "see https://gitlab.com/OpenMW/openmw/-/merge_requests/5794 now",
             "thanks @carol and @dave-x": "thanks carol and dave-x",
