@@ -539,6 +539,7 @@ add_component_dir(serialization
 
 add_component_dir(sqlite3
     db
+    error
     request
     statement
     transaction

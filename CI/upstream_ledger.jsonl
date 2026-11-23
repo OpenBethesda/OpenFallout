@@ -44,3 +44,4 @@
 {"decision": "skipped", "note": "Dependency versions are the fork's own choice: the other half of this change is in CI/, which the fork does not take, so only the fallback download in extern/CMakeLists.txt would move.", "title": "[DEPS] Update to 2026-11-05, update osg commit", "upstream": "b8285cc95d19e080fe0532f9f5154b0c3f727735"}
 {"decision": "taken", "title": "Reduce drive write load to navmesh.db", "upstream": "06a88fe9926a7dcd6336054ecf199344e1f25d87"}
 {"decision": "taken", "title": "Initialize some uninitialized variables", "upstream": "c0790fc755a6782013adbed78a90f38e2c66915c"}
+{"decision": "taken", "title": "Provide more useful errors for navmesh.db failures", "upstream": "110cd9cb839ea61ac749ce82c674af4fab103636"}
