@@ -486,6 +486,7 @@ namespace OFGui
             createdClass.mDescription = mCreateClassDialog->getDescription();
             createdClass.mData.mSpecialization = mCreateClassDialog->getSpecializationId();
             createdClass.mData.mIsPlayable = true;
+            createdClass.mData.mServices = 0;
             createdClass.mRecordFlags = 0;
 
             std::vector<ESM::RefId> attributes = mCreateClassDialog->getFavoriteAttributes();
