@@ -169,7 +169,7 @@ namespace
         if (!stats.getMagicEffects().getOrDefault(ESM::MagicEffect::Soultrap).getMagnitude())
             return;
         const int creatureSoulValue = creature.get<ESM::Creature>()->mBase->mData.mSoul;
-        if (creatureSoulValue == 0)
+        if (creatureSoulValue <= 0)
             return;
         OFBase::World* const world = OFBase::Environment::get().getWorld();
         static const float fSoulgemMult
