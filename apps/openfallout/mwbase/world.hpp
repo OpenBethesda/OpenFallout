@@ -5,6 +5,7 @@
 
 #include <deque>
 #include <map>
+#include <optional>
 #include <set>
 #include <span>
 #include <string_view>
@@ -17,6 +18,8 @@
 #include "../mwworld/globalvariablename.hpp"
 #include "../mwworld/ptr.hpp"
 #include "../mwworld/spellcaststate.hpp"
+
+#include "../mwmechanics/movingtarget.hpp"
 
 #include "../mwrender/rendermode.hpp"
 
@@ -489,7 +492,8 @@ namespace OFBase
         virtual void castSpell(const OFWorld::Ptr& actor, bool scriptedSpell = false) = 0;
 
         virtual void launchMagicBolt(const ESM::RefId& spellId, const OFWorld::Ptr& caster,
-            const osg::Vec3f& fallbackDirection, ESM::RefNum item)
+            const osg::Vec3f& fallbackDirection, ESM::RefNum item,
+            const std::optional<OFMechanics::MovingTarget>& movingTarget)
             = 0;
         virtual void launchProjectile(OFWorld::Ptr& actor, OFWorld::Ptr& projectile, const osg::Vec3f& worldPos,
             const osg::Quat& orient, OFWorld::Ptr& bow, float speed, float attackStrength, float attackWindUp)

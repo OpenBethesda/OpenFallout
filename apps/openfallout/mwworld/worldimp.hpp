@@ -563,7 +563,7 @@ namespace OFWorld
         void castSpell(const OFWorld::Ptr& actor, bool manualSpell = false) override;
 
         void launchMagicBolt(const ESM::RefId& spellId, const OFWorld::Ptr& caster, const osg::Vec3f& fallbackDirection,
-            ESM::RefNum item) override;
+            ESM::RefNum item, const std::optional<OFMechanics::MovingTarget>& movingTarget) override;
         void launchProjectile(OFWorld::Ptr& actor, OFWorld::Ptr& projectile, const osg::Vec3f& worldPos,
             const osg::Quat& orient, OFWorld::Ptr& bow, float speed, float attackStrength, float attackWindUp) override;
         void updateProjectilesCasters() override;

@@ -137,7 +137,7 @@ namespace OFMechanics
             fallbackDirection = (mTarget.getRefData().getPosition().asVec3() + offset)
                 - (mCaster.getRefData().getPosition().asVec3());
 
-        OFBase::Environment::get().getWorld()->launchMagicBolt(mId, mCaster, fallbackDirection, mItem);
+        OFBase::Environment::get().getWorld()->launchMagicBolt(mId, mCaster, fallbackDirection, mItem, mMovingTarget);
     }
 
     void CastSpell::inflict(

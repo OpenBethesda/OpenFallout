@@ -1,6 +1,7 @@
 #ifndef OPENFALLOUT_MWWORLD_PROJECTILEMANAGER_H
 #define OPENFALLOUT_MWWORLD_PROJECTILEMANAGER_H
 
+#include <optional>
 #include <string>
 
 #include <osg/PositionAttitudeTransform>
@@ -10,6 +11,8 @@
 #include <components/vfs/pathutil.hpp>
 
 #include "../mwbase/soundmanager.hpp"
+
+#include "../mwmechanics/movingtarget.hpp"
 
 #include "ptr.hpp"
 
@@ -49,9 +52,10 @@ namespace OFWorld
         ProjectileManager(osg::Group* parent, Resource::ResourceSystem* resourceSystem,
             OFRender::RenderingManager* rendering, OFPhysics::PhysicsSystem* physics);
 
-        /// If caster is an actor, the actor's facing orientation is used. Otherwise fallbackDirection is used.
+        /// If caster is an actor, the bolt is aimed at movingTarget if given, otherwise the actor's facing orientation
+        /// is used. If caster is not an actor, fallbackDirection is used.
         void launchMagicBolt(const ESM::RefId& spellId, const OFWorld::Ptr& caster, const osg::Vec3f& fallbackDirection,
-            ESM::RefNum item);
+            ESM::RefNum item, const std::optional<OFMechanics::MovingTarget>& movingTarget);
 
         void launchProjectile(const OFWorld::Ptr& actor, const OFWorld::ConstPtr& projectile, const osg::Vec3f& pos,
             const osg::Quat& orient, const OFWorld::Ptr& bow, float speed, float attackStrength, float attackWindUp);
