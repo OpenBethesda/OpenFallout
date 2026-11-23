@@ -835,7 +835,10 @@ class Sync:
             "- " + link(r), "  - conflicted: " + code_list(r["entry"].get("paths", [])) if r["entry"].get("paths")
             else "  - conflicted: (no file listed)",
             *(["  - " + sanitize(r["entry"]["note"])] if r["entry"].get("note") else []),
-            "  - `python3 CI/upstream_sync.py pick %s`" % r["unit"]["sha"]])
+            # `pick` cannot build the two small trees of a unit whose files collide, so it gets no pick command.
+            "  - port it by hand, then `python3 CI/upstream_sync.py skip %s --reason \"ported by hand in <commit>\"`"
+            % r["unit"]["sha"] if "map to the same path" in r["entry"].get("note", "")
+            else "  - `python3 CI/upstream_sync.py pick %s`" % r["unit"]["sha"]])
         section("Check failed", "check-failed", lambda r: [
             # A check that prints nothing leaves no note (make_entry drops empty keys).
             "- " + link(r), "", "  ```",

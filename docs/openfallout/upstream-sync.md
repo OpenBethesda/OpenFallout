@@ -106,9 +106,10 @@ python3 CI/upstream_sync.py continue
 ```
 
 `pick` puts the unit into the working tree with conflict markers. `continue` commits it, once the conflicts are resolved
-and staged. To give up on the pick instead, run `python3 CI/upstream_sync.py abort`, which undoes it. `abort` and
-`continue` refuse to work on another branch or commit than the one the pick started on, so they cannot throw away
-unrelated work; `abort --forget` then only forgets the pick and touches no file.
+and staged. To give up on the pick instead, run `python3 CI/upstream_sync.py abort`. It puts the working tree back to
+the commit the pick started on, so it also discards any other edit made to tracked files since the pick: save such
+edits first. `abort` and `continue` refuse to work on another branch or commit than the one the pick started on;
+`abort --forget` then only forgets the pick and touches no file.
 
 To leave the unit out:
 

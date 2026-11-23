@@ -531,11 +531,16 @@ class CommandTest(WorldTest):
     def test_two_upstream_files_with_one_translated_path_are_a_conflict_for_a_person(self):
         # fake_path moves old/ to new/, so old/dup.txt and new/dup.txt both become new/dup.txt.
         self.add_late_unit(110, {"old/dup.txt": "OLD one\n", "new/dup.txt": "two\n"}, "Two files, one path")
-        status, out, err = self.tool("sync", "--fetch")
+        report = Path(self.root) / "r.md"
+        status, out, err = self.tool("sync", "--fetch", "--report", str(report))
         self.assertEqual(status, 0, err)
         entry = self.ledger()[-1]
         self.assertEqual(entry["decision"], "conflict")
         self.assertIn("two upstream files map to the same path new/dup.txt", entry["note"])
+        # `pick` refuses this unit, so the report must not send the reader to it.
+        text = report.read_text(encoding="utf-8")
+        self.assertNotIn("pick %s" % entry["upstream"], text)
+        self.assertIn("skip %s --reason" % entry["upstream"], text)
         self.assertIn("hand port", entry["note"])
         self.assertFalse((self.fork / "new" / "dup.txt").exists())
         status, _, err = self.tool("pick", self.units()[-1])
