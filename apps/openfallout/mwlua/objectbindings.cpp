@@ -549,7 +549,8 @@ namespace OFLua
                     {
                         DelayedRemovalFn delayedRemovalFn = *removeFn(ptr, count);
                         context.mLuaManager->addAction(
-                            [object, cell, pos, rot, count, delayedRemovalFn, placeOnGround] {
+                            [object, cell, pos, rot, count, delayedRemovalFn = std::move(delayedRemovalFn),
+                                placeOnGround] {
                                 OFWorld::Ptr oldPtr = object.ptr();
                                 oldPtr.getCellRef().setCount(count);
                                 OFWorld::Ptr newPtr = oldPtr.getClass().moveToCell(oldPtr, *cell);

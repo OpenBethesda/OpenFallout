@@ -49,3 +49,4 @@
 {"decision": "taken", "title": "Improve CellRef's internal consistency", "upstream": "787892c6322c5a094c7780df66e760d9e7f5f786"}
 {"decision": "taken", "title": "Preload clothing and armor of NPCs without an inventory yet", "upstream": "7ef584c4d78c3b197864f105a78b6cc68f5dc85d"}
 {"decision": "taken", "title": "Run CI Python scripts with uv", "upstream": "7abb1fb24ab9964ef85cf93d26154ca979dc1337"}
+{"decision": "taken", "title": "Move DelayedRemovalFn to address a Coverity issue", "upstream": "10b88689fa1105edc6f24959b041e5c0b12b2d11"}
