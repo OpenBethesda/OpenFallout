@@ -38,4 +38,5 @@
 {"decision": "taken", "title": "Fix AMD driver failing to properly handle div-by-0 in fog shader", "upstream": "0ca40dbaf5b530d15265b126d446240ea6c7851f"}
 {"decision": "taken", "title": "Format the time of day with the Calendar localization", "upstream": "9b61c18d06323153d553c5aa15ed651489ea07d0"}
 {"decision": "skipped", "note": "Council review of the first import: it registers references by FormId at cell load, before the fork's Fallout script host has applied its queued enable and disable toggles (falloutscripts.cpp), so GetDisabled could read the wrong state. Needs a hand port with a play test.", "title": "Formid registry disabled refs", "upstream": "d0c0fc0e600703f979e110caf92cf869b6552114"}
+{"decision": "taken", "title": "update sv translation of inventory", "upstream": "f7ef35e538738ffc01be3405b995dfd78e52ad86"}
 {"decision": "skipped", "note": "Dependency versions are the fork's own choice: the other half of this change is in CI/, which the fork does not take, so only the fallback download in extern/CMakeLists.txt would move.", "title": "[DEPS] Update to 2026-11-05, update osg commit", "upstream": "b8285cc95d19e080fe0532f9f5154b0c3f727735"}
