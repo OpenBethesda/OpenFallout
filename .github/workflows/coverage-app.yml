@@ -1,0 +1,56 @@
+name: Reusable instrumented app workflow
+
+# The packaged app built for clang source coverage (CI/before_script.macos.sh -P), as a disk image, for a person who
+# plays rounds on it and measures which engine code they reach (docs/openfallout/ci-reporting.md, "The instrumented
+# app"). Only the manual run of push.yml with `coverage-app` calls it: pull requests, pushes, the merge queue and release
+# tags never build it, so it costs them nothing. It is not signed with the release identity, not notarized, not checked
+# by CI/check_mac_package.py and never released; it shares no cache with the other jobs and stores none.
+on:
+  workflow_call:
+
+jobs:
+  CoverageApp:
+    name: Instrumented app
+    runs-on: macos-26
+    # A cold compiler cache: the app job took 34.9 min cold (20 Nov 2026); instrumentation adds to the compile.
+    timeout-minutes: 90
+    env:
+      CMAKE_BUILD_TYPE: RelWithDebInfo
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up the Mac build
+      id: setup
+      uses: ./.github/actions/mac-build-setup
+
+    # A key of its own and never saved: the objects are instrumented, and a manual run must not push the caches of the
+    # pull requests out of the budget.
+    - name: Prime ccache
+      id: compiler-cache
+      uses: hendrikmuhs/ccache-action@v1.2.25
+      with:
+        install: 'no'
+        key: macos-26-coverage-app
+        max-size: 1000M
+        save: false
+
+    - name: Configure the instrumented app
+      run: CI/before_script.macos.sh -C -k -P
+
+    - name: Build the instrumented app
+      env:
+        BUILD_DIR: build-coverage-app
+      run: CI/macos/build.sh all
+
+    # The ad hoc signature (cmake/SignMacApplications.cmake without an identity).
+    - name: Package the instrumented disk image
+      working-directory: build-coverage-app
+      run: cpack --config ./CPackConfig.cmake
+
+    - name: Store the instrumented disk image
+      uses: actions/upload-artifact@v7
+      with:
+        name: openfallout-macos-coverage-dmg-arm64-${{ github.sha }}
+        path: |
+          ${{ github.workspace }}/build-coverage-app/OpenFallout-*.dmg
+        if-no-files-found: error
