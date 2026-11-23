@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-#include <osg/ComputeBoundsVisitor>
 #include <osg/Group>
 #include <osg/Timer>
 
@@ -926,19 +925,9 @@ namespace OFWorld
 
     osg::Matrixf World::getActorHeadTransform(const OFWorld::ConstPtr& actor) const
     {
-        const OFRender::Animation* anim = mRendering->getAnimation(actor);
-        if (anim)
-        {
-            const osg::Node* node = anim->getNode("Head");
-            if (!node)
-                node = anim->getNode("Bip01 Head");
-            if (node)
-            {
-                osg::NodePathList nodepaths = node->getParentalNodePaths();
-                if (!nodepaths.empty())
-                    return osg::computeLocalToWorld(nodepaths[0]);
-            }
-        }
+        if (const OFRender::Animation* anim = mRendering->getAnimation(actor))
+            if (std::optional<osg::Matrixf> transform = anim->getHeadWorldTransform())
+                return *transform;
         return osg::Matrixf::translate(actor.getRefData().getPosition().asVec3());
     }
 
@@ -1653,13 +1642,8 @@ namespace OFWorld
             if (!object.isEmpty())
             {
                 osg::BoundingBox bb = mPhysics->getBoundingBox(object);
-                if (!bb.valid() && object.getRefData().getBaseNode())
-                {
-                    osg::ComputeBoundsVisitor computeBoundsVisitor;
-                    computeBoundsVisitor.setTraversalMask(~(OFRender::Mask_ParticleSystem | OFRender::Mask_Effect));
-                    object.getRefData().getBaseNode()->accept(computeBoundsVisitor);
-                    bb = computeBoundsVisitor.getBoundingBox();
-                }
+                if (!bb.valid())
+                    bb = mRendering->getObjectBounds(object, OFRender::Mask_ParticleSystem | OFRender::Mask_Effect);
                 const osg::Vec2f pos = mRendering->getScreenCoords(bb);
                 OFBase::Environment::get().getWindowManager()->setFocusObjectScreenCoords(pos.x(), pos.y());
             }
@@ -1967,10 +1951,7 @@ namespace OFWorld
         if (!object.getClass().isActor() && adjustPos && object.getRefData().getBaseNode())
         {
             // Adjust position so the location we wanted ends up in the middle of the object bounding box
-            osg::ComputeBoundsVisitor computeBounds;
-            computeBounds.setTraversalMask(~OFRender::Mask_ParticleSystem);
-            object.getRefData().getBaseNode()->accept(computeBounds);
-            osg::BoundingBox bounds = computeBounds.getBoundingBox();
+            osg::BoundingBox bounds = mRendering->getObjectBounds(object, OFRender::Mask_ParticleSystem);
             if (bounds.valid())
             {
                 ESM::Position pos = object.getRefData().getPosition();

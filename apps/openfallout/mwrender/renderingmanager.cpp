@@ -1172,6 +1172,17 @@ namespace OFRender
         mScreenshotManager->screenshot(image, w, h);
     }
 
+    osg::BoundingBox RenderingManager::getObjectBounds(const OFWorld::Ptr& ptr, unsigned int ignoreMask) const
+    {
+        SceneUtil::PositionAttitudeTransform* baseNode = ptr.getRefData().getBaseNode();
+        if (baseNode == nullptr)
+            return {};
+        osg::ComputeBoundsVisitor computeBounds;
+        computeBounds.setTraversalMask(~ignoreMask);
+        baseNode->accept(computeBounds);
+        return computeBounds.getBoundingBox();
+    }
+
     osg::Vec2f RenderingManager::getScreenCoords(const osg::BoundingBox& bb)
     {
         if (bb.valid())
