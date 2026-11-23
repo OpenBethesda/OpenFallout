@@ -336,7 +336,7 @@ namespace SceneUtil
     void RigGeometry::setBoneInfo(std::vector<BoneInfo>&& bones)
     {
         if (!mData)
-            mData = new InfluenceData;
+            mData = std::make_shared<InfluenceData>();
 
         mData->mBones = std::move(bones);
     }
@@ -344,7 +344,7 @@ namespace SceneUtil
     void RigGeometry::setInfluences(const std::vector<BoneWeights>& influences)
     {
         if (!mData)
-            mData = new InfluenceData;
+            mData = std::make_shared<InfluenceData>();
 
         std::map<BoneWeights, VertexList> influencesToVertices;
         for (size_t i = 0; i < influences.size(); i++)
@@ -358,14 +358,14 @@ namespace SceneUtil
     void RigGeometry::setTransform(osg::Matrixf&& transform)
     {
         if (!mData)
-            mData = new InfluenceData;
+            mData = std::make_shared<InfluenceData>();
         mData->mTransform = transform;
     }
 
     void RigGeometry::setRootBone(std::string_view name)
     {
         if (!mData)
-            mData = new InfluenceData;
+            mData = std::make_shared<InfluenceData>();
         mData->mRootBone = name;
     }
 
