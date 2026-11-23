@@ -41,14 +41,15 @@ namespace OFLua
 
     void setGlobalVariableValue(const std::string_view globalId, float value)
     {
-        char varType = OFBase::Environment::get().getWorld()->getGlobalVariableType(globalId);
+        const std::string name = Misc::StringUtils::lowerCase(globalId);
+        char varType = OFBase::Environment::get().getWorld()->getGlobalVariableType(name);
         if (varType == 'f')
         {
-            OFBase::Environment::get().getWorld()->setGlobalFloat(globalId, value);
+            OFBase::Environment::get().getWorld()->setGlobalFloat(name, value);
         }
         else if (varType == 's' || varType == 'l')
         {
-            OFBase::Environment::get().getWorld()->setGlobalInt(globalId, static_cast<int>(value));
+            OFBase::Environment::get().getWorld()->setGlobalInt(name, static_cast<int>(value));
         }
     }
 
