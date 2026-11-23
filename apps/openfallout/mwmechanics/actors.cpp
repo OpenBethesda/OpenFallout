@@ -1778,7 +1778,7 @@ namespace OFMechanics
             }
 
             killDeadActors();
-            updateSneaking(playerCharacter, duration);
+            updateSneaking(playerCharacter, duration, cachedAllies);
         }
     }
 
@@ -1949,23 +1949,26 @@ namespace OFMechanics
         fastForwardAi();
     }
 
-    void Actors::updateSneaking(CharacterController* ctrl, float duration)
+    void Actors::updateSneaking(CharacterController* ctrl, float duration, SidingCache& cachedAllies)
     {
+        const auto windowManager = OFBase::Environment::get().getWindowManager();
         if (!ctrl)
         {
-            OFBase::Environment::get().getWindowManager()->setSneakVisibility(false);
+            windowManager->setSneakVisibility(false);
             return;
         }
 
         const OFWorld::Ptr player = getPlayer();
+        const auto mechanicsManager = OFBase::Environment::get().getMechanicsManager();
 
-        if (!OFBase::Environment::get().getMechanicsManager()->isSneaking(player))
+        if (!mechanicsManager->isSneaking(player))
         {
-            OFBase::Environment::get().getWindowManager()->setSneakVisibility(false);
+            mSneakSkillTimer = 0.f;
+            windowManager->setSneakVisibility(false);
             return;
         }
 
-        OFBase::World* const world = OFBase::Environment::get().getWorld();
+        const auto world = OFBase::Environment::get().getWorld();
         const OFWorld::Store<ESM::GameSetting>& gmst = world->getStore().get<ESM::GameSetting>();
         static const float fSneakUseDist = gmst.find("fSneakUseDist")->mValue.getFloat();
         static const float fSneakUseDelay = gmst.find("fSneakUseDelay")->mValue.getFloat();
@@ -1973,56 +1976,50 @@ namespace OFMechanics
         if (mSneakTimer >= fSneakUseDelay)
             mSneakTimer = 0.f;
 
-        if (mSneakTimer == 0.f)
+        // Set when an NPC is within line of sight and distance, but is still unaware. Used for skill progress.
+        bool avoidedNotice = false;
+        bool detected = false;
+
+        std::vector<OFWorld::Ptr> observers;
+        const osg::Vec3f position(player.getRefData().getPosition().asVec3());
+        const float radius = std::min(fSneakUseDist, static_cast<float>(Settings::game().mActorsProcessingRange));
+        getObjectsInRange(position, radius, observers);
+
+        const auto& sidingActors = cachedAllies.getActorsSidingWith(player);
+
+        for (const OFWorld::Ptr& observer : observers)
         {
-            // Set when an NPC is within line of sight and distance, but is still unaware. Used for skill progress.
-            bool avoidedNotice = false;
-            bool detected = false;
+            if (observer == player || observer.getClass().getCreatureStats(observer).isDead())
+                continue;
 
-            std::vector<OFWorld::Ptr> observers;
-            const osg::Vec3f position(player.getRefData().getPosition().asVec3());
-            const float radius = std::min(fSneakUseDist, static_cast<float>(Settings::game().mActorsProcessingRange));
-            getObjectsInRange(position, radius, observers);
+            if (sidingActors.find(observer) != sidingActors.cend())
+                continue;
 
-            std::set<OFWorld::Ptr> sidingActors;
-            getActorsSidingWith(player, sidingActors);
+            if (!world->getLOS(player, observer))
+                continue;
 
-            for (const OFWorld::Ptr& observer : observers)
+            if (mechanicsManager->awarenessCheck(player, observer))
             {
-                if (observer == player || observer.getClass().getCreatureStats(observer).isDead())
-                    continue;
-
-                if (sidingActors.find(observer) != sidingActors.cend())
-                    continue;
-
-                if (world->getLOS(player, observer))
-                {
-                    if (OFBase::Environment::get().getMechanicsManager()->awarenessCheck(player, observer))
-                    {
-                        detected = true;
-                        avoidedNotice = false;
-                        OFBase::Environment::get().getWindowManager()->setSneakVisibility(false);
-                        break;
-                    }
-                    else
-                    {
-                        avoidedNotice = true;
-                    }
-                }
+                detected = true;
+                avoidedNotice = false;
+                break;
             }
 
-            if (mSneakSkillTimer >= fSneakUseDelay)
-                mSneakSkillTimer = 0.f;
-
-            if (avoidedNotice && mSneakSkillTimer == 0.f)
-                player.getClass().skillUsageSucceeded(player, ESM::Skill::Sneak, ESM::Skill::Sneak_AvoidNotice);
-
-            if (!detected)
-                OFBase::Environment::get().getWindowManager()->setSneakVisibility(true);
+            avoidedNotice = true;
         }
 
+        // Sneaking time accumulates even with no observer in range.
+        mSneakSkillTimer = detected ? 0.f : mSneakSkillTimer + duration;
+        if (avoidedNotice && mSneakSkillTimer > fSneakUseDelay)
+        {
+            mSneakSkillTimer -= fSneakUseDelay;
+            player.getClass().skillUsageSucceeded(player, ESM::Skill::Sneak, ESM::Skill::Sneak_AvoidNotice);
+        }
+
+        if (mSneakTimer == 0.f)
+            windowManager->setSneakVisibility(!detected);
+
         mSneakTimer += duration;
-        mSneakSkillTimer += duration;
     }
 
     int Actors::getHoursToRest(const OFWorld::Ptr& ptr) const
@@ -2355,6 +2352,7 @@ namespace OFMechanics
         mIndex.clear();
         mActors.clear();
         mDeathCount.clear();
+        mSneakSkillTimer = 0.f;
     }
 
     void Actors::updateMagicEffects(const OFWorld::Ptr& ptr) const
@@ -2436,7 +2434,7 @@ namespace OFMechanics
     const std::set<OFWorld::Ptr>& SidingCache::getActorsSidingWith(const OFWorld::Ptr& actor)
     {
         // If we have already found actor's allies, use the cache
-        auto search = mCache.find(actor);
+        const auto search = mCache.find(actor);
         if (search != mCache.end())
             return search->second;
         std::set<OFWorld::Ptr>& out = mCache[actor];
@@ -2454,9 +2452,7 @@ namespace OFMechanics
         {
             if (iter == actor)
                 continue;
-            search = mCache.find(iter);
-            if (search == mCache.end())
-                mCache.emplace(iter, out);
+            mCache[iter].insert(out.begin(), out.end());
         }
         return out;
     }
