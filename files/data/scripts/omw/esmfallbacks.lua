@@ -1,3 +1,6 @@
+-- The records of Morrowind that the C++ still reads for the Interface windows (attribute and skill names and icons, default
+-- GMSTs, the fallback= lines of openfallout.cfg). It came from files/data-mw, which is gone; step 4 of the removal of the
+-- Morrowind code (the Interface windows) removes it.
 local content = require('openfallout.content')
 
 local function asNumber(value)
