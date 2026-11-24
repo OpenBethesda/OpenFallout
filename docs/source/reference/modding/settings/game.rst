@@ -45,15 +45,6 @@ Game Settings
    If this setting is true, the reach and speed of weapons will show on their tooltip.
 
 .. omw-setting::
-   :title: show enchant chance
-   :type: boolean
-   :range: true, false
-   :default: false
-   :location: :bdg-success:`Launcher > Settings > Interface`
-
-   Whether or not the chance of success will be displayed in the enchanting menu.
-
-.. omw-setting::
    :title: best attack
    :type: boolean
    :range: true, false
@@ -221,17 +212,6 @@ Game Settings
    Attention: animations from AnimKit have their own format and are not supposed to be directly loaded in-game!
 
 .. omw-setting::
-   :title: barter disposition change is permanent
-   :type: boolean
-   :range: true, false
-   :default: false
-   :location: :bdg-success:`Launcher > Settings > Gameplay`
-
-   If this setting is true, 
-   disposition change of merchants caused by trading will be permanent and won't be discarded upon exiting dialogue with them.
-   This imitates the option that Morrowind Code Patch offers.
-
-.. omw-setting::
    :title: only appropriate ammunition bypasses resistance
    :type: boolean
    :range: true, false
@@ -276,22 +256,6 @@ Game Settings
    If this setting is true, race weight is ignored in the calculations which allows for a movement behavior
    equivalent to the one introduced by the equivalent Morrowind Code Patch feature.
    This makes the movement speed behavior more fair between different races.
-
-.. omw-setting::
-   :title: projectiles enchant multiplier
-   :type: float32
-   :range: [0, 1]
-   :default: 0.0
-   
-
-   The value of this setting determines how many projectiles (thrown weapons, arrows and bolts) you can enchant at once according to the following formula:
-
-   .. math::
-
-      \text{count} = \frac{\text{soul gem charge} \cdot \text{projectiles enchant multiplier}}{\text{enchantment strength}}
-
-   A value of 0 means that you can only enchant one projectile.
-   If you want to have Morrowind Code Patch-like count of projectiles being enchanted at once, set this value to 0.25 (i.e. 25% of the charge).
 
 .. omw-setting::
    :title: uncapped damage fatigue
@@ -374,19 +338,6 @@ Game Settings
 
    Regulates strength of the "swim upward correction" effect (if enabled).
    Makes player swim a bit upward (or downward in case of negative value) from the line of sight. Recommended range of values is from 0.0 to 0.25.
-
-.. omw-setting::
-   :title: trainers training skills based on base skill
-   :type: boolean
-   :range: true, false
-   :default: false
-   :location: :bdg-success:`Launcher > Settings > Gameplay`
-
-   The trainers in Morrowind choose their proposed training skills based on their 3 best attributes.
-
-   If disabled then the 3 best skills of trainers and the training limits take into account fortified/drained trainer skill.
-
-   If enabled then the 3 best skills of trainers and the training limits are based on the trainer base skills.
 
 .. omw-setting::
    :title: always allow stealing from knocked out actors

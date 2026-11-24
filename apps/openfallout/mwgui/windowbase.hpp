@@ -129,15 +129,6 @@ namespace OFGui
         DragAndDrop* mDrag;
         bool mTransparent;
     };
-
-    class BookWindowBase : public WindowBase
-    {
-    public:
-        BookWindowBase(std::string_view parLayout);
-
-    protected:
-        float adjustButton(std::string_view name);
-    };
 }
 
 #endif

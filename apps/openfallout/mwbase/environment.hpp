@@ -30,7 +30,6 @@ namespace OFScript
 namespace OFBase
 {
     class World;
-    class DialogueManager;
     class SoundManager;
     class MechanicsManager;
     class InputManager;
@@ -54,7 +53,6 @@ namespace OFBase
         OFScript::FalloutScripts* mFalloutScripts = nullptr;
         WindowManager* mWindowManager = nullptr;
         MechanicsManager* mMechanicsManager = nullptr;
-        DialogueManager* mDialogueManager = nullptr;
         InputManager* mInputManager = nullptr;
         StateManager* mStateManager = nullptr;
         LuaManager* mLuaManager = nullptr;
@@ -88,8 +86,6 @@ namespace OFBase
 
         void setMechanicsManager(MechanicsManager& value) { mMechanicsManager = &value; }
 
-        void setDialogueManager(DialogueManager& value) { mDialogueManager = &value; }
-
         void setInputManager(InputManager& value) { mInputManager = &value; }
 
         void setStateManager(StateManager& value) { mStateManager = &value; }
@@ -116,8 +112,6 @@ namespace OFBase
         Misc::NotNullPtr<WindowManager> getWindowManager() const { return mWindowManager; }
 
         Misc::NotNullPtr<MechanicsManager> getMechanicsManager() const { return mMechanicsManager; }
-
-        Misc::NotNullPtr<DialogueManager> getDialogueManager() const { return mDialogueManager; }
 
         Misc::NotNullPtr<InputManager> getInputManager() const { return mInputManager; }
 

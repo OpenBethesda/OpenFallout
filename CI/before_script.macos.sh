@@ -6,6 +6,7 @@ KEEP=""
 USE_WERROR=""
 TEST_TREE=""
 METAL_TREE=""
+COVERAGE_APP_TREE=""
 BUILD_DIR="build"
 DEPENDENCIES_ROOT_PATH="/tmp/openmw-deps"
 BUNDLE_ANGLE_ROOT=""
@@ -19,7 +20,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 source ./CI/macos/deps_versions.sh
 
-while getopts VCkETMd:a:o:A: ARG
+while getopts VCkETMPd:a:o:A: ARG
 do
     case $ARG in
 	V )
@@ -42,6 +43,10 @@ do
 	    METAL_TREE=true
 	    BUILD_DIR="build-metal" ;;
 
+	P )
+	    COVERAGE_APP_TREE=true
+	    BUILD_DIR="build-coverage-app" ;;
+
         a )
             ANGLE_ROOT_PATH="$OPTARG"
             ;;
@@ -59,7 +64,7 @@ do
 
 	* )
 	    cat <<EOF
-Usage: $0 [-VCkETMdaoA]
+Usage: $0 [-VCkETMPdaoA]
 Options:
 	-C
 		Use ccache.
@@ -81,6 +86,10 @@ Options:
 		Configure the Metal tree in build-metal instead: the Metal build of the engine (OpenGL ES 3
 		through ANGLE), Debug without coverage, the engine and the two test suites, no tools. It is
 		never packaged. It cannot be combined with -T.
+	-P
+		Configure the instrumented app tree in build-coverage-app instead: the packaged app
+		(RelWithDebInfo) built for clang source coverage, for the manual coverage-app run of
+		push.yml only (docs/openfallout/ci-reporting.md). It cannot be combined with -T or -M.
 	-a <dir>
 		ANGLE's folder for -M (lib/libEGL.dylib, lib/libGLESv2.dylib, include/), default /tmp/openfallout-angle.
 	-o <dir>
@@ -93,6 +102,11 @@ done
 
 if [[ -n $TEST_TREE && -n $METAL_TREE ]]; then
     echo "-M and -T cannot be combined: the coverage tree is the desktop OpenGL build" >&2
+    exit 1
+fi
+
+if [[ -n $COVERAGE_APP_TREE && ( -n $TEST_TREE || -n $METAL_TREE ) ]]; then
+    echo "-P cannot be combined with -T or -M: it is the packaged OpenGL app, instrumented" >&2
     exit 1
 fi
 
@@ -139,6 +153,15 @@ if [[ -n $TEST_TREE ]]; then
         -D BUILD_WITH_CODE_COVERAGE=ON
         -D BUILD_COMPONENTS_TESTS=ON
         -D BUILD_OPENFALLOUT_TESTS=ON
+    )
+fi
+
+# The instrumented app (-P) is the packaged app with clang source coverage (-fprofile-instr-generate -fcoverage-mapping,
+# cmake/OpenFalloutMacros.cmake), so that a manual run can measure which engine code a played round reaches. It keeps
+# the app's build type and tools; only the manual coverage-app run of push.yml builds it, never a pull request or push.
+if [[ -n $COVERAGE_APP_TREE ]]; then
+    BUILD_OPTS+=(
+        -D BUILD_WITH_CODE_COVERAGE=ON
     )
 fi
 

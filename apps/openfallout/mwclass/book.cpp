@@ -10,10 +10,11 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwworld/actionread.hpp"
+#include "../mwworld/actiontake.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/failedaction.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include "../mwrender/objects.hpp"
@@ -58,7 +59,8 @@ namespace OFClass
         if (werewolfAction)
             return werewolfAction;
 
-        return std::make_unique<OFWorld::ActionRead>(ptr);
+        // A book is picked up, as a book of Fallout is (the book window of Morrowind is gone)
+        return std::make_unique<OFWorld::ActionTake>(ptr);
     }
 
     ESM::RefId Book::getScript(const OFWorld::ConstPtr& ptr) const
@@ -145,7 +147,7 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Book::use(const OFWorld::Ptr& ptr, bool force) const
     {
-        return std::make_unique<OFWorld::ActionRead>(ptr);
+        return std::make_unique<OFWorld::NullAction>();
     }
 
     OFWorld::Ptr Book::copyToCellImpl(const OFWorld::ConstPtr& ptr, OFWorld::CellStore& cell) const

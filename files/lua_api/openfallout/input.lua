@@ -172,7 +172,6 @@
 -- @field [parent=#ACTION] #number QuickKey8
 -- @field [parent=#ACTION] #number QuickKey9
 -- @field [parent=#ACTION] #number QuickKey10
--- @field [parent=#ACTION] #number QuickKeysMenu
 -- @field [parent=#ACTION] #number ToggleHUD
 -- @field [parent=#ACTION] #number ToggleDebug
 -- @field [parent=#ACTION] #number ZoomIn

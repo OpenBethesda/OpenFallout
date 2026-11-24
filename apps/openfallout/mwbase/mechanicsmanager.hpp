@@ -296,8 +296,6 @@ namespace OFBase
         /// If the observer is a non-NPC, check all actors in AI processing distance as observers
         virtual bool isActorDetected(const OFWorld::Ptr& actor, const OFWorld::Ptr& observer) = 0;
 
-        virtual void confiscateStolenItems(const OFWorld::Ptr& player, const OFWorld::Ptr& targetContainer) = 0;
-
         /// List the owners that the player has stolen this item from (the owner can be an NPC or a faction).
         /// <Owner, item count>
         virtual std::vector<std::pair<ESM::RefId, int>> getStolenItemOwners(const ESM::RefId& itemid) = 0;

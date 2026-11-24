@@ -114,7 +114,7 @@ The unit tests never load the Lua scripts and l10n files under `files/data`, so 
 
 - The log of the stage B binary matches the stage A binary line for line (297 lines, after removing timestamps, paths and the revision; the stage A log was read with the `OMW*` l10n context names mapped to `OF*`). Only the order of two lines written by different threads differs.
 - As a control, one `require('openfallout.ui')` in a copy of the resources was changed back to `openmw.ui`. The script fails and prints `Can't start Menu[scripts/omw/settings/menu.lua]; Lua error: module not found: openmw.ui` and the three scripts that depend on it.
-- Limit: only scripts for the `MENU` context start, because the synthetic file has no cell to start a new game in. The `GLOBAL`, `PLAYER` and `NPC` scripts are listed in the log but not started. For them stage B relies on a static check that every `require` id in `files/data` and `files/data-mw` is either registered in C++ or a file in the virtual file system, and that every `l10n(...)` context and `#{Context:Key}` reference has a matching directory.
+- Limit: only scripts for the `MENU` context start, because the synthetic file has no cell to start a new game in. The `GLOBAL`, `PLAYER` and `NPC` scripts are listed in the log but not started. For them stage B relies on a static check that every `require` id in `files/data` is either registered in C++ or a file in the virtual file system, and that every `l10n(...)` context and `#{Context:Key}` reference has a matching directory.
 
 ### The Fallout start smoke test
 

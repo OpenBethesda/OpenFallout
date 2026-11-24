@@ -141,15 +141,6 @@ namespace OFLua
                 scripts->onSkillLevelUp(event.mSkill, event.mSource);
         }
 
-        void operator()(const OnJailTimeServed& event) const
-        {
-            OFWorld::Ptr actor = getPtr(event.mActor);
-            if (actor.isEmpty())
-                return;
-            if (auto* scripts = getLocalScripts(actor))
-                scripts->onJailTimeServed(event.mDays);
-        }
-
     private:
         OFWorld::Ptr getPtr(ESM::RefNum id) const
         {

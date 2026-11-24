@@ -22,7 +22,6 @@ namespace Settings
         SettingValue<int> mShowOwned{ mIndex, "Game", "show owned", makeEnumSanitizerInt({ 0, 1, 2, 3 }) };
         SettingValue<bool> mShowProjectileDamage{ mIndex, "Game", "show projectile damage" };
         SettingValue<bool> mShowMeleeInfo{ mIndex, "Game", "show melee info" };
-        SettingValue<bool> mShowEnchantChance{ mIndex, "Game", "show enchant chance" };
         SettingValue<bool> mBestAttack{ mIndex, "Game", "best attack" };
         SettingValue<int> mDifficulty{ mIndex, "Game", "difficulty", makeClampSanitizerInt(-500, 500) };
         // We have to cap it since using high values (larger than 7168) will make some quests harder or impossible to
@@ -40,8 +39,6 @@ namespace Settings
         SettingValue<bool> mRebalanceSoulGemValues{ mIndex, "Game", "rebalance soul gem values" };
         SettingValue<bool> mUseAdditionalAnimSources{ mIndex, "Game", "use additional anim sources" };
         SettingValue<bool> mSmoothAnimTransitions{ mIndex, "Game", "smooth animation transitions" };
-        SettingValue<bool> mBarterDispositionChangeIsPermanent{ mIndex, "Game",
-            "barter disposition change is permanent" };
         SettingValue<int> mStrengthInfluencesHandToHand{ mIndex, "Game", "strength influences hand to hand",
             makeEnumSanitizerInt({ 0, 1, 2 }) };
         SettingValue<bool> mWeaponSheathing{ mIndex, "Game", "weapon sheathing" };
@@ -50,8 +47,6 @@ namespace Settings
             "only appropriate ammunition bypasses resistance" };
         SettingValue<bool> mUseMagicItemAnimations{ mIndex, "Game", "use magic item animations" };
         SettingValue<bool> mNormaliseRaceSpeed{ mIndex, "Game", "normalise race speed" };
-        SettingValue<float> mProjectilesEnchantMultiplier{ mIndex, "Game", "projectiles enchant multiplier",
-            makeClampSanitizerFloat(0, 1) };
         SettingValue<bool> mUncappedDamageFatigue{ mIndex, "Game", "uncapped damage fatigue" };
         SettingValue<bool> mTurnToMovementDirection{ mIndex, "Game", "turn to movement direction" };
         SettingValue<bool> mSmoothMovement{ mIndex, "Game", "smooth movement" };
@@ -61,8 +56,6 @@ namespace Settings
         SettingValue<bool> mNPCsGiveWay{ mIndex, "Game", "NPCs give way" };
         SettingValue<bool> mSwimUpwardCorrection{ mIndex, "Game", "swim upward correction" };
         SettingValue<float> mSwimUpwardCoef{ mIndex, "Game", "swim upward coef", makeClampSanitizerFloat(-1, 1) };
-        SettingValue<bool> mTrainersTrainingSkillsBasedOnBaseSkill{ mIndex, "Game",
-            "trainers training skills based on base skill" };
         SettingValue<bool> mAlwaysAllowStealingFromKnockedOutActors{ mIndex, "Game",
             "always allow stealing from knocked out actors" };
         SettingValue<bool> mGraphicHerbalism{ mIndex, "Game", "graphic herbalism" };

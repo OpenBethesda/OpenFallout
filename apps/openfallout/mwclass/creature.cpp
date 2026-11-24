@@ -33,7 +33,6 @@
 
 #include "../mwlua/localscripts.hpp"
 
-#include "../mwworld/actionopen.hpp"
 #include "../mwworld/actiontalk.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/containerstore.hpp"
@@ -41,6 +40,7 @@
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/failedaction.hpp"
 #include "../mwworld/inventorystore.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 #include "../mwworld/worldmodel.hpp"
 
@@ -434,11 +434,11 @@ namespace OFClass
         {
             // by default user can loot non-fighting actors during death animation
             if (Settings::game().mCanLootDuringDeathAnimation)
-                return std::make_unique<OFWorld::ActionOpen>(ptr);
+                return std::make_unique<OFWorld::NullAction>();
 
             // otherwise wait until death animation
             if (stats.isDeathAnimationFinished())
-                return std::make_unique<OFWorld::ActionOpen>(ptr);
+                return std::make_unique<OFWorld::NullAction>();
         }
         else if (!stats.getKnockedDown())
             return std::make_unique<OFWorld::ActionTalk>(ptr);

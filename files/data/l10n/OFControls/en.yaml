@@ -68,8 +68,6 @@ Inventory_description: "Open the inventory."
 Journal_name: "Journal"
 Journal_description: "Open the journal."
 
-QuickKeysMenu_name: "Quick Menu"
-QuickKeysMenu_description: "Open the quick keys menu."
 
 SmoothMoveForward_name: "Smooth Move Forward"
 SmoothMoveForward_description: "Forward movement adjusted for smooth Walk-Run transitions."

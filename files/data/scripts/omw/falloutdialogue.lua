@@ -1,6 +1,6 @@
 -- The conversation of the player with a character of Fallout 3 or New Vegas: what the character says and the topics the
 -- player picks from. The rules and the state of the conversation are the engine's (core.conversation); this script shows
--- them in the window "Dialogue", which it takes over from the one of Morrowind for content that has dialogue of Fallout.
+-- them in the window of the mode "DialogMenu" (the game's name of its dialogue menu), which only this script draws.
 local core = require('openfallout.core')
 local input = require('openfallout.input')
 local async = require('openfallout.async')
@@ -62,7 +62,7 @@ local function destroyElement()
 end
 
 local function closeWindow()
-    I.UI.removeMode('Dialogue')
+    I.UI.removeMode('DialogMenu')
 end
 
 local advance, render, skipLine, activateRow
@@ -594,15 +594,16 @@ local function hide()
     destroyElement()
 end
 
--- Windows are replaced only when the loaded content has the dialogue of Fallout: the dialogue of Morrowind keeps its own
+-- The window (DialogMenu of the games, a window only this script has) is there when the loaded content has the dialogue
+-- of Fallout
 if conversation.available() then
-    I.UI.registerWindow('Dialogue', show, hide)
+    I.UI.registerWindow('DialogMenu', show, hide)
 end
 
 -- What a key (or a button of the pad that stands for one) does while the window is there and the top one (a menu opened
 -- over it takes the keys and the buttons)
 local function press(code)
-    if not visible or I.UI.getMode() ~= 'Dialogue' or messageOpen() then
+    if not visible or I.UI.getMode() ~= 'DialogMenu' or messageOpen() then
         return
     end
     local view = conversation.get()
@@ -664,7 +665,7 @@ local function press(code)
     end
 end
 
-local onPad = pad.handler('dialogue', function() return visible and I.UI.getMode() == 'Dialogue' and not messageOpen() end, press)
+local onPad = pad.handler('dialogue', function() return visible and I.UI.getMode() == 'DialogMenu' and not messageOpen() end, press)
 
 return {
     engineHandlers = {
@@ -742,9 +743,9 @@ return {
         -- However the window is left (Escape, the main menu, a script), the conversation is over. A screen that opens on
         -- top of it (the making of a character, from the end script of a response) leaves it where it is.
         UiModeChanged = function(data)
-            if data.oldMode == 'Dialogue' and data.newMode ~= 'Dialogue' then
+            if data.oldMode == 'DialogMenu' and data.newMode ~= 'DialogMenu' then
                 for _, mode in ipairs(ui._getUiModeStack()) do
-                    if mode == 'Dialogue' then
+                    if mode == 'DialogMenu' then
                         return
                     end
                 end

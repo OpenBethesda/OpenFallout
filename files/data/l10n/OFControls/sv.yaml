@@ -69,8 +69,6 @@ Inventory_description: "Öppna lagret."
 Journal_name: "Dagbok"
 Journal_description: "Öppna dagboken."
 
-QuickKeysMenu_name: "Snabbknappsmeny"
-QuickKeysMenu_description: "Öppnar snabbknappsmenyn."
 
 SmoothMoveForward_name: "Mjuk förflyttning framåt"
 SmoothMoveForward_description: "Framåtförflyttning anpassad för mjuka övergångar från gång till spring."

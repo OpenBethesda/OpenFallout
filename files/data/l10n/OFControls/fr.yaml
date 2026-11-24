@@ -71,8 +71,6 @@ Inventory_description: "Ouvre l'inventaire."
 Journal_name: "Journal"
 Journal_description: "Ouvre le journal."
 
-QuickKeysMenu_name: "Menu Touches rapides"
-QuickKeysMenu_description: "Ouvre le menu des touches rapides."
 
 SmoothMoveForward_name: "En avant, doux"
 SmoothMoveForward_description: "Déplace le joueur en avant, avec une transition douce entre la marche et la course."

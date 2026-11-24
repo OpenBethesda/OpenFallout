@@ -21,7 +21,6 @@
 #include <components/esm3/loadscpt.hpp>
 #include <components/esm3/loadweap.hpp>
 #include <components/esm3/player.hpp>
-#include <components/esm3/quickkeys.hpp>
 #include <components/esm3/weatherstate.hpp>
 
 #include <gmock/gmock.h>
@@ -47,11 +46,6 @@ namespace ESM
         auto tie(const ESM::Region::SoundRef& value)
         {
             return std::tie(value.mSound, value.mChance);
-        }
-
-        auto tie(const ESM::QuickKeys::QuickKey& value)
-        {
-            return std::tie(value.mType, value.mId);
         }
 
         Path makePath(std::string&& value)
@@ -81,17 +75,6 @@ namespace ESM
     {
         return stream << "ESM::Region::SoundRef {.mSound = '" << value.mSound << "', .mChance = " << value.mChance
                       << "}";
-    }
-
-    inline bool operator==(const ESM::QuickKeys::QuickKey& lhs, const ESM::QuickKeys::QuickKey& rhs)
-    {
-        return tie(lhs) == tie(rhs);
-    }
-
-    inline std::ostream& operator<<(std::ostream& stream, const ESM::QuickKeys::QuickKey& value)
-    {
-        return stream << "ESM::QuickKeys::QuickKey {.mType = '" << static_cast<std::uint32_t>(value.mType)
-                      << "', .mId = " << value.mId << "}";
     }
 
     inline bool operator==(const ESM::Path& lhs, const ESM::Path& rhs)
@@ -361,25 +344,6 @@ namespace ESM
             EXPECT_EQ(result.mVarNames, record.mVarNames);
             EXPECT_EQ(result.mScriptData, record.mScriptData);
             EXPECT_EQ(result.mScriptText, record.mScriptText);
-        }
-
-        TEST_P(Esm3SaveLoadRecordTest, quickKeysShouldNotChange)
-        {
-            const QuickKeys record {
-                .mKeys = {
-                    {
-                        .mType = QuickKeys::Type::Magic,
-                        .mId = generateRandomRefId(32),
-                    },
-                    {
-                        .mType = QuickKeys::Type::MagicItem,
-                        .mId = generateRandomRefId(32),
-                    },
-                },
-            };
-            QuickKeys result;
-            saveAndLoadRecord(record, GetParam(), result);
-            EXPECT_EQ(result.mKeys, record.mKeys);
         }
 
         TEST_P(Esm3SaveLoadRecordTest, dialogueShouldNotChange)

@@ -12,7 +12,6 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwworld/actionsoulgem.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/manualref.hpp"
@@ -232,9 +231,6 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Miscellaneous::use(const OFWorld::Ptr& ptr, bool force) const
     {
-        if (isSoulGem(ptr))
-            return std::make_unique<OFWorld::ActionSoulgem>(ptr);
-
         return std::make_unique<OFWorld::NullAction>();
     }
 

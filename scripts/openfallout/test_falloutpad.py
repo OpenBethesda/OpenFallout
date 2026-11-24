@@ -290,7 +290,7 @@ class ScriptsTest(unittest.TestCase):
     def test_a_menu_over_a_screen_takes_the_keys_and_the_buttons(self):
         # A screen keeps its element when the main menu opens over it, so its keys and buttons act only while its mode
         # is the top one
-        for screen, mode in (("pipboy", "Interface"), ("dialogue", "Dialogue"), ("vats", "Interface"),
+        for screen, mode in (("pipboy", "Interface"), ("dialogue", "DialogMenu"), ("vats", "Interface"),
                              ("loot", "Interface"), ("craft", "Interface"), ("interaction", "Interface")):
             text = (SCRIPTS / ("fallout%s.lua" % screen)).read_text(encoding="utf-8")
             self.assertGreaterEqual(text.count("I.UI.getMode() ~= '%s'" % mode), 1, screen)

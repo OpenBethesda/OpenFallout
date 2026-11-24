@@ -9,7 +9,6 @@ API Reference
 
     index_packages
     index_auxpackages
-    index_aipackages
     index_interfaces
     UI <user_interface>
     setting_renderers

@@ -15,7 +15,6 @@
 
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwworld/actionharvest.hpp"
-#include "../mwworld/actionopen.hpp"
 #include "../mwworld/actiontrap.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -181,7 +180,7 @@ namespace OFClass
             if (!isTrapped)
             {
                 if (!canBeHarvested(ptr))
-                    return std::make_unique<OFWorld::ActionOpen>(ptr);
+                    return std::make_unique<OFWorld::NullAction>(); // the container window of Morrowind is gone
 
                 if (hasToolTip(ptr))
                     return std::make_unique<OFWorld::ActionHarvest>(ptr);

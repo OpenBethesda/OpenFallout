@@ -956,8 +956,6 @@ namespace OFWorld
         // TODO: if we require this behaviour, maybe we should move it to the place that requires it
         std::sort(mShared.begin(), mShared.end(),
             [](const ESM::Dialogue* l, const ESM::Dialogue* r) -> bool { return l->mId < r->mId; });
-
-        mKeywordSearchModFlag = true;
     }
 
     const ESM::Dialogue* Store<ESM::Dialogue>::search(const ESM::RefId& id) const
@@ -1016,15 +1014,12 @@ namespace OFWorld
             dialogue.mId = found->second.mId;
         }
 
-        mKeywordSearchModFlag = true;
-
         return RecordId(dialogue.mId, isDeleted);
     }
 
     bool Store<ESM::Dialogue>::eraseStatic(const ESM::RefId& id)
     {
-        if (eraseFromMap(mStatic, id))
-            mKeywordSearchModFlag = true;
+        eraseFromMap(mStatic, id);
 
         return true;
     }
@@ -1034,11 +1029,6 @@ namespace OFWorld
         list.reserve(list.size() + getSize());
         for (const auto& dialogue : mShared)
             list.push_back(dialogue->mId);
-    }
-
-    bool Store<ESM::Dialogue>::getKeywordSearchModFlag() const
-    {
-        return std::exchange(mKeywordSearchModFlag, false);
     }
 
     // ESM4 Cell

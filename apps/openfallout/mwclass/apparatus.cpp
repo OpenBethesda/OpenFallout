@@ -8,8 +8,8 @@
 #include <components/esm3/loadappa.hpp>
 #include <components/esm3/loadnpc.hpp>
 
-#include "../mwworld/actionalchemy.hpp"
 #include "../mwworld/cellstore.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include "../mwrender/objects.hpp"
@@ -110,7 +110,8 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Apparatus::use(const OFWorld::Ptr& ptr, bool force) const
     {
-        return std::make_unique<OFWorld::ActionAlchemy>(force);
+        // The window that made potions of Morrowind is gone
+        return std::make_unique<OFWorld::NullAction>();
     }
 
     OFWorld::Ptr Apparatus::copyToCellImpl(const OFWorld::ConstPtr& ptr, OFWorld::CellStore& cell) const

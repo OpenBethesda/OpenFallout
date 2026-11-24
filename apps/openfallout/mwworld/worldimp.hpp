@@ -128,10 +128,7 @@ namespace OFWorld
 
         bool mTeleportEnabled;
         bool mLevitationEnabled;
-        bool mGoToJail;
-        int mDaysInPrison;
         bool mPlayerTraveling;
-        bool mPlayerInJail;
 
         float mSpellPreloadTimer;
 
@@ -598,11 +595,6 @@ namespace OFWorld
         /// This should be called when initiating a dialogue.
         void updateDialogueGlobals() override;
 
-        /// Moves all stolen items from \a ptr to the closest evidence chest.
-        void confiscateStolenItems(const OFWorld::Ptr& ptr) override;
-
-        void goToJail() override;
-
         /// Spawn a random creature from a levelled list next to the player
         void spawnRandomCreature(const ESM::RefId& creatureList) override;
 
@@ -627,8 +619,6 @@ namespace OFWorld
         /// @note The length of the vector is the distance between actor and target.
         osg::Vec3f aimToTarget(
             const OFWorld::ConstPtr& actor, const OFWorld::ConstPtr& target, bool isRangedCombat) override;
-
-        bool isPlayerInJail() const override;
 
         void setPlayerTraveling(bool traveling) override;
         bool isPlayerTraveling() const override;

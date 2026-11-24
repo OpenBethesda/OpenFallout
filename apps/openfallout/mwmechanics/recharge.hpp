@@ -7,9 +7,6 @@ namespace OFMechanics
 {
 
     bool rechargeItem(const OFWorld::Ptr& item, const float maxCharge, const float duration);
-
-    bool rechargeItem(const OFWorld::Ptr& item, const OFWorld::Ptr& gem);
-
 }
 
 #endif

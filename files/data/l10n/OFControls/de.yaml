@@ -79,8 +79,6 @@ Inventory_description: "Inventar-Modus öffnen bzw. schließen."
 Journal_name: "Tagebuch"
 Journal_description: "Tagebuch öffnen bzw. schließen."
 
-QuickKeysMenu_name: "Kurzmenü"
-QuickKeysMenu_description: "Kurzmenü für Schnellauswahl von Gegenständen und Zaubern öffnen bzw. schließen."
 
 SmoothMoveForward_name: "Sanfte Vorwärts-Bewegung"
 SmoothMoveForward_description: |

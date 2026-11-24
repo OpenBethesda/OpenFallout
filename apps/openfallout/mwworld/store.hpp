@@ -491,8 +491,6 @@ namespace OFWorld
         /// @warning ESM::Dialogue Store currently implements a sorted order for unknown reasons.
         std::vector<ESM::Dialogue*> mShared;
 
-        mutable bool mKeywordSearchModFlag{ true };
-
     public:
         Store();
 
@@ -513,8 +511,6 @@ namespace OFWorld
         RecordId load(ESM::ESMReader& esm) override;
 
         void listIdentifier(std::vector<ESM::RefId>& list) const override;
-
-        bool getKeywordSearchModFlag() const;
     };
 
     template <typename T>

@@ -26,12 +26,10 @@
 #include <components/settings/settings.hpp>
 #include <components/toutf8/toutf8.hpp>
 
-#include "charactercreation.hpp"
 #include "draganddrop.hpp"
 #include "mapwindow.hpp"
 #include "messagebox.hpp"
 #include "settings.hpp"
-#include "soulgemdialog.hpp"
 #include "statswatcher.hpp"
 #include "textcolours.hpp"
 #include "tooltips.hpp"
@@ -98,28 +96,15 @@ namespace OFGui
     class StatsWindow;
     class InventoryWindow;
     class MenuScenes;
-    class TextInputDialog;
-    class InfoBoxDialog;
     class SettingsWindow;
-    class AlchemyWindow;
-    class QuickKeysMenu;
     class FalloutAirMeter;
     class LoadingScreen;
-    class LevelupDialog;
-    class WaitDialog;
-    class SpellCreationDialog;
-    class EnchantingDialog;
-    class TrainingWindow;
     class SpellIcons;
-    class MerchantRepair;
-    class Recharge;
-    class CompanionWindow;
     class VideoWidget;
     class WindowModal;
     class ScreenFader;
     class DebugWindow;
     class PostProcessorHud;
-    class JailScreen;
     class KeyboardNavigation;
     class ItemTransfer;
     class ControllerButtonsOverlay;
@@ -159,8 +144,6 @@ namespace OFGui
         void popGuiMode(bool forceExit = false) override;
         void removeGuiMode(GuiMode mode) override; ///< can be anywhere in the stack
 
-        void goToJail(int days) override;
-
         GuiMode getMode() const override;
         bool containsMode(GuiMode mode) const override;
 
@@ -190,10 +173,8 @@ namespace OFGui
         OFGui::MenuScenes* getMenuScenes() override { return mMenuScenes.get(); }
         OFGui::CountDialog* getCountDialog() override;
         OFGui::ConfirmationDialog* getConfirmationDialog() override;
-        OFGui::TradeWindow* getTradeWindow() override;
         OFGui::HUD* getHud() override;
         OFGui::PostProcessorHud* getPostProcessorHud() override;
-        std::vector<OFGui::WindowBase*> getGuiModeWindows(GuiMode mode) override;
 
         /// Make the player use an item, while updating GUI state accordingly
         void useItem(const OFWorld::Ptr& item, bool bypassBeastRestrictions = false) override;
@@ -238,11 +219,6 @@ namespace OFGui
         void setSpellVisibility(bool visible) override;
         void setSneakVisibility(bool visible) override;
 
-        /// activate selected quick key
-        void activateQuickKey(int index) override;
-        /// update activated quick key state (if action executing was delayed for some reason)
-        void updateActivatedQuickKey() override;
-
         const ESM::RefId& getSelectedSpell() override { return mSelectedSpell; }
         void setSelectedSpell(const ESM::RefId& spellId, int successChancePercent) override;
         void setSelectedEnchantItem(const OFWorld::Ptr& item) override;
@@ -265,9 +241,6 @@ namespace OFGui
         void notifyInputActionBound() override;
 
         void addVisitedLocation(const std::string& name, int x, int y) override;
-
-        /// Hides dialog and schedules dialog to be deleted.
-        void removeDialog(std::unique_ptr<Layout>&& dialog) override;
 
         /// Gracefully attempts to exit the topmost GUI mode
         void exitCurrentGuiMode() override;
@@ -310,17 +283,9 @@ namespace OFGui
         void watchActor(const OFWorld::Ptr& ptr) override;
         OFWorld::Ptr getWatchedActor() const override;
 
-        void enableRest() override { mRestAllowed = true; }
-        bool getRestEnabled() override;
-
         bool getJournalAllowed() override { return (mAllowed & GW_Magic) != 0; }
 
-        bool getPlayerSleeping() override;
-        void wakeUpPlayer() override;
-
         void updatePlayer() override;
-
-        void showSoulgemDialog(OFWorld::Ptr item) override;
 
         void changePointer(const std::string& name) override;
         void createLuaCursor(const std::string& name, const std::string& path, int width, int height, int hotspotX,
@@ -409,7 +374,6 @@ namespace OFGui
         const std::string& getVersionDescription() const override;
 
         void onDeleteCustomData(const OFWorld::Ptr& ptr) override;
-        void forceLootMode(const OFWorld::Ptr& ptr) override;
 
         void asyncPrepareSaveMap() override;
 
@@ -468,21 +432,14 @@ namespace OFGui
         StatsWindow* mStatsWindow;
         std::unique_ptr<MessageBoxManager> mMessageBoxManager;
         Console* mConsole;
-        DialogueWindow* mDialogueWindow;
         std::unique_ptr<DragAndDrop> mDragAndDrop;
         std::unique_ptr<ItemTransfer> mItemTransfer;
         InventoryWindow* mInventoryWindow;
-        ScrollWindow* mScrollWindow;
-        BookWindow* mBookWindow;
         CountDialog* mCountDialog;
-        TradeWindow* mTradeWindow;
         SettingsWindow* mSettingsWindow;
         ConfirmationDialog* mConfirmationDialog;
         SpellWindow* mSpellWindow;
-        QuickKeysMenu* mQuickKeysMenu;
         LoadingScreen* mLoadingScreen;
-        WaitDialog* mWaitDialog;
-        std::unique_ptr<SoulgemDialog> mSoulgemDialog;
         MyGUI::ImageBox* mVideoBackground;
         VideoWidget* mVideoWidget;
         ScreenFader* mWerewolfFader;
@@ -491,8 +448,6 @@ namespace OFGui
         ScreenFader* mScreenFader;
         DebugWindow* mDebugWindow;
         PostProcessorHud* mPostProcessorHud;
-        JailScreen* mJailScreen;
-        ContainerWindow* mContainerWindow;
         ControllerButtonsOverlay* mControllerButtonsOverlay;
         InventoryTabsOverlay* mInventoryTabsOverlay;
 
@@ -502,8 +457,6 @@ namespace OFGui
         std::map<std::string_view, WindowBase*> mLuaIdToWindow;
 
         Translation::Storage& mTranslationDataStorage;
-
-        std::unique_ptr<CharacterCreation> mCharGen;
 
         MyGUI::Widget* mInputBlocker;
 
@@ -554,9 +507,6 @@ namespace OFGui
         std::string mLuaCursorOverride;
         std::string mMyGuiCursor;
 
-        std::vector<std::unique_ptr<Layout>> mGarbageDialogs;
-        void cleanupGarbage();
-
         GuiWindow mShown; // Currently shown windows in inventory mode
         GuiWindow mForceHidden; // Hidden windows (overrides mShown)
 
@@ -566,8 +516,6 @@ namespace OFGui
            allow() and disableAll().
          */
         GuiWindow mAllowed;
-        // is the rest window allowed?
-        bool mRestAllowed;
 
         void updateVisible(); // Update visibility of all windows based on mode, shown and allowed settings
 
@@ -637,8 +585,6 @@ namespace OFGui
         void enableScene(bool enable);
 
         void handleScheduledMessageBoxes();
-
-        void pushGuiMode(GuiMode mode, const OFWorld::Ptr& arg, bool force);
 
         void setCullMask(uint32_t mask) override;
         uint32_t getCullMask() override;

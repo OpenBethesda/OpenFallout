@@ -24,7 +24,6 @@ file(GLOB UNITTEST_SRC_FILES
     mwclass/testesm4npcbody.cpp
     mwclass/testesm4npcparts.cpp
 
-    mwdialogue/testkeywordsearch.cpp
 
     mwgui/tooltips.cpp
     mwgui/weightedsearch.cpp

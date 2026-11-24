@@ -212,10 +212,7 @@ namespace OFWorld
         , mDistanceToFocusObject(-1.f)
         , mTeleportEnabled(true)
         , mLevitationEnabled(true)
-        , mGoToJail(false)
-        , mDaysInPrison(0)
         , mPlayerTraveling(false)
-        , mPlayerInJail(false)
         , mSpellPreloadTimer(0.f)
     {
     }
@@ -291,7 +288,6 @@ namespace OFWorld
 
     void World::startNewGame(bool bypass, bool useStartCell)
     {
-        mGoToJail = false;
         mLevitationEnabled = true;
         mTeleportEnabled = true;
 
@@ -395,11 +391,9 @@ namespace OFWorld
         mDoorStates.clear();
         mFocusRay = OFPhysics::RayCastingResult();
 
-        mGoToJail = false;
         mTeleportEnabled = true;
         mLevitationEnabled = true;
         mPlayerTraveling = false;
-        mPlayerInJail = false;
         mIdsRebuilt = false;
 
         fillGlobalVariables();
@@ -1512,17 +1506,8 @@ namespace OFWorld
 
     void World::update(float duration, bool paused)
     {
-        if (mGoToJail && !paused)
-            goToJail();
-
         // Reset "traveling" flag - there was a frame to detect traveling.
         mPlayerTraveling = false;
-
-        // The same thing for "in jail" flag: reset it if:
-        // 1. Player was in jail
-        // 2. Jailing window was closed
-        if (mPlayerInJail && !mGoToJail && !OFBase::Environment::get().getWindowManager()->containsMode(OFGui::GM_Jail))
-            mPlayerInJail = false;
 
         updateWeather(duration, paused);
 
@@ -3576,72 +3561,6 @@ namespace OFWorld
 
         mGlobalVariables[Globals::sCrimeGoldTurnIn].setInteger(turnIn);
         mGlobalVariables[Globals::sPCHasTurnIn].setInteger((turnIn <= playerGold) ? 1 : 0);
-    }
-
-    void World::confiscateStolenItems(const Ptr& ptr)
-    {
-        OFWorld::ConstPtr prisonMarker = getClosestMarker(ptr, ESM::RefId::stringRefId("prisonmarker"));
-        if (prisonMarker.isEmpty())
-        {
-            Log(Debug::Warning) << "Failed to confiscate items: no closest prison marker found.";
-            return;
-        }
-        ESM::RefId prisonName = prisonMarker.getCellRef().getDestCell();
-        if (prisonName.empty())
-        {
-            Log(Debug::Warning) << "Failed to confiscate items: prison marker not linked to prison interior";
-            return;
-        }
-        OFWorld::CellStore& prison = mWorldModel.getCell(prisonName);
-
-        OFWorld::Ptr closestChest = prison.search(ESM::RefId::stringRefId("stolen_goods"));
-        if (!closestChest.isEmpty()) // Found a close chest
-        {
-            OFBase::Environment::get().getMechanicsManager()->confiscateStolenItems(ptr, closestChest);
-        }
-        else
-            Log(Debug::Warning) << "Failed to confiscate items: no stolen_goods container found";
-    }
-
-    void World::goToJail()
-    {
-        const OFWorld::Ptr player = getPlayerPtr();
-        if (!mGoToJail)
-        {
-            // Reset bounty and forget the crime now, but don't change cell yet (the player should be able to read the
-            // dialog text first)
-            mGoToJail = true;
-            mPlayerInJail = true;
-
-            int bounty = player.getClass().getNpcStats(player).getBounty();
-            player.getClass().getNpcStats(player).setBounty(0);
-            mPlayer->recordCrimeId();
-            confiscateStolenItems(player);
-
-            static int iDaysinPrisonMod = mStore.get<ESM::GameSetting>().find("iDaysinPrisonMod")->mValue.getInteger();
-            mDaysInPrison = std::max(1, bounty / iDaysinPrisonMod);
-
-            return;
-        }
-        else
-        {
-            if (OFBase::Environment::get().getMechanicsManager()->isAttackPreparing(player))
-            {
-                player.getClass().getCreatureStats(player).setAttackingOrSpell(false);
-            }
-
-            mPlayer->setDrawState(OFMechanics::DrawState::Nothing);
-            mGoToJail = false;
-
-            OFBase::Environment::get().getWindowManager()->removeGuiMode(OFGui::GM_Dialogue);
-
-            OFBase::Environment::get().getWindowManager()->goToJail(mDaysInPrison);
-        }
-    }
-
-    bool World::isPlayerInJail() const
-    {
-        return mPlayerInJail;
     }
 
     void World::setPlayerTraveling(bool traveling)

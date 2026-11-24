@@ -187,7 +187,8 @@ namespace OFInput
             if (mInputBinder->getKeyBinding(control, ICS::Control::INCREASE) == key)
                 mInputBinder->removeKeyBinding(key);
         };
-        letGo(A_QuickKeysMenu, SDL_SCANCODE_F1);
+        // 41 was the quick keys menu of Morrowind, gone with its window
+        letGo(41, SDL_SCANCODE_F1);
         letGo(A_TogglePostProcessorHUD, SDL_SCANCODE_F2);
 
         loadKeyDefaults();
@@ -486,8 +487,6 @@ namespace OFInput
                 return "#{sInventory}";
             case A_TogglePOV:
                 return "#{sTogglePOVCmd}";
-            case A_QuickKeysMenu:
-                return "#{sQuickMenu}";
             case A_QuickKey1:
                 return "#{sQuick1Cmd}";
             case A_QuickKey2:
@@ -578,8 +577,8 @@ namespace OFInput
             A_TogglePOV, A_ZoomIn, A_ZoomOut, A_Run, A_AlwaysRun, A_Sneak, A_Activate, A_Use, A_ToggleWeapon,
             A_ToggleSpell, A_CycleSpellLeft, A_CycleSpellRight, A_CycleWeaponLeft, A_CycleWeaponRight, A_AutoMove,
             A_Jump, A_Inventory, A_Journal, A_Rest, A_Console, A_QuickSave, A_QuickLoad, A_ToggleHUD, A_Screenshot,
-            A_QuickKeysMenu, A_QuickKey1, A_QuickKey2, A_QuickKey3, A_QuickKey4, A_QuickKey5, A_QuickKey6, A_QuickKey7,
-            A_QuickKey8, A_QuickKey9, A_QuickKey10, A_TogglePostProcessorHUD };
+            A_QuickKey1, A_QuickKey2, A_QuickKey3, A_QuickKey4, A_QuickKey5, A_QuickKey6, A_QuickKey7, A_QuickKey8,
+            A_QuickKey9, A_QuickKey10, A_TogglePostProcessorHUD };
 
         return actions;
     }
@@ -587,10 +586,9 @@ namespace OFInput
     {
         static const std::initializer_list<int> actions{ A_MoveForward, A_MoveBackward, A_MoveLeft, A_MoveRight,
             A_TogglePOV, A_ZoomIn, A_ZoomOut, A_Sneak, A_Activate, A_Use, A_ToggleWeapon, A_ToggleSpell, A_AutoMove,
-            A_Jump, A_Inventory, A_Journal, A_Rest, A_QuickSave, A_QuickLoad, A_ToggleHUD, A_Screenshot,
-            A_QuickKeysMenu, A_QuickKey1, A_QuickKey2, A_QuickKey3, A_QuickKey4, A_QuickKey5, A_QuickKey6, A_QuickKey7,
-            A_QuickKey8, A_QuickKey9, A_QuickKey10, A_CycleSpellLeft, A_CycleSpellRight, A_CycleWeaponLeft,
-            A_CycleWeaponRight };
+            A_Jump, A_Inventory, A_Journal, A_Rest, A_QuickSave, A_QuickLoad, A_ToggleHUD, A_Screenshot, A_QuickKey1,
+            A_QuickKey2, A_QuickKey3, A_QuickKey4, A_QuickKey5, A_QuickKey6, A_QuickKey7, A_QuickKey8, A_QuickKey9,
+            A_QuickKey10, A_CycleSpellLeft, A_CycleSpellRight, A_CycleWeaponLeft, A_CycleWeaponRight };
 
         return actions;
     }

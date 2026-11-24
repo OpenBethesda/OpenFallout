@@ -101,36 +101,6 @@ namespace OFInput
             case A_Rest:
                 rest();
                 break;
-            case A_QuickKey1:
-                quickKey(1);
-                break;
-            case A_QuickKey2:
-                quickKey(2);
-                break;
-            case A_QuickKey3:
-                quickKey(3);
-                break;
-            case A_QuickKey4:
-                quickKey(4);
-                break;
-            case A_QuickKey5:
-                quickKey(5);
-                break;
-            case A_QuickKey6:
-                quickKey(6);
-                break;
-            case A_QuickKey7:
-                quickKey(7);
-                break;
-            case A_QuickKey8:
-                quickKey(8);
-                break;
-            case A_QuickKey9:
-                quickKey(9);
-                break;
-            case A_QuickKey10:
-                quickKey(10);
-                break;
             case A_ToggleHUD:
                 windowManager->setHudVisibility(!windowManager->isHudVisible());
                 break;
@@ -164,7 +134,6 @@ namespace OFInput
                 break;
             case A_Inventory:
             case A_Journal:
-            case A_QuickKeysMenu:
                 // Handled in Lua
                 break;
         }
@@ -249,19 +218,13 @@ namespace OFInput
         if (!OFBase::Environment::get().getInputManager()->getControlSwitch("playercontrols"))
             return;
 
-        // Fallout waits on a screen of its own (core.interact), which the host asks for
+        // Fallout waits on a screen of its own (core.interact), which the host asks for; the wait dialog of Morrowind
+        // is gone
         if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
         {
             if (!OFBase::Environment::get().getWindowManager()->isGuiMode())
                 scripts->requestRest(false, 0);
-            return;
         }
-
-        if (!OFBase::Environment::get().getWindowManager()->getRestEnabled()
-            || OFBase::Environment::get().getWindowManager()->isGuiMode())
-            return;
-
-        OFBase::Environment::get().getWindowManager()->pushGuiMode(OFGui::GM_Rest); // Open rest GUI
     }
 
     void ActionManager::toggleConsole()
@@ -270,26 +233,6 @@ namespace OFInput
             return;
 
         OFBase::Environment::get().getWindowManager()->toggleConsole();
-    }
-
-    void ActionManager::quickKey(int index)
-    {
-        // The number keys of Fallout are the hot keys of its head-up display (a script reads them), not the quick keys
-        // of Morrowind
-        if (OFBase::Environment::get().getFalloutScripts() != nullptr)
-            return;
-        if (!OFBase::Environment::get().getInputManager()->getControlSwitch("playercontrols")
-            || !OFBase::Environment::get().getInputManager()->getControlSwitch("playerfighting")
-            || !OFBase::Environment::get().getInputManager()->getControlSwitch("playermagic"))
-            return;
-        if (!checkAllowedToUseItems())
-            return;
-
-        if (OFBase::Environment::get().getWorld()->getGlobalFloat(OFWorld::Globals::sCharGenState) != -1)
-            return;
-
-        if (!OFBase::Environment::get().getWindowManager()->isGuiMode())
-            OFBase::Environment::get().getWindowManager()->activateQuickKey(index);
     }
 
     void ActionManager::activate()

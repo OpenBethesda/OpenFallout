@@ -427,8 +427,11 @@ function r.pipboyGeneral(label) return ask('pipboyGeneral', { label = label }) e
 function r.weapon(label) return ask('weapon', { label = label }) end
 -- `equip(record)`: the weapon with that record in the hand; without one, the first ranged weapon that has rounds (`pick`: the nth)
 function r.equip(record, pick) return ask('equip', { form = record and recordOf(record) or nil, pick = pick }) end
--- What an actor carries as the Pip-Boy lists it (the player when `actor` is left out): one line for each weapon and ammunition
-function r.inventory(label, actor) return ask('inventory', { label = label, holder = actor and form(actor) or nil }) end
+-- What an actor carries as the Pip-Boy lists it (the player when `actor` is left out): one line for each weapon and ammunition;
+-- with `record` ("FormId:0x..." or { file, id }) also how many items of that record it carries (`carried` in the answer)
+function r.inventory(label, actor, record)
+    return ask('inventory', { label = label, holder = actor and form(actor) or nil, form = record and recordOf(record) or nil })
+end
 function r.god(on) return ask('god', { on = on }) end
 function r.drawn(on) return ask('drawn', { on = on }) end
 function r.fire(label, target) return ask('fire', { label = label, target = target }) end

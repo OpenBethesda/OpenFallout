@@ -197,28 +197,3 @@ void NoDrop::setAlpha(float alpha)
     if (mWidget)
         mWidget->setAlpha(alpha);
 }
-
-BookWindowBase::BookWindowBase(std::string_view parLayout)
-    : WindowBase(parLayout)
-{
-}
-
-float BookWindowBase::adjustButton(std::string_view name)
-{
-    Gui::ImageButton* button;
-    WindowBase::getWidget(button, name);
-    MyGUI::IntSize requested = button->getRequestedSize();
-    float scale = float(requested.height) / button->getSize().height;
-    MyGUI::IntSize newSize(static_cast<int>(requested.width / scale), static_cast<int>(requested.height / scale));
-    button->setSize(newSize);
-
-    if (button->getAlign().isRight())
-    {
-        MyGUI::IntSize diff = (button->getSize() - requested);
-        diff.width = static_cast<int>(diff.width / scale);
-        diff.height = static_cast<int>(diff.height / scale);
-        button->setPosition(button->getPosition() + MyGUI::IntPoint(diff.width, 0));
-    }
-
-    return scale;
-}

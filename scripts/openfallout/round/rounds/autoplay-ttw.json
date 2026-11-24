@@ -29,6 +29,7 @@
     "AUTOPLAY\\tintro over\\t"
   ],
   "forbid_log": [
+    "unknown GUI (mode|window) '",
     "AUTOPLAY\\ttime is up",
     "AUTOPLAY\\tlevel stuck",
     "AUTOPLAY\\tscreens error\\t",

@@ -43,6 +43,7 @@
     "AUTOPLAY\\tsave\\tautoplay-again\\tok\\t": 1
   },
   "forbid_log": [
+    "unknown GUI (mode|window) '",
     "AUTOPLAY\\tdigest\\tcheck MISMATCH",
     "AUTOPLAY\\tload\\tautoplay-save\\tno slot",
     "AUTOPLAY\\tload\\terror\\t",

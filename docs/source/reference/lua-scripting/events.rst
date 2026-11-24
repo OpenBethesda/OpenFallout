@@ -41,18 +41,6 @@ This event is sent to an actor's local script when that actor dies.
         end
     }
 
-**StartAIPackage, RemoveAIPackages**
-
-Any script can send to any actor (except player, for player will be ignored) events ``StartAIPackage`` and ``RemoveAIPackages``.
-The effect is equivalent to calling ``interfaces.AI.startPackage`` or ``interfaces.AI.removePackages`` in a local script on this actor.
-
-Examples:
-
-.. code-block:: Lua
-
-    actor:sendEvent('StartAIPackage', {type='Combat', target=self.object})
-    actor:sendEvent('RemoveAIPackages', 'Pursue')
-
 **UseItem**
 
 Any script can send global event ``UseItem`` with arguments ``object``, ``actor``, and optional boolean ``force``.
@@ -115,32 +103,6 @@ The following two examples are equivalent, except the ``item`` variant is guaran
 
     actor:sendEvent('Unequip', {slot = Actor.EQUIPMENT_SLOT.CarriedLeft})
 
-Combat events
--------------
-
-**Hit**
-
-Any script can send ``Hit`` events with arguments described in the Combat interface to cause a hit to an actor
-
-Example:
-
-.. code-block:: Lua
-
-    -- See Combat#AttackInfo
-    local attack = {
-        attacker = self,
-        weapon = Actor.getEquipment(self, Actor.EQUIPMENT_SLOT.CarriedRight),
-        sourceType = I.Combat.ATTACK_SOURCE_TYPES.Melee,
-        strength = 1,
-        type = self.ATTACK_TYPE.Chop,
-        damage = {
-            health = 20,
-            fatigue = 10,
-        },
-        successful = true,
-    }
-    victim:sendEvent('Hit', attack)
-
 Item events
 -----------
 
@@ -159,13 +121,6 @@ Example:
         core.sendGlobalEvent('ModifyItemCondition', {actor = self, item = item, amount = -1})
     end
 
-Spellcast events
-----------------
-
-**ApplyMagicEffects**
-
-Used by built-in scripts to apply effects on Lockables and other actors during spellcasting.
-
 UI events
 ---------
 
@@ -180,7 +135,7 @@ If sent to a player, shows a message as if a call to ui.showMessage was made.
 **UiModeChanged**
 
 Every time UI mode is changed built-in scripts send to player the event ``UiModeChanged`` with arguments ``oldMode, ``newMode`` (same as ``I.UI.getMode()``)
-and ``arg`` (for example in the mode ``Book`` the argument is the book the player is reading).
+and ``arg`` (for example in the mode ``DialogMenu`` the argument is the actor the player is talking to).
 
 .. code-block:: Lua
 
@@ -196,7 +151,7 @@ Equivalent to ``I.UI.addMode``, but can be sent from another object or global sc
 
 .. code-block:: Lua
 
-    player:sendEvent('AddUiMode', {mode = 'Book', target = book})
+    player:sendEvent('AddUiMode', {mode = 'DialogMenu', target = actor})
 
 **SetUiMode**
 
@@ -204,7 +159,7 @@ Equivalent to ``I.UI.setMode``, but can be sent from another object or global sc
 
 .. code-block:: Lua
 
-    player:sendEvent('SetUiMode', {mode = 'Book', target = book})
+    player:sendEvent('SetUiMode', {mode = 'DialogMenu', target = actor})
 
 World events
 ------------

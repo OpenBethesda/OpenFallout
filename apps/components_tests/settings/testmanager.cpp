@@ -482,6 +482,28 @@ namespace Settings
                 "# ignoring setting modified while the program was running: added by hand = 3\n");
         }
 
+        // The settings of the Morrowind windows are gone from settings-default.cfg; the file of a player who played
+        // before still has them and loads, and the settings that are left are read from it.
+        TEST_F(SettingsSaveTest, aUserFileWithSettingsThatHaveNoDefaultAnyMoreStillLoads)
+        {
+            const auto path = pathFor("settings.cfg");
+            spit(path,
+                "[Windows]\n"
+                "dialogue x = 0.2\n"
+                "inventory container maximized = true\n"
+                "[GUI]\n"
+                "color topic enable = true\n"
+                "[Sound]\n"
+                "volume = 0.5\n");
+            setDefault("Sound", "volume", "1");
+
+            ASSERT_NO_THROW(SettingsFileParser().loadSettingsFile(path, Manager::mUserSettings));
+
+            EXPECT_EQ(Manager::mDefaultSettings.count(CategorySetting("Windows", "dialogue x")), 0u);
+            EXPECT_EQ(Manager::mUserSettings.at(CategorySetting("Windows", "dialogue x")), "0.2");
+            EXPECT_EQ(Manager::getString("volume", "Sound"), "0.5");
+        }
+
         TEST_F(SettingsSaveTest, brokenLinesAreCommentedOutInsteadOfLost)
         {
             const auto path = pathFor("settings.cfg");

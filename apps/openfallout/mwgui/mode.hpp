@@ -6,46 +6,15 @@ namespace OFGui
     enum GuiMode
     {
         GM_None,
-        GM_Inventory, // Inventory mode
-        GM_Container,
-        GM_Companion,
+        GM_Inventory, // Inventory mode (the Lua name is Interface: the Fallout screens that Lua draws are in it)
         GM_MainMenu, // Main menu mode
 
-        GM_Journal, // Journal mode
-
-        GM_Scroll, // Read scroll
-        GM_Book, // Read book
-        GM_Alchemy, // Make potions
-        GM_Repair,
-
-        GM_Dialogue, // NPC interaction
-        GM_Barter,
-        GM_Rest,
-        GM_SpellBuying,
-        GM_Travel,
-        GM_SpellCreation,
-        GM_Enchanting,
-        GM_Recharge,
-        GM_Training,
-        GM_MerchantRepair,
-
-        GM_Levelup,
-
-        // Startup character creation dialogs
-        GM_Name,
-        GM_Race,
-        GM_Birth,
-        GM_Class,
-        GM_ClassGenerate,
-        GM_ClassPick,
-        GM_ClassCreate,
-        GM_Review,
+        // A conversation of Fallout (DialogMenu of the games, drawn by falloutdialogue.lua). No C++ window: the
+        // window manager keeps a conversation that offers no goodbye open (FalloutScripts::conversationHeld)
+        GM_DialogMenu,
 
         GM_Loading,
         GM_LoadingWallpaper,
-        GM_Jail,
-
-        GM_QuickKeysMenu
     };
 
     // Windows shown in inventory mode

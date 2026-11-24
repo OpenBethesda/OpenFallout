@@ -130,6 +130,11 @@ and the scenario of `m1-unattended-load` runs to its end in the loaded game. An 
 main menu: the round ends at its limit (60 s, so the engine is stopped after 90 s) and fails, its report says the accept and load
 lines were not found and shows the last lines of the log.
 
+`rounds/book-pickup-fo3.json` (scenario `scenarios/book_pickup_fo3.lua`) starts Fallout 3 in Arefu's abandoned shack and activates
+the book that the game places there (a book made by `world.createObject` has no reference the scripts of Fallout know): the round passes when the book is in the
+inventory, is gone from the world and no screen opened (the UI mode stays empty for three seconds). `r.inventory(label, actor,
+record)` counts the items of a record (`carried`) and `r.mode` answers the UI mode (`ui`) for such checks.
+
 `scenarios/smoke.lua` is the smallest scenario; `scenarios/m13_mountains.lua` with `rounds/m13-mountains.json` is the check of the
 distant land of New Vegas in seven variants of `game lod debug`. Its places are in the Mojave and the save can be anywhere:
 the scenario takes the worldspace from the cell of a reference that lives there (`anchor` lines say which one was found and which

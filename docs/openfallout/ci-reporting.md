@@ -39,6 +39,17 @@ Every run of the Mac jobs for a branch or pull request runs them. A release tag
 already tested it, and a second upload for the same commit would be counted
 twice by Codecov.
 
+## The instrumented app
+
+A manual run of `Build and test` with the input `coverage-app` (`gh workflow run push.yml -f coverage-app=true --ref
+<branch>`) also calls `coverage-app.yml`: the packaged app, RelWithDebInfo, configured by `CI/before_script.macos.sh -P`
+(`BUILD_WITH_CODE_COVERAGE=ON`, tree `build-coverage-app`), as the artifact `openfallout-macos-coverage-dmg-arm64-<sha>`.
+It is for measuring which engine code played rounds reach: run the rounds on it with `LLVM_PROFILE_FILE` pointing into
+the round folder (for example `<folder>/%p-%m.profraw`), then `xcrun llvm-profdata merge` the profiles and
+`xcrun llvm-cov report` them against `OpenFallout.app/Contents/MacOS/openfallout`. Only a clean exit writes a profile.
+The image is ad hoc signed, never notarized, checked or released. Pull requests, pushes, the merge queue and release
+tags never build it, and it neither restores nor stores a build cache.
+
 ## Merge queue
 
 `Build and test` (push.yml), `Documentation` and `Documentation links` also run on `merge_group`, the event of

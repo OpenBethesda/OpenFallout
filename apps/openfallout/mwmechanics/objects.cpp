@@ -57,29 +57,11 @@ namespace OFMechanics
 
     void Objects::update(float duration, bool paused)
     {
+        // (a paused world played the opening of a container of Morrowind in its container window, which is gone)
         if (!paused)
         {
             for (CharacterController& object : mObjects)
                 object.update(duration);
-        }
-        else
-        {
-            // We still should play container opening animation in the Container GUI mode.
-            OFGui::GuiMode mode = OFBase::Environment::get().getWindowManager()->getMode();
-            if (mode != OFGui::GM_Container)
-                return;
-
-            for (CharacterController& object : mObjects)
-            {
-                if (object.getPtr().getType() != ESM::Container::sRecordId)
-                    continue;
-
-                if (object.isAnimPlaying("containeropen"))
-                {
-                    object.update(duration);
-                    OFBase::Environment::get().getWorld()->updateAnimatedCollisionShape(object.getPtr());
-                }
-            }
         }
     }
 

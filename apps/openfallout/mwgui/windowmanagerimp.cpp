@@ -46,6 +46,7 @@
 
 #include <components/vfs/manager.hpp>
 
+#include <components/widgets/imagebutton.hpp>
 #include <components/widgets/tags.hpp>
 #include <components/widgets/widgets.hpp>
 
@@ -79,54 +80,37 @@
 
 #include "../mwrender/postprocessor.hpp"
 
-#include "alchemywindow.hpp"
+#include "../mwscript/falloutscripts.hpp"
+
 #include "backgroundimage.hpp"
-#include "bookpage.hpp"
-#include "bookwindow.hpp"
-#include "companionwindow.hpp"
 #include "confirmationdialog.hpp"
 #include "console.hpp"
-#include "container.hpp"
 #include "controllerbuttonsoverlay.hpp"
 #include "controllers.hpp"
 #include "countdialog.hpp"
 #include "cursor.hpp"
 #include "debugwindow.hpp"
-#include "dialogue.hpp"
-#include "enchantingdialog.hpp"
 #include "exposedwindow.hpp"
 #include "falloutairmeter.hpp"
 #include "hud.hpp"
 #include "inventorytabsoverlay.hpp"
 #include "inventorywindow.hpp"
-#include "itemchargeview.hpp"
 #include "itemtransfer.hpp"
 #include "itemview.hpp"
 #include "itemwidget.hpp"
-#include "jailscreen.hpp"
 #include "keyboardnavigation.hpp"
-#include "levelupdialog.hpp"
 #include "loadingscreen.hpp"
 #include "mainmenu.hpp"
 #include "menuscenes.hpp"
-#include "merchantrepair.hpp"
 #include "postprocessorhud.hpp"
-#include "quickkeysmenu.hpp"
-#include "recharge.hpp"
-#include "repair.hpp"
 #include "resourceskin.hpp"
 #include "screenfader.hpp"
-#include "scrollwindow.hpp"
 #include "settingswindow.hpp"
-#include "spellbuyingwindow.hpp"
 #include "spellview.hpp"
 #include "spellwindow.hpp"
 #include "statswindow.hpp"
-#include "tradewindow.hpp"
-#include "trainingwindow.hpp"
-#include "travelwindow.hpp"
 #include "videowidget.hpp"
-#include "waitdialog.hpp"
+#include "widgets.hpp"
 
 namespace OFGui
 {
@@ -165,18 +149,12 @@ namespace OFGui
         , mMap(nullptr)
         , mStatsWindow(nullptr)
         , mConsole(nullptr)
-        , mDialogueWindow(nullptr)
         , mInventoryWindow(nullptr)
-        , mScrollWindow(nullptr)
-        , mBookWindow(nullptr)
         , mCountDialog(nullptr)
-        , mTradeWindow(nullptr)
         , mSettingsWindow(nullptr)
         , mConfirmationDialog(nullptr)
         , mSpellWindow(nullptr)
-        , mQuickKeysMenu(nullptr)
         , mLoadingScreen(nullptr)
-        , mWaitDialog(nullptr)
         , mVideoBackground(nullptr)
         , mVideoWidget(nullptr)
         , mWerewolfFader(nullptr)
@@ -185,8 +163,6 @@ namespace OFGui
         , mScreenFader(nullptr)
         , mDebugWindow(nullptr)
         , mPostProcessorHud(nullptr)
-        , mJailScreen(nullptr)
-        , mContainerWindow(nullptr)
         , mControllerButtonsOverlay(nullptr)
         , mInventoryTabsOverlay(nullptr)
         , mTranslationDataStorage(translationDataStorage)
@@ -197,11 +173,9 @@ namespace OFGui
         , mCursorInteractionEnabled(false)
         , mPlayerBounty(-1)
         , mGuiModes()
-        , mGarbageDialogs()
         , mShown(GW_ALL)
         , mForceHidden(GW_None)
         , mAllowed(GW_ALL)
-        , mRestAllowed(true)
         , mVersionDescription(versionDescription)
         , mWindowVisible(true)
         , mCfgMgr(cfgMgr)
@@ -241,10 +215,8 @@ namespace OFGui
         MyGUI::FactoryManager::getInstance().registerFactory<BackgroundImage>("Widget");
         MyGUI::FactoryManager::getInstance().registerFactory<MyGUIPlatform::AdditiveLayer>("Layer");
         MyGUI::FactoryManager::getInstance().registerFactory<MyGUIPlatform::ScalingLayer>("Layer");
-        BookPage::registerMyGUIComponents();
         PostProcessorHud::registerMyGUIComponents();
         ItemView::registerComponents();
-        ItemChargeView::registerComponents();
         ItemWidget::registerComponents();
         SpellView::registerComponents();
         Gui::registerAllWidgets();
@@ -324,10 +296,6 @@ namespace OFGui
         mDragAndDrop = std::make_unique<DragAndDrop>();
         mItemTransfer = std::make_unique<ItemTransfer>(*this);
 
-        auto recharge = std::make_unique<Recharge>();
-        mGuiModeStates[GM_Recharge] = GuiModeState(recharge.get());
-        mWindows.push_back(std::move(recharge));
-
         auto menu = std::make_unique<MainMenu>(w, h, mResourceSystem->getVFS(), mVersionDescription);
         mGuiModeStates[GM_MainMenu] = GuiModeState(menu.get());
         mWindows.push_back(std::move(menu));
@@ -359,59 +327,23 @@ namespace OFGui
         mGuiModeStates[GM_Inventory] = GuiModeState({ mMap, mInventoryWindow, mSpellWindow, mStatsWindow });
         mGuiModeStates[GM_None] = GuiModeState({ mMap, mInventoryWindow, mSpellWindow, mStatsWindow });
 
-        auto tradeWindow = std::make_unique<TradeWindow>();
-        mTradeWindow = tradeWindow.get();
-        mWindows.push_back(std::move(tradeWindow));
-        trackWindow(mTradeWindow, makeBarterWindowSettingValues());
-        mGuiModeStates[GM_Barter] = GuiModeState({ mInventoryWindow, mTradeWindow });
-
         auto console = std::make_unique<Console>(w, h, mCfgMgr);
         mConsole = console.get();
         mWindows.push_back(std::move(console));
         trackWindow(mConsole, makeConsoleWindowSettingValues());
 
-        // GM_Journal has no window: the journal of Morrowind went, and the quests of Fallout are on the DATA page of
-        // the Pip-Boy (the Journal control opens nothing, playercontrols.lua)
-
         mMessageBoxManager = std::make_unique<MessageBoxManager>(
             mStore->get<ESM::GameSetting>().find("fMessageTimePerChar")->mValue.getFloat());
 
-        auto spellBuyingWindow = std::make_unique<SpellBuyingWindow>();
-        mGuiModeStates[GM_SpellBuying] = GuiModeState(spellBuyingWindow.get());
-        mWindows.push_back(std::move(spellBuyingWindow));
-
-        auto travelWindow = std::make_unique<TravelWindow>();
-        mGuiModeStates[GM_Travel] = GuiModeState(travelWindow.get());
-        mWindows.push_back(std::move(travelWindow));
-
-        auto dialogueWindow = std::make_unique<DialogueWindow>();
-        mDialogueWindow = dialogueWindow.get();
-        mWindows.push_back(std::move(dialogueWindow));
-        trackWindow(mDialogueWindow, makeDialogueWindowSettingValues());
-        mGuiModeStates[GM_Dialogue] = GuiModeState(mDialogueWindow);
-        mTradeWindow->eventTradeDone += MyGUI::newDelegate(mDialogueWindow, &DialogueWindow::onTradeComplete);
-
-        auto containerWindow = std::make_unique<ContainerWindow>(*mDragAndDrop, *mItemTransfer);
-        mContainerWindow = containerWindow.get();
-        mWindows.push_back(std::move(containerWindow));
-        trackWindow(mContainerWindow, makeContainerWindowSettingValues());
-        mGuiModeStates[GM_Container] = GuiModeState({ mContainerWindow, mInventoryWindow });
+        // A conversation of Fallout has no C++ window: falloutdialogue.lua draws DialogMenu (I.UI.registerWindow
+        // takes a window that only Lua has)
+        mGuiModeStates[GM_DialogMenu] = GuiModeState();
 
         auto hud = std::make_unique<HUD>(mCustomMarkers, mDragAndDrop.get(), mLocalMapRender.get());
         mHud = hud.get();
         mWindows.push_back(std::move(hud));
 
         mToolTips = std::make_unique<ToolTips>();
-
-        auto scrollWindow = std::make_unique<ScrollWindow>();
-        mScrollWindow = scrollWindow.get();
-        mWindows.push_back(std::move(scrollWindow));
-        mGuiModeStates[GM_Scroll] = GuiModeState(mScrollWindow);
-
-        auto bookWindow = std::make_unique<BookWindow>();
-        mBookWindow = bookWindow.get();
-        mWindows.push_back(std::move(bookWindow));
-        mGuiModeStates[GM_Book] = GuiModeState(mBookWindow);
 
         auto countDialog = std::make_unique<CountDialog>();
         mCountDialog = countDialog.get();
@@ -425,58 +357,6 @@ namespace OFGui
         auto confirmationDialog = std::make_unique<ConfirmationDialog>();
         mConfirmationDialog = confirmationDialog.get();
         mWindows.push_back(std::move(confirmationDialog));
-
-        auto alchemyWindow = std::make_unique<AlchemyWindow>();
-        trackWindow(alchemyWindow.get(), makeAlchemyWindowSettingValues());
-        mGuiModeStates[GM_Alchemy] = GuiModeState(alchemyWindow.get());
-        mWindows.push_back(std::move(alchemyWindow));
-
-        auto quickKeysMenu = std::make_unique<QuickKeysMenu>();
-        mQuickKeysMenu = quickKeysMenu.get();
-        mWindows.push_back(std::move(quickKeysMenu));
-        mGuiModeStates[GM_QuickKeysMenu] = GuiModeState(mQuickKeysMenu);
-
-        auto levelupDialog = std::make_unique<LevelupDialog>();
-        mGuiModeStates[GM_Levelup] = GuiModeState(levelupDialog.get());
-        mWindows.push_back(std::move(levelupDialog));
-
-        auto waitDialog = std::make_unique<WaitDialog>();
-        mWaitDialog = waitDialog.get();
-        mWindows.push_back(std::move(waitDialog));
-        mGuiModeStates[GM_Rest] = GuiModeState({ mWaitDialog->getProgressBar(), mWaitDialog });
-
-        auto spellCreationDialog = std::make_unique<SpellCreationDialog>();
-        mGuiModeStates[GM_SpellCreation] = GuiModeState(spellCreationDialog.get());
-        mWindows.push_back(std::move(spellCreationDialog));
-
-        auto enchantingDialog = std::make_unique<EnchantingDialog>();
-        mGuiModeStates[GM_Enchanting] = GuiModeState(enchantingDialog.get());
-        mWindows.push_back(std::move(enchantingDialog));
-
-        auto trainingWindow = std::make_unique<TrainingWindow>();
-        mGuiModeStates[GM_Training] = GuiModeState({ trainingWindow->getProgressBar(), trainingWindow.get() });
-        mWindows.push_back(std::move(trainingWindow));
-
-        auto merchantRepair = std::make_unique<MerchantRepair>();
-        mGuiModeStates[GM_MerchantRepair] = GuiModeState(merchantRepair.get());
-        mWindows.push_back(std::move(merchantRepair));
-
-        auto repair = std::make_unique<Repair>();
-        mGuiModeStates[GM_Repair] = GuiModeState(repair.get());
-        mWindows.push_back(std::move(repair));
-
-        mSoulgemDialog = std::make_unique<SoulgemDialog>(mMessageBoxManager.get());
-
-        auto companionWindow
-            = std::make_unique<CompanionWindow>(*mDragAndDrop, *mItemTransfer, mMessageBoxManager.get());
-        trackWindow(companionWindow.get(), makeCompanionWindowSettingValues());
-        mGuiModeStates[GM_Companion] = GuiModeState({ mInventoryWindow, companionWindow.get() });
-        mWindows.push_back(std::move(companionWindow));
-
-        auto jailScreen = std::make_unique<JailScreen>();
-        mJailScreen = jailScreen.get();
-        mWindows.push_back(std::move(jailScreen));
-        mGuiModeStates[GM_Jail] = GuiModeState(mJailScreen);
 
         std::string werewolfFaderTex = "textures\\werewolfoverlay.dds";
         if (mResourceSystem->getVFS()->exists(werewolfFaderTex))
@@ -532,8 +412,6 @@ namespace OFGui
 
         mHud->setVisible(true);
 
-        mCharGen = std::make_unique<CharacterCreation>(mViewer->getSceneData()->asGroup(), mResourceSystem);
-
         updatePinnedWindows();
 
         // Set up visibility
@@ -541,7 +419,6 @@ namespace OFGui
 
         mStatsWatcher->addListener(mHud);
         mStatsWatcher->addListener(mStatsWindow);
-        mStatsWatcher->addListener(mCharGen.get());
 
         for (auto& window : mWindows)
         {
@@ -554,13 +431,7 @@ namespace OFGui
     void WindowManager::setNewGame(bool newgame)
     {
         if (newgame)
-        {
             disallowAll();
-
-            mStatsWatcher->removeListener(mCharGen.get());
-            mCharGen = std::make_unique<CharacterCreation>(mViewer->getSceneData()->asGroup(), mResourceSystem);
-            mStatsWatcher->addListener(mCharGen.get());
-        }
         else
             allow(GW_ALL);
 
@@ -586,12 +457,9 @@ namespace OFGui
             mWindows.clear();
             mMessageBoxManager.reset();
             mToolTips.reset();
-            mCharGen.reset();
             mMenuScenes.reset();
 
             mKeyboardNavigation.reset();
-
-            cleanupGarbage();
 
             mFontLoader.reset();
 
@@ -609,12 +477,6 @@ namespace OFGui
     {
         mStore = &store;
         mLoadingScreen->setStore(store);
-    }
-
-    void WindowManager::cleanupGarbage()
-    {
-        // Delete any dialogs which are no longer in use
-        mGarbageDialogs.clear();
     }
 
     void WindowManager::enableScene(bool enable)
@@ -705,13 +567,8 @@ namespace OFGui
             mStatsWindow->setVisible(false);
             mSpellWindow->setVisible(false);
             mHud->setDrowningBarVisible(false);
-            mInventoryWindow->setVisible(
-                getMode() == GM_Container || getMode() == GM_Barter || getMode() == GM_Companion);
+            mInventoryWindow->setVisible(false);
         }
-
-        GuiMode mode = mGuiModes.back();
-
-        mInventoryWindow->setTrading(mode == GM_Barter);
 
         if (getMode() == GM_Inventory)
         {
@@ -727,37 +584,11 @@ namespace OFGui
         }
 
         updateControllerButtonsOverlay();
-
-        switch (mode)
-        {
-            // FIXME: refactor chargen windows to use modes properly (or not use them at all)
-            case GM_Name:
-            case GM_Race:
-            case GM_Class:
-            case GM_ClassPick:
-            case GM_ClassCreate:
-            case GM_Birth:
-            case GM_ClassGenerate:
-            case GM_Review:
-                mCharGen->spawnDialog(mode);
-                break;
-            default:
-                break;
-        }
     }
 
     void WindowManager::setDrowningTimeLeft(float time, float maxTime)
     {
         mHud->setDrowningTimeLeft(time, maxTime);
-    }
-
-    void WindowManager::removeDialog(std::unique_ptr<Layout>&& dialog)
-    {
-        if (!dialog)
-            return;
-        dialog->setVisible(false);
-        mGarbageDialogs.push_back(std::move(dialog));
-        updateControllerButtonsOverlay();
     }
 
     void WindowManager::exitCurrentGuiMode()
@@ -770,6 +601,19 @@ namespace OFGui
 
         if (mGuiModes.empty())
             return;
+
+        // A conversation of Fallout that offers no goodbye is not left: the pause menu opens over it instead (the
+        // doctor's test of Goodsprings, which a player who walked out of it half way could not go on with)
+        if (getMode() == GM_DialogMenu)
+        {
+            if (const OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
+                scripts != nullptr && scripts->conversationHeld())
+            {
+                if (!MyGUI::InputManager::getInstance().isModalAny())
+                    pushGuiMode(GM_MainMenu);
+                return;
+            }
+        }
 
         GuiModeState& state = mGuiModeStates[mGuiModes.back()];
         for (const auto& window : state.mWindows)
@@ -829,10 +673,13 @@ namespace OFGui
 
     void WindowManager::messageBox(std::string_view message, enum OFGui::ShowInDialogueMode showInDialogueMode)
     {
-        if (getMode() == GM_Dialogue && showInDialogueMode != OFGui::ShowInDialogueMode_Never)
+        // During a conversation a message goes where the games put it: the message queue of the head-up display
+        // (ShowInDialogueMode)
+        OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
+        if (getMode() == GM_DialogMenu && scripts != nullptr && showInDialogueMode != OFGui::ShowInDialogueMode_Never)
         {
             MyGUI::UString text = MyGUI::LanguageManager::getInstance().replaceTags(MyGUI::UString(message));
-            mDialogueWindow->addMessageBox(text);
+            scripts->hudMessages().push(text.asUTF8());
         }
         else if (showInDialogueMode != OFGui::ShowInDialogueMode_Only)
         {
@@ -1118,14 +965,7 @@ namespace OFGui
 
         mPostProcessorHud->onFrame(frameDuration);
 
-        if (mCharGen)
-            mCharGen->onFrame(frameDuration);
-
-        updateActivatedQuickKey();
-
         mStatsWatcher->update();
-
-        cleanupGarbage();
     }
 
     void WindowManager::changeCell(const OFWorld::CellStore* cell)
@@ -1483,26 +1323,8 @@ namespace OFGui
 
     void WindowManager::pushGuiMode(GuiMode mode, const OFWorld::Ptr& arg)
     {
-        pushGuiMode(mode, arg, false);
-    }
-
-    void WindowManager::forceLootMode(const OFWorld::Ptr& ptr)
-    {
-        pushGuiMode(OFGui::GM_Container, ptr, true);
-    }
-
-    void WindowManager::pushGuiMode(GuiMode mode, const OFWorld::Ptr& arg, bool force)
-    {
         if (mode == GM_Inventory && mAllowed == GW_None)
             return;
-        // The journal of Morrowind is gone and its mode has no window: entered, it would be a blank mode that takes the
-        // input of the menus
-        if (mode == GM_Journal)
-        {
-            Log(Debug::Warning) << "Warning: the Journal mode has no window (Fallout's quests are on the Pip-Boy DATA "
-                                   "page), not entered";
-            return;
-        }
 
         if (mGuiModes.empty() || mGuiModes.back() != mode)
         {
@@ -1521,9 +1343,6 @@ namespace OFGui
 
             mGuiModeStates[mode].update(true);
         }
-        if (force)
-            mContainerWindow->treatNextOpenAsLoot();
-
         try
         {
             for (WindowBase* window : mGuiModeStates[mode].mWindows)
@@ -1542,18 +1361,10 @@ namespace OFGui
 
         if (Settings::gui().mControllerMenus)
         {
-            if (mode == GM_Container)
-            {
-                // Ensure controller focus is on container when entering container mode.
-                setActiveControllerWindow(mode, 0);
-            }
-            else
-            {
-                // Activate first visible window. This needs to be called after updateVisible.
-                if (mActiveControllerWindows[mode] != 0)
-                    mActiveControllerWindows[mode] = mActiveControllerWindows[mode] - 1;
-                cycleActiveControllerWindow(true);
-            }
+            // Activate first visible window. This needs to be called after updateVisible.
+            if (mActiveControllerWindows[mode] != 0)
+                mActiveControllerWindows[mode] = mActiveControllerWindows[mode] - 1;
+            cycleActiveControllerWindow(true);
         }
     }
 
@@ -1642,12 +1453,6 @@ namespace OFGui
 
         updateVisible();
         OFBase::Environment::get().getLuaManager()->uiModeChanged(OFWorld::Ptr());
-    }
-
-    void WindowManager::goToJail(int days)
-    {
-        pushGuiMode(OFGui::GM_Jail);
-        mJailScreen->goToJail(days);
     }
 
     void WindowManager::setSelectedSpell(const ESM::RefId& spellId, int successChancePercent)
@@ -1741,10 +1546,6 @@ namespace OFGui
         return mScalingFactor;
     }
 
-    std::vector<OFGui::WindowBase*> WindowManager::getGuiModeWindows(GuiMode mode)
-    {
-        return mGuiModeStates[mode].mWindows;
-    }
     OFGui::InventoryWindow* WindowManager::getInventoryWindow()
     {
         return mInventoryWindow;
@@ -1760,10 +1561,6 @@ namespace OFGui
     OFGui::HUD* WindowManager::getHud()
     {
         return mHud;
-    }
-    OFGui::TradeWindow* WindowManager::getTradeWindow()
-    {
-        return mTradeWindow;
     }
     OFGui::PostProcessorHud* WindowManager::getPostProcessorHud()
     {
@@ -1785,22 +1582,12 @@ namespace OFGui
     {
         mAllowed = (GuiWindow)(mAllowed | wnd);
 
-        if (wnd & GW_Inventory)
-        {
-            mBookWindow->setInventoryAllowed(true);
-            mScrollWindow->setInventoryAllowed(true);
-        }
-
         updateVisible();
     }
 
     void WindowManager::disallowAll()
     {
         mAllowed = GW_None;
-        mRestAllowed = false;
-
-        mBookWindow->setInventoryAllowed(false);
-        mScrollWindow->setInventoryAllowed(false);
 
         updateVisible();
     }
@@ -1896,41 +1683,12 @@ namespace OFGui
             mHud->setCrosshairVisible(show && Settings::hud().mCrosshair);
     }
 
-    void WindowManager::updateActivatedQuickKey()
-    {
-        mQuickKeysMenu->updateActivatedQuickKey();
-    }
-
-    void WindowManager::activateQuickKey(int index)
-    {
-        mQuickKeysMenu->activateQuickKey(index);
-    }
-
     bool WindowManager::setHudVisibility(bool show)
     {
         mHudEnabled = show;
         updateVisible();
         mMessageBoxManager->setVisible(mHudEnabled);
         return mHudEnabled;
-    }
-
-    bool WindowManager::getRestEnabled()
-    {
-        // Enable rest dialogue if character creation finished
-        if (mRestAllowed == false
-            && OFBase::Environment::get().getWorld()->getGlobalFloat(OFWorld::Globals::sCharGenState) == -1)
-            mRestAllowed = true;
-        return mRestAllowed;
-    }
-
-    bool WindowManager::getPlayerSleeping()
-    {
-        return mWaitDialog->getSleeping();
-    }
-
-    void WindowManager::wakeUpPlayer()
-    {
-        mWaitDialog->wakeUp();
     }
 
     void WindowManager::addVisitedLocation(const std::string& name, int x, int y)
@@ -1978,12 +1736,6 @@ namespace OFGui
     std::string WindowManager::getCurrentCursorName() const
     {
         return mLuaCursorOverride.empty() ? mMyGuiCursor : mLuaCursorOverride;
-    }
-
-    void WindowManager::showSoulgemDialog(OFWorld::Ptr item)
-    {
-        mSoulgemDialog->show(item);
-        updateVisible();
     }
 
     void WindowManager::updatePlayer()
@@ -2166,7 +1918,6 @@ namespace OFGui
             mAirMeter->hide();
 
         mForceHidden = GW_None;
-        mRestAllowed = true;
 
         while (!mGuiModes.empty())
             popGuiMode();
@@ -2178,7 +1929,7 @@ namespace OFGui
     {
         mMap->write(writer, progress);
 
-        mQuickKeysMenu->write(writer);
+        // The quick keys of Morrowind (KEYS) are no longer written: their menu is gone, and an old save's are skipped
 
         if (!mSelectedSpell.empty())
         {
@@ -2199,8 +1950,6 @@ namespace OFGui
     {
         if (type == ESM::REC_GMAP)
             mMap->readRecord(reader, type);
-        else if (type == ESM::REC_KEYS)
-            mQuickKeysMenu->readRecord(reader, type);
         else if (type == ESM::REC_ASPL)
         {
             reader.getSubNameIs("ID__");
@@ -2219,7 +1968,6 @@ namespace OFGui
     size_t WindowManager::countSavedGameRecords() const
     {
         return 1 // Global map
-            + 1 // QuickKeysMenu
             + mCustomMarkers.size() + (!mSelectedSpell.empty() ? 1 : 0);
     }
 
@@ -2228,7 +1976,7 @@ namespace OFGui
         return !MyGUI::InputManager::getInstance().isModalAny()
             && !isConsoleMode()
             // TODO: remove this, once we have properly serialized the state of open windows
-            && (!isGuiMode() || (mGuiModes.size() == 1 && (getMode() == GM_MainMenu || getMode() == GM_Rest)));
+            && (!isGuiMode() || (mGuiModes.size() == 1 && getMode() == GM_MainMenu));
     }
 
     void WindowManager::playVideo(std::string_view name, bool allowSkipping, bool overrideSounds)
@@ -2859,7 +2607,14 @@ namespace OFGui
 
     void WindowManager::setDisabledByLua(std::string_view windowId, bool disabled)
     {
-        mLuaIdToWindow.at(windowId)->setDisabledByLua(disabled);
+        // A window that went (the windows of Morrowind) or never was is said once in the log, by this greppable line
+        const auto it = mLuaIdToWindow.find(windowId);
+        if (it == mLuaIdToWindow.end())
+        {
+            Log(Debug::Warning) << "Warning: unknown GUI window '" << windowId << "'";
+            return;
+        }
+        it->second->setDisabledByLua(disabled);
         updateVisible();
     }
 
@@ -2867,7 +2622,10 @@ namespace OFGui
     {
         auto it = mLuaIdToWindow.find(windowId);
         if (it == mLuaIdToWindow.end())
-            throw std::logic_error("Invalid window name: " + std::string(windowId));
+        {
+            Log(Debug::Warning) << "Warning: unknown GUI window '" << windowId << "'";
+            return false;
+        }
         return it->second->isVisible();
     }
 

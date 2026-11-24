@@ -68,8 +68,6 @@ Inventory_description: "Otwiera ekwipunek."
 Journal_name: "Dziennik"
 Journal_description: "Otwiera dziennik."
 
-QuickKeysMenu_name: "Menu skrótów"
-QuickKeysMenu_description: "Otwiera menu skrótów."
 
 SmoothMoveForward_name: "Płynny ruch do przodu"
 SmoothMoveForward_description: "Ruch do przodu z płynnym przejściem między chodzeniem a bieganiem."

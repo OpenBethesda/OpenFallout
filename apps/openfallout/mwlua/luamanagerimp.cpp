@@ -776,11 +776,6 @@ namespace OFLua
             EngineEvents::OnSkillLevelUp{ getId(actor), skillId.serializeText(), std::string(source) });
     }
 
-    void LuaManager::jailTimeServed(const OFWorld::Ptr& actor, int days)
-    {
-        mEngineEvents.addToQueue(EngineEvents::OnJailTimeServed{ getId(actor), days });
-    }
-
     void LuaManager::onHit(const OFWorld::Ptr& attacker, const OFWorld::Ptr& victim, const OFWorld::Ptr& weapon,
         const OFWorld::Ptr& ammo, int attackType, float attackStrength, float attackWindUp, float damage, bool isHealth,
         const osg::Vec3f& hitPos, bool successful, OFMechanics::DamageSourceType sourceType)

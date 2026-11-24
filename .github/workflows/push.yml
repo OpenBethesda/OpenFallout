@@ -19,6 +19,13 @@ on:
           probe into the OpenGL app. On the default branch the image is signed and notarized. Never for a release.
         type: boolean
         default: false
+      coverage-app:
+        description: >-
+          Also build the packaged app instrumented for clang source coverage, as the artifact
+          openfallout-macos-coverage-dmg-arm64-<sha>, to measure which engine code played rounds reach
+          (docs/openfallout/ci-reporting.md). Pull requests and pushes never build it.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -28,9 +35,9 @@ permissions:
 # only master runs store the caches that pull requests start from, and a cancelled
 # run stores nothing.
 concurrency:
-  # The manual ANGLE test run has a group of its own: a pending run replaces the pending run of its group, and the
-  # test run must never take the place of a push's run on master.
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.bundle-angle && '-angle' || '' }}
+  # The manual ANGLE test run and the manual instrumented-app run have groups of their own: a pending run replaces the
+  # pending run of its group, and a test run must never take the place of a push's run on master.
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.bundle-angle && '-angle' || '' }}${{ inputs.coverage-app && '-coverage' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -108,3 +115,10 @@ jobs:
       MACOS_NOTARY_API_KEY_ID: ${{ secrets.MACOS_NOTARY_API_KEY_ID }}
       MACOS_NOTARY_API_ISSUER_ID: ${{ secrets.MACOS_NOTARY_API_ISSUER_ID }}
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # The instrumented app (coverage-app.yml): only the manual run that asks for it. The jobs above run in that run too, as
+  # in any manual run; nothing waits for this one.
+  CoverageApp:
+    name: Coverage
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.coverage-app }}
+    uses: ./.github/workflows/coverage-app.yml
