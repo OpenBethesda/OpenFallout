@@ -824,64 +824,6 @@ namespace OFGui
         mFocusToolTipY = y;
     }
 
-    void ToolTips::createSkillToolTip(MyGUI::Widget* widget, ESM::RefId skillId)
-    {
-        if (skillId.empty())
-            return;
-
-        const OFWorld::ESMStore& store = *OFBase::Environment::get().getESMStore();
-        const ESM::Skill* skill = store.get<ESM::Skill>().find(skillId);
-        const ESM::Attribute* attr = store.get<ESM::Attribute>().find(skill->mData.mAttribute);
-
-        widget->setUserString("ToolTipType", "Layout");
-        widget->setUserString("ToolTipLayout", "SkillNoProgressToolTip");
-        widget->setUserString("Caption_SkillNoProgressName", MyGUI::TextIterator::toTagsString(skill->mName));
-        widget->setUserString("Caption_SkillNoProgressDescription", skill->mDescription);
-        widget->setUserString("Caption_SkillNoProgressAttribute",
-            "#{sGoverningAttribute}: " + MyGUI::TextIterator::toTagsString(attr->mName));
-        widget->setUserString("ImageTexture_SkillNoProgressImage", skill->mIcon.getNormalized());
-    }
-
-    void ToolTips::createAttributeToolTip(MyGUI::Widget* widget, ESM::RefId attributeId)
-    {
-        const ESM::Attribute* attribute
-            = OFBase::Environment::get().getESMStore()->get<ESM::Attribute>().search(attributeId);
-        if (!attribute)
-            return;
-
-        widget->setUserString("ToolTipType", "Layout");
-        widget->setUserString("ToolTipLayout", "AttributeToolTip");
-        widget->setUserString("Caption_AttributeName", MyGUI::TextIterator::toTagsString(attribute->mName));
-        widget->setUserString(
-            "Caption_AttributeDescription", MyGUI::TextIterator::toTagsString(attribute->mDescription));
-        widget->setUserString("ImageTexture_AttributeImage", attribute->mIcon.getNormalized());
-    }
-
-    void ToolTips::createSpecializationToolTip(MyGUI::Widget* widget, std::string_view name, int specId)
-    {
-        widget->setUserString("Caption_Caption", name);
-        std::string specText;
-        // get all skills of this specialisation
-        const OFWorld::Store<ESM::Skill>& skills = OFBase::Environment::get().getESMStore()->get<ESM::Skill>();
-
-        bool isFirst = true;
-        for (const auto& skill : skills)
-        {
-            if (skill.mData.mSpecialization == specId)
-            {
-                if (isFirst)
-                    isFirst = false;
-                else
-                    specText += "\n";
-
-                specText += MyGUI::TextIterator::toTagsString(skill.mName);
-            }
-        }
-        widget->setUserString("Caption_ColumnText", specText);
-        widget->setUserString("ToolTipLayout", "SpecializationToolTip");
-        widget->setUserString("ToolTipType", "Layout");
-    }
-
     void ToolTips::createBirthsignToolTip(MyGUI::Widget* widget, const ESM::RefId& birthsignId)
     {
         const OFWorld::ESMStore& store = *OFBase::Environment::get().getESMStore();
@@ -956,24 +898,5 @@ namespace OFGui
         widget->setUserString("Caption_ClassSpecialisation", "#{sSpecialization}: " + specStr);
         widget->setUserString("ToolTipType", "Layout");
         widget->setUserString("ToolTipLayout", "ClassToolTip");
-    }
-
-    void ToolTips::createMagicEffectToolTip(MyGUI::Widget* widget, ESM::RefId effectId)
-    {
-        const auto& store = OFBase::Environment::get().getESMStore();
-        const ESM::MagicEffect* effect = store->get<ESM::MagicEffect>().find(effectId);
-
-        const VFS::Path::Normalized iconPath = Misc::ResourceHelpers::correctBigIconPath(
-            effect->mIcon.getNormalized(), *OFBase::Environment::get().getResourceSystem()->getVFS());
-
-        widget->setUserString("ToolTipType", "Layout");
-        widget->setUserString("ToolTipLayout", "MagicEffectToolTip");
-        widget->setUserString("Caption_MagicEffectName", effect->mName);
-        widget->setUserString("Caption_MagicEffectDescription", effect->mDescription);
-        widget->setUserString("Caption_MagicEffectSchool",
-            "#{sSchool}: "
-                + MyGUI::TextIterator::toTagsString(
-                    store->get<ESM::Skill>().find(effect->mData.mSchool)->mSchool->mName));
-        widget->setUserString("ImageTexture_MagicEffectImage", iconPath);
     }
 }

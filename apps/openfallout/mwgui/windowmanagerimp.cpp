@@ -46,6 +46,7 @@
 
 #include <components/vfs/manager.hpp>
 
+#include <components/widgets/imagebutton.hpp>
 #include <components/widgets/tags.hpp>
 #include <components/widgets/widgets.hpp>
 
@@ -109,6 +110,7 @@
 #include "spellwindow.hpp"
 #include "statswindow.hpp"
 #include "videowidget.hpp"
+#include "widgets.hpp"
 
 namespace OFGui
 {
@@ -1544,10 +1546,6 @@ namespace OFGui
         return mScalingFactor;
     }
 
-    std::vector<OFGui::WindowBase*> WindowManager::getGuiModeWindows(GuiMode mode)
-    {
-        return mGuiModeStates[mode].mWindows;
-    }
     OFGui::InventoryWindow* WindowManager::getInventoryWindow()
     {
         return mInventoryWindow;

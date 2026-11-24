@@ -58,8 +58,6 @@ namespace OFGui
 
         bool getWorldMouseOver() { return mWorldMouseOver; }
 
-        MyGUI::Widget* getEffectBox() { return mEffectBox; }
-
         void setEnemy(const OFWorld::Ptr& enemy);
 
         void clear() override;

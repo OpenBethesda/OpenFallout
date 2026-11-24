@@ -161,7 +161,6 @@ namespace OFBase
         virtual OFGui::ConfirmationDialog* getConfirmationDialog() = 0;
         virtual OFGui::HUD* getHud() = 0;
         virtual OFGui::PostProcessorHud* getPostProcessorHud() = 0;
-        virtual std::vector<OFGui::WindowBase*> getGuiModeWindows(OFGui::GuiMode mode) = 0;
 
         /// Make the player use an item, while updating GUI state accordingly
         virtual void useItem(const OFWorld::Ptr& item, bool force = false) = 0;

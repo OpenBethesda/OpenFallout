@@ -175,7 +175,6 @@ namespace OFGui
         OFGui::ConfirmationDialog* getConfirmationDialog() override;
         OFGui::HUD* getHud() override;
         OFGui::PostProcessorHud* getPostProcessorHud() override;
-        std::vector<OFGui::WindowBase*> getGuiModeWindows(GuiMode mode) override;
 
         /// Make the player use an item, while updating GUI state accordingly
         void useItem(const OFWorld::Ptr& item, bool bypassBeastRestrictions = false) override;
