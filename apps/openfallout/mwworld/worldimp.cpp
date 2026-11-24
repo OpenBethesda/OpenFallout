@@ -421,12 +421,6 @@ namespace OFWorld
         writer.writeHNOString("RAND", Misc::Rng::serialize(mPrng));
         writer.endRecord(ESM::REC_RAND);
 
-        // Active cells could have a dirty fog of war, sync it to the CellStore first
-        for (CellStore* cellstore : mWorldScene->getActiveCells())
-        {
-            OFBase::Environment::get().getWindowManager()->writeFog(cellstore);
-        }
-
         mStore.write(writer, progress); // dynamic Store must be written (and read) before Cells, so that
                                         // references to custom made records will be recognized
         mWorldModel.write(writer, progress); // the player's cell needs to be loaded before the player
@@ -1556,18 +1550,19 @@ namespace OFWorld
 
     void World::preloadSpells()
     {
-        const ESM::RefId& selectedSpell = OFBase::Environment::get().getWindowManager()->getSelectedSpell();
+        const OFWorld::Ptr player = getPlayerPtr();
+        const ESM::RefId& selectedSpell = player.getClass().getCreatureStats(player).getSpells().getSelectedSpell();
         if (!selectedSpell.empty())
         {
             const ESM::Spell* spell = mStore.get<ESM::Spell>().search(selectedSpell);
             if (spell)
                 preloadEffects(&spell->mEffects);
         }
-        const OFWorld::Ptr& selectedEnchantItem
-            = OFBase::Environment::get().getWindowManager()->getSelectedEnchantItem();
-        if (!selectedEnchantItem.isEmpty())
+        OFWorld::InventoryStore& inventory = player.getClass().getInventoryStore(player);
+        const OFWorld::ContainerStoreIterator selectedEnchantItem = inventory.getSelectedEnchantItem();
+        if (selectedEnchantItem != inventory.end())
         {
-            const ESM::RefId& enchantId = selectedEnchantItem.getClass().getEnchantment(selectedEnchantItem);
+            const ESM::RefId& enchantId = selectedEnchantItem->getClass().getEnchantment(*selectedEnchantItem);
             if (!enchantId.empty())
             {
                 const ESM::Enchantment* ench = mStore.get<ESM::Enchantment>().search(enchantId);
@@ -1575,10 +1570,11 @@ namespace OFWorld
                     preloadEffects(&ench->mEffects);
             }
         }
-        const OFWorld::Ptr& selectedWeapon = OFBase::Environment::get().getWindowManager()->getSelectedWeapon();
-        if (!selectedWeapon.isEmpty())
+        const OFWorld::ContainerStoreIterator selectedWeapon
+            = inventory.getSlot(OFWorld::InventoryStore::Slot_CarriedRight);
+        if (selectedWeapon != inventory.end())
         {
-            const ESM::RefId& enchantId = selectedWeapon.getClass().getEnchantment(selectedWeapon);
+            const ESM::RefId& enchantId = selectedWeapon->getClass().getEnchantment(*selectedWeapon);
             if (!enchantId.empty())
             {
                 const ESM::Enchantment* ench = mStore.get<ESM::Enchantment>().search(enchantId);
@@ -2311,7 +2307,6 @@ namespace OFWorld
         rotateObject(player, osg::Vec3f(), OFBase::RotationFlag_inverseOrder | OFBase::RotationFlag_adjust);
 
         OFBase::Environment::get().getMechanicsManager()->add(getPlayerPtr());
-        OFBase::Environment::get().getWindowManager()->watchActor(getPlayerPtr());
 
         mPhysics->remove(getPlayerPtr());
         mPhysics->addActor(getPlayerPtr(), getPlayerPtr().getClass().getCorrectedModel(getPlayerPtr()));

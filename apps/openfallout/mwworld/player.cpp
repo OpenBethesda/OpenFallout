@@ -441,16 +441,6 @@ namespace OFWorld
         mPreviousItems.erase(boundItemId);
     }
 
-    void Player::setSelectedSpell(const ESM::RefId& spellId)
-    {
-        Ptr player = getPlayer();
-        InventoryStore& store = player.getClass().getInventoryStore(player);
-        store.setSelectedEnchantItem(store.end());
-        int castChance = int(OFMechanics::getSpellSuccessChance(spellId, player));
-        OFBase::Environment::get().getWindowManager()->setSelectedSpell(spellId, castChance);
-        OFBase::Environment::get().getWindowManager()->updateSpellWindow();
-    }
-
     void Player::update()
     {
         auto player = getPlayer();

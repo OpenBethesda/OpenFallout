@@ -154,7 +154,6 @@ OFWorld::ContainerStoreIterator OFWorld::InventoryStore::add(
 
     if (mListener)
         mListener->itemAdded(*retVal, count);
-    OFBase::Environment::get().getWindowManager()->inventoryUpdated(actor);
 
     return retVal;
 }
@@ -599,7 +598,6 @@ int OFWorld::InventoryStore::remove(const Ptr& item, int count, bool equipReplac
 
     if (mListener)
         mListener->itemRemoved(item, retCount);
-    OFBase::Environment::get().getWindowManager()->inventoryUpdated(actor);
 
     return retCount;
 }
@@ -694,14 +692,6 @@ void OFWorld::InventoryStore::fireEquipmentChangedEvent()
         return;
     if (mInventoryListener)
         mInventoryListener->equipmentChanged();
-
-    // if player, update inventory window
-    /*
-    if (mActor == OFMechanics::getPlayer())
-    {
-        OFBase::Environment::get().getWindowManager()->getInventoryWindow()->updateItemView();
-    }
-    */
 }
 
 void OFWorld::InventoryStore::clear()

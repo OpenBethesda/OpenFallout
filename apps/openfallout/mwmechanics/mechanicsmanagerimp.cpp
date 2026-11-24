@@ -275,8 +275,6 @@ namespace OFMechanics
 
     void MechanicsManager::remove(const OFWorld::Ptr& ptr, bool keepActive)
     {
-        if (ptr == OFBase::Environment::get().getWindowManager()->getWatchedActor())
-            OFBase::Environment::get().getWindowManager()->watchActor(OFWorld::Ptr());
         mActors.removeActor(ptr, keepActive);
         mObjects.removeObject(ptr);
         mFalloutActors.remove(ptr);
@@ -284,9 +282,6 @@ namespace OFMechanics
 
     void MechanicsManager::updateCell(const OFWorld::Ptr& old, const OFWorld::Ptr& ptr)
     {
-        if (old == OFBase::Environment::get().getWindowManager()->getWatchedActor())
-            OFBase::Environment::get().getWindowManager()->watchActor(ptr);
-
         if (ptr.getClass().isActor())
             mActors.updateActor(old, ptr);
         else if (FalloutActors::handles(ptr))
@@ -306,29 +301,6 @@ namespace OFMechanics
     {
         // Note: we should do it here since game mechanics and world updates use these values
         OFWorld::Ptr ptr = getPlayer();
-        OFBase::WindowManager* winMgr = OFBase::Environment::get().getWindowManager();
-
-        OFWorld::InventoryStore& inv = ptr.getClass().getInventoryStore(ptr);
-        OFWorld::ContainerStoreIterator weapon = inv.getSlot(OFWorld::InventoryStore::Slot_CarriedRight);
-
-        // Update the selected spell icon
-        OFWorld::ContainerStoreIterator enchantItem = inv.getSelectedEnchantItem();
-        if (enchantItem != inv.end())
-            winMgr->setSelectedEnchantItem(*enchantItem);
-        else
-        {
-            const ESM::RefId& spell = winMgr->getSelectedSpell();
-            if (!spell.empty())
-                winMgr->setSelectedSpell(spell, int(OFMechanics::getSpellSuccessChance(spell, ptr)));
-            else
-                winMgr->unsetSelectedSpell();
-        }
-
-        // Update the equipped weapon icon
-        if (weapon == inv.end())
-            winMgr->unsetSelectedWeapon();
-        else
-            winMgr->setSelectedWeapon(*weapon);
 
         if (mUpdatePlayer)
         {
@@ -1902,14 +1874,10 @@ namespace OFMechanics
             {
                 player->saveStats();
                 player->setWerewolfStats();
-                windowManager->forceHide(OFGui::GW_Inventory);
-                windowManager->forceHide(OFGui::GW_Magic);
             }
             else
             {
                 player->restoreStats();
-                windowManager->unsetForceHide(OFGui::GW_Inventory);
-                windowManager->unsetForceHide(OFGui::GW_Magic);
             }
 
             windowManager->setWerewolfOverlay(werewolf);

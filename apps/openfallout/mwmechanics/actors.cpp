@@ -1912,18 +1912,12 @@ namespace OFMechanics
     void Actors::updateSneaking(CharacterController* ctrl, float duration)
     {
         if (!ctrl)
-        {
-            OFBase::Environment::get().getWindowManager()->setSneakVisibility(false);
             return;
-        }
 
         const OFWorld::Ptr player = getPlayer();
 
         if (!OFBase::Environment::get().getMechanicsManager()->isSneaking(player))
-        {
-            OFBase::Environment::get().getWindowManager()->setSneakVisibility(false);
             return;
-        }
 
         OFBase::World* const world = OFBase::Environment::get().getWorld();
         const OFWorld::Store<ESM::GameSetting>& gmst = world->getStore().get<ESM::GameSetting>();
@@ -1937,7 +1931,6 @@ namespace OFMechanics
         {
             // Set when an NPC is within line of sight and distance, but is still unaware. Used for skill progress.
             bool avoidedNotice = false;
-            bool detected = false;
 
             std::vector<OFWorld::Ptr> observers;
             const osg::Vec3f position(player.getRefData().getPosition().asVec3());
@@ -1959,9 +1952,7 @@ namespace OFMechanics
                 {
                     if (OFBase::Environment::get().getMechanicsManager()->awarenessCheck(player, observer))
                     {
-                        detected = true;
                         avoidedNotice = false;
-                        OFBase::Environment::get().getWindowManager()->setSneakVisibility(false);
                         break;
                     }
                     else
@@ -1976,9 +1967,6 @@ namespace OFMechanics
 
             if (avoidedNotice && mSneakSkillTimer == 0.f)
                 player.getClass().skillUsageSucceeded(player, ESM::Skill::Sneak, ESM::Skill::Sneak_AvoidNotice);
-
-            if (!detected)
-                OFBase::Environment::get().getWindowManager()->setSneakVisibility(true);
         }
 
         mSneakTimer += duration;

@@ -32,8 +32,6 @@ namespace OFInput
         void loadKeyDefaults(bool force = false);
         void loadControllerDefaults(bool force = false);
 
-        void setDragDrop(bool dragDrop);
-
         void update(float dt);
 
         void setPlayerControlsEnabled(bool enabled);
@@ -74,8 +72,6 @@ namespace OFInput
         std::unique_ptr<BindingsListener> mListener;
 
         std::filesystem::path mUserFile;
-
-        bool mDragDrop;
     };
 }
 #endif

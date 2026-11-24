@@ -211,22 +211,17 @@ set(BUILTIN_DATA_FILES
     mygui/openmw_console.layout
     mygui/openmw_console.skin.xml
     mygui/openmw_controllerbuttons.layout
-    mygui/openmw_count_window.layout
     mygui/openmw_edit.skin.xml
     mygui/openmw_hud_box.skin.xml
     mygui/openmw_hud_energybar.skin.xml
     mygui/openmw_hud.layout
     mygui/openmw_interactive_messagebox.layout
     mygui/openmw_interactive_messagebox_notransp.layout
-    mygui/openmw_inventory_tabs.layout
-    mygui/openmw_inventory_window.layout
     mygui/openmw_layers.xml
     mygui/openmw_lua.xml
     mygui/openmw_list.skin.xml
     mygui/openmw_mainmenu.layout
     mygui/openmw_mainmenu.skin.xml
-    mygui/openmw_map_window.layout
-    mygui/openmw_map_window.skin.xml
     mygui/openmw_messagebox.layout
     mygui/openmw_pointer.xml
     mygui/openmw_progress.skin.xml
@@ -234,8 +229,6 @@ set(BUILTIN_DATA_FILES
     mygui/openmw_scroll.skin.xml
     mygui/openmw_settings_window.layout
     mygui/openmw_settings.xml
-    mygui/openmw_spell_window.layout
-    mygui/openmw_stats_window.layout
     mygui/openmw_text.skin.xml
     mygui/openmw_tooltips.layout
     mygui/openmw_windows.skin.xml
@@ -262,9 +255,6 @@ endforeach (f)
 # most of them) shadows the one made here.
 set(FALLBACK_TEXTURES
     textures/_land_default.dds
-    textures/compass.dds
-    textures/cursor_drop_ground.dds
-    textures/door_icon.dds
     textures/menu_bar_gray.dds
     textures/menu_button_frame_bottom.dds
     textures/menu_button_frame_bottom_left_corner.dds

@@ -61,7 +61,6 @@ The ranges included with each setting are the physically possible ranges, not re
         HUD <HUD>
         Input <input>
         Lua <lua>
-        Map <map>
         Models <models>
         Navigator <navigator>
         Physics <physics>

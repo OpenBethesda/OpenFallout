@@ -62,10 +62,7 @@ namespace OFGui
     class Layout;
 
     class Console;
-    class SpellWindow;
     class ConfirmationDialog;
-    class CountDialog;
-    class InventoryWindow;
     class MenuScenes;
     class WindowModal;
     class MessageBox;
@@ -116,8 +113,6 @@ namespace OFBase
         /// (and will continually update the window while doing so)
         virtual void playVideo(std::string_view name, bool allowSkipping, bool overrideSounds = true) = 0;
 
-        virtual void setNewGame(bool newgame) = 0;
-
         virtual void pushGuiMode(OFGui::GuiMode mode, const OFWorld::Ptr& arg) = 0;
         virtual void pushGuiMode(OFGui::GuiMode mode) = 0;
         virtual void popGuiMode(bool forceExit = false) = 0;
@@ -140,32 +135,11 @@ namespace OFBase
         /// that replaces it does not share. 0 when no box is open.
         virtual std::uint64_t interactiveMessageBoxId() const = 0;
 
-        virtual void toggleVisible(OFGui::GuiWindow wnd) = 0;
-
-        virtual void forceHide(OFGui::GuiWindow wnd) = 0;
-        virtual void unsetForceHide(OFGui::GuiWindow wnd) = 0;
-
-        /// Disallow all inventory mode windows
-        virtual void disallowAll() = 0;
-
-        /// Allow one or more windows
-        virtual void allow(OFGui::GuiWindow wnd) = 0;
-
-        virtual bool isAllowed(OFGui::GuiWindow wnd) const = 0;
-
-        /// \todo investigate, if we really need to expose every single lousy UI element to the outside world
-        virtual OFGui::InventoryWindow* getInventoryWindow() = 0;
         /// The scenes that menus show (models drawn to a texture)
         virtual OFGui::MenuScenes* getMenuScenes() = 0;
-        virtual OFGui::CountDialog* getCountDialog() = 0;
         virtual OFGui::ConfirmationDialog* getConfirmationDialog() = 0;
         virtual OFGui::HUD* getHud() = 0;
         virtual OFGui::PostProcessorHud* getPostProcessorHud() = 0;
-
-        /// Make the player use an item, while updating GUI state accordingly
-        virtual void useItem(const OFWorld::Ptr& item, bool force = false) = 0;
-
-        virtual void updateSpellWindow() = 0;
 
         virtual void setConsoleSelectedObject(const OFWorld::Ptr& object) = 0;
         virtual OFWorld::Ptr getConsoleSelectedObject() const = 0;
@@ -183,9 +157,6 @@ namespace OFBase
         /// @param maxTime how long we can be underwater (in total) until drowning starts
         virtual void setDrowningTimeLeft(float time, float maxTime) = 0;
 
-        virtual void changeCell(const OFWorld::CellStore* cell) = 0;
-        ///< change the active cell
-
         virtual void setFocusObject(const OFWorld::Ptr& focus) = 0;
         virtual void setFocusObjectScreenCoords(float x, float y) = 0;
 
@@ -194,12 +165,9 @@ namespace OFBase
         virtual void setCursorInteractionEnabled(bool enabled) = 0;
         virtual void getMousePosition(int& x, int& y) = 0;
         virtual void getMousePosition(float& x, float& y) = 0;
-        virtual void setDragDrop(bool dragDrop) = 0;
         virtual bool getWorldMouseOver() = 0;
 
         virtual float getScalingFactor() const = 0;
-
-        virtual bool toggleFogOfWar() = 0;
 
         virtual bool toggleFullHelp() = 0;
         ///< show extra info in item tooltips (owner, script)
@@ -209,24 +177,6 @@ namespace OFBase
         /// sets the visibility of the drowning bar
         virtual void setDrowningBarVisibility(bool visible) = 0;
 
-        /// sets the visibility of the hud health/magicka/stamina bars
-        virtual void setHMSVisibility(bool visible) = 0;
-
-        /// sets the visibility of the hud minimap
-        virtual void setMinimapVisibility(bool visible) = 0;
-        virtual void setWeaponVisibility(bool visible) = 0;
-        virtual void setSpellVisibility(bool visible) = 0;
-        virtual void setSneakVisibility(bool visible) = 0;
-
-        virtual const ESM::RefId& getSelectedSpell() = 0;
-        virtual void setSelectedSpell(const ESM::RefId& spellId, int successChancePercent) = 0;
-        virtual void setSelectedEnchantItem(const OFWorld::Ptr& item) = 0;
-        virtual const OFWorld::Ptr& getSelectedEnchantItem() const = 0;
-        virtual void setSelectedWeapon(const OFWorld::Ptr& item) = 0;
-        virtual const OFWorld::Ptr& getSelectedWeapon() const = 0;
-        virtual void unsetSelectedSpell() = 0;
-        virtual void unsetSelectedWeapon() = 0;
-
         virtual void showCrosshair(bool show) = 0;
         virtual bool setHudVisibility(bool show) = 0;
         virtual bool isHudVisible() const = 0;
@@ -234,8 +184,6 @@ namespace OFBase
         virtual void disallowMouse() = 0;
         virtual void allowMouse() = 0;
         virtual void notifyInputActionBound() = 0;
-
-        virtual void addVisitedLocation(const std::string& name, int x, int y) = 0;
 
         /// Gracefully attempts to exit the topmost GUI mode
         /** No guarantee of actually closing the window **/
@@ -275,8 +223,6 @@ namespace OFBase
 
         virtual void processChangedSettings(const std::set<std::pair<std::string, std::string>>& changed) = 0;
 
-        virtual bool getJournalAllowed() = 0;
-
         virtual void changePointer(const std::string& name) = 0;
 
         /// Registers a hardware cursor using a texture from the virtual filesystem.
@@ -305,10 +251,6 @@ namespace OFBase
         /// Clear all savegame-specific data
         virtual void clear() = 0;
 
-        virtual void write(ESM::ESMWriter& writer, Loading::Listener& progress) = 0;
-        virtual void readRecord(ESM::ESMReader& reader, uint32_t type) = 0;
-        virtual size_t countSavedGameRecords() const = 0;
-
         /// Does the current stack of GUI-windows permit saving?
         virtual bool isSavingAllowed() const = 0;
 
@@ -324,7 +266,6 @@ namespace OFBase
             \param input Pointer to the current modal, to ensure proper modal is removed **/
         virtual void removeCurrentModal(OFGui::WindowModal* input) = 0;
 
-        virtual void pinWindow(OFGui::GuiWindow window) = 0;
         virtual void toggleMaximized(OFGui::Layout* layout) = 0;
 
         /// Fade the screen in, over \a time seconds
@@ -368,16 +309,7 @@ namespace OFBase
         /// ... and the key that leaves the menu is the script's
         virtual bool isMainMenuEscapeLua() const = 0;
 
-        /// Cycle to next or previous spell
-        virtual void cycleSpell(bool next) = 0;
-        /// Cycle to next or previous weapon
-        virtual void cycleWeapon(bool next) = 0;
-
         virtual void playSound(const ESM::RefId& soundId, float volume = 1.f, float pitch = 1.f) = 0;
-
-        virtual void addCell(OFWorld::CellStore* cell) = 0;
-        virtual void removeCell(OFWorld::CellStore* cell) = 0;
-        virtual void writeFog(OFWorld::CellStore* cell) = 0;
 
         virtual const OFGui::TextColours& getTextColours() = 0;
 
@@ -392,22 +324,13 @@ namespace OFBase
         virtual void saveUserSettings() = 0;
         virtual bool isWindowVisible() const = 0;
 
-        virtual void watchActor(const OFWorld::Ptr& ptr) = 0;
-        virtual OFWorld::Ptr getWatchedActor() const = 0;
-
         virtual const std::string& getVersionDescription() const = 0;
-
-        virtual void onDeleteCustomData(const OFWorld::Ptr& ptr) = 0;
-
-        virtual void asyncPrepareSaveMap() = 0;
 
         /// Sets the cull masks for all applicable views
         virtual void setCullMask(uint32_t mask) = 0;
 
         /// Same as viewer->getCamera()->getCullMask(), provided for consistency.
         virtual uint32_t getCullMask() = 0;
-
-        virtual void inventoryUpdated(const OFWorld::Ptr& ptr) const = 0;
 
         /// Return the window that should receive controller events
         virtual OFGui::WindowBase* getActiveControllerWindow() = 0;

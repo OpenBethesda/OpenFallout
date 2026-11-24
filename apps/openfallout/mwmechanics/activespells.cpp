@@ -77,7 +77,6 @@ namespace OFMechanics
     {
         bool mUpdatedEnemy = false;
         bool mUpdatedHitOverlay = false;
-        bool mUpdateSpellWindow = false;
         bool mPlayNonLooping = false;
         bool mEraseRemoved = false;
         bool mUpdate;
@@ -339,14 +338,11 @@ namespace OFMechanics
                     // invisibility manually
                     purgeEffect(ptr, ESM::MagicEffect::Invisibility);
                     applyPurges(ptr);
-                    const bool added = initParams(ptr, ActiveSpellParams{ *slot, enchantment, ptr }, context);
-                    if (added)
-                        context.mUpdateSpellWindow = true;
+                    initParams(ptr, ActiveSpellParams{ *slot, enchantment, ptr }, context);
                 }
             }
         }
 
-        const OFWorld::Ptr player = OFMechanics::getPlayer();
         // Update effects
         context.mEraseRemoved = true;
         for (auto spellIt = mSpells.begin(); spellIt != mSpells.end();)
@@ -360,14 +356,6 @@ namespace OFMechanics
                 = ptr.getClass().isNpc() ? ESM::MagicEffect::CalmHumanoid : ESM::MagicEffect::CalmCreature;
             if (creatureStats.getMagicEffects().getOrDefault(effect).getMagnitude() > 0.f)
                 creatureStats.getAiSequence().stopCombat();
-        }
-
-        if (ptr == player && context.mUpdateSpellWindow)
-        {
-            // Something happened with the spell list -- possibly while the game is paused,
-            // so we want to make the spell window get the memo.
-            // We don't normally want to do this, so this targets constant enchantments.
-            OFBase::Environment::get().getWindowManager()->updateSpellWindow();
         }
     }
 
@@ -456,7 +444,6 @@ namespace OFMechanics
                 for (const auto& effect : params.mEffects)
                     onMagicEffectRemoved(ptr, params, effect);
                 applyPurges(ptr, &spellIt);
-                context.mUpdateSpellWindow = true;
                 return true;
             }
         }

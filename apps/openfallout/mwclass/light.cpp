@@ -92,9 +92,6 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Light::activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const
     {
-        if (!OFBase::Environment::get().getWindowManager()->isAllowed(OFGui::GW_Inventory))
-            return std::make_unique<OFWorld::NullAction>();
-
         OFWorld::LiveCellRef<ESM::Light>* ref = ptr.get<ESM::Light>();
         if (!(ref->mBase->mData.mFlags & ESM::Light::Carry))
             return std::make_unique<OFWorld::FailedAction>();

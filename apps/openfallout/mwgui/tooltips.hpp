@@ -8,12 +8,6 @@
 
 #include "widgets.hpp"
 
-namespace ESM
-{
-    struct Class;
-    struct Race;
-}
-
 namespace OFGui
 {
     // Info about tooltip that is supplied by the OFWorld::Class object
@@ -41,9 +35,6 @@ namespace OFGui
 
         // effects (for potions, ingredients)
         Widgets::SpellEffectList effects;
-
-        // local map notes
-        std::vector<std::string> notes;
 
         bool isPotion; // potions do not show target in the tooltip
         bool isIngredient; // ingredients have no effect magnitude
@@ -95,12 +86,6 @@ namespace OFGui
 
         static std::string getDurationString(float duration, std::string_view prefix);
         ///< Returns duration as two largest time units, rounded down. Note: not localized; no line break.
-
-        // these do not create an actual tooltip, but they fill in the data that is required so the tooltip
-        // system knows what to show in case this widget is hovered
-        static void createBirthsignToolTip(MyGUI::Widget* widget, const ESM::RefId& birthsignId);
-        static void createRaceToolTip(MyGUI::Widget* widget, const ESM::Race* playerRace);
-        static void createClassToolTip(MyGUI::Widget* widget, const ESM::Class& playerClass);
 
         bool checkOwned();
         /// Returns True if taking mFocusObject would be crime

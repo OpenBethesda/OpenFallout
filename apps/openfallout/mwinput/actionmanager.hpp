@@ -24,8 +24,6 @@ namespace OFInput
 
         void executeAction(int action);
 
-        bool checkAllowedToUseItems() const;
-
         void toggleMainMenu();
         void toggleConsole();
         void screenshot();

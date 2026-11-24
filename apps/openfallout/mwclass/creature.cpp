@@ -812,7 +812,6 @@ namespace OFClass
                     ptr.getCellRef().setCount(1);
                 }
 
-                OFBase::Environment::get().getWindowManager()->onDeleteCustomData(ptr);
                 ptr.getRefData().setCustomData(nullptr);
 
                 // Reset to original position

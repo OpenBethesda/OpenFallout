@@ -1286,16 +1286,6 @@
            </property>
           </widget>
          </item>
-         <item row="7" column="0">
-          <widget class="QCheckBox" name="useZoomOnMapCheckBox">
-           <property name="toolTip">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable zooming on local and global maps.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="text">
-            <string>Can Zoom on Maps</string>
-           </property>
-          </widget>
-         </item>
          <item row="5" column="1">
           <widget class="QCheckBox" name="showProjectileDamageCheckBox">
            <property name="toolTip">

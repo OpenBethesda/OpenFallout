@@ -10,7 +10,6 @@
 #include <components/settings/values.hpp>
 #include <components/widgets/imagebutton.hpp>
 
-#include "draganddrop.hpp"
 #include "exposedwindow.hpp"
 
 using namespace OFGui;
@@ -152,48 +151,4 @@ void WindowModal::onClose()
     OFBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
 
     MyGUI::InputManager::getInstance().removeWidgetModal(mMainWidget);
-}
-
-NoDrop::NoDrop(DragAndDrop* drag, MyGUI::Widget* widget)
-    : mWidget(widget)
-    , mDrag(drag)
-    , mTransparent(false)
-{
-}
-
-void NoDrop::onFrame(float dt)
-{
-    if (!mWidget)
-        return;
-
-    MyGUI::IntPoint mousePos = MyGUI::InputManager::getInstance().getMousePosition();
-
-    if (mDrag->mIsOnDragAndDrop)
-    {
-        MyGUI::Widget* focus = MyGUI::InputManager::getInstance().getMouseFocusWidget();
-        while (focus && focus != mWidget)
-            focus = focus->getParent();
-
-        if (focus == mWidget)
-            mTransparent = true;
-    }
-    if (!mWidget->getAbsoluteCoord().inside(mousePos))
-        mTransparent = false;
-
-    if (mTransparent)
-    {
-        mWidget->setNeedMouseFocus(false); // Allow click-through
-        setAlpha(std::max(0.13f, mWidget->getAlpha() - dt * 5));
-    }
-    else
-    {
-        mWidget->setNeedMouseFocus(true);
-        setAlpha(std::min(1.0f, mWidget->getAlpha() + dt * 5));
-    }
-}
-
-void NoDrop::setAlpha(float alpha)
-{
-    if (mWidget)
-        mWidget->setAlpha(alpha);
 }

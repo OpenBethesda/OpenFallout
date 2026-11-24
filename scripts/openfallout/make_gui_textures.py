@@ -210,15 +210,6 @@ def move_pointer():
     return image
 
 
-def drop_pointer():
-    """The pointer for putting an item down on the ground: an arrow pointing down onto a line."""
-    image = Image(32, 32)
-    image.line(15, 2, 15, 20, with_alpha(ACCENT, 255), 3)
-    image.polygon([(15, 28), (6, 17), (24, 17)], with_alpha(ACCENT, 255))
-    image.line(3, 30, 28, 30, with_alpha(ACCENT, 255), 2)
-    return image
-
-
 def crosshair():
     image = Image(27, 27)
     green = with_alpha(ACCENT, 230)
@@ -228,19 +219,6 @@ def crosshair():
         image.blend(13 - d, 13, green)
         image.blend(13 + d, 13, green)
     image.blend(13, 13, green)
-    return image
-
-
-def compass_image():
-    image = Image(32, 32)
-    for y in range(32):
-        for x in range(32):
-            r = math.hypot(x - 15.5, y - 15.5)
-            if 13.5 <= r <= 15.5:
-                image.set(x, y, with_alpha(ACCENT, 220))
-            elif r < 13.5:
-                image.set(x, y, with_alpha(PANEL, 160))
-    image.polygon([(15.5, 3), (12, 15.5), (19, 15.5)], with_alpha(ACCENT, 255))
     return image
 
 
@@ -432,15 +410,10 @@ def build_all():
             gray.set(x, y, (int(shade), int(shade), int(shade), 255))
     images['menu_bar_gray'] = gray
 
-    # pointers, crosshair, compass, door marker
+    # pointers and crosshair
     images['tx_cursor'] = arrow_pointer()
     images['tx_cursormove'] = move_pointer()
-    images['cursor_drop_ground'] = drop_pointer()
     images['target'] = crosshair()
-    images['compass'] = compass_image()
-    door = Image(8, 8, with_alpha(ACCENT, 255))
-    door.rect(2, 2, 6, 6, with_alpha(PANEL, 255))
-    images['door_icon'] = door
 
     # the pages and scrolls of books and notes
     # the images are stretched to the size of the window, so half the size will do

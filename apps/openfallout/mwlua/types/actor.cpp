@@ -151,15 +151,13 @@ namespace OFLua
 
             if (!alreadyEquipped)
             {
-                OFBase::Environment::get().getWindowManager()->useItem(itemPtr);
+                itemPtr.getClass().use(itemPtr)->execute(actor, true);
                 // make sure that item was successfully equipped
                 if (!store.isEquipped(itemPtr))
                     return;
             }
         }
         store.setSelectedEnchantItem(it);
-        // to reset WindowManager::mSelectedSpell immediately
-        OFBase::Environment::get().getWindowManager()->setSelectedEnchantItem(*it);
     }
 
     void addActorBindings(sol::table actor, const Context& context)
@@ -212,14 +210,7 @@ namespace OFLua
                 return;
             if (newDrawState == OFMechanics::DrawState::Spell)
             {
-                bool hasSelectedSpell;
-                if (self.ptr() == OFBase::Environment::get().getWorld()->getPlayerPtr())
-                    // For the player selecting spell in UI doesn't change selected spell in CreatureStats (was
-                    // implemented this way to prevent changing spell during casting, probably should be refactored), so
-                    // we have to handle the player separately.
-                    hasSelectedSpell = !OFBase::Environment::get().getWindowManager()->getSelectedSpell().empty();
-                else
-                    hasSelectedSpell = !stats.getSpells().getSelectedSpell().empty();
+                const bool hasSelectedSpell = !stats.getSpells().getSelectedSpell().empty();
                 if (!hasSelectedSpell)
                 {
                     const OFWorld::ContainerStore& store = cls.getContainerStore(self.ptr());

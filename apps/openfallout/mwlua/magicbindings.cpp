@@ -533,11 +533,7 @@ namespace OFLua
             const OFWorld::Class& cls = ptr.getClass();
             if (!cls.isActor())
                 throw std::runtime_error("Actor expected");
-            ESM::RefId spellId;
-            if (ptr == OFBase::Environment::get().getWorld()->getPlayerPtr())
-                spellId = OFBase::Environment::get().getWindowManager()->getSelectedSpell();
-            else
-                spellId = cls.getCreatureStats(ptr).getSpells().getSelectedSpell();
+            const ESM::RefId& spellId = cls.getCreatureStats(ptr).getSpells().getSelectedSpell();
             if (spellId.empty())
                 return sol::nullopt;
             else
@@ -570,23 +566,14 @@ namespace OFLua
                 if (spellId.empty())
                 {
                     resetEnchantItem();
-                    if (objPtr == OFBase::Environment::get().getWorld()->getPlayerPtr())
-                        OFBase::Environment::get().getWindowManager()->unsetSelectedSpell();
-                    else
-                        stats.getSpells().setSelectedSpell(ESM::RefId());
+                    stats.getSpells().setSelectedSpell(ESM::RefId());
                     return;
                 }
                 if (!stats.getSpells().hasSpell(spellId))
                     throw std::runtime_error("Actor doesn't know spell " + spellId.toDebugString());
 
                 resetEnchantItem();
-                if (objPtr == OFBase::Environment::get().getWorld()->getPlayerPtr())
-                {
-                    int chance = static_cast<int>(OFMechanics::getSpellSuccessChance(spellId, objPtr));
-                    OFBase::Environment::get().getWindowManager()->setSelectedSpell(spellId, chance);
-                }
-                else
-                    stats.getSpells().setSelectedSpell(spellId);
+                stats.getSpells().setSelectedSpell(spellId);
             });
         };
 
@@ -598,10 +585,7 @@ namespace OFLua
                 auto& stats = ptr.getClass().getCreatureStats(ptr);
                 OFWorld::ContainerStore& inventory = ptr.getClass().getContainerStore(ptr);
                 inventory.setSelectedEnchantItem(inventory.end());
-                if (ptr == OFBase::Environment::get().getWorld()->getPlayerPtr())
-                    OFBase::Environment::get().getWindowManager()->unsetSelectedSpell();
-                else
-                    stats.getSpells().setSelectedSpell(ESM::RefId());
+                stats.getSpells().setSelectedSpell(ESM::RefId());
             });
         };
 
@@ -821,7 +805,6 @@ namespace OFLua
                 {
                     context.mLuaManager->addAction([]() {
                         OFBase::Environment::get().getMechanicsManager()->updateMagicEffects(OFMechanics::getPlayer());
-                        OFBase::Environment::get().getWindowManager()->updateSpellWindow();
                     });
                 }
 

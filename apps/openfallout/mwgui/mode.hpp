@@ -16,19 +16,6 @@ namespace OFGui
         GM_Loading,
         GM_LoadingWallpaper,
     };
-
-    // Windows shown in inventory mode
-    enum GuiWindow
-    {
-        GW_None = 0,
-
-        GW_Map = 0x01,
-        GW_Inventory = 0x02,
-        GW_Magic = 0x04,
-        GW_Stats = 0x08,
-
-        GW_ALL = 0xFF
-    };
 }
 
 #endif

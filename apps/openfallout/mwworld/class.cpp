@@ -351,9 +351,6 @@ namespace OFWorld
 
     std::unique_ptr<Action> Class::defaultItemActivate(const Ptr& ptr, const Ptr& actor) const
     {
-        if (!OFBase::Environment::get().getWindowManager()->isAllowed(OFGui::GW_Inventory))
-            return std::make_unique<NullAction>();
-
         std::unique_ptr<Action> werewolfAction = getWerewolfRefusalAction(actor);
         if (werewolfAction)
             return werewolfAction;

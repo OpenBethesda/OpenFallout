@@ -1528,15 +1528,6 @@ namespace OFMechanics
                     // Unset casting flag, otherwise pressing the mouse button down would
                     // continue casting every frame if there is no animation
                     setAttackingOrSpell(false);
-                    if (mPtr == getPlayer())
-                    {
-                        // For the player, set the spell we want to cast
-                        // This has to be done at the start of the casting animation,
-                        // *not* when selecting a spell in the GUI (otherwise you could change the spell mid-animation)
-                        const ESM::RefId& selectedSpell
-                            = OFBase::Environment::get().getWindowManager()->getSelectedSpell();
-                        stats.getSpells().setSelectedSpell(selectedSpell);
-                    }
                     ESM::RefId spellid = stats.getSpells().getSelectedSpell();
                     bool isMagicItem = false;
 

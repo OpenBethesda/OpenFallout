@@ -21,11 +21,13 @@ namespace OFWorld
         OFWorld::Ptr object = getTarget();
         OFWorld::InventoryStore& invStore = actor.getClass().getInventoryStore(actor);
 
-        if (actor != OFMechanics::getPlayer())
+        // A broken weapon or armor cannot be equipped
+        if (object.getClass().hasItemHealth(object) && object.getCellRef().getCharge() == 0)
         {
-            // player logic is handled in InventoryWindow::useItem
-            if (object.getClass().hasItemHealth(object) && object.getCellRef().getCharge() == 0)
-                return;
+            if (actor == OFMechanics::getPlayer())
+                OFBase::Environment::get().getWindowManager()->messageBox(
+                    object.getClass().canBeEquipped(object, actor).second);
+            return;
         }
 
         if (!mForce)

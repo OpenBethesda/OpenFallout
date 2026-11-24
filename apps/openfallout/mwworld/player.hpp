@@ -117,8 +117,6 @@ namespace OFWorld
         ESM::RefId getPreviousItem(const ESM::RefId& boundItemId);
         void erasePreviousItem(const ESM::RefId& boundItemId);
 
-        void setSelectedSpell(const ESM::RefId& spellId);
-
         void update();
     };
 }

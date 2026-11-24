@@ -16,7 +16,6 @@
 #include "livecellref.hpp"
 
 #include <components/esm/refid.hpp>
-#include <components/esm3/fogstate.hpp>
 #include <components/misc/tuplemeta.hpp>
 
 #include "ptr.hpp"
@@ -191,11 +190,6 @@ namespace OFWorld
 
         void setWaterLevel(float level);
 
-        void setFog(std::unique_ptr<ESM::FogState>&& fog);
-        ///< \note Takes ownership of the pointer
-
-        ESM::FogState* getFog() const;
-
         std::size_t count() const;
         ///< Return total number of references, including deleted ones.
 
@@ -315,10 +309,6 @@ namespace OFWorld
 
         void saveState(ESM::CellState& state) const;
 
-        void writeFog(ESM::ESMWriter& writer) const;
-
-        void readFog(ESM::ESMReader& reader);
-
         void writeReferences(ESM::ESMWriter& writer) const;
 
         struct GetCellStoreCallback
@@ -348,7 +338,6 @@ namespace OFWorld
         // Even though fog actually belongs to the player and not cells,
         // it makes sense to store it here since we need it once for each cell.
         // Note this is nullptr until the cell is explored to save some memory
-        std::unique_ptr<ESM::FogState> mFogState;
 
         OFWorld::Cell mCellVariant;
         State mState;
