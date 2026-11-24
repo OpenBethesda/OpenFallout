@@ -43,16 +43,6 @@
            </property>
           </widget>
          </item>
-         <item row="7" column="0">
-          <widget class="QCheckBox" name="permanentBarterDispositionChangeCheckBox">
-           <property name="toolTip">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Make disposition change of merchants caused by trading permanent.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="text">
-            <string>Permanent Barter Disposition Changes</string>
-           </property>
-          </widget>
-         </item>
          <item row="9" column="1">
           <widget class="QCheckBox" name="normaliseRaceSpeedCheckBox">
            <property name="toolTip">
@@ -170,16 +160,6 @@
            </property>
            <property name="text">
             <string>Merchant Equipping Fix</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0">
-          <widget class="QCheckBox" name="trainersTrainingSkillsBasedOnBaseSkillCheckBox">
-           <property name="toolTip">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Trainers now only choose which skills to train using their base skill points, allowing mercantile improving effects to be used without making mercantile an offered skill.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="text">
-            <string>Trainers Choose Offered Skills by Base Value</string>
            </property>
           </widget>
          </item>
@@ -1296,16 +1276,6 @@
            </property>
           </widget>
          </item>
-         <item row="6" column="0">
-          <widget class="QCheckBox" name="changeDialogTopicsCheckBox">
-           <property name="toolTip">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;If this setting is true, dialogue topics will have a different color if the topic is specific to the NPC you're talking to or the topic was previously seen. Color can be changed in settings.cfg.&lt;/p&gt;&lt;p&gt;The default value is false.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="text">
-            <string>Change Dialogue Topic Color</string>
-           </property>
-          </widget>
-         </item>
          <item row="2" column="0">
           <widget class="QLabel" name="fontSizeLabel">
            <property name="toolTip">
@@ -1383,16 +1353,6 @@
           <widget class="QLabel" name="showOwnedLabel">
            <property name="text">
             <string>Show Owned Objects</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="1">
-          <widget class="QCheckBox" name="showEnchantChanceCheckBox">
-           <property name="toolTip">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Whether or not the chance of success will be displayed in the enchanting menu.&lt;/p&gt;&lt;p&gt;The default value is false.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="text">
-            <string>Show Enchant Chance</string>
            </property>
           </widget>
          </item>

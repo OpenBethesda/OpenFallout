@@ -1098,37 +1098,6 @@ namespace OFMechanics
             player, victim, OT_Theft, item.getCellRef().getFaction(), item.getClass().getValue(item) * toRemove);
     }
 
-    void MechanicsManager::confiscateStolenItems(const OFWorld::Ptr& player, const OFWorld::Ptr& targetContainer)
-    {
-        OFWorld::ContainerStore& store = player.getClass().getContainerStore(player);
-        OFWorld::ContainerStore& containerStore = targetContainer.getClass().getContainerStore(targetContainer);
-        for (OFWorld::ContainerStoreIterator it = store.begin(); it != store.end(); ++it)
-        {
-            StolenItemsMap::iterator stolenIt = mStolenItems.find(it->getCellRef().getRefId());
-            if (stolenIt == mStolenItems.end())
-                continue;
-            OwnerMap& owners = stolenIt->second;
-            int itemCount = it->getCellRef().getCount();
-            for (OwnerMap::iterator ownerIt = owners.begin(); ownerIt != owners.end();)
-            {
-                int toRemove = std::min(itemCount, ownerIt->second);
-                itemCount -= toRemove;
-                ownerIt->second -= toRemove;
-                if (ownerIt->second == 0)
-                    owners.erase(ownerIt++);
-                else
-                    ++ownerIt;
-            }
-
-            int toMove = it->getCellRef().getCount() - itemCount;
-
-            containerStore.add(*it, toMove);
-            store.remove(*it, toMove);
-        }
-        // TODO: unhardcode the locklevel
-        targetContainer.getCellRef().lock(50);
-    }
-
     void MechanicsManager::itemTaken(
         const OFWorld::Ptr& ptr, const OFWorld::Ptr& item, const OFWorld::Ptr& container, int count, bool alarm)
     {

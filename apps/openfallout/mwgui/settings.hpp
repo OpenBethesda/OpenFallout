@@ -20,17 +20,9 @@ namespace OFGui
         Settings::SettingValue<bool>& mIsMaximized;
     };
 
-    WindowSettingValues makeAlchemyWindowSettingValues();
-    WindowSettingValues makeBarterWindowSettingValues();
-    WindowSettingValues makeCompanionWindowSettingValues();
     WindowSettingValues makeConsoleWindowSettingValues();
-    WindowSettingValues makeContainerWindowSettingValues();
     WindowSettingValues makeDebugWindowSettingValues();
-    WindowSettingValues makeDialogueWindowSettingValues();
     WindowSettingValues makeInventoryWindowSettingValues();
-    WindowSettingValues makeInventoryBarterWindowSettingValues();
-    WindowSettingValues makeInventoryCompanionWindowSettingValues();
-    WindowSettingValues makeInventoryContainerWindowSettingValues();
     WindowSettingValues makeMapWindowSettingValues();
     WindowSettingValues makePostprocessorWindowSettingValues();
     WindowSettingValues makeSettingsWindowSettingValues();

@@ -4988,7 +4988,7 @@ namespace OFScript
     {
         if (!startConversation(speaker, topic))
             return false;
-        OFBase::Environment::get().getWindowManager()->pushGuiMode(OFGui::GM_Dialogue, speaker);
+        OFBase::Environment::get().getWindowManager()->pushGuiMode(OFGui::GM_DialogMenu, speaker);
         return true;
     }
 

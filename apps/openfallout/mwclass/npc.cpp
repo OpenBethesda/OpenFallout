@@ -46,13 +46,13 @@
 #include "../mwmechanics/spellcasting.hpp"
 #include "../mwmechanics/weapontype.hpp"
 
-#include "../mwworld/actionopen.hpp"
 #include "../mwworld/actiontalk.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/customdata.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/failedaction.hpp"
 #include "../mwworld/inventorystore.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 #include "../mwworld/worldmodel.hpp"
 
@@ -792,22 +792,22 @@ namespace OFClass
         {
             // by default user can loot non-fighting actors during death animation
             if (Settings::game().mCanLootDuringDeathAnimation)
-                return std::make_unique<OFWorld::ActionOpen>(ptr);
+                return std::make_unique<OFWorld::NullAction>();
 
             // otherwise wait until death animation
             if (stats.isDeathAnimationFinished())
-                return std::make_unique<OFWorld::ActionOpen>(ptr);
+                return std::make_unique<OFWorld::NullAction>();
         }
         else
         {
             const bool allowStealingFromKO
                 = Settings::game().mAlwaysAllowStealingFromKnockedOutActors || !inCombatWithActor;
             if (stats.getKnockedDown() && allowStealingFromKO)
-                return std::make_unique<OFWorld::ActionOpen>(ptr);
+                return std::make_unique<OFWorld::NullAction>();
 
             const bool allowStealingWhileSneaking = !inCombatWithActor;
             if (OFBase::Environment::get().getMechanicsManager()->isSneaking(actor) && allowStealingWhileSneaking)
-                return std::make_unique<OFWorld::ActionOpen>(ptr);
+                return std::make_unique<OFWorld::NullAction>();
 
             const bool allowTalking = !inCombatWithActor && !getNpcStats(ptr).isWerewolf();
             if (allowTalking)

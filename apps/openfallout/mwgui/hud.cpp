@@ -213,14 +213,14 @@ namespace OFGui
         {
             GuiMode mode = winMgr->getMode();
 
-            if (!winMgr->isConsoleMode() && (mode != GM_Container) && (mode != GM_Inventory))
+            if (!winMgr->isConsoleMode() && (mode != GM_Inventory))
                 return;
 
             OFWorld::Ptr object = OFBase::Environment::get().getWorld()->getFocusObject();
 
             if (winMgr->isConsoleMode())
                 winMgr->setConsoleSelectedObject(object);
-            else // if ((mode == GM_Container) || (mode == GM_Inventory))
+            else // if (mode == GM_Inventory)
             {
                 // pick up object
                 if (!object.isEmpty())

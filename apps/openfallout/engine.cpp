@@ -77,8 +77,6 @@
 
 #include "mwclass/classes.hpp"
 
-#include "mwdialogue/dialoguemanagerimp.hpp"
-
 #include "mwmechanics/mechanicsmanagerimp.hpp"
 
 #include "mwstate/statemanagerimp.hpp"
@@ -412,7 +410,6 @@ OF::Engine::~Engine()
     mScreenCaptureHandler = nullptr;
 
     mMechanicsManager = nullptr;
-    mDialogueManager = nullptr;
     mWindowManager = nullptr;
     // The world is destroyed after the scripts, and the bodies it draws tell the scripts when they go: they must find
     // no scripts, not the place where the scripts were
@@ -904,10 +901,6 @@ void OF::Engine::prepareEngine()
     // Create game mechanics system
     mMechanicsManager = std::make_unique<OFMechanics::MechanicsManager>();
     mEnvironment.setMechanicsManager(*mMechanicsManager);
-
-    // The Morrowind dialogue window still asks about a Morrowind conversation, and there is none
-    mDialogueManager = std::make_unique<OFDialogue::DialogueManager>();
-    mEnvironment.setDialogueManager(*mDialogueManager);
 
     mLuaManager->loadPermanentStorage(mCfgMgr.getUserConfigPath());
     mLuaManager->initPreLoad();

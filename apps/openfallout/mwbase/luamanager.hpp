@@ -101,7 +101,6 @@ namespace OFBase
         virtual void animationEnded(const OFWorld::Ptr& actor, std::string_view groupname, float time, float completion,
             std::string_view startKey, std::string_view stopKey)
             = 0;
-        virtual void jailTimeServed(const OFWorld::Ptr& actor, int days) = 0;
         virtual void skillLevelUp(const OFWorld::Ptr& actor, ESM::RefId skillId, std::string_view source) = 0;
         virtual void skillUse(const OFWorld::Ptr& actor, ESM::RefId skillId, int useType, float scale) = 0;
         virtual void onHit(const OFWorld::Ptr& attacker, const OFWorld::Ptr& victim, const OFWorld::Ptr& weapon,

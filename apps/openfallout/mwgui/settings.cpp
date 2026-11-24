@@ -4,63 +4,6 @@
 
 namespace OFGui
 {
-    WindowSettingValues makeAlchemyWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mAlchemyX,
-                .mY = Settings::windows().mAlchemyY,
-                .mW = Settings::windows().mAlchemyW,
-                .mH = Settings::windows().mAlchemyH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mAlchemyMaximizedX,
-                .mY = Settings::windows().mAlchemyMaximizedY,
-                .mW = Settings::windows().mAlchemyMaximizedW,
-                .mH = Settings::windows().mAlchemyMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mAlchemyMaximized,
-        };
-    }
-
-    WindowSettingValues makeBarterWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mBarterX,
-                .mY = Settings::windows().mBarterY,
-                .mW = Settings::windows().mBarterW,
-                .mH = Settings::windows().mBarterH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mBarterMaximizedX,
-                .mY = Settings::windows().mBarterMaximizedY,
-                .mW = Settings::windows().mBarterMaximizedW,
-                .mH = Settings::windows().mBarterMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mBarterMaximized,
-        };
-    }
-
-    WindowSettingValues makeCompanionWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mCompanionX,
-                .mY = Settings::windows().mCompanionY,
-                .mW = Settings::windows().mCompanionW,
-                .mH = Settings::windows().mCompanionH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mCompanionMaximizedX,
-                .mY = Settings::windows().mCompanionMaximizedY,
-                .mW = Settings::windows().mCompanionMaximizedW,
-                .mH = Settings::windows().mCompanionMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mCompanionMaximized,
-        };
-    }
-
     WindowSettingValues makeConsoleWindowSettingValues()
     {
         return WindowSettingValues{
@@ -77,25 +20,6 @@ namespace OFGui
                 .mH = Settings::windows().mConsoleMaximizedH,
             },
             .mIsMaximized = Settings::windows().mConsoleMaximized,
-        };
-    }
-
-    WindowSettingValues makeContainerWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mContainerX,
-                .mY = Settings::windows().mContainerY,
-                .mW = Settings::windows().mContainerW,
-                .mH = Settings::windows().mContainerH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mContainerMaximizedX,
-                .mY = Settings::windows().mContainerMaximizedY,
-                .mW = Settings::windows().mContainerMaximizedW,
-                .mH = Settings::windows().mContainerMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mContainerMaximized,
         };
     }
 
@@ -118,25 +42,6 @@ namespace OFGui
         };
     }
 
-    WindowSettingValues makeDialogueWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mDialogueX,
-                .mY = Settings::windows().mDialogueY,
-                .mW = Settings::windows().mDialogueW,
-                .mH = Settings::windows().mDialogueH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mDialogueMaximizedX,
-                .mY = Settings::windows().mDialogueMaximizedY,
-                .mW = Settings::windows().mDialogueMaximizedW,
-                .mH = Settings::windows().mDialogueMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mDialogueMaximized,
-        };
-    }
-
     WindowSettingValues makeInventoryWindowSettingValues()
     {
         return WindowSettingValues{
@@ -153,63 +58,6 @@ namespace OFGui
                 .mH = Settings::windows().mInventoryMaximizedH,
             },
             .mIsMaximized = Settings::windows().mInventoryMaximized,
-        };
-    }
-
-    WindowSettingValues makeInventoryBarterWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mInventoryBarterX,
-                .mY = Settings::windows().mInventoryBarterY,
-                .mW = Settings::windows().mInventoryBarterW,
-                .mH = Settings::windows().mInventoryBarterH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mInventoryBarterMaximizedX,
-                .mY = Settings::windows().mInventoryBarterMaximizedY,
-                .mW = Settings::windows().mInventoryBarterMaximizedW,
-                .mH = Settings::windows().mInventoryBarterMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mInventoryBarterMaximized,
-        };
-    }
-
-    WindowSettingValues makeInventoryCompanionWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mInventoryCompanionX,
-                .mY = Settings::windows().mInventoryCompanionY,
-                .mW = Settings::windows().mInventoryCompanionW,
-                .mH = Settings::windows().mInventoryCompanionH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mInventoryCompanionMaximizedX,
-                .mY = Settings::windows().mInventoryCompanionMaximizedY,
-                .mW = Settings::windows().mInventoryCompanionMaximizedW,
-                .mH = Settings::windows().mInventoryCompanionMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mInventoryCompanionMaximized,
-        };
-    }
-
-    WindowSettingValues makeInventoryContainerWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mInventoryContainerX,
-                .mY = Settings::windows().mInventoryContainerY,
-                .mW = Settings::windows().mInventoryContainerW,
-                .mH = Settings::windows().mInventoryContainerH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mInventoryContainerMaximizedX,
-                .mY = Settings::windows().mInventoryContainerMaximizedY,
-                .mW = Settings::windows().mInventoryContainerMaximizedW,
-                .mH = Settings::windows().mInventoryContainerMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mInventoryContainerMaximized,
         };
     }
 

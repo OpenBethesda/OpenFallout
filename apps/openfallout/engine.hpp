@@ -106,11 +106,6 @@ namespace OFMechanics
     class MechanicsManager;
 }
 
-namespace OFDialogue
-{
-    class DialogueManager;
-}
-
 namespace L10n
 {
     class Manager;
@@ -133,7 +128,6 @@ namespace OF
         std::unique_ptr<OFScript::FalloutScripts> mFalloutScripts;
         std::unique_ptr<OFGui::WindowManager> mWindowManager;
         std::unique_ptr<OFMechanics::MechanicsManager> mMechanicsManager;
-        std::unique_ptr<OFDialogue::DialogueManager> mDialogueManager;
         std::unique_ptr<OFInput::InputManager> mInputManager;
         std::unique_ptr<OFState::StateManager> mStateManager;
         std::unique_ptr<OFLua::LuaManager> mLuaManager;

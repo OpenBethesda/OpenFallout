@@ -32,8 +32,6 @@
 #include "../mwmechanics/actorutil.hpp"
 #include "../mwmechanics/npcstats.hpp"
 
-#include "companionwindow.hpp"
-#include "container.hpp"
 #include "countdialog.hpp"
 #include "draganddrop.hpp"
 #include "hud.hpp"
@@ -45,7 +43,6 @@
 #include "statswindow.hpp"
 #include "tooltips.hpp"
 #include "tradeitemmodel.hpp"
-#include "tradewindow.hpp"
 
 namespace
 {
@@ -64,19 +61,11 @@ namespace OFGui
 {
     namespace
     {
-        WindowSettingValues getModeSettings(GuiMode mode)
+        // The container, barter and companion windows of Morrowind that showed the inventory beside them are gone, and
+        // with them the places the inventory had in those modes
+        WindowSettingValues getModeSettings(GuiMode /*mode*/)
         {
-            switch (mode)
-            {
-                case GM_Container:
-                    return makeInventoryContainerWindowSettingValues();
-                case GM_Companion:
-                    return makeInventoryCompanionWindowSettingValues();
-                case GM_Barter:
-                    return makeInventoryBarterWindowSettingValues();
-                default:
-                    return makeInventoryWindowSettingValues();
-            }
+            return makeInventoryWindowSettingValues();
         }
     }
 
@@ -92,7 +81,6 @@ namespace OFGui
         , mLastXSize(0)
         , mLastYSize(0)
         , mPreview(std::make_unique<OFRender::InventoryPreview>(parent, resourceSystem, OFMechanics::getPlayer()))
-        , mTrading(false)
         , mUpdateNextFrame(false)
         , mPendingControllerAction(ControllerAction::None)
     {
@@ -237,8 +225,7 @@ namespace OFGui
 
         mGuiMode = mode;
         const WindowSettingValues settings = getModeSettings(mGuiMode);
-        setPinButtonVisible(
-            mode != GM_Container && mode != GM_Companion && mode != GM_Barter && !Settings::gui().mControllerMenus);
+        setPinButtonVisible(!Settings::gui().mControllerMenus);
 
         const WindowRectSettingValues& rect = settings.mIsMaximized ? settings.mMaximized : settings.mRegular;
 
@@ -292,7 +279,6 @@ namespace OFGui
         }
 
         const ItemStack& item = mTradeModel->getItem(index);
-        const ESM::RefId& sound = item.mBase.getClass().getDownSoundId(item.mBase);
 
         OFWorld::Ptr object = item.mBase;
         size_t count = item.mCount;
@@ -300,26 +286,6 @@ namespace OFGui
 
         if (MyGUI::InputManager::getInstance().isControlPressed())
             count = 1;
-
-        if (mTrading)
-        {
-            // Can't give conjured items to a merchant
-            if (item.mFlags & ItemStack::Flag_Bound)
-            {
-                OFBase::Environment::get().getWindowManager()->playSound(sound);
-                OFBase::Environment::get().getWindowManager()->messageBox("#{sBarterDialog9}");
-                return;
-            }
-
-            // check if merchant accepts item
-            int services = OFBase::Environment::get().getWindowManager()->getTradeWindow()->getMerchantServices();
-            if (!object.getClass().canSell(object, services))
-            {
-                OFBase::Environment::get().getWindowManager()->playSound(sound);
-                OFBase::Environment::get().getWindowManager()->messageBox("#{sBarterDialog4}");
-                return;
-            }
-        }
 
         // If we unequip weapon during attack, it can lead to unexpected behaviour
         if (OFBase::Environment::get().getMechanicsManager()->isAttackingOrSpell(mPtr))
@@ -340,17 +306,13 @@ namespace OFGui
         {
             CountDialog* dialog = OFBase::Environment::get().getWindowManager()->getCountDialog();
             std::string message = "#{sTake}";
-            if (mTrading || mPendingControllerAction == ControllerAction::Sell)
-                message = "#{sQuanityMenuMessage01}";
-            else if (mPendingControllerAction == ControllerAction::Drop)
+            if (mPendingControllerAction == ControllerAction::Drop)
                 message = "#{sDrop}";
             std::string name{ object.getClass().getName(object) };
             name += OFGui::ToolTips::getSoulString(object.getCellRef());
             dialog->openCountDialog(name, message, static_cast<int>(count));
             dialog->eventOkClicked.clear();
-            if (mTrading || mPendingControllerAction == ControllerAction::Sell)
-                dialog->eventOkClicked += MyGUI::newDelegate(this, &InventoryWindow::sellItem);
-            else if (mPendingControllerAction == ControllerAction::Drop)
+            if (mPendingControllerAction == ControllerAction::Drop)
                 dialog->eventOkClicked += MyGUI::newDelegate(this, &InventoryWindow::dropItem);
             else if (MyGUI::InputManager::getInstance().isAltPressed()
                 || mPendingControllerAction == ControllerAction::Transfer)
@@ -364,9 +326,7 @@ namespace OFGui
         {
             mSelectedItem = index;
 
-            if (mTrading || mPendingControllerAction == ControllerAction::Sell)
-                sellItem(nullptr, count);
-            else if (mPendingControllerAction == ControllerAction::Use)
+            if (mPendingControllerAction == ControllerAction::Use)
                 equipItem(count);
             else if (mPendingControllerAction == ControllerAction::Drop)
                 dropItem(nullptr, count);
@@ -424,30 +384,6 @@ namespace OFGui
     {
         ensureSelectedItemUnequipped(static_cast<int>(count));
         mItemTransfer->apply(mTradeModel->getItem(mSelectedItem), count, *mItemView);
-        notifyContentChanged();
-    }
-
-    void InventoryWindow::sellItem(MyGUI::Widget* /*sender*/, std::size_t count)
-    {
-        ensureSelectedItemUnequipped(static_cast<int>(count));
-        const ItemStack& item = mTradeModel->getItem(mSelectedItem);
-        const ESM::RefId& sound = item.mBase.getClass().getUpSoundId(item.mBase);
-        OFBase::Environment::get().getWindowManager()->playSound(sound);
-
-        if (item.mType == ItemStack::Type_Barter)
-        {
-            // this was an item borrowed to us by the merchant
-            mTradeModel->returnItemBorrowedToUs(mSelectedItem, count);
-            OFBase::Environment::get().getWindowManager()->getTradeWindow()->returnItem(mSelectedItem, count);
-        }
-        else
-        {
-            // borrow item to the merchant
-            mTradeModel->borrowItemFromUs(mSelectedItem, count);
-            OFBase::Environment::get().getWindowManager()->getTradeWindow()->borrowItem(mSelectedItem, count);
-        }
-
-        mItemView->update();
         notifyContentChanged();
     }
 
@@ -751,24 +687,11 @@ namespace OFGui
 
         if (mUpdateNextFrame)
         {
-            if (mTrading)
-            {
-                mTradeModel->updateBorrowed();
-                OFBase::Environment::get().getWindowManager()->getTradeWindow()->mTradeModel->updateBorrowed();
-                OFBase::Environment::get().getWindowManager()->getTradeWindow()->updateItemView();
-                OFBase::Environment::get().getWindowManager()->getTradeWindow()->updateOffer();
-            }
-
             mDragAndDrop->update();
             mItemView->update();
             notifyContentChanged();
             mUpdateNextFrame = false;
         }
-    }
-
-    void InventoryWindow::setTrading(bool trading)
-    {
-        mTrading = trading;
     }
 
     void InventoryWindow::dirtyPreview()
@@ -960,24 +883,6 @@ namespace OFGui
     {
         switch (mGuiMode)
         {
-            case OFGui::GM_Companion:
-                mControllerButtons.mA = "#{OFEngine:InventorySelect}";
-                mControllerButtons.mB = "#{Interface:Close}";
-                mControllerButtons.mX.clear();
-                mControllerButtons.mR2 = "#{Interface:Share}";
-                break;
-            case OFGui::GM_Container:
-                mControllerButtons.mA = "#{OFEngine:InventorySelect}";
-                mControllerButtons.mB = "#{Interface:Close}";
-                mControllerButtons.mX = "#{Interface:TakeAll}";
-                mControllerButtons.mR2 = "#{Interface:Container}";
-                break;
-            case OFGui::GM_Barter:
-                mControllerButtons.mA = "#{Interface:Sell}";
-                mControllerButtons.mB = "#{Interface:Cancel}";
-                mControllerButtons.mX = "#{Interface:Offer}";
-                mControllerButtons.mR2 = "#{Interface:Barter}";
-                break;
             case OFGui::GM_Inventory:
             default:
                 mControllerButtons.mA = "#{Interface:Equip}";
@@ -1001,10 +906,6 @@ namespace OFGui
         {
             if (mGuiMode == OFGui::GM_Inventory)
                 mPendingControllerAction = ControllerAction::Use;
-            else if (mGuiMode == OFGui::GM_Companion || mGuiMode == OFGui::GM_Container)
-                mPendingControllerAction = ControllerAction::Transfer;
-            else if (mGuiMode == OFGui::GM_Barter)
-                mPendingControllerAction = ControllerAction::Sell;
 
             mItemView->onControllerButton(SDL_CONTROLLER_BUTTON_A);
         }
@@ -1014,22 +915,6 @@ namespace OFGui
             {
                 mPendingControllerAction = ControllerAction::Drop;
                 mItemView->onControllerButton(SDL_CONTROLLER_BUTTON_A);
-            }
-            else if (mGuiMode == OFGui::GM_Container)
-            {
-                // Take all. Pass the button press to the container window and let it do the
-                // logic of taking all.
-                OFGui::ContainerWindow* containerWindow = static_cast<OFGui::ContainerWindow*>(
-                    OFBase::Environment::get().getWindowManager()->getGuiModeWindows(mGuiMode).at(0));
-                containerWindow->onControllerButtonEvent(arg);
-            }
-            else if (mGuiMode == OFGui::GM_Barter)
-            {
-                // Offer. Pass the button press to the barter window and let it do the logic
-                // of making an offer.
-                OFGui::TradeWindow* tradeWindow = static_cast<OFGui::TradeWindow*>(
-                    OFBase::Environment::get().getWindowManager()->getGuiModeWindows(mGuiMode).at(1));
-                tradeWindow->onControllerButtonEvent(arg);
             }
         }
         else if (arg.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)

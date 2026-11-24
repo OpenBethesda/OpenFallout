@@ -65,11 +65,8 @@ namespace OFMechanics
 
         if (reached)
         {
-            if (!OFBase::Environment::get().getWorld()->getLOS(target, actor))
-                return false;
-            OFBase::Environment::get().getWindowManager()->pushGuiMode(
-                OFGui::GM_Dialogue, actor); // Arrest player when reached
-            return true;
+            // The arrest of Morrowind was a conversation in its dialogue window, which is gone: the pursuit ends here
+            return OFBase::Environment::get().getWorld()->getLOS(target, actor);
         }
 
         actor.getClass().getCreatureStats(actor).setMovementFlag(

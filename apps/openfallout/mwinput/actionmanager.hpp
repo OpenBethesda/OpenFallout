@@ -34,8 +34,6 @@ namespace OFInput
         void quickLoad();
         void quickSave();
 
-        void quickKey(int index);
-
         void resetIdleTime();
         float getIdleTime() const { return mTimeIdle; }
 

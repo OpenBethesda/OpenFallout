@@ -816,6 +816,46 @@ namespace ESM
             EXPECT_FALSE(reader.hasMoreRecs());
         }
 
+        TEST_P(Esm3SaveGameRecordTest, theQuickKeysRecordOfAnOldSaveIsSkippedAndTheRecordAfterItStillLoads)
+        {
+            // The engine no longer has the quick keys menu of Morrowind: every save it wrote before held one record of
+            // its keys (REC_KEYS, a TYPE and an ID__ for each key), which it now skips (StateManager::loadGame), and
+            // the record after it must be read as if the quick keys were never there.
+            GlobalScript next;
+            next.mId = id("nextscript");
+            next.mRunning = false;
+
+            ESMWriter writer;
+            auto stream = std::make_unique<std::stringstream>();
+            writer.setFormatVersion(GetParam());
+            writer.save(*stream);
+            writer.startRecord(REC_KEYS);
+            writer.writeHNT("TYPE", std::uint32_t{ 0 }); // an item
+            writer.writeHNRefId("ID__", id("stimpak"));
+            writer.writeHNT("TYPE", std::uint32_t{ 3 }); // unassigned
+            writer.writeHNRefId("ID__", ESM::RefId());
+            writer.endRecord(REC_KEYS);
+            writer.startRecord(fakeRecordId);
+            next.save(writer);
+            writer.endRecord(fakeRecordId);
+
+            ESMReader reader;
+            reader.open(std::move(stream), "stream");
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), static_cast<std::uint32_t>(REC_KEYS));
+            reader.getRecHeader();
+            reader.skipRecord();
+
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), fakeRecordId);
+            reader.getRecHeader();
+            GlobalScript result;
+            result.load(reader);
+            EXPECT_EQ(result.mId, next.mId);
+            EXPECT_FALSE(result.mRunning);
+            EXPECT_FALSE(reader.hasMoreRecs());
+        }
+
         INSTANTIATE_TEST_SUITE_P(FormatVersions, Esm3SaveGameRecordTest, ValuesIn(getFormats()));
     }
 }

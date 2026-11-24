@@ -1171,8 +1171,6 @@ namespace OFMechanics
             mCastingScriptedSpell = false;
             mCanCast = false;
         }
-        else if (groupname == "containeropen" && action == "loot")
-            OFBase::Environment::get().getWindowManager()->pushGuiMode(OFGui::GM_Container, mPtr);
     }
 
     void CharacterController::updatePtr(const OFWorld::Ptr& ptr)

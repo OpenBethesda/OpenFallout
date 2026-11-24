@@ -28,23 +28,18 @@ add_openfallout_dir (mwinput
     )
 
 add_openfallout_dir (mwgui
-    layout textinput widgets race class birth review windowmanagerimp console dialogue
-    windowbase statswindow messagebox charactercreation
-    mapwindow windowpinnablebase tooltips scrollwindow bookwindow resourceskin
-    formatting inventorywindow container hud countdialog tradewindow settingswindow
-    confirmationdialog alchemywindow referenceinterface spellwindow mainmenu quickkeysmenu menuscenes
-    itemselection spellbuyingwindow loadingscreen falloutloading falloutairmeter falloutmenuresources levelupdialog waitdialog spellcreationdialog
-    enchantingdialog trainingwindow travelwindow exposedwindow cursor spellicons
-    merchantrepair repair soulgemdialog companionwindow bookpage
-    itemmodel containeritemmodel inventoryitemmodel sortfilteritemmodel itemview
-    tradeitemmodel companionitemmodel pickpocketitemmodel controllers savegamedialog
-    recharge mode videowidget backgroundimage itemwidget screenfader debugwindow spellmodel spellview
-    draganddrop timeadvancer jailscreen itemchargeview keyboardnavigation textcolours statswatcher
+    layout widgets windowmanagerimp console
+    windowbase statswindow messagebox
+    mapwindow windowpinnablebase tooltips resourceskin
+    inventorywindow hud countdialog settingswindow
+    confirmationdialog referenceinterface spellwindow mainmenu menuscenes
+    loadingscreen falloutloading falloutairmeter falloutmenuresources
+    exposedwindow cursor spellicons
+    itemmodel inventoryitemmodel sortfilteritemmodel itemview
+    tradeitemmodel controllers savegamedialog
+    mode videowidget backgroundimage itemwidget screenfader debugwindow spellmodel spellview
+    draganddrop keyboardnavigation textcolours statswatcher
     postprocessorhud settings worlditemmodel itemtransfer controllerbuttonsoverlay inventorytabsoverlay
-    )
-
-add_openfallout_dir (mwdialogue
-    dialoguemanagerimp keywordsearch
     )
 
 add_openfallout_dir (mwscript
@@ -89,9 +84,9 @@ add_openfallout_dir (mwsound
 add_openfallout_dir (mwworld
     refdata worldimp scene globals class action nullaction actionteleport
     containerstore actiontalk actiontake manualref player cellvisitors failedaction
-    worldmodel customdata inventorystore ptr actionopen actionread actionharvest
-    actionequip timestamp actionalchemy cellstore actionapply actioneat
-    store esmstore fallback actionrepair actionsoulgem livecellref actiondoor
+    worldmodel customdata inventorystore ptr actionharvest
+    actionequip timestamp cellstore actionapply actioneat
+    store esmstore fallback livecellref actiondoor
     contentloader esmloader actiontrap cellreflist cellref weather projectilemanager
     cellpreloader datetimemanager groundcoverstore magiceffects cell ptrregistry
     positioncellgrid placeholderrecords worldspacestart
@@ -112,8 +107,8 @@ add_openfallout_dir (mwclass
 add_openfallout_dir (mwmechanics
     mechanicsmanagerimp stat creaturestats magiceffects movement actorutil spelllist
     drawstate spells activespells npcstats aipackage aisequence aipursue alchemy aiwander aitravel aifollow aiavoiddoor aibreathe
-    aicast aiescort aiface aiactivate aicombat recharge repair enchanting pathfinding pathgrid security spellcasting spellresistance
-    disease pickpocket levelledlist combat steering obstacle autocalcspell difficultyscaling aicombataction summoning
+    aicast aiescort aiface aiactivate aicombat recharge pathfinding pathgrid security spellcasting spellresistance
+    disease levelledlist combat steering obstacle autocalcspell difficultyscaling aicombataction summoning
     character actors objects aistate weaponpriority spellpriority weapontype spellutil
     spelleffects falloutpackages falloutactors
     )
@@ -123,7 +118,7 @@ add_openfallout_dir (mwstate
     )
 
 add_openfallout_dir (mwbase
-    environment world dialoguemanager soundmanager mechanicsmanager
+    environment world soundmanager mechanicsmanager
     inputmanager windowmanager statemanager luamanager
     )
 

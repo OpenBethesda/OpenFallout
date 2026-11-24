@@ -44,7 +44,6 @@ namespace OFGui
         void onClose() override;
 
         /// start trading, disables item drag&drop
-        void setTrading(bool trading);
 
         void onFrame(float dt) override;
 
@@ -118,7 +117,6 @@ namespace OFGui
         std::unique_ptr<MyGUI::ITexture> mPreviewTexture;
         std::unique_ptr<OFRender::InventoryPreview> mPreview;
 
-        bool mTrading;
         bool mUpdateNextFrame;
 
         void toggleMaximized();
@@ -133,12 +131,10 @@ namespace OFGui
             None,
             Use,
             Transfer,
-            Sell,
             Drop,
         };
         ControllerAction mPendingControllerAction;
 
-        void sellItem(MyGUI::Widget* sender, std::size_t count);
         void dragItem(MyGUI::Widget* sender, std::size_t count);
         void transferItem(MyGUI::Widget* sender, std::size_t count);
         void dropItem(MyGUI::Widget* sender, std::size_t count);

@@ -244,7 +244,7 @@ namespace OFLua
             [&](LuaUtil::LuaView& view) { addPackage("openfallout.self", sol::make_object(view.sol(), &mData)); });
         registerEngineHandlers({ &mOnActiveHandlers, &mOnInactiveHandlers, &mOnConsumeHandlers, &mOnActivatedHandlers,
             &mOnTeleportedHandlers, &mOnAnimationTextKeyHandlers, &mOnPlayAnimationHandlers, &mOnAnimationEndedHandlers,
-            &mOnSkillUse, &mOnSkillLevelUp, &mOnJailTimeServed });
+            &mOnSkillUse, &mOnSkillLevelUp });
     }
 
     void LocalScripts::setActive(bool active, bool callHandlers)

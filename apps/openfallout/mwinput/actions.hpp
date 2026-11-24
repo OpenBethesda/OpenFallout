@@ -53,7 +53,7 @@ namespace OFInput
         A_QuickKey9 = 39,
         A_QuickKey10 = 40,
 
-        A_QuickKeysMenu = 41,
+        // 41 was the quick keys menu of Morrowind (BindingsManager lets go of its old key)
 
         A_ToggleHUD = 42,
         A_ToggleDebug = 43,

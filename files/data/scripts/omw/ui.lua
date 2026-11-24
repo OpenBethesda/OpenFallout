@@ -2,7 +2,6 @@ local ui = require('openfallout.ui')
 local util = require('openfallout.util')
 local self = require('openfallout.self')
 local core = require('openfallout.core')
-local ambient = require('openfallout.ambient')
 
 local MODE = ui._getAllUiModes()
 local WINDOW = ui._getAllWindowIds()
@@ -16,17 +15,35 @@ for _, mode in pairs(MODE) do
     modePause[mode] = true
 end
 
+-- A window of the engine that a script draws instead, or a window that only a script has (a Fallout screen such as
+-- DialogMenu): the second kind has the name of a mode and is shown in that mode
+local luaOnlyWindows = {}
+
 local function registerWindow(window, showFn, hideFn)
-    if not WINDOW[window] then
-        error('At the moment it is only possible to override existing windows. Window "'..
-              tostring(window)..'" not found.')
+    if WINDOW[window] then
+        ui._setWindowDisabled(window, true)
+    elseif MODE[window] then
+        luaOnlyWindows[window] = true
+    else
+        error('Window "' .. tostring(window) .. '" is neither a window of the engine nor the name of a mode.')
     end
-    ui._setWindowDisabled(window, true)
     if replacedWindows[window] then
         replacedWindows[window].hideFn()
     end
     replacedWindows[window] = {showFn = showFn, hideFn = hideFn, visible = false}
     hiddenWindows[window] = nil
+end
+
+-- The windows a mode shows: those of the engine, and a window only a script has whose name is the mode's
+local function windowsOfMode(mode)
+    local windows = {}
+    for _, w in pairs(ui._getAllowedWindows(mode)) do
+        windows[#windows + 1] = w
+    end
+    if luaOnlyWindows[mode] then
+        windows[#windows + 1] = mode
+    end
+    return windows
 end
 
 local function updateHidden(mode, options)
@@ -57,7 +74,10 @@ local function updateHidden(mode, options)
     end
 end
 
+-- A mode that is not there (a mode of Morrowind that went with its window) is said in the log ("unknown GUI mode") and
+-- opens nothing
 local function setMode(mode, options)
+    if mode and not ui._isUiMode(mode) then return end
     local function impl()
         updateHidden(mode, options)
         ui._setUiModeStack({mode}, options and options.target)
@@ -72,6 +92,7 @@ local function setMode(mode, options)
 end
 
 local function addMode(mode, options)
+    if not ui._isUiMode(mode) then return end
     local function impl()
         updateHidden(mode, options)
         ui._setUiModeStack(modeStack, options and options.target)
@@ -117,7 +138,7 @@ local function onUiModeChanged(changedByLua, arg)
         if not changedByLua and mode ~= MODE.MainMenu and oldMode ~= MODE.MainMenu then
             updateHidden(mode)
         end
-        for _, w in pairs(ui._getAllowedWindows(mode)) do
+        for _, w in ipairs(windowsOfMode(mode)) do
             local state = replacedWindows[w]
             if state and not hiddenWindows[w] then
                 state.showFn(arg)
@@ -138,24 +159,6 @@ local function onUiModeChanged(changedByLua, arg)
     oldMode = mode
 end
 
-local function onUiModeChangedEvent(data)
-    if data.oldMode == data.newMode then
-        return
-    end
-    -- Sounds are processed in the event handler rather than in engine handler
-    -- in order to allow them to be overridden in mods.
-    if data.newMode == MODE.Book then
-        ambient.playSound('book open', {scale = false})
-    elseif data.oldMode == MODE.Book then
-        if not ambient.isSoundPlaying('item book up') then
-            ambient.playSound('book close', {scale = false})
-        end
-    elseif data.newMode == MODE.Scroll or data.oldMode == MODE.Scroll then
-        if not ambient.isSoundPlaying('item book up') then
-            ambient.playSound('scroll', {scale = false})
-        end
-    end
-end
 
 local function isWindowVisible(windowName)
     if replacedWindows[windowName] then
@@ -173,7 +176,7 @@ return {
     interface = {
         --- Interface version
         -- @field [parent=#UI] #number version
-        version = 3,
+        version = 4,
 
         --- All available UI modes.
         -- Use `view(I.UI.MODE)` in `luap` console mode to see the list.
@@ -186,7 +189,9 @@ return {
         WINDOW = util.makeStrictReadOnly(WINDOW),
 
         --- Register new implementation for the window with given name; overrides previous implementation.
-        -- Adding new windows is not supported yet. At the moment it is only possible to override built-in windows.
+        -- The name is a window of the engine (`I.UI.WINDOW`), which the script then draws instead, or the name of a
+        -- mode (`I.UI.MODE`) for a window that only the script has: it is shown in that mode (`falloutdialogue.lua`
+        -- draws `DialogMenu`). Any other name is an error.
         -- @function [parent=#UI] registerWindow
         -- @param #string windowName
         -- @param #function showFn Callback that will be called when the window should become visible
@@ -222,8 +227,8 @@ return {
         -- @function [parent=#UI] addMode
         -- @param #string mode New mode
         -- @param #table options (optional) Table with keys 'windows' and/or 'target' (see example).
-        -- @usage -- Open barter with an NPC
-        -- I.UI.addMode('Barter', {target = actor})
+        -- @usage -- Open the conversation with a character (what the engine does when the player talks to one)
+        -- I.UI.addMode('DialogMenu', {target = actor})
         addMode = addMode,
 
         --- Remove the specified mode from active modes.
@@ -271,7 +276,6 @@ return {
         _onUiModeChanged = onUiModeChanged,
     },
     eventHandlers = {
-        UiModeChanged = onUiModeChangedEvent,
         AddUiMode = function(options) addMode(options.mode, options) end,
         SetUiMode = function(options) setMode(options.mode, options) end,
     },

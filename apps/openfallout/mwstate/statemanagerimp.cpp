@@ -596,6 +596,9 @@ void OFState::StateManager::loadGame(
                     // The Morrowind journal (its entries and quests) and the Morrowind dialogue state (known topics,
                     // changed faction reactions) of a save made before they were removed: Fallout keeps its quests
                     // and conversations in the record of its scripts (FOSV), and nothing reads these any more.
+                case ESM::REC_KEYS:
+                    // The quick keys of Morrowind, which every save of the engine wrote until their menu was removed:
+                    // the hot keys of Fallout are in the record of its scripts.
                     reader.skipRecord();
                     break;
 
@@ -605,7 +608,6 @@ void OFState::StateManager::loadGame(
                     break;
 
                 case ESM::REC_GMAP:
-                case ESM::REC_KEYS:
                 case ESM::REC_ASPL:
                 case ESM::REC_MARK:
 

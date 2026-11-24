@@ -322,7 +322,6 @@ namespace OFLua
                 { "QuickKey8", OFInput::A_QuickKey8 },
                 { "QuickKey9", OFInput::A_QuickKey9 },
                 { "QuickKey10", OFInput::A_QuickKey10 },
-                { "QuickKeysMenu", OFInput::A_QuickKeysMenu },
 
                 { "ToggleHUD", OFInput::A_ToggleHUD },
                 { "ToggleDebug", OFInput::A_ToggleDebug },

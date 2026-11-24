@@ -23,7 +23,7 @@ namespace OFWorld
         if (actor == OFBase::Environment::get().getWorld()->getPlayerPtr())
         {
             OFGui::GuiMode mode = OFBase::Environment::get().getWindowManager()->getMode();
-            if (mode == OFGui::GM_Inventory || mode == OFGui::GM_Container)
+            if (mode == OFGui::GM_Inventory)
             {
                 OFBase::Environment::get().getWindowManager()->getInventoryWindow()->pickUpObject(getTarget());
                 return;

@@ -55,7 +55,6 @@ do
         'ToggleSneak',
         'Inventory',
         'Journal',
-        'QuickKeysMenu',
     }
     for _, key in ipairs(triggers) do
         input.registerTrigger {
@@ -196,24 +195,14 @@ input.registerTriggerHandler('Inventory', async:callback(function()
 
     if I.UI.getMode() == nil then
         I.UI.setMode(I.UI.MODE.Interface)
-    elseif I.UI.getMode() == I.UI.MODE.Interface or I.UI.getMode() == I.UI.MODE.Container then
+    elseif I.UI.getMode() == I.UI.MODE.Interface then
         I.UI.removeMode(I.UI.getMode())
     end
 end))
 
 input.registerTriggerHandler('Journal', async:callback(function()
     -- Fallout has no journal: its quests are on the DATA page of the Pip-Boy. The journal book of Morrowind that this
-    -- control opened is gone (the Journal mode has no window), so the control opens nothing.
-end))
-
-input.registerTriggerHandler('QuickKeysMenu', async:callback(function()
-    if not uiAllowed() then return end
-
-    if I.UI.getMode() == I.UI.MODE.QuickKeysMenu then
-        I.UI.removeMode(I.UI.MODE.QuickKeysMenu)
-    elseif checkNotWerewolf() and Player.isCharGenFinished(self) then
-        I.UI.addMode(I.UI.MODE.QuickKeysMenu)
-    end
+    -- control opened is gone, and so is its mode, so the control opens nothing.
 end))
 
 local function onFrame(_)

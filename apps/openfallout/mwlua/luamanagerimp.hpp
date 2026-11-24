@@ -108,7 +108,6 @@ namespace OFLua
             std::string_view startKey, std::string_view stopKey) override;
         void skillUse(const OFWorld::Ptr& actor, ESM::RefId skillId, int useType, float scale) override;
         void skillLevelUp(const OFWorld::Ptr& actor, ESM::RefId skillId, std::string_view source) override;
-        void jailTimeServed(const OFWorld::Ptr& actor, int days) override;
         void onHit(const OFWorld::Ptr& attacker, const OFWorld::Ptr& victim, const OFWorld::Ptr& weapon,
             const OFWorld::Ptr& ammo, int attackType, float attackStrength, float attackWindUp, float damage,
             bool isHealth, const osg::Vec3f& hitPos, bool successful,

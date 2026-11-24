@@ -63,25 +63,22 @@ namespace OFGui
 
     class Console;
     class SpellWindow;
-    class TradeWindow;
-    class TravelWindow;
-    class SpellBuyingWindow;
     class ConfirmationDialog;
     class CountDialog;
-    class ScrollWindow;
-    class BookWindow;
     class InventoryWindow;
     class MenuScenes;
-    class ContainerWindow;
-    class DialogueWindow;
     class WindowModal;
-    class JailScreen;
     class MessageBox;
     class PostProcessorHud;
     class SettingsWindow;
     class HUD;
     class WindowBase;
 
+    /// Where a message goes while a conversation of Fallout (GM_DialogMenu) is open. The games put every notice in the
+    /// one message queue of their head-up display, whatever menu is open (FalloutNV.exe 0x7052F0 -> 0x775380), and
+    /// DialogMenu has no place for notices of its own: during a conversation a message goes to that queue
+    /// (FalloutScripts::hudMessages, shown by falloutmenuhud.lua) unless it says Never, and goes to the message box of
+    /// the window manager otherwise. A message that is Only for a conversation is dropped outside one.
     enum ShowInDialogueMode
     {
         ShowInDialogueMode_IfPossible,
@@ -128,8 +125,6 @@ namespace OFBase
         virtual void removeGuiMode(OFGui::GuiMode mode) = 0;
         ///< can be anywhere in the stack
 
-        virtual void goToJail(int days) = 0;
-
         virtual void updatePlayer() = 0;
 
         virtual OFGui::GuiMode getMode() const = 0;
@@ -164,7 +159,6 @@ namespace OFBase
         virtual OFGui::MenuScenes* getMenuScenes() = 0;
         virtual OFGui::CountDialog* getCountDialog() = 0;
         virtual OFGui::ConfirmationDialog* getConfirmationDialog() = 0;
-        virtual OFGui::TradeWindow* getTradeWindow() = 0;
         virtual OFGui::HUD* getHud() = 0;
         virtual OFGui::PostProcessorHud* getPostProcessorHud() = 0;
         virtual std::vector<OFGui::WindowBase*> getGuiModeWindows(OFGui::GuiMode mode) = 0;
@@ -225,11 +219,6 @@ namespace OFBase
         virtual void setSpellVisibility(bool visible) = 0;
         virtual void setSneakVisibility(bool visible) = 0;
 
-        /// activate selected quick key
-        virtual void activateQuickKey(int index) = 0;
-        /// update activated quick key state (if action executing was delayed for some reason)
-        virtual void updateActivatedQuickKey() = 0;
-
         virtual const ESM::RefId& getSelectedSpell() = 0;
         virtual void setSelectedSpell(const ESM::RefId& spellId, int successChancePercent) = 0;
         virtual void setSelectedEnchantItem(const OFWorld::Ptr& item) = 0;
@@ -248,9 +237,6 @@ namespace OFBase
         virtual void notifyInputActionBound() = 0;
 
         virtual void addVisitedLocation(const std::string& name, int x, int y) = 0;
-
-        /// Hides dialog and schedules dialog to be deleted.
-        virtual void removeDialog(std::unique_ptr<OFGui::Layout>&& dialog) = 0;
 
         /// Gracefully attempts to exit the topmost GUI mode
         /** No guarantee of actually closing the window **/
@@ -290,14 +276,7 @@ namespace OFBase
 
         virtual void processChangedSettings(const std::set<std::pair<std::string, std::string>>& changed) = 0;
 
-        virtual void enableRest() = 0;
-        virtual bool getRestEnabled() = 0;
         virtual bool getJournalAllowed() = 0;
-
-        virtual bool getPlayerSleeping() = 0;
-        virtual void wakeUpPlayer() = 0;
-
-        virtual void showSoulgemDialog(OFWorld::Ptr item) = 0;
 
         virtual void changePointer(const std::string& name) = 0;
 
@@ -420,7 +399,6 @@ namespace OFBase
         virtual const std::string& getVersionDescription() const = 0;
 
         virtual void onDeleteCustomData(const OFWorld::Ptr& ptr) = 0;
-        virtual void forceLootMode(const OFWorld::Ptr& ptr) = 0;
 
         virtual void asyncPrepareSaveMap() = 0;
 

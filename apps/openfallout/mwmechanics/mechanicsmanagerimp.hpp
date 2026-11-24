@@ -219,8 +219,6 @@ namespace OFMechanics
         /// If the observer is a non-NPC, check all actors in AI processing distance as observers
         bool isActorDetected(const OFWorld::Ptr& actor, const OFWorld::Ptr& observer) override;
 
-        void confiscateStolenItems(const OFWorld::Ptr& player, const OFWorld::Ptr& targetContainer) override;
-
         /// List the owners that the player has stolen this item from (the owner can be an NPC or a faction).
         /// <Owner, item count>
         std::vector<std::pair<ESM::RefId, int>> getStolenItemOwners(const ESM::RefId& itemid) override;

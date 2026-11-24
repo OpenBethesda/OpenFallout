@@ -206,8 +206,6 @@ bool Launcher::SettingsPage::loadSettings()
         loadSettingBool(Settings::game().mFollowersAttackOnSight, *followersAttackOnSightCheckBox);
         loadSettingBool(Settings::game().mRebalanceSoulGemValues, *rebalanceSoulGemValuesCheckBox);
         loadSettingBool(Settings::game().mEnchantedWeaponsAreMagical, *enchantedWeaponsMagicalCheckBox);
-        loadSettingBool(
-            Settings::game().mBarterDispositionChangeIsPermanent, *permanentBarterDispositionChangeCheckBox);
         loadSettingBool(Settings::game().mClassicReflectedAbsorbSpellsBehavior, *classicReflectedAbsorbSpellsCheckBox);
         loadSettingBool(Settings::game().mClassicCalmSpellsBehavior, *classicCalmSpellsCheckBox);
         loadSettingBool(
@@ -342,10 +340,8 @@ bool Launcher::SettingsPage::loadSettings()
     // Interface Changes
     {
         loadSettingBool(Settings::game().mShowEffectDuration, *showEffectDurationCheckBox);
-        loadSettingBool(Settings::game().mShowEnchantChance, *showEnchantChanceCheckBox);
         loadSettingBool(Settings::game().mShowMeleeInfo, *showMeleeInfoCheckBox);
         loadSettingBool(Settings::game().mShowProjectileDamage, *showProjectileDamageCheckBox);
-        loadSettingBool(Settings::gui().mColorTopicEnable, *changeDialogTopicsCheckBox);
         showOwnedComboBox->setCurrentIndex(Settings::game().mShowOwned);
         loadSettingBool(Settings::gui().mStretchMenuBackground, *stretchBackgroundCheckBox);
         connect(controllerMenusCheckBox, &QCheckBox::toggled, this, &SettingsPage::slotControllerMenusToggled);
@@ -360,8 +356,6 @@ bool Launcher::SettingsPage::loadSettings()
     // Bug fixes
     {
         loadSettingBool(Settings::game().mPreventMerchantEquipping, *preventMerchantEquippingCheckBox);
-        loadSettingBool(
-            Settings::game().mTrainersTrainingSkillsBasedOnBaseSkill, *trainersTrainingSkillsBasedOnBaseSkillCheckBox);
     }
 
     // Miscellaneous
@@ -495,8 +489,6 @@ void Launcher::SettingsPage::saveSettings()
         saveSettingBool(*followersAttackOnSightCheckBox, Settings::game().mFollowersAttackOnSight);
         saveSettingBool(*rebalanceSoulGemValuesCheckBox, Settings::game().mRebalanceSoulGemValues);
         saveSettingBool(*enchantedWeaponsMagicalCheckBox, Settings::game().mEnchantedWeaponsAreMagical);
-        saveSettingBool(
-            *permanentBarterDispositionChangeCheckBox, Settings::game().mBarterDispositionChangeIsPermanent);
         saveSettingBool(*classicReflectedAbsorbSpellsCheckBox, Settings::game().mClassicReflectedAbsorbSpellsBehavior);
         saveSettingBool(*classicCalmSpellsCheckBox, Settings::game().mClassicCalmSpellsBehavior);
         saveSettingBool(
@@ -623,10 +615,8 @@ void Launcher::SettingsPage::saveSettings()
     // Interface Changes
     {
         saveSettingBool(*showEffectDurationCheckBox, Settings::game().mShowEffectDuration);
-        saveSettingBool(*showEnchantChanceCheckBox, Settings::game().mShowEnchantChance);
         saveSettingBool(*showMeleeInfoCheckBox, Settings::game().mShowMeleeInfo);
         saveSettingBool(*showProjectileDamageCheckBox, Settings::game().mShowProjectileDamage);
-        saveSettingBool(*changeDialogTopicsCheckBox, Settings::gui().mColorTopicEnable);
         saveSettingInt(*showOwnedComboBox, Settings::game().mShowOwned);
         saveSettingBool(*stretchBackgroundCheckBox, Settings::gui().mStretchMenuBackground);
         saveSettingBool(*controllerMenusCheckBox, Settings::gui().mControllerMenus);
@@ -640,8 +630,6 @@ void Launcher::SettingsPage::saveSettings()
     // Bug fixes
     {
         saveSettingBool(*preventMerchantEquippingCheckBox, Settings::game().mPreventMerchantEquipping);
-        saveSettingBool(
-            *trainersTrainingSkillsBasedOnBaseSkillCheckBox, Settings::game().mTrainersTrainingSkillsBasedOnBaseSkill);
     }
 
     // Miscellaneous

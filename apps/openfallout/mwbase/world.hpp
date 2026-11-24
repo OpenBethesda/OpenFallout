@@ -533,11 +533,6 @@ namespace OFBase
         /// This should be called when initiating a dialogue.
         virtual void updateDialogueGlobals() = 0;
 
-        /// Moves all stolen items from \a ptr to the closest evidence chest.
-        virtual void confiscateStolenItems(const OFWorld::Ptr& ptr) = 0;
-
-        virtual void goToJail() = 0;
-
         /// Spawn a random creature from a levelled list next to the player
         virtual void spawnRandomCreature(const ESM::RefId& creatureList) = 0;
 
@@ -564,8 +559,6 @@ namespace OFBase
         virtual osg::Vec3f aimToTarget(
             const OFWorld::ConstPtr& actor, const OFWorld::ConstPtr& target, bool isRangedCombat)
             = 0;
-
-        virtual bool isPlayerInJail() const = 0;
 
         virtual void rest(double hours) = 0;
 

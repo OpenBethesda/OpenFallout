@@ -82,11 +82,6 @@ namespace OFLua
             std::string mSkill;
             std::string mSource;
         };
-        struct OnJailTimeServed
-        {
-            ESM::RefNum mActor;
-            int mDays;
-        };
         struct OnDropped
         {
             ESM::RefNum mObject;
@@ -102,7 +97,7 @@ namespace OFLua
             LuaUtil::TransformQ mRotation;
         };
         using Event = std::variant<OnActive, OnInactive, OnConsume, OnActivate, OnUseItem, OnNewExterior, OnTeleported,
-            OnAnimationTextKey, OnAnimationEnded, OnSkillUse, OnSkillLevelUp, OnJailTimeServed, OnDropped, OnPlaced>;
+            OnAnimationTextKey, OnAnimationEnded, OnSkillUse, OnSkillLevelUp, OnDropped, OnPlaced>;
 
         void clear() { mQueue.clear(); }
         void addToQueue(Event e) { mQueue.push_back(std::move(e)); }

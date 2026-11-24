@@ -69,8 +69,6 @@ Inventory_description: "Открыть инвентарь."
 Journal_name: "Дневник"
 Journal_description: "Открыть дневник."
 
-QuickKeysMenu_name: "Меню быстрых клавиш"
-QuickKeysMenu_description: "Открыть меню быстрых клавиш."
 
 SmoothMoveForward_name: "Плавно двигаться вперед"
 SmoothMoveForward_description: "Движение вперед с плавными переходами от ходьбы к бегу."

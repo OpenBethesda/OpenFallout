@@ -2,6 +2,7 @@
 
 #include <MyGUI_RenderManager.h>
 
+#include <components/debug/debuglog.hpp>
 #include <components/lua/util.hpp>
 #include <components/lua_ui/alignment.hpp>
 #include <components/lua_ui/content.hpp>
@@ -19,6 +20,7 @@
 
 #include <cmath>
 #include <numbers>
+#include <optional>
 
 #include "context.hpp"
 #include "luamanagerimp.hpp"
@@ -43,38 +45,14 @@ namespace OFLua
     {
         constexpr int sMaxCursorSize = 128;
 
+        // The Lua names of the GUI modes. A mode of a Fallout screen has the name of the game's menu (DialogMenu);
+        // Interface is the mode of the Pip-Boy and of the screens that Lua draws over the game
         const std::unordered_map<OFGui::GuiMode, std::string_view> modeToName{
             { OFGui::GM_Inventory, "Interface" },
-            { OFGui::GM_Container, "Container" },
-            { OFGui::GM_Companion, "Companion" },
             { OFGui::GM_MainMenu, "MainMenu" },
-            { OFGui::GM_Scroll, "Scroll" },
-            { OFGui::GM_Book, "Book" },
-            { OFGui::GM_Alchemy, "Alchemy" },
-            { OFGui::GM_Repair, "Repair" },
-            { OFGui::GM_Dialogue, "Dialogue" },
-            { OFGui::GM_Barter, "Barter" },
-            { OFGui::GM_Rest, "Rest" },
-            { OFGui::GM_SpellBuying, "SpellBuying" },
-            { OFGui::GM_Travel, "Travel" },
-            { OFGui::GM_SpellCreation, "SpellCreation" },
-            { OFGui::GM_Enchanting, "Enchanting" },
-            { OFGui::GM_Recharge, "Recharge" },
-            { OFGui::GM_Training, "Training" },
-            { OFGui::GM_MerchantRepair, "MerchantRepair" },
-            { OFGui::GM_Levelup, "LevelUp" },
-            { OFGui::GM_Name, "ChargenName" },
-            { OFGui::GM_Race, "ChargenRace" },
-            { OFGui::GM_Birth, "ChargenBirth" },
-            { OFGui::GM_Class, "ChargenClass" },
-            { OFGui::GM_ClassGenerate, "ChargenClassGenerate" },
-            { OFGui::GM_ClassPick, "ChargenClassPick" },
-            { OFGui::GM_ClassCreate, "ChargenClassCreate" },
-            { OFGui::GM_Review, "ChargenClassReview" },
+            { OFGui::GM_DialogMenu, "DialogMenu" },
             { OFGui::GM_Loading, "Loading" },
             { OFGui::GM_LoadingWallpaper, "LoadingWallpaper" },
-            { OFGui::GM_Jail, "Jail" },
-            { OFGui::GM_QuickKeysMenu, "QuickKeysMenu" },
         };
 
         const auto nameToMode = [] {
@@ -83,6 +61,17 @@ namespace OFLua
                 res[name] = mode;
             return res;
         }();
+
+        // A name that is no mode (a mode of Morrowind that went with its window, a typing error) is said once in the
+        // log, by this greppable line, and left out
+        std::optional<OFGui::GuiMode> findMode(std::string_view name)
+        {
+            const auto it = nameToMode.find(name);
+            if (it != nameToMode.end())
+                return it->second;
+            Log(Debug::Warning) << "Warning: unknown GUI mode '" << name << "'";
+            return std::nullopt;
+        }
     }
 
     sol::table registerUiApi(const Context& context)
@@ -362,6 +351,7 @@ namespace OFLua
                 res[name] = name;
             return res;
         };
+        api["_isUiMode"] = [](std::string_view name) { return findMode(name).has_value(); };
         api["_getUiModeStack"] = [windowManager](sol::this_state thisState) {
             sol::table res(thisState, sol::create);
             int i = 1;
@@ -371,9 +361,11 @@ namespace OFLua
         };
         api["_setUiModeStack"]
             = [windowManager, luaManager = context.mLuaManager](sol::table modes, sol::optional<LObject> arg) {
-                  std::vector<OFGui::GuiMode> newStack(modes.size());
-                  for (unsigned i = 0; i < newStack.size(); ++i)
-                      newStack[i] = nameToMode.at(LuaUtil::cast<std::string_view>(modes[LuaUtil::toLuaIndex(i)]));
+                  std::vector<OFGui::GuiMode> newStack;
+                  for (unsigned i = 0; i < modes.size(); ++i)
+                      if (const std::optional<OFGui::GuiMode> mode
+                          = findMode(LuaUtil::cast<std::string_view>(modes[LuaUtil::toLuaIndex(i)])))
+                          newStack.push_back(*mode);
                   luaManager->addAction(
                       [windowManager, newStack = std::move(newStack), arg = std::move(arg)]() {
                           OFWorld::Ptr ptr;
@@ -402,8 +394,9 @@ namespace OFLua
         };
         api["_getAllowedWindows"] = [windowManager](sol::this_state thisState, std::string_view mode) {
             sol::table res(thisState, sol::create);
-            for (std::string_view name : windowManager->getAllowedWindowIds(nameToMode.at(mode)))
-                res[name] = name;
+            if (const std::optional<OFGui::GuiMode> found = findMode(mode))
+                for (std::string_view name : windowManager->getAllowedWindowIds(*found))
+                    res[name] = name;
             return res;
         };
         api["_setWindowDisabled"]

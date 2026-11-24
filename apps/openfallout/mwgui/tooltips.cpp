@@ -106,9 +106,7 @@ namespace OFGui
                 return;
             const MyGUI::IntPoint& mousePos = MyGUI::InputManager::getInstance().getMousePosition();
 
-            if (winMgr->getWorldMouseOver()
-                && (winMgr->isConsoleMode() || (winMgr->getMode() == GM_Container)
-                    || (winMgr->getMode() == GM_Inventory)))
+            if (winMgr->getWorldMouseOver() && (winMgr->isConsoleMode() || (winMgr->getMode() == GM_Inventory)))
             {
                 if (mFocusObject.isEmpty())
                     return;

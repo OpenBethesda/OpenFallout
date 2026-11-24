@@ -9,8 +9,8 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwworld/actionrepair.hpp"
 #include "../mwworld/cellstore.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include "../mwgui/tooltips.hpp"
@@ -135,7 +135,8 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Repair::use(const OFWorld::Ptr& ptr, bool force) const
     {
-        return std::make_unique<OFWorld::ActionRepair>(ptr, force);
+        // The repair window of Morrowind is gone (Fallout repairs from the Pip-Boy, falloutpipboyrepair.lua)
+        return std::make_unique<OFWorld::NullAction>();
     }
 
     bool Repair::canSell(const OFWorld::ConstPtr& item, int npcServices) const
