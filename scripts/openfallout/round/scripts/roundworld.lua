@@ -504,6 +504,104 @@ end
 
 function r.inspect(label, actor) return r.inventory(label, actor) end
 
+-- ---- Step 4 additions: the rules of the player measured (movement, jump, fall, level-up, death) -----------------------------------
+-- Every question is answered by the player script (roundplayer.lua, "s4" handlers), which reads the game through the Fallout-backed
+-- APIs only (core.pipboy, Actor.getCurrentSpeed and the like, positions, the commands of the script language).
+
+-- Marks that a scenario leaves for itself across a load: a game that loads (the death of the player loads the newest save) starts
+-- the scenario again from its first line in the loaded world, and a mark that was set before the save is there again, so
+-- that the second run knows which part is left. Marks are saved with the game (onSave/onLoad below).
+local marks = {}
+function r.mark(key, value) marks[key] = value end
+function r.marked(key) return marks[key] end
+
+-- Saves the game with this description (the menu script s4menu.lua does it: only a menu script may)
+function r.saveGame(description)
+    types.Player.sendMenuEvent(player(), 'S4Save', { description = description })
+    log('s4save', description)
+end
+
+-- What the player is now, as numbers (and the line `s4stats <label> ...`): level, experience, health, action points, weights,
+-- the points to spend, SPECIAL and every skill by number. The answer holds the same as tables.
+function r.s4stats(label) return ask('s4stats', { label = label }) end
+
+-- Walks, runs or sneaks for `seconds` of the game's own time and measures what it does: the distance the player covers on the
+-- ground in the window after the first `skip` seconds, and what the speed of the game's API says in it. Gives the numbers.
+function r.s4move(o)
+    local started_reply = ask('s4move', o)
+    if started_reply == nil then return nil end
+    local deadline = now() + (o.seconds or 5) + 30
+    local result
+    repeat
+        r.wait(0.25)
+        result = ask('s4moveResult', {})
+    until result == nil or result.error ~= nil or result.done or now() >= deadline
+    if result == nil or not result.done then
+        log('error', 's4move', tostring(o.label or '-'), result and tostring(result.error) or 'no result')
+        return nil
+    end
+    return result
+end
+
+-- A jump (and, with `again`, more presses of the key while the player is in the air: seconds after the take-off, a list)
+function r.s4jump(o)
+    local started_reply = ask('s4jump', o)
+    if started_reply == nil then return nil end
+    local deadline = now() + (o.seconds or 4) + 30
+    local result
+    repeat
+        r.wait(0.25)
+        result = ask('s4jumpResult', {})
+    until result == nil or result.error ~= nil or result.done or now() >= deadline
+    if result == nil or not result.done then
+        log('error', 's4jump', tostring(o.label or '-'), result and tostring(result.error) or 'no result')
+        return nil
+    end
+    return result
+end
+
+-- The player is let fall (the caller has put it in the air with r.teleport): the height lost and the health taken on landing
+function r.s4drop(o)
+    local started_reply = ask('s4drop', o)
+    if started_reply == nil then return nil end
+    -- the fall begins where the scenario says (`teleport`: the arguments of r.teleport, with the height `z` of the drop)
+    if o.teleport then r.teleport(o.teleport) end
+    local deadline = now() + (o.timeout or 25)
+    local result
+    repeat
+        r.wait(0.25)
+        result = ask('s4dropResult', {})
+    until result == nil or result.error ~= nil or result.done or now() >= deadline
+    if result == nil or not result.done then
+        log('error', 's4drop', tostring(o.label or '-'), result and tostring(result.error) or 'no result')
+        return nil
+    end
+    return result
+end
+
+-- The level-up screen answered as a player does it: the points to spend, spent on the skills in the order of the list, a perk
+-- chosen when one is offered, the screen left. Gives what the screen offered and what was left, or nil when none opened.
+function r.s4levelup(label, timeout)
+    local deadline = now() + (timeout or 20)
+    local result
+    repeat
+        result = ask('s4levelup', { label = label })
+        if result ~= nil and result.answered then return result end
+        r.wait(0.5)
+    until result == nil or now() >= deadline
+    return nil
+end
+
+-- Whether the player is dead, whether a box is open on the screen and how many buttons it has, whether a save to reload exists
+function r.s4dead(label) return ask('s4dead', { label = label }) end
+
+-- Whether the HUD gave the player the text of the game setting (such as `sOverEncumbered`) since the last call
+function r.s4message(setting)
+    local reply = ask('s4message', { setting = setting })
+    return reply and reply.seen == true
+end
+
+
 r.form = form
 r.types = types
 
@@ -538,6 +636,10 @@ end
 
 return {
     engineHandlers = {
+        onSave = function() return { marks = marks } end,
+        onLoad = function(data)
+            if type(data) == 'table' and type(data.marks) == 'table' then marks = data.marks end
+        end,
         onUpdate = function()
             local t = now()
             if t - started >= LIMIT and not finished then

@@ -1,0 +1,25 @@
+{
+  "name": "s4-jump-nv",
+  "game": "nv",
+  "save": "${OPENFALLOUT_ROUND_SAVE_NV}",
+  "scenario": "../scenarios/s4_jump_nv.lua",
+  "resolution": [
+    1280,
+    720
+  ],
+  "framerate": 30,
+  "limit": 600,
+  "settings": {
+    "Sound": {
+      "master volume": "0"
+    }
+  },
+  "env": {
+    "OPENFALLOUT_HEADLESS_SOUND": "1"
+  },
+  "variants": [
+    {
+      "name": "plain"
+    }
+  ]
+}

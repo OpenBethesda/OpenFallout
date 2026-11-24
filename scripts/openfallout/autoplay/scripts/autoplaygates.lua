@@ -40,6 +40,13 @@ return {
         -- fire there either missed it (no save) or saved after the stage had moved on (digest MISMATCH, 65 saved as 70)
         save = { { quest = 'CG03', stage = 60 }, { quest = 'VCG01', stage = 79 } },
         load = { { quest = 'CG04', stage = 21 }, { quest = 'VCG01', stage = 80 } },
+        -- The saves that the rounds of step 4 start from (an engine's own save, so that its players are the ones the engine makes), written
+        -- where the intro is over and the player is outside with its controls: Fallout 3 in the Wasteland on the quest after the vault
+        -- (MQ01 stage 40 stands for 229 s in a Mac run), New Vegas on VMQ01 stage 50 (92 s). Each is saved once, `after` seconds in.
+        fixtures = {
+            { quest = 'MQ01', stage = 40, description = 's4-fixture-fo3' },
+            { quest = 'VMQ01', stage = 50, description = 's4-fixture-nv' },
+        },
     },
     boxes = {
         -- CG04VaultExitMessage, at the door out of Vault 101: five buttons, and the last one leaves (the others stay)
