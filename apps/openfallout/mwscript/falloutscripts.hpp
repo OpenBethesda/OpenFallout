@@ -2137,6 +2137,8 @@ namespace OFScript
         double jumpHeight(const OFWorld::Ptr& ptr, bool swimming);
         /// Whether the actor is a teammate of the player (a follower: the third test of the tier rule, A.T2)
         bool isPlayerTeammate(const OFWorld::Ptr& ptr);
+        /// The Paralysis actor value (47) is above 0: the actor can neither move nor act
+        bool isParalyzed(const OFWorld::Ptr& ptr);
         /// What scripts told the actor to do over what its AI would make it do (falloutactorstatus.cpp): SetActorsAI 0
         /// (it does nothing: no package, no fight), SetForceRun and SetForceSneak (the gait it walks with). Any thread.
         bool actorAiOff(const OFWorld::Ptr& ptr);

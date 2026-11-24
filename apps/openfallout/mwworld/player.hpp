@@ -1,26 +1,24 @@
 #ifndef GAME_MWWORLD_PLAYER_H
 #define GAME_MWWORLD_PLAYER_H
 
-#include <map>
+#include <cstdint>
+
+#include <osg/Vec3f>
+
+#include <components/esm4/loadnpc.hpp>
 
 #include "../mwworld/livecellref.hpp"
 
 #include "../mwmechanics/drawstate.hpp"
 
-#include <components/esm/attr.hpp>
-#include <components/esm/refid.hpp>
-#include <components/esm3/loadnpc.hpp>
-#include <components/esm3/loadskil.hpp>
-
 namespace ESM
 {
-    class ESMWriter;
     class ESMReader;
 }
 
-namespace Loading
+namespace FalloutScript
 {
-    class Listener;
+    struct PlayerState;
 }
 
 namespace OFWorld
@@ -28,62 +26,41 @@ namespace OFWorld
     class CellStore;
     class ConstPtr;
 
-    /// \brief NPC object representing the player and additional player data
+    /// The player of Fallout 3, New Vegas and Tale of Two Wastelands: the reference PlayerRef (form 0x14 of the first
+    /// Fallout plugin) of the NPC_ record 0x7 of that plugin, as the games have it. Its class is the player's own
+    /// (OFClass::FalloutPlayer), its stats are the Fallout scripts' (actor values, perks, equipment), and its movement
+    /// is the player's actor (OFMechanics::PlayerCharacter). What a save keeps of it here is in the "player" section of
+    /// the record of the Fallout scripts (FOSV).
     class Player
     {
-        LiveCellRef<ESM::NPC> mPlayer;
-        OFWorld::CellStore* mCellStore;
-        ESM::RefId mSign;
+        LiveCellRef<ESM4::Npc> mPlayer;
+        OFWorld::CellStore* mCellStore = nullptr;
 
         osg::Vec3f mLastKnownExteriorPosition;
 
-        ESM::Position mMarkedPosition;
-        // If no position was marked, this is nullptr
-        CellStore* mMarkedCell;
-
-        bool mTeleported;
-
-        int mCurrentCrimeId; // the id assigned witnesses
-        int mPaidCrimeId; // the last id paid off (0 bounty)
-
-        typedef std::map<ESM::RefId, ESM::RefId> PreviousItems; // previous equipped items, needed for bound spells
-        PreviousItems mPreviousItems;
-
-        // Saved stats prior to becoming a werewolf
-        std::map<ESM::RefId, float> mSaveSkills;
-        std::map<ESM::RefId, float> mSaveAttributes;
-
-        bool mJumping;
+        bool mTeleported = false;
+        bool mJumping = false;
 
     public:
-        Player(const ESM::NPC* player);
+        /// \param player The NPC_ record 0x7 of the first Fallout plugin
+        /// \param reference PlayerRef: form 0x14 of that plugin
+        Player(const ESM4::Npc* player, ESM::RefNum reference);
 
-        void saveStats();
-        void restoreStats();
-        void setWerewolfStats();
-
-        // For mark/recall magic effects
-        void markPosition(CellStore* markedCell, const ESM::Position& markedPosition);
-        void getMarkedPosition(CellStore*& markedCell, ESM::Position& markedPosition) const;
-
-        /// Interiors can not always be mapped to a world position. However
-        /// world position is still required for divine / almsivi magic effects
-        /// and the player arrow on the global map.
+        /// Interiors can not always be placed in the world: the map shows the player where it last was outside
         void setLastKnownExteriorPosition(const osg::Vec3f& position) { mLastKnownExteriorPosition = position; }
         osg::Vec3f getLastKnownExteriorPosition() const { return mLastKnownExteriorPosition; }
 
-        void set(const ESM::NPC* player);
+        void set(const ESM4::Npc* player);
 
         void setCell(OFWorld::CellStore* cellStore);
 
         OFWorld::Ptr getPlayer();
         OFWorld::ConstPtr getConstPlayer() const;
 
-        void setBirthSign(const ESM::RefId& sign);
-        const ESM::RefId& getBirthSign() const;
-
+        /// The weapon out of its holster (the equipment of the Fallout scripts): Weapon or Nothing; Fallout has no
+        /// stance of spells
         void setDrawState(OFMechanics::DrawState state);
-        OFMechanics::DrawState getDrawState(); /// \todo constness
+        OFMechanics::DrawState getDrawState() const;
 
         /// Activate the object under the crosshair, if any
         void activate();
@@ -98,26 +75,23 @@ namespace OFWorld
         void setJumping(bool jumping);
         bool getJumping() const;
 
-        /// Checks all nearby actors to see if anyone has an aipackage against you
-        bool isInCombat();
+        /// The player fights or is fought (the combat state of the Fallout scripts: StartCombat and the actors' own)
+        bool isInCombat() const;
 
-        bool enemiesNearby();
+        /// The games refuse to rest or wait while an enemy fights the player
+        bool enemiesNearby() const { return isInCombat(); }
 
         void clear();
 
-        void write(ESM::ESMWriter& writer, Loading::Listener& progress) const;
+        /// What the "player" section of a save keeps
+        FalloutScript::PlayerState saveState() const;
 
-        bool readRecord(ESM::ESMReader& reader, uint32_t type);
+        /// Restores what saveState gave (called while the save is read, before the world goes to the player's cell)
+        void loadState(const FalloutScript::PlayerState& state);
 
-        int getNewCrimeId(); // get new id for witnesses
-        void recordCrimeId(); // record the paid crime id when bounty is 0
-        int getCrimeId() const; // get the last paid crime id
-
-        void setPreviousItem(const ESM::RefId& boundItemId, const ESM::RefId& previousItemId);
-        ESM::RefId getPreviousItem(const ESM::RefId& boundItemId);
-        void erasePreviousItem(const ESM::RefId& boundItemId);
-
-        void setSelectedSpell(const ESM::RefId& spellId);
+        /// Reads the PLAY record of a save made when the player was a Morrowind character: it is converted once
+        /// (FalloutScript::convertOldPlayer) and what it had that Fallout does not is dropped
+        bool readRecord(ESM::ESMReader& reader, std::uint32_t type);
 
         void update();
     };

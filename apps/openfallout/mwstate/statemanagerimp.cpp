@@ -42,7 +42,6 @@
 #include "../mwworld/worldmodel.hpp"
 
 #include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/npcstats.hpp"
 
 #include "../mwscript/falloutscripts.hpp"
 
@@ -243,7 +242,7 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
         if (!character)
         {
             OFWorld::ConstPtr player = OFMechanics::getPlayer();
-            const std::string& name = player.get<ESM::NPC>()->mBase->mName;
+            const std::string name(player.getClass().getName(player));
 
             character = mCharacterManager.createCharacter(name);
             mCharacterManager.setCurrentCharacter(character);
@@ -257,25 +256,19 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
 
         profile.mContentFiles = world.getContentFiles();
 
-        profile.mPlayerName = player.get<ESM::NPC>()->mBase->mName;
-        profile.mPlayerLevel = player.getClass().getNpcStats(player).getLevel();
-
-        const ESM::RefId& classId = player.get<ESM::NPC>()->mBase->mClass;
-        if (world.getStore().get<ESM::Class>().isDynamic(classId))
-            profile.mPlayerClassName = world.getStore().get<ESM::Class>().find(classId)->mName;
-        else
-            profile.mPlayerClassId = classId;
-
-        const OFMechanics::CreatureStats& stats = player.getClass().getCreatureStats(player);
+        // The header is rebuilt from Fallout's values: the name the player gave the character (else the full name
+        // of NPC_ 0x7), the level and the health of the Fallout scripts. Fallout has no class: the class fields stay
+        // empty.
+        profile.mPlayerName = std::string(player.getClass().getName(player));
+        profile.mPlayerLevel = 1;
 
         profile.mPlayerCellName = world.getCellName();
         profile.mInGameTime = world.getTimeManager()->getEpochTimeStamp();
         profile.mTimePlayed = mTimePlayed;
         profile.mDescription = description;
         profile.mCurrentDay = world.getTimeManager()->getTimeStamp().getDay();
-        profile.mCurrentHealth = stats.getHealth().getCurrent();
-        profile.mMaximumHealth = stats.getHealth().getModified();
-        // The level and the health of the games are kept by the host of the scripts, not by the stats of the player
+        profile.mCurrentHealth = 0;
+        profile.mMaximumHealth = 0;
         if (OFScript::FalloutScripts* fallout = OFBase::Environment::get().getFalloutScripts())
         {
             const OFScript::FalloutScripts::SavedPlayer saved = fallout->savedPlayer();
@@ -294,9 +287,6 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
             slot = character->createSlot(profile);
         else
             slot = character->updateSlot(slot, profile);
-
-        // Make sure the animation state held by references is up to date before saving the game.
-        OFBase::Environment::get().getMechanicsManager()->persistAnimationStates();
 
         Log(Debug::Info) << "Writing saved game '" << description << "' for character '" << profile.mPlayerName << "'";
 
@@ -555,10 +545,8 @@ void OFState::StateManager::loadGame(
                 case ESM::REC_ACTI:
                 case ESM::REC_ARMO:
                 case ESM::REC_BOOK:
-                case ESM::REC_CLAS:
                 case ESM::REC_CLOT:
                 case ESM::REC_ENCH:
-                case ESM::REC_NPC_:
                 case ESM::REC_SPEL:
                 case ESM::REC_WEAP:
                 case ESM::REC_GLOB:
@@ -567,8 +555,6 @@ void OFState::StateManager::loadGame(
                 case ESM::REC_WTHR:
                 case ESM::REC_DYNA:
                 case ESM::REC_ACTC:
-                case ESM::REC_PROJ:
-                case ESM::REC_MPRJ:
                 case ESM::REC_ENAB:
                 case ESM::REC_LEVC:
                 case ESM::REC_LEVI:
@@ -587,6 +573,14 @@ void OFState::StateManager::loadGame(
                     reader.getHNT(firstPersonCam, "FIRS");
                     break;
 
+                case ESM::REC_PROJ:
+                case ESM::REC_MPRJ:
+                    // The arrows and the magic bolts of Morrowind in flight: they went with its combat and magic.
+                case ESM::REC_NPC_:
+                case ESM::REC_CLAS:
+                    // The placeholder NPC_ record "Player" of a save made when the player was a Morrowind character,
+                    // and a class the player made: the player is NPC_ 0x7 of the first Fallout plugin, and Fallout
+                    // has no classes. No other NPC_ is written: the Morrowind characters are gone.
                 case ESM::REC_GSCR:
                     // The running Morrowind global scripts of a save made before they were removed: there is nothing
                     // to restore them into, and nothing else in the file refers to them.
@@ -687,19 +681,13 @@ void OFState::StateManager::loadGame(
             OFBase::Environment::get().getWorld()->changeToCell(cell.getCell()->getId(), pos, true, false);
         }
 
-        OFBase::Environment::get().getWorld()->updateProjectilesCasters();
-
         // Since we passed "changeEvent=false" to changeCell, we shouldn't have triggered the cell change flag.
         // But make sure the flag is cleared anyway in case it was set from an earlier game.
         OFBase::Environment::get().getWorldScene()->markCellAsUnchanged();
 
+        // (the summoned creatures of Morrowind that an older save lists in actorIdConverter.mGraveyard are gone with
+        // its magic)
         OFBase::Environment::get().getLuaManager()->gameLoaded();
-        for (int actorId : actorIdConverter.mGraveyard)
-        {
-            auto mapped = actorIdConverter.mMappings.find(actorId);
-            if (mapped != actorIdConverter.mMappings.end())
-                OFBase::Environment::get().getMechanicsManager()->cleanupSummonedCreature(mapped->second);
-        }
     }
     catch (const SaveVersionTooNewError& e)
     {

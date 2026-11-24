@@ -52,6 +52,8 @@ namespace FalloutScript
         /// New Vegas and the unused throwing in Fallout 3)
         constexpr int lastSkill = 45;
         /// What hides a character from V.A.T.S. (it halves the chance to hit it): invisibility and chameleon
+        /// Above 0 the actor cannot move or act (the Paralysis effect raises it; rule E of the docs)
+        constexpr int paralysis = 47;
         constexpr int invisibility = 48;
         constexpr int chameleon = 49;
         /// The numbers from here are not actor values

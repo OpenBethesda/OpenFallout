@@ -177,4 +177,10 @@ namespace OFScript
         const FalloutScript::FormId actor = scriptReferenceOf(ptr);
         return actor != 0 && actor != mPlayer && isTeammate(actor);
     }
+
+    bool FalloutScripts::isParalyzed(const OFWorld::Ptr& ptr)
+    {
+        const FalloutScript::FormId actor = scriptReferenceOf(ptr);
+        return actor != 0 && mActorValues.current(actor, FalloutScript::ActorValue::paralysis) > 0;
+    }
 }

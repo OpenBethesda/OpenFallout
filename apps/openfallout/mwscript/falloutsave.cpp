@@ -8,6 +8,7 @@
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
 #include <components/esm4/loadglob.hpp>
+#include <components/falloutscript/playerstate.hpp>
 #include <components/falloutscript/savecharacters.hpp>
 #include <components/falloutscript/savescripts.hpp>
 #include <components/falloutscript/savestate.hpp>
@@ -23,6 +24,7 @@
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/globals.hpp"
 #include "../mwworld/manualref.hpp"
+#include "../mwworld/player.hpp"
 #include "../mwworld/worldmodel.hpp"
 
 #include "falloutsavepending.hpp"
@@ -864,6 +866,17 @@ namespace OFScript
         sections.push_back({ "globals", 1, [this](FalloutScript::SaveWriter& out) { Access::writeGlobals(*this, out); },
             [this](
                 FalloutScript::SaveReader& in, std::uint32_t version) { Access::readGlobals(*this, in, version); } });
+        // The player's place, stance and Lua scripts (the PLAY record of Morrowind before): first after the values of
+        // the game, so that what comes later finds the player in its cell
+        sections.push_back({ "player", FalloutScript::playerSectionVersion,
+            [](FalloutScript::SaveWriter& out) {
+                FalloutScript::writePlayerState(OFBase::Environment::get().getWorld()->getPlayer().saveState(), out);
+            },
+            [](FalloutScript::SaveReader& in, std::uint32_t version) {
+                FalloutScript::PlayerState state;
+                FalloutScript::readPlayerState(state, in, version);
+                OFBase::Environment::get().getWorld()->getPlayer().loadState(state);
+            } });
         sections.push_back({ "quests", FalloutScript::questsSectionVersion,
             [this](FalloutScript::SaveWriter& out) { FalloutScript::writeQuests(mQuests, out); },
             [this](FalloutScript::SaveReader& in, std::uint32_t version) {
