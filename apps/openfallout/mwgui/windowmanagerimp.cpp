@@ -10,6 +10,7 @@
 
 #include <MyGUI_ClipboardManager.h>
 #include <MyGUI_FactoryManager.h>
+#include <MyGUI_ITexture.h>
 #include <MyGUI_InputManager.h>
 #include <MyGUI_LanguageManager.h>
 #include <MyGUI_LayerManager.h>
