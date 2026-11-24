@@ -226,7 +226,7 @@ vec = function(x, y, z) return setmetatable({ x = x, y = y, z = z }, { __add = f
     __index = vector_methods }) end
 -- the stand-in for the player: walks at `walk` or `run` units a second north, jumps with `jump_speed` against `gravity`, hurts by `fall_damage`
 state = { x = 0, y = 0, z = 100, vz = 0, ground = true, ground_z = 100, walk = 84.7, run = 338.8, jump_speed = 283, gravity = 627,
-          hp = 200, max_hp = 200, fall_lowest = 100, xp = 0, level = 1, skill_points = 0, perk_points = 0, ui_mode = nil, spent = 0 }
+          hp = 200, max_hp = 200, fall_lowest = 100, mod = {}, xp = 0, level = 1, skill_points = 0, perk_points = 0, ui_mode = nil, spent = 0 }
 self_module = { position = vec(0, 0, 100), cell = { isExterior = true, gridX = 0, gridY = 0, worldSpaceId = 'w' }, object = {},
                 controls = { movement = 0, sideMovement = 0, run = false, sneak = false, jump = false } }
 package.preload['openfallout.self'] = function() return self_module end
@@ -239,10 +239,16 @@ package.preload['openfallout.core'] = function()
                      skillPoints = state.skill_points, perkPoints = state.perk_points, newVegas = true } end,
                  attributes = function()
                      local rows = {}
-                     for number = 5, 11 do rows[#rows + 1] = { number = number, value = 5, base = 5 } end
+                     for number = 5, 11 do rows[#rows + 1] = { number = number, value = 5 + (state.mod[number] or 0), base = 5 } end
                      return rows
                  end,
-                 skills = function() return { { number = 32, value = 15, base = 15, tagged = false }, { number = 37, value = 30, base = 30, tagged = true } } end,
+                 skills = function()
+                     -- Barter (Charisma, 8) and Medicine (Intelligence, 9, tagged): 2 + 2 x attribute + ceil(Luck / 2) + 15 if tagged
+                     local luck = math.ceil((5 + (state.mod[11] or 0)) / 2)
+                     local barter = 2 + 2 * (5 + (state.mod[8] or 0)) + luck
+                     local medicine = 2 + 2 * (5 + (state.mod[9] or 0)) + luck + 15
+                     return { { number = 32, value = barter, base = barter, tagged = false }, { number = 37, value = medicine, base = medicine, tagged = true } }
+                 end,
                  offeredPerks = function() return state.perk_points > 0 and { { id = 'perk1', available = true } } or {} end,
                  spendSkillPoints = function(number, points) state.spent = state.spent + points; state.skill_points = 0; return points end,
                  choosePerk = function(id) state.perk_points = 0; return true end,
@@ -255,7 +261,7 @@ package.preload['openfallout.camera'] = function() return {} end
 package.preload['openfallout.debug'] = function() return {} end
 package.preload['openfallout.nearby'] = function() return {} end
 package.preload['openfallout.input'] = function() return {} end
-package.preload['openfallout.util'] = function() return { vector3 = vec } end
+package.preload['openfallout.util'] = function() return { vector3 = vec, transform = { rotateZ = function(a) return { yaw = a } end } } end
 package.preload['openfallout.animation'] = function() return { BONE_GROUP = {} } end
 package.preload['openfallout.types'] = function()
     return { Actor = {
@@ -392,3 +398,152 @@ class MeasuringHandlers(unittest.TestCase):
         self.lua.execute("state.hp = 0.5")
         self.ask("s4dead", label="x")
         self.assertIn("dead=true box=none save=true", self.lines("s4dead")[0])
+
+
+# ---- the scenarios of the rounds, played whole against a stand-in for the engine -----------------------------------------------------
+# (nothing of the game: a player that walks, jumps and falls by the rules of a stand-in physics, and the Lua modules the two scripts call)
+
+WHOLE_PRELUDE = PLAYER_WORLD + """
+commands = {}
+saved_games = {}
+menu_events = {}
+god = false
+local function cell_of() return { isExterior = true, gridX = 0, gridY = 0, worldSpaceId = 'w', id = 'cell' } end
+world_player = { position = self_module.position, cell = cell_of(), id = '0x14',
+    sendEvent = function(self, name, data) player_module.eventHandlers.RoundAsk(data) end,
+    teleport = function(self, cell, pos, options)
+        state.x, state.y = pos.x, pos.y
+        if options and options.onGround then state.z, state.ground, state.vz = state.ground_z, true, 0 else put_in_air(pos.z) end
+    end }
+setmetatable(world_player, { __index = function(t, k) if k == 'position' then return self_module.position end end })
+rawset(world_player, 'position', nil)
+local core = package.preload['openfallout.core']()
+core.sendGlobalEvent = function(name, data) world_module.eventHandlers.RoundAnswer(data) end
+core.quit = function() quit_called = true end
+core.isWorldPaused = function() return false end
+core.getFormId = function(file, id) return string.format('FormId:%s:0x%x', file, id) end
+core.worldCommands = { run = function() return 1 end, result = function() return 0 end }
+core.messageBox = { current = function() return nil end }
+core.combat = { setDrawn = function(on) state.drawn = on end, weapon = function() return { weapon = 'x', rounds = 1, range = 100 } end }
+core.pipboy.items = function(holder)
+    return { { id = 'row1', category = 'weapons', form = 'FormId:FalloutNV.esm:0xe3778', equipped = state.equipped == true, hasAmmo = true, clip = 1,
+               loaded = 1, reserve = 0, count = 1 } }
+end
+core.pipboy.use = function(id) state.equipped = true; return 'equipped' end
+package.preload['openfallout.core'] = function() return core end
+package.preload['openfallout.world'] = function()
+    return { players = { world_player }, globals = { GameHour = 8 }, quests = { find = function() return nil end },
+             getExteriorCell = function() return cell_of() end, getCellById = function() return cell_of() end, getCellByName = function() return cell_of() end }
+end
+package.preload['openfallout.types'] = function()
+    return { Actor = { getCurrentSpeed = function() return state.api_speed or 0 end, isOnGround = function() return state.ground end,
+                       getStance = function() return 0 end, setStance = function() end, STANCE = { Weapon = 1, Nothing = 0 } },
+             Player = { sendMenuEvent = function(player, event, data) menu_events[#menu_events + 1] = { event = event, data = data } end } }
+end
+package.preload['openfallout.debug'] = function()
+    return { isGodMode = function() return god end, toggleGodMode = function() god = not god end, takeScreenshot = function() end,
+             scriptCommand = function(name, reference, arguments)
+                 commands[#commands + 1] = { name = name, reference = reference, arguments = arguments }
+                 if name == 'ForceActorValue' and arguments[1] == 16 then state.hp = arguments[2] end
+                 if name == 'DamageActorValue' and arguments[1] == 16 then state.hp = 0 end
+                 if name == 'ModActorValue' then state.mod[arguments[1]] = (state.mod[arguments[1]] or 0) + arguments[2] end
+                 if name == 'RewardXP' then state.ui_mode, state.skill_points, state.perk_points = 'Interface', 13, 1 end
+             end }
+end
+package.preload['openfallout.camera'] = function()
+    return { MODE = { FirstPerson = 1, ThirdPerson = 2, Static = 0 }, setMode = function() end, getMode = function() return 2 end,
+             getPosition = function() return vec(0, 0, 164) end, getYaw = function() return 0 end, getPitch = function() return 0 end,
+             setYaw = function() end, setPitch = function() end }
+end
+package.preload['openfallout.nearby'] = function()
+    return { COLLISION_TYPE = { HeightMap = 4 }, actors = {}, castRay = function(from, to) return { hit = true, hitPos = vec(from.x, from.y, state.ground_z) } end }
+end
+package.preload['scripts.roundscenario'] = function() return load(scenario_source)() end
+player_module = load(player_source)()
+world_module = load(world_source)()
+
+function frame(dt)
+    step(dt, player_module)
+    world_module.engineHandlers.onUpdate()
+end
+"""
+
+
+@unittest.skipUnless(LuaRuntime, "needs lupa")
+class WholeScenarios(unittest.TestCase):
+    def play(self, kind, game, seconds, setup=""):
+        lua = LuaRuntime(unpack_returned_tuples=True)
+        g = lua.globals()
+        g.player_source = (SCRIPTS / "roundplayer.lua").read_text(encoding="utf-8")
+        g.world_source = (SCRIPTS / "roundworld.lua").read_text(encoding="utf-8")
+        g.scenario_source = (SCENARIOS / f"s4_{kind}_{game}.lua").read_text(encoding="utf-8")
+        g.s4rounds_source = (SCRIPTS / "s4rounds.lua").read_text(encoding="utf-8")
+        g.s4common_source = (SCRIPTS / "s4common.lua").read_text(encoding="utf-8")
+        # the scenario's own require of the other files of the round (the files of the round folder are on the data path of the engine)
+        lua.execute("""
+            package.preload['scripts.s4rounds'] = function() return load(s4rounds_source, 's4rounds')() end
+            package.preload['scripts.s4common'] = function() return load(s4common_source, 's4common')() end
+        """)
+        lua.execute(f"quit_called = false\n{WHOLE_PRELUDE}\n{setup}")
+        for _ in range(int(seconds * 30)):
+            lua.eval("frame")(1 / 30)
+            if lua.eval("quit_called"):
+                break
+        printed = lua.eval("printed")
+        return lua, [printed[i] for i in range(1, len(printed) + 1)]
+
+    def test_the_movement_round_measures_every_leg_and_logs_the_lines(self):
+        lua, lines = self.play("movement", "nv", 400, "state.walk, state.run = 84.7, 338.8")
+        text = "\n".join(lines)
+        self.assertNotIn("attempt to", text)
+        self.assertIn("ROUND\tnote\ts4 measure walk_holstered_api=84.700 expect=84.700 tol=0.05 ok", text)
+        self.assertIn("ROUND\tnote\ts4 measure walk_holstered_ground=84.700 expect=84.700 tol=5% ok", text)
+        self.assertIn("ROUND\tnote\ts4 measure run_holstered_ground=338.800 expect=338.800 tol=5% ok", text)
+        # a stand-in that does not move at the rule's speed fails: the line is a ROUND error
+        self.assertTrue(any(line.startswith("ROUND\terror\ts4 measure walk_drawn_api=84.700 expect=77.000") for line in lines))
+        self.assertRegex(text, r"ROUND\tdone\tend\t")
+        # the weights were added with the game's own command, and the heavy item is the one of the record
+        self.assertIn("overloaded", text)
+
+    def test_the_jump_round_checks_the_apex_and_the_extra_presses(self):
+        lua, lines = self.play("jump", "nv", 120, "state.jump_speed = 285")
+        text = "\n".join(lines)
+        self.assertNotIn("attempt to", text)
+        self.assertRegex(text, r"s4 measure jump_apex=6\d\.\d+ expect=64\.000 tol=8 ok")
+        self.assertRegex(text, r"s4 measure jump_no_double=-?\d\.\d+ expect=0\.000 tol=8 ok")
+
+    def test_the_fall_round_measures_two_drops_and_the_damage_of_the_rule(self):
+        lua, lines = self.play("fall", "fo3", 200)
+        text = "\n".join(lines)
+        self.assertNotIn("attempt to", text)
+        self.assertRegex(text, r"s4 measure fall_lost_350=3[45]\d\.\d+ expect=350\.000 tol=6 ok")
+        self.assertRegex(text, r"s4 measure fall_damage_350=0\.000 expect=0\.000 tol=0\.01 ok")
+        self.assertRegex(text, r"s4 measure fall_lost_700=69\d\.\d+ expect=700\.000 tol=6 ok")
+        self.assertRegex(text, r"s4 measure fall_damage_700=49\.\d+ expect=49\.\d+ tol=3%\|1 ok")
+
+    def test_the_level_up_round_reads_the_screen_and_the_formula(self):
+        lua, lines = self.play("levelup", "nv", 200)
+        text = "\n".join(lines)
+        self.assertNotIn("attempt to", text)
+        self.assertRegex(text, r"s4 measure xp_to_next_level=200\.000 expect=200\.000 tol=0 ok")
+        self.assertRegex(text, r"s4 measure skills_follow_current_special=0\.000 expect=0\.000 tol=0 ok")
+        self.assertRegex(text, r"s4 measure levelup_skill_points=13\.000 expect=13\.000 tol=0 ok")
+        self.assertRegex(text, r"s4 measure levelup_perk_points=1\.000 expect=1\.000 tol=0 ok")
+
+    def test_the_death_round_saves_marks_and_waits_for_the_load_that_a_stand_in_cannot_make(self):
+        lua, lines = self.play("death", "nv", 60)
+        text = "\n".join(lines)
+        self.assertNotIn("attempt to", text)
+        self.assertIn("s4 death t0 kind=half_a_point", text)
+        self.assertRegex(text, r"s4 measure death_below_one_point=true expect=true")
+        self.assertEqual(lua.eval("menu_events[1].event"), "S4Save")
+        self.assertEqual(lua.eval("menu_events[1].data.description"), "s4-death")
+        self.assertIn("s4 measure death_reload=none", text)
+
+    def test_the_second_run_of_the_death_round_finds_the_mark_and_checks_the_loaded_player(self):
+        lua, lines = self.play("death", "nv", 30, "world_module.engineHandlers.onLoad({ marks = { phase = 'reloaded' } })")
+        text = "\n".join(lines)
+        self.assertIn("s4 death the game was loaded again by the death", text)
+        self.assertIn("s4 measure death_reloaded_alive=true expect=true tol=exact ok", text)
+        self.assertIn("s4 measure death_reloaded_health=200.000 expect=200.000 tol=1 ok", text)
+        self.assertNotIn("s4 death t0", text)

@@ -197,7 +197,7 @@ function M.fall(game)
                     common.check(r, 'fall_lost_' .. drop, res.lost, drop, { abs = 6 },
                         'the height lost is the start height minus the height at which the player stands (F1)')
                     -- the rule at the height that was lost (the damage moves 0.8 points for each unit of it)
-                    common.check(r, 'fall_damage_' .. drop, damage, rule, { rel = 0.03, abs = (drop <= 600) and 0.01 or 1.0 },
+                    common.check(r, 'fall_damage_' .. drop, damage, rule, (drop <= 600) and { abs = 0.01 } or { rel = 0.03, abs = 1.0 },
                         'the damage is not 0.025 * (lost - 600) ^ 1.65 (F2)')
                     local nominal = common.fallDamage(drop)
                     common.observe(r, 'fall_damage_' .. drop .. '_nominal', nominal, 'the rule at the nominal height (the spec: 0 and 49.8)')
