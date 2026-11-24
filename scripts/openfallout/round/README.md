@@ -130,8 +130,8 @@ and the scenario of `m1-unattended-load` runs to its end in the loaded game. An 
 main menu: the round ends at its limit (60 s, so the engine is stopped after 90 s) and fails, its report says the accept and load
 lines were not found and shows the last lines of the log.
 
-`rounds/book-pickup-fo3.json` (scenario `scenarios/book_pickup_fo3.lua`) starts Fallout 3 in the open, makes a book of the game
-next to the player (one that teaches no skill and has no script) and activates it: the round passes when the book is in the
+`rounds/book-pickup-fo3.json` (scenario `scenarios/book_pickup_fo3.lua`) starts Fallout 3 in Arefu's abandoned shack and activates
+the book that the game places there (a book made by `world.createObject` has no reference the scripts of Fallout know): the round passes when the book is in the
 inventory, is gone from the world and no screen opened (the UI mode stays empty for three seconds). `r.inventory(label, actor,
 record)` counts the items of a record (`carried`) and `r.mode` answers the UI mode (`ui`) for such checks.
 

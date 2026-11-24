@@ -1,7 +1,7 @@
 {
   "name": "book-pickup-fo3",
   "game": "fo3",
-  "start": "Wasteland:0,0",
+  "start": "ArefuAbandonedShack",
   "scenario": "../scenarios/book_pickup_fo3.lua",
   "resolution": [1280, 720],
   "framerate": 30,

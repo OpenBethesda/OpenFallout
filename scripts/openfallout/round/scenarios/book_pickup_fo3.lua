@@ -1,7 +1,10 @@
 -- A book of Fallout that the player activates in the world goes into the inventory, and no screen opens: the book window of
--- Morrowind and the Lua path that opened it for Fallout books are gone. The book is the Wasteland Survival Guide of the quest
--- item (Fallout3.esm 0x0C5634), which teaches no skill and has no script. It logs numbers and ids only.
-local BOOK = { 'Fallout3.esm', 0x0C5634 }
+-- Morrowind and the Lua path that opened it for Fallout books are gone. The book is the copy of Pugilism Illustrated that
+-- Fallout3.esm places in Arefu's abandoned shack (reference 0x070B70, record BookSkillUnarmed 0x03403F, no script, no owner);
+-- a book that a script makes with world.createObject would not do, because the scripts of Fallout know only the references of
+-- the games. It logs numbers and ids only.
+local BOOK = { 'Fallout3.esm', 0x03403F }
+local REFERENCE = { 'Fallout3.esm', 0x070B70 }
 
 return { limit = 120, delay = 4, run = function(r)
     r.god(true)
@@ -9,16 +12,12 @@ return { limit = 120, delay = 4, run = function(r)
     local before = r.inventory('before', nil, BOOK)
     local carried = before and before.carried or 0
 
-    local book = r.spawn{ record = BOOK, dist = 80, bearing = 0, label = 'book' }
-    if book == nil then return end
-    r.wait(2)
-
-    local ok, err = pcall(function() book:activateBy(r.player()) end)
-    if not ok then
-        r.error('book', 'activate', tostring(err))
+    local book = r.object(REFERENCE, 'book')
+    if book == nil then
+        r.error('book', 'the placed book is not there')
         return
     end
-    r.log('book', 'activated')
+    if not r.activate(REFERENCE, 'book') then return end
 
     -- The screen of the book opened on the frame after the activation (an event to the player); watch for three seconds
     for i = 1, 6 do
@@ -35,7 +34,8 @@ return { limit = 120, delay = 4, run = function(r)
         r.error('book', 'not in the inventory', string.format('before=%d after=%s', carried, tostring(after and after.carried)))
         return
     end
-    if book:isValid() and book.count > 0 then
+    r.object(REFERENCE, 'book after')
+    if book:isValid() and book.enabled and book.count > 0 then
         r.error('book', 'still in the world', 'count=' .. tostring(book.count))
         return
     end
