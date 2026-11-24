@@ -178,6 +178,40 @@ Mac runs that made the tool's tables did, and take minutes: New Vegas about 15, 
 scripts/openfallout/round/round.py run scripts/openfallout/round/rounds/saveload-nv.json
 ```
 
+## The helpers for conversations, boxes and quests (`scripts/roundhelpers.lua`)
+
+A scenario that talks with a character, presses a button of a message box, reads a quest or an actor's state, or checks a
+rule of the game asks for the helpers once: `local h = require('scripts.roundhelpers')(r)`. They are made of the steps above and of
+the engine's own calls (`core.conversation`, `core.messageBox`, `core.combat.command`), run on the world side, and need no player
+script. The ones that wait must be called from the scenario function itself (the rule of `r.wait`). Each logs one line,
+`ROUND<tab>h.<name><tab>ok<tab>...` with numbers and form ids only, and raises `error()` when it cannot do its job (the scenario
+ends and the round fails with `ROUND error scenario h.<name>: ...`). A form is `{ 'FalloutNV.esm', 0x135F19 }`, the text
+`core.getFormId` writes, or a bare number (a record of `h.file`, FalloutNV.esm).
+
+| helper | does |
+|---|---|
+| `h.talk(actor[, { timeout }])` | the player activates the actor; waits for the conversation, checks the speaker, waits for the greeting to be said |
+| `h.pick{ topic \| text \| index, finish, timeout }` | picks a topic by form id, by a part of its words (never logged) or by its place; waits for the previous response first; `finish = true` ends the response at once |
+| `h.pickAll(list)`, `h.conversation(label)`, `h.waitSpoken([timeout])` | picks several topics; logs the state (speaker, options, topics); waits until the response is said |
+| `h.waitConversationEnd([timeout])`, `h.closeConversation()` | waits for a response that ends the conversation; ends it as Goodbye does |
+| `h.box(label)`, `h.waitBox([timeout])`, `h.pressBox{ index \| text \| last, form, timeout }` | the box that is open (serial, message form, number of buttons); waits for one; presses a button by its place among the shown buttons or by a part of its words, and turns the scenario's own answers off and on again around it |
+| `h.questStage(q)`, `h.setQuestStage(q, stage)`, `h.objectiveDisplayed(q, n)` | the stage (also running, completed, failed), SetStage with its result scripts, an objective |
+| `h.questVariable(q, name)`, `h.setQuestVariable(q, name)` | **not possible on master**: no binding or command gives a variable of a quest script to Lua. They fail with that message instead of answering 0; use the effect of the variable |
+| `h.isTeammate(a)`, `h.isEssential(a)`, `h.isDead(a)`, `h.isKnockedOut(a)`, `h.state(a, label)` | GetPlayerTeammate, IsEssential, GetDead, GetUnconscious (and the health the crosshair shows) as booleans; `state` logs all four on one line |
+| `h.command(name, actor, ...)`, `h.itemCount(item[, actor])`, `h.teammateCount()` | any command of the script language with its value back at once (a command the table does not know fails) |
+| `h.kill(actor[, killer])`, `h.strike(actor, weapon, { limit, soft })` | KillActor, with the player as the killer; blows of a weapon until the actor dies or falls |
+| `h.setHardcore(on)` | SetHardcore through `core.interact.setHardcore`, the call of the Gameplay screen's switch; fails when the mode is not what was asked |
+| `h.waitSeconds(n, label)`, `h.waitGameHours(hours, { rest, timeout })` | real seconds; game hours, by the Wait screen (`rest = true`) or by watching the clock run |
+| `h.check(label, actual, wanted)`, `h.checkRange(label, actual, low, high)` | a check of a rule: `ROUND<tab>check<tab>label<tab>ok`, or `ROUND<tab>error<tab>check<tab>label<tab>FAIL<tab>actual=..<tab>want=..`; the scenario goes on, so one run shows every check that fails |
+
+`scenarios/s4c_companion_nv.lua` (`rounds/s4c-companion-nv.json`) is the companion part of the Hardcore round of New Vegas
+(step 4c). It starts with Hardcore off and puts in the three stand-ins that a fresh character does not have (quest VMS05 at stage
+30, 750 caps, Barter 50: the topics of Cass need all three), goes to Cass in Mojave Outpost Barracks, recruits her with ten
+dialogue picks (no `SetPlayerTeammate`), checks that she is a teammate and follows, kills her with Hardcore off (she must be put down
+and get up after about 10 s, twice: by `KillActor` and by blows of a pistol) and then with Hardcore on (she must die, her `OnDeath`
+must have set `VCassCompanion` to stage 110, and she must stay dead). Each rule is a check, so a run on an engine that does not
+follow one fails that check and goes on. The save only has to be New Vegas (any place; the scenario goes to the barracks itself).
+
 ## What it cannot do
 
 - `round.py run` works on macOS only, as the engine does; elsewhere it stops with a message. `profile` and `check` do not
