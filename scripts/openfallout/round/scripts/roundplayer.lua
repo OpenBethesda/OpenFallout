@@ -283,8 +283,9 @@ end
 
 function handlers.inventory(args)
     local rows = pipboyWeapons(args.holder)
-    local weapons, ammo, other = 0, 0, 0
+    local weapons, ammo, other, carried = 0, 0, 0, 0
     for _, item in ipairs(rows) do
+        if args.form ~= nil and tostring(item.form) == tostring(args.form) then carried = carried + (item.count or 0) end
         if item.category == 'weapons' then
             weapons = weapons + 1
             log('item', tostring(args.label or '-'), 'weapon', 'form=' .. tostring(item.form), 'count=' .. tostring(item.count),
@@ -298,8 +299,13 @@ function handlers.inventory(args)
             other = other + 1
         end
     end
-    log('inventory', tostring(args.label or '-'), 'weapons=' .. weapons, 'ammoKinds=' .. ammo, 'others=' .. other)
-    return { weapons = weapons }
+    if args.form ~= nil then
+        log('inventory', tostring(args.label or '-'), 'weapons=' .. weapons, 'ammoKinds=' .. ammo, 'others=' .. other,
+            'carried=' .. tostring(args.form) .. ':' .. carried)
+    else
+        log('inventory', tostring(args.label or '-'), 'weapons=' .. weapons, 'ammoKinds=' .. ammo, 'others=' .. other)
+    end
+    return { weapons = weapons, carried = carried }
 end
 
 -- Puts a weapon of the Pip-Boy's list in the hand: the one with this form, or (no form given) the first ranged one that has
@@ -432,7 +438,7 @@ function handlers.mode(args)
     log('mode', tostring(args.label or '-'), 'camera=' .. tostring(camera.getMode()), 'stance=' .. tostring(Actor.getStance(self)),
         'sneaking=' .. tostring(self.controls.sneak), 'onGround=' .. tostring(Actor.isOnGround(self)),
         'speed=' .. number(Actor.getCurrentSpeed(self)), 'ui=' .. tostring(I.UI.getMode()))
-    return {}
+    return { ui = tostring(I.UI.getMode()) }
 end
 
 -- Sampling of animation state: every `every` real seconds (0.25) the groups that play on each tracked actor, one line each.
