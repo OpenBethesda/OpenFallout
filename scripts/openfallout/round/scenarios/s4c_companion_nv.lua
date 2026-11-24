@@ -20,7 +20,7 @@ local CASS = { NV, 0x135F19 } -- ACHR RoseofSharonCassidyREF
 local CASS_BASE = 0x133FDD -- NPC_ RoseofSharonCassidy
 local CAPS = { NV, 0xF } -- Caps001
 local BARTER = 32 -- actor value 0x20
-local BARRACKS = 'Mojave Outpost Barracks' -- cell 0x141AA5
+local BARRACKS = 0x141AA5 -- cell MojaveOutpostBarracks01 (the name is "Mojave Outpost Barracks", but the world does not find it by that name)
 local SHOTGUN, KNIFE = { NV, 0x176E55 }, { NV, 0x176E56 } -- what Cass carries (spec G, section 3)
 local PISTOL = { NV, 0x434F } -- a pistol for the blows of the damage path (as m16_damage.lua)
 -- The ten topics of the recruit path, in order (DIAL ids; spec G, section 1b). The last one's follow-up (INFO 0x15D054) is the recruit.
@@ -43,15 +43,15 @@ return { limit = 1400, delay = 4, run = function(r)
 
     phase('P2 stand-ins')
     h.setQuestStage('VMS05', 30)
-    r.give(CAPS, 800, nil, 'caps')
+    h.addItem(CAPS, 800)
     h.command('ForceActorValue', h.player(), BARTER, 60)
     r.wait(1)
     h.check('p-vms05-stage-30', h.questStage('VMS05'), 30)
-    h.check('p-caps-at-least-750', h.itemCount(CAPS) >= 750, true)
-    h.check('p-barter-at-least-50', h.command('GetActorValue', h.player(), BARTER) >= 50, true)
+    h.checkAtLeast('p-caps-at-least-750', h.itemCount(CAPS), 750)
+    h.checkAtLeast('p-barter-at-least-50', h.command('GetActorValue', h.player(), BARTER), 50)
 
     phase('P3 go to Cass')
-    r.teleport{ cell = BARRACKS, pos = { 2103, 1861, 9328 }, yaw = 0, onGround = true, label = 'cass' }
+    r.teleport{ cellId = core.getFormId(NV, BARRACKS), pos = { 2103, 1861, 9328 }, yaw = 0, onGround = true, label = 'cass' }
     r.wait(3)
     r.settle(3, 30)
     r.eye('barracks')
@@ -60,7 +60,7 @@ return { limit = 1400, delay = 4, run = function(r)
     local startDistance = distance(cass, r.player())
     r.log(string.format('cass %s distance %.0f', r.describe(cass), startDistance))
     h.check('p-cass-in-the-same-cell', cass.cell ~= nil and cass.cell.id == r.player().cell.id, true)
-    h.check('p-cass-within-300-units', startDistance < 300, true)
+    h.checkRange('p-cass-within-300-units', startDistance, 0, 300)
 
     phase('P4 baseline')
     local base = h.state(CASS, 'baseline')
@@ -87,7 +87,7 @@ return { limit = 1400, delay = 4, run = function(r)
     phase('R3 check the hire')
     local hired = h.state(CASS, 'after recruit')
     h.check('r-teammate-1', hired.teammate, true)
-    h.check('r-teammate-count-at-least-1', h.teammateCount() >= 1, true)
+    h.checkAtLeast('r-teammate-count-at-least-1', h.teammateCount(), 1)
     -- (Topic013 takes the 750 caps of the 800)
     h.check('r-caps-50-after-the-purchase', h.itemCount(CAPS), 50)
     h.check('r-essential-1-without-hardcore', hired.essential, true)
@@ -96,20 +96,22 @@ return { limit = 1400, delay = 4, run = function(r)
     r.inventory('cass hired', cass, SHOTGUN)
 
     phase('R4 follows')
-    -- The player walks away backwards for some seconds; a teammate with a follow package closes the gap
-    local walkFrom = r.player().position
-    r.move{ forward = -1, run = true, seconds = 4 }
-    r.wait(5)
+    -- The player goes to the far end of the room (700 units and more from Cass); a teammate with a follow package closes the gap
+    r.teleport{ cellId = core.getFormId(NV, BARRACKS), pos = { 2230, 1250, 9330 }, yaw = 0, onGround = true, label = 'away from cass' }
+    r.wait(1)
     local gapAfterWalk = distance(cass, r.player())
-    r.actors('after walk', 2000, 6)
-    h.waitSeconds(10, 'cass follows')
+    r.actors('away from cass', 2000, 3)
+    -- (her place and what she plays every three seconds, to see whether she moves at all)
+    r.track({ { label = 'cass follow', actor = cass } }, 3)
+    local packageNow = pcall(h.command, 'GetCurrentPackage', CASS)
+    h.waitSeconds(15, 'cass follows')
+    r.untrack()
     local gapAfterFollow = distance(cass, r.player())
-    r.log(string.format('follow: the player walked %.0f units, gap %.0f after the walk, %.0f ten seconds later', (r.player().position - walkFrom):length(),
-        gapAfterWalk, gapAfterFollow))
-    -- She follows when the walk opened a gap of more than 400 units and ten seconds later she is within 350 of the player (and nearer
-    -- than before). A walk that opened no gap proves nothing and is a failure of this check, not a pass.
-    h.check('r-walk-opened-a-gap-over-400', gapAfterWalk > 400, true)
-    h.check('r-follows-within-350-after-10-s', gapAfterFollow <= 350 and gapAfterFollow < gapAfterWalk, true)
+    r.log(string.format('follow: gap %.0f at the start, %.0f fifteen seconds later', gapAfterWalk, gapAfterFollow))
+    -- She follows when the player is more than 600 units away at the start and fifteen seconds later she is within 350 and nearer.
+    -- A start with no gap proves nothing and is a failure of this check, not a pass.
+    h.checkAtLeast('r-start-gap-at-least-600', gapAfterWalk, 600)
+    h.checkRange('r-follows-within-350-after-15-s', gapAfterFollow, 0, math.min(350, gapAfterWalk - 1))
 
     ---------------------------------------------------------------------------------------------------- K: casual, Hardcore off
     phase('K1 kill with Hardcore off (KillActor)')
@@ -136,7 +138,8 @@ return { limit = 1400, delay = 4, run = function(r)
     h.check('k-casual-woke-not-knocked-out', up.knockedOut, false)
     h.check('k-casual-woke-still-teammate', up.teammate, true)
     -- (what health she has when she gets up is not settled by the exe reading, spec G UNCLEAR 1: only that she has some)
-    h.check('k-casual-woke-health-above-0', up.hp ~= nil and up.hp > 0, true)
+    h.checkAtLeast('k-casual-woke-health-above-0', up.hp or -1, 0.01)
+    r.log(string.format('K1 health when she got up: %s (%s of her health)', tostring(up.hp), tostring(up.hpPercent)))
     h.check('k-casual-quest-stage-still-unchanged', h.questStage('VCassCompanion'), stageBefore)
 
     phase('K2 knock-out by blows (Hardcore off)')
@@ -178,14 +181,27 @@ return { limit = 1400, delay = 4, run = function(r)
     -- her body keeps what she carried
     local shotgun = r.inventory('corpse shotgun', cass, SHOTGUN)
     local knife = r.inventory('corpse knife', cass, KNIFE)
-    h.check('h-corpse-has-the-caravan-shotgun', shotgun ~= nil and shotgun.carried >= 1, true)
-    h.check('h-corpse-has-the-combat-knife', knife ~= nil and knife.carried >= 1, true)
+    h.checkAtLeast('h-corpse-has-the-caravan-shotgun', shotgun and shotgun.carried or -1, 1)
+    h.checkAtLeast('h-corpse-has-the-combat-knife', knife and knife.carried or -1, 1)
 
     phase('H3 she stays dead')
     h.waitSeconds(20, 'stays dead')
     local stays = h.state(CASS, 'hardcore +21 s')
     h.check('h-stays-dead', stays.dead, true)
     h.check('h-stays-not-knocked-out', stays.knockedOut, false)
+
+    phase('H4 the same by blows')
+    -- A second death with Hardcore still on, by the damage path (the blows of a pistol), after the game's own Resurrect
+    h.command('ResurrectActor', CASS, 1)
+    r.wait(2)
+    local back = h.state(CASS, 'resurrected')
+    h.check('h4-resurrected-alive', back.dead, false)
+    h.check('h4-resurrected-not-essential', back.essential, false)
+    h.strike(CASS, PISTOL, { soft = true, limit = 80 })
+    r.wait(1)
+    local again = h.state(CASS, 'hardcore blows +1 s')
+    h.check('h4-blows-killed-her', again.dead, true)
+    h.check('h4-blows-did-not-knock-out', again.knockedOut, false)
     r.actors('end', 800, 10)
     r.log('companion round done; Cass base record ' .. string.format('0x%x', CASS_BASE))
 end }

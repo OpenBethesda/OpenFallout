@@ -86,19 +86,17 @@ return function(r)
     function h.isDead(actor) return flag('GetDead', actor) end
     function h.isKnockedOut(actor) return flag('GetUnconscious', actor) end
 
-    -- The health of a character as the crosshair's bar shows it (current, maximum), nil when the engine has no answer
+    -- The health of a character: the actor value Health (16) as GetActorValue gives it, and GetHealthPercentage; nil for what a
+    -- command does not answer
     function h.health(actor)
-        local ok, current, maximum = pcall(function()
-            local target = core.hud.target(h.object(actor, 'health'))
-            return target.health, target.maxHealth
-        end)
-        if ok then return current, maximum end
-        return nil
+        local okValue, current = pcall(h.command, 'GetActorValue', actor, 16)
+        local okPercent, percent = pcall(h.command, 'GetHealthPercentage', actor)
+        return okValue and current or nil, okPercent and percent or nil
     end
 
     local function bit(value) return value and 1 or 0 end
 
-    -- One line with the four states of an actor (and its health); gives them as a table of booleans
+    -- One line with the four states of an actor (and its health); gives them as a table (booleans, hp, hpPercent)
     function h.state(actor, label)
         local state = {
             teammate = h.isTeammate(actor),
@@ -106,15 +104,23 @@ return function(r)
             dead = h.isDead(actor),
             knockedOut = h.isKnockedOut(actor),
         }
-        local current, maximum = h.health(actor)
-        state.hp, state.maxHp = current, maximum
+        local current, percent = h.health(actor)
+        state.hp, state.hpPercent = current, percent
         log('h.state', 'ok', tostring(label or '-'), 'teammate=' .. bit(state.teammate), 'essential=' .. bit(state.essential),
             'dead=' .. bit(state.dead), 'knockedOut=' .. bit(state.knockedOut),
-            'hp=' .. (current and string.format('%.1f/%.1f', current, maximum or 0) or 'n/a'))
+            'hp=' .. (current and string.format('%.1f', current) or 'n/a'),
+            'hpPercent=' .. (percent and string.format('%.3f', percent) or 'n/a'))
         return state
     end
 
     function h.teammateCount() return h.command('GetPlayerTeammateCount') end
+
+    -- Puts items in the inventory of an actor (the player by default) as the AddItem of a script does (the inventory the script
+    -- language and the Pip-Boy read; r.give puts them in the Lua one)
+    function h.addItem(item, count, actor)
+        h.command('AddItem', actor or h.player(), item, count or 1)
+        log('h.addItem', 'ok', hex(formNumber(h.form(item))), tostring(count or 1))
+    end
 
     -- The number of items of a record that an actor carries (the player by default)
     function h.itemCount(item, actor)
@@ -135,6 +141,15 @@ return function(r)
             return true
         end
         r.error('check', label, 'FAIL', 'actual=' .. show(actual), 'want=' .. show(wanted))
+        return false
+    end
+    -- A number of at least `minimum`
+    function h.checkAtLeast(label, actual, minimum)
+        if type(actual) == 'number' and actual >= minimum then
+            log('check', label, 'ok', 'actual=' .. show(actual), 'want>=' .. show(minimum))
+            return true
+        end
+        r.error('check', label, 'FAIL', 'actual=' .. show(actual), 'want>=' .. show(minimum))
         return false
     end
     -- A number within [low, high]
@@ -318,7 +333,13 @@ return function(r)
         local after = core.conversation.choose(found.topic)
         -- `finish = true`: the response is over at once (the window would end it when the lines are read; its end script runs here
         -- as it does there). For a pick whose words are not what a round looks at.
-        if o.finish and after.active and after.speaking then after = core.conversation.finish() end
+        if o.finish then
+            -- (a response with a follow-up says the next one when it is over: finish those too, six at most)
+            for _ = 1, 6 do
+                if not (after.active and after.speaking) then break end
+                after = core.conversation.finish()
+            end
+        end
         log('h.pick', 'ok', 'topic=' .. hex(formNumber(found.topic)), 'index=' .. tostring(index), 'options=' .. #options,
             'by=' .. how, 'finish=' .. bit(o.finish), 'speaking=' .. bit(after.speaking), 'ended=' .. bit(after.ended))
         return found
