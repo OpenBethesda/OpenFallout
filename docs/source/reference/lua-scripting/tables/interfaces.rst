@@ -8,9 +8,6 @@
   * - :doc:`Activation </reference/lua-scripting/interface_activation>`
     - |bdg-ctx-global|
     - Allows to extend or override built-in activation mechanics.
-  * - :doc:`AI </reference/lua-scripting/interface_ai>`
-    - |bdg-ctx-local|
-    - Control basic AI of NPCs and creatures.
   * - :doc:`AnimationController </reference/lua-scripting/interface_animation>`
     - |bdg-ctx-local|
     - Control animations of NPCs and creatures.
@@ -23,9 +20,6 @@
   * - :doc:`Crimes </reference/lua-scripting/interface_crimes>`
     - |bdg-ctx-global|
     - Commit crimes.
-  * - :doc:`Combat </reference/lua-scripting/interface_combat>`
-    - |bdg-ctx-local| |bdg-ctx-global|
-    - Control combat of NPCs and creatures
   * - :doc:`GamepadControls </reference/lua-scripting/interface_gamepadcontrols>`
     - |bdg-ctx-player|
     - Allows to alter behavior of the built-in script that handles player gamepad controls.
@@ -35,18 +29,12 @@
   * - :doc:`MWUI </reference/lua-scripting/interface_mwui>`
     - |bdg-ctx-menu| |bdg-ctx-player|
     - Morrowind-style UI templates.
-  * - :doc:`Projectiles </reference/lua-scripting/interface_projectiles>`
-    - |bdg-ctx-global|
-    - Allows altering projectile behaviour.
   * - :doc:`Settings </reference/lua-scripting/interface_settings>`
     - |bdg-ctx-global| |bdg-ctx-menu| |bdg-ctx-player| 
     - Save, display and track changes of setting values.
   * - :doc:`SkillProgression </reference/lua-scripting/interface_skill_progression>`
     - |bdg-ctx-player|
     - Control, extend, and override skill progression of the player.
-  * - :doc:`SpellCasting </reference/lua-scripting/interface_spellcasting>`
-    - |bdg-ctx-local|
-    - Allows to control, extend, and override spell casting
   * - :doc:`UI </reference/lua-scripting/interface_ui>`
     - |bdg-ctx-player|
     - High-level UI modes interface. Allows to override parts of the interface.

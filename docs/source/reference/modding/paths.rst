@@ -218,7 +218,6 @@ Change the start of the file from:
     user-data="?userdata?"
     config="?userconfig?"
     resources=./resources
-    data=./resources/vfs-mw
 
     # lighting
     fallback=LightAttenuation_UseConstant,0
@@ -233,7 +232,6 @@ to:
     data-local=userdata/data
     user-data=userdata
     resources=./resources
-    data=./resources/vfs-mw
 
     # lighting
     fallback=LightAttenuation_UseConstant,0
@@ -272,7 +270,6 @@ Change the start of the file from:
     user-data="?userdata?"
     config="?userconfig?"
     resources=./resources
-    data=./resources/vfs-mw
 
     # lighting
     fallback=LightAttenuation_UseConstant,0
@@ -292,7 +289,6 @@ to:
     user-data="userdata"
     config="config"
     resources=./resources
-    data=./resources/vfs-mw
 
     # lighting
     fallback=LightAttenuation_UseConstant,0

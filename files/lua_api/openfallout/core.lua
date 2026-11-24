@@ -1115,7 +1115,7 @@
 ---
 -- @{#Conversation}: the conversation of the player with a character of Fallout 3 or New Vegas. Not available in load
 -- scripts. A conversation starts when the player activates a character who has something to say (or a script of the
--- game starts one); the interface that shows it is the window `Dialogue` that `I.UI.registerWindow` replaces.
+-- game starts one); the interface that shows it is the window `DialogMenu` that `I.UI.registerWindow` replaces.
 -- @field [parent=#core] #Conversation conversation
 
 ---
