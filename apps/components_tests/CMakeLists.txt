@@ -231,6 +231,7 @@ file(GLOB UNITTEST_SRC_FILES
     falloutscript/testinteraction.cpp
     falloutscript/testderivedstats.cpp
     falloutscript/testfalldamage.cpp
+    falloutscript/testmovement.cpp
     falloutscript/testfootsteps.cpp
     falloutscript/testambient.cpp
     falloutscript/testnearwater.cpp
