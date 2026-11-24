@@ -14,6 +14,7 @@
 #include "apps/openfallout/mwmechanics/actorutil.hpp"
 #include "apps/openfallout/mwmechanics/creaturestats.hpp"
 #include "apps/openfallout/mwmechanics/drawstate.hpp"
+#include "apps/openfallout/mwworld/action.hpp"
 #include "apps/openfallout/mwworld/class.hpp"
 #include "apps/openfallout/mwworld/inventorystore.hpp"
 #include "apps/openfallout/mwworld/worldmodel.hpp"
