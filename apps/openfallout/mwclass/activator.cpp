@@ -29,7 +29,6 @@
 
 #include "../mwgui/tooltips.hpp"
 
-#include "../mwmechanics/npcstats.hpp"
 
 #include "classmodel.hpp"
 
@@ -115,10 +114,6 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Activator::activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const
     {
-        std::unique_ptr<OFWorld::Action> werewolfAction = getWerewolfRefusalAction(actor);
-        if (werewolfAction)
-            return werewolfAction;
-
         return std::make_unique<OFWorld::NullAction>();
     }
 
@@ -127,58 +122,6 @@ namespace OFClass
         const OFWorld::LiveCellRef<ESM::Activator>* ref = ptr.get<ESM::Activator>();
 
         return OFWorld::Ptr(cell.insert(ref), &cell);
-    }
-
-    ESM::RefId Activator::getSoundIdFromSndGen(const OFWorld::Ptr& ptr, std::string_view name) const
-    {
-        // Assume it's not empty, since we wouldn't have gotten the soundgen otherwise
-        const VFS::Path::NormalizedView model = getModel(ptr);
-        const OFWorld::ESMStore& store = *OFBase::Environment::get().getESMStore();
-        ESM::RefId creatureId;
-
-        for (const ESM::Creature& iter : store.get<ESM::Creature>())
-        {
-            if (!iter.mModel.empty() && model == iter.mModel.getNormalized())
-            {
-                creatureId = !iter.mOriginal.empty() ? iter.mOriginal : iter.mId;
-                break;
-            }
-        }
-
-        const int type = getSndGenTypeFromName(name);
-
-        std::vector<const ESM::SoundGenerator*> fallbacksounds;
-        auto& prng = OFBase::Environment::get().getWorld()->getPrng();
-        if (!creatureId.empty())
-        {
-            std::vector<const ESM::SoundGenerator*> sounds;
-            for (auto sound = store.get<ESM::SoundGenerator>().begin(); sound != store.get<ESM::SoundGenerator>().end();
-                 ++sound)
-            {
-                if (type == sound->mType && !sound->mCreature.empty() && creatureId == sound->mCreature)
-                    sounds.push_back(&*sound);
-                if (type == sound->mType && sound->mCreature.empty())
-                    fallbacksounds.push_back(&*sound);
-            }
-
-            if (!sounds.empty())
-                return sounds[Misc::Rng::rollDice(sounds.size(), prng)]->mSound;
-            if (!fallbacksounds.empty())
-                return fallbacksounds[Misc::Rng::rollDice(fallbacksounds.size(), prng)]->mSound;
-        }
-        else
-        {
-            // The activator doesn't have a corresponding creature ID, but we can try to use the defaults
-            for (auto sound = store.get<ESM::SoundGenerator>().begin(); sound != store.get<ESM::SoundGenerator>().end();
-                 ++sound)
-                if (type == sound->mType && sound->mCreature.empty())
-                    fallbacksounds.push_back(&*sound);
-
-            if (!fallbacksounds.empty())
-                return fallbacksounds[Misc::Rng::rollDice(fallbacksounds.size(), prng)]->mSound;
-        }
-
-        return ESM::RefId();
     }
 
     int Activator::getSndGenTypeFromName(std::string_view name)

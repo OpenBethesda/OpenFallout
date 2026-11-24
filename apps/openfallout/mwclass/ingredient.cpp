@@ -119,8 +119,8 @@ namespace OFClass
             info.extra += OFGui::ToolTips::getMiscString(ref->mBase->mScript.getRefIdString(), "Script");
         }
 
-        OFWorld::Ptr player = OFBase::Environment::get().getWorld()->getPlayerPtr();
-        float alchemySkill = player.getClass().getSkill(player, ESM::Skill::Alchemy);
+        // The player of Fallout has no Alchemy skill
+        const float alchemySkill = 0.f;
 
         static const float fWortChanceValue = OFBase::Environment::get()
                                                   .getESMStore()

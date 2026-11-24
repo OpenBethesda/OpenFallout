@@ -38,8 +38,6 @@ namespace OFClass
         ESM::RefId getScript(const OFWorld::ConstPtr& ptr) const override;
         ///< Return name of the script attached to ptr
 
-        std::string_view getWerewolfRefusalSoundId() const override { return "WolfActivator"; }
-
         std::unique_ptr<OFWorld::Action> activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const override;
         ///< Generate action for activation
 
@@ -50,7 +48,6 @@ namespace OFClass
 
         bool isActivator() const override;
 
-        ESM::RefId getSoundIdFromSndGen(const OFWorld::Ptr& ptr, std::string_view name) const override;
     };
 }
 

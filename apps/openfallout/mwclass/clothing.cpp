@@ -10,10 +10,9 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwworld/actionequip.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
-#include "../mwworld/inventorystore.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include "../mwgui/tooltips.hpp"
@@ -60,52 +59,6 @@ namespace OFClass
         const OFWorld::LiveCellRef<ESM::Clothing>* ref = ptr.get<ESM::Clothing>();
 
         return ref->mBase->mScript;
-    }
-
-    std::pair<std::vector<int>, bool> Clothing::getEquipmentSlots(const OFWorld::ConstPtr& ptr) const
-    {
-        const OFWorld::LiveCellRef<ESM::Clothing>* ref = ptr.get<ESM::Clothing>();
-
-        std::vector<int> slots;
-
-        if (ref->mBase->mData.mType == ESM::Clothing::Ring)
-        {
-            slots.push_back(int(OFWorld::InventoryStore::Slot_LeftRing));
-            slots.push_back(int(OFWorld::InventoryStore::Slot_RightRing));
-        }
-        else
-        {
-            const int size = 9;
-
-            static const int sMapping[size][2] = { { ESM::Clothing::Shirt, OFWorld::InventoryStore::Slot_Shirt },
-                { ESM::Clothing::Belt, OFWorld::InventoryStore::Slot_Belt },
-                { ESM::Clothing::Robe, OFWorld::InventoryStore::Slot_Robe },
-                { ESM::Clothing::Pants, OFWorld::InventoryStore::Slot_Pants },
-                { ESM::Clothing::Shoes, OFWorld::InventoryStore::Slot_Boots },
-                { ESM::Clothing::LGlove, OFWorld::InventoryStore::Slot_LeftGauntlet },
-                { ESM::Clothing::RGlove, OFWorld::InventoryStore::Slot_RightGauntlet },
-                { ESM::Clothing::Skirt, OFWorld::InventoryStore::Slot_Skirt },
-                { ESM::Clothing::Amulet, OFWorld::InventoryStore::Slot_Amulet } };
-
-            for (int i = 0; i < size; ++i)
-                if (sMapping[i][0] == ref->mBase->mData.mType)
-                {
-                    slots.push_back(int(sMapping[i][1]));
-                    break;
-                }
-        }
-
-        return std::make_pair(slots, false);
-    }
-
-    ESM::RefId Clothing::getEquipmentSkill(const OFWorld::ConstPtr& ptr, bool useLuaInterfaceIfAvailable) const
-    {
-        const OFWorld::LiveCellRef<ESM::Clothing>* ref = ptr.get<ESM::Clothing>();
-
-        if (ref->mBase->mData.mType == ESM::Clothing::Shoes)
-            return ESM::Skill::Unarmored;
-
-        return {};
     }
 
     int Clothing::getValue(const OFWorld::ConstPtr& ptr) const
@@ -194,47 +147,6 @@ namespace OFClass
         newItem.mEnchant = enchId;
         const ESM::Clothing* record = OFBase::Environment::get().getESMStore()->insert(newItem);
         return record->mId;
-    }
-
-    std::pair<int, std::string_view> Clothing::canBeEquipped(
-        const OFWorld::ConstPtr& ptr, const OFWorld::Ptr& npc) const
-    {
-        // slots that this item can be equipped in
-        std::pair<std::vector<int>, bool> slots = getEquipmentSlots(ptr);
-
-        if (slots.first.empty())
-            return { 0, {} };
-
-        if (npc.getClass().isNpc())
-        {
-            const ESM::RefId& npcRace = npc.get<ESM::NPC>()->mBase->mRace;
-
-            // Beast races cannot equip shoes / boots, or full helms (head part vs hair part)
-            const ESM::Race* race = OFBase::Environment::get().getESMStore()->get<ESM::Race>().find(npcRace);
-            if (race->mData.mFlags & ESM::Race::Beast)
-            {
-                std::vector<ESM::PartReference> parts = ptr.get<ESM::Clothing>()->mBase->mParts.mParts;
-
-                for (std::vector<ESM::PartReference>::iterator itr = parts.begin(); itr != parts.end(); ++itr)
-                {
-                    if ((*itr).mPart == ESM::PRT_Head)
-                        return { 0, "#{sNotifyMessage13}" };
-                    if ((*itr).mPart == ESM::PRT_LFoot || (*itr).mPart == ESM::PRT_RFoot)
-                        return { 0, "#{sNotifyMessage15}" };
-                }
-            }
-        }
-
-        return { 1, {} };
-    }
-
-    std::unique_ptr<OFWorld::Action> Clothing::use(const OFWorld::Ptr& ptr, bool force) const
-    {
-        std::unique_ptr<OFWorld::Action> action = std::make_unique<OFWorld::ActionEquip>(ptr, force);
-
-        action->setSound(getUpSoundId(ptr));
-
-        return action;
     }
 
     OFWorld::Ptr Clothing::copyToCellImpl(const OFWorld::ConstPtr& ptr, OFWorld::CellStore& cell) const

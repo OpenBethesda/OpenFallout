@@ -1,4 +1,5 @@
 #include "falloutactors.hpp"
+#include "processlists.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -2342,7 +2343,7 @@ namespace OFMechanics
         facesSpeaker(frame, *found->second, speaker, std::min(duration, longestStep));
     }
 
-    void FalloutActors::update(float duration)
+    void FalloutActors::update(float duration, const ProcessLists& tiers)
     {
         if (mMinds.empty())
             return;
@@ -2357,7 +2358,6 @@ namespace OFMechanics
         Frame frame{ world, falloutClock(now.getHour(), now.getDay()), player.getRefData().getPosition().asVec3(),
             Settings::navigator().mEnable, OFBase::Environment::get().getFalloutScripts(), &events, &mMinds };
         duration = std::min(duration, longestStep);
-        const float range = static_cast<float>(Settings::game().mActorsProcessingRange);
 
         // The character that the player talks with
         const OFWorld::Ptr speaker = frame.mScripts != nullptr ? frame.mScripts->conversationSpeaker() : OFWorld::Ptr();
@@ -2374,7 +2374,10 @@ namespace OFMechanics
             if (found == mMinds.end())
                 continue;
             Mind& mind = *found->second;
-            if (distanceAcross(mind.position(), frame.mPlayer) > range)
+            // The tier says whether the actor is near (rule A.T2: its cell is in the scene and its 3D is loaded); a
+            // Middle Low or Low actor keeps where it is and what it does
+            const ProcessLevel level = tiers.levelOf(mind.mPtr);
+            if (level != ProcessLevel::High && level != ProcessLevel::MiddleHigh)
                 continue;
 
             // It is dead (a blow or a script killed it): it does nothing more, and its body falls, at once for one

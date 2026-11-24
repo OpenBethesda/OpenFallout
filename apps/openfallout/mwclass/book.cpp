@@ -4,6 +4,7 @@
 #include <MyGUI_UString.h>
 
 #include <components/esm3/loadbook.hpp>
+#include <components/esm3/loadnpc.hpp>
 #include <components/esm3/loadsoun.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -22,7 +23,6 @@
 
 #include "../mwgui/tooltips.hpp"
 
-#include "../mwmechanics/npcstats.hpp"
 
 #include "classmodel.hpp"
 #include "nameorid.hpp"
@@ -55,10 +55,6 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Book::activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const
     {
-        std::unique_ptr<OFWorld::Action> werewolfAction = getWerewolfRefusalAction(actor);
-        if (werewolfAction)
-            return werewolfAction;
-
         // A book is picked up, as a book of Fallout is (the book window of Morrowind is gone)
         return std::make_unique<OFWorld::ActionTake>(ptr);
     }

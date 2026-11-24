@@ -23,8 +23,6 @@ namespace OFClass
 
         bool isItem(const OFWorld::ConstPtr&) const override { return true; }
 
-        std::string_view getWerewolfRefusalSoundId() const override { return "WolfItem"; }
-
         std::unique_ptr<OFWorld::Action> activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const override;
         ///< Generate action for activation
 
@@ -39,12 +37,6 @@ namespace OFClass
 
         ESM::RefId getScript(const OFWorld::ConstPtr& ptr) const override;
         ///< Return name of the script attached to ptr
-
-        std::pair<std::vector<int>, bool> getEquipmentSlots(const OFWorld::ConstPtr& ptr) const override;
-        ///< \return first: Return IDs of the slot this object can be equipped in; second: can object
-        /// stay stacked when equipped?
-
-        ESM::RefId getEquipmentSkill(const OFWorld::ConstPtr& ptr, bool useLuaInterfaceIfAvailable) const override;
 
         int getValue(const OFWorld::ConstPtr& ptr) const override;
         ///< Return trade value of the object. Throws an exception, if the object can't be traded.
@@ -64,15 +56,6 @@ namespace OFClass
         const ESM::RefId& applyEnchantment(const OFWorld::ConstPtr& ptr, const ESM::RefId& enchId, int enchCharge,
             const std::string& newName) const override;
         ///< Creates a new record using \a ptr as template, with the given name and the given enchantment applied to it.
-
-        std::pair<int, std::string_view> canBeEquipped(
-            const OFWorld::ConstPtr& ptr, const OFWorld::Ptr& npc) const override;
-        ///< Return 0 if player cannot equip item. 1 if can equip. 2 if it's twohanded weapon. 3 if twohanded weapon
-        ///< conflicts with that.
-        ///  Second item in the pair specifies the error message
-
-        std::unique_ptr<OFWorld::Action> use(const OFWorld::Ptr& ptr, bool force = false) const override;
-        ///< Generate action for using via inventory menu
 
         VFS::Path::NormalizedView getModel(const OFWorld::ConstPtr& ptr) const override;
 

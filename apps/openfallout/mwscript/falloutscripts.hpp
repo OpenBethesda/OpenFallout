@@ -24,6 +24,7 @@
 #include <components/esm/refid.hpp>
 #include <components/esm4/effectlist.hpp>
 #include <components/esm4/loadnpc.hpp>
+#include <components/falloutscript/movement.hpp>
 #include <components/falloutscript/footsteps.hpp>
 #include <components/falloutscript/hitreactions.hpp>
 #include <components/files/gameini.hpp>
@@ -2009,6 +2010,12 @@ namespace OFScript
         /// commands that script call open them, and the interface (core.chargen) shows the one that is open and tells
         /// when the player is done with it.
         FalloutScript::Chargen& chargen() { return mChargen; }
+        /// The name the player gave its character (empty before the name screen); valid until the next call
+        std::string_view playerName()
+        {
+            mPlayerNameShown = mChargen.name();
+            return mPlayerNameShown;
+        }
         /// The player is done with the screen: what it picked becomes the character (the attributes and skills the
         /// player has, the traits as perks) and the next screen of the menu opens
         void finishChargenPage();
@@ -2111,6 +2118,25 @@ namespace OFScript
         /// What the crippled legs of the character leave of its speed (1 when none is: fMoveOneCrippledLegSpeedMult and
         /// fMoveTwoCrippledLegsSpeedMult of the executables' speed rule, 0x647d10). Any thread.
         double moveSpeedMultiplier(const OFWorld::Ptr& ptr);
+        /// The settings of the speed and the jump of the games (part B and C.J1 of docs/openfallout/fallout-rules.md),
+        /// read once from the loaded game settings (the exe default for one that no plugin has)
+        const FalloutScript::Movement::Settings& movementSettings();
+        /// What the speed rules read of an actor now: its SpeedMult, legs, weight, armor and weapon (falloutmovement.cpp)
+        FalloutScript::Movement::Mover moverOf(const OFWorld::Ptr& ptr, bool sneaking);
+        /// The speed the actor walks, runs or swims at by the rules of its game (units a second; B.M1 to B.M10). A run
+        /// asked for while over the carry weight is a walk. Main thread.
+        double moveSpeed(const OFWorld::Ptr& ptr, bool running, bool sneaking, bool swimming);
+        /// Whether the character carries more than its carry weight (a creature never does)
+        bool overEncumbered(const OFWorld::Ptr& ptr);
+        /// What the items of the actor weigh, by their cards (Pack Rat and the weight mods of the weapons count)
+        double carriedWeightOf(FalloutScript::FormId actor);
+        /// The size factor of the executables: the reference scale times the height of the race (or the scale of the
+        /// record of a creature)
+        double sizeOf(const OFWorld::Ptr& ptr);
+        /// The height of a jump of the actor (rule C.J1: fJumpHeightMin times its size, twice that swimming)
+        double jumpHeight(const OFWorld::Ptr& ptr, bool swimming);
+        /// Whether the actor is a teammate of the player (a follower: the third test of the tier rule, A.T2)
+        bool isPlayerTeammate(const OFWorld::Ptr& ptr);
         /// What scripts told the actor to do over what its AI would make it do (falloutactorstatus.cpp): SetActorsAI 0
         /// (it does nothing: no package, no fight), SetForceRun and SetForceSneak (the gait it walks with). Any thread.
         bool actorAiOff(const OFWorld::Ptr& ptr);
@@ -2212,8 +2238,7 @@ namespace OFScript
         void disableAllActors(FalloutScript::FormId except) override;
         bool isPlayableRace(FalloutScript::FormId race) override;
         FalloutScript::FormId raceOf(FalloutScript::FormId actor) override;
-        /// The stance that scripts forced on the player is put on its stats, where the movement and the animation of the
-        /// player read it (once a frame)
+        /// Notes a change of the stance that scripts forced on the player (the player's actor reads it each frame)
         void applyPlayerStance();
 
         bool placement(FalloutScript::FormId reference, FalloutScript::Placement& result) override;
@@ -2794,6 +2819,8 @@ namespace OFScript
         void buildNames() const;
 
         const OFWorld::ESMStore& mStore;
+        std::optional<FalloutScript::Movement::Settings> mMovementSettings;
+        std::string mPlayerNameShown;
         FalloutScript::CommandTable mCommands;
         FalloutScript::Interpreter mInterpreter;
         FalloutScript::ConditionEvaluator mConditions;

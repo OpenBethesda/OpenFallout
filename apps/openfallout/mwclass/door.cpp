@@ -13,6 +13,8 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
+#include "../mwmechanics/actorutil.hpp"
+
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwworld/actiondoor.hpp"
 #include "../mwworld/actionteleport.hpp"
@@ -32,7 +34,6 @@
 #include "../mwrender/renderinginterface.hpp"
 #include "../mwrender/vismask.hpp"
 
-#include "../mwmechanics/actorutil.hpp"
 
 #include "classmodel.hpp"
 #include "nameorid.hpp"

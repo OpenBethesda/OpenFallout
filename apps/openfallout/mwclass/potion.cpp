@@ -18,8 +18,6 @@
 #include "../mwrender/objects.hpp"
 #include "../mwrender/renderinginterface.hpp"
 
-#include "../mwmechanics/alchemy.hpp"
-#include "../mwmechanics/spellutil.hpp"
 
 #include "classmodel.hpp"
 #include "nameorid.hpp"
@@ -64,7 +62,7 @@ namespace OFClass
 
     int Potion::getValue(const OFWorld::ConstPtr& ptr) const
     {
-        return OFMechanics::getPotionValue(*ptr.get<ESM::Potion>()->mBase);
+        return ptr.get<ESM::Potion>()->mBase->mData.mValue;
     }
 
     const ESM::RefId& Potion::getUpSoundId(const OFWorld::ConstPtr& ptr) const
@@ -102,10 +100,7 @@ namespace OFClass
 
         info.effects = OFGui::Widgets::MWEffectList::effectListFromESM(&ref->mBase->mEffects);
 
-        // hide effects the player doesn't know about
-        OFWorld::Ptr player = OFBase::Environment::get().getWorld()->getPlayerPtr();
-        for (size_t i = 0; i < info.effects.size(); ++i)
-            info.effects[i].mKnown = OFMechanics::Alchemy::knownEffect(i, player);
+        // (the player of Fallout knows no Morrowind alchemy: the effects are shown as the record has them)
 
         info.isPotion = true;
 

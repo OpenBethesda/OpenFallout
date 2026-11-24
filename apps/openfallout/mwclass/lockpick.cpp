@@ -10,9 +10,8 @@
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwworld/actionequip.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/cellstore.hpp"
-#include "../mwworld/inventorystore.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include "../mwgui/tooltips.hpp"
@@ -59,15 +58,6 @@ namespace OFClass
         const OFWorld::LiveCellRef<ESM::Lockpick>* ref = ptr.get<ESM::Lockpick>();
 
         return ref->mBase->mScript;
-    }
-
-    std::pair<std::vector<int>, bool> Lockpick::getEquipmentSlots(const OFWorld::ConstPtr& ptr) const
-    {
-        std::vector<int> slots;
-
-        slots.push_back(static_cast<int>(OFWorld::InventoryStore::Slot_CarriedRight));
-
-        return std::make_pair(slots, false);
     }
 
     int Lockpick::getValue(const OFWorld::ConstPtr& ptr) const
@@ -125,32 +115,11 @@ namespace OFClass
         return info;
     }
 
-    std::unique_ptr<OFWorld::Action> Lockpick::use(const OFWorld::Ptr& ptr, bool force) const
-    {
-        std::unique_ptr<OFWorld::Action> action = std::make_unique<OFWorld::ActionEquip>(ptr, force);
-
-        action->setSound(getUpSoundId(ptr));
-
-        return action;
-    }
-
     OFWorld::Ptr Lockpick::copyToCellImpl(const OFWorld::ConstPtr& ptr, OFWorld::CellStore& cell) const
     {
         const OFWorld::LiveCellRef<ESM::Lockpick>* ref = ptr.get<ESM::Lockpick>();
 
         return OFWorld::Ptr(cell.insert(ref), &cell);
-    }
-
-    std::pair<int, std::string_view> Lockpick::canBeEquipped(
-        const OFWorld::ConstPtr& ptr, const OFWorld::Ptr& npc) const
-    {
-        // Do not allow equip tools from inventory during attack
-        if (OFBase::Environment::get().getMechanicsManager()->isAttackingOrSpell(npc)
-            && !OFBase::Environment::get().getMechanicsManager()->isCastingSpell(npc)
-            && OFBase::Environment::get().getWindowManager()->isGuiMode())
-            return { 0, "#{sCantEquipWeapWarning}" };
-
-        return { 1, {} };
     }
 
     bool Lockpick::canSell(const OFWorld::ConstPtr& item, int npcServices) const

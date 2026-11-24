@@ -13,10 +13,10 @@ set(OPENFALLOUT_HEADERS
 source_group(apps/openfallout FILES main.cpp ${OPENFALLOUT_SOURCES} ${OPENFALLOUT_HEADERS})
 
 add_openfallout_dir (mwrender
-    actors objects renderingmanager animation rotatecontroller sky skyutil skyfallback npcanimation esm4npcanimation esm4creatureanimation falloutactoranimation falloutanimation falloutface falloutplayerbody vismask
-    creatureanimation effectmanager util renderinginterface pathgrid rendermode weaponanimation screenshotmanager
+    actors objects renderingmanager animation rotatecontroller sky skyutil skyfallback esm4npcanimation esm4creatureanimation falloutactoranimation falloutanimation falloutface falloutplayerbody falloutplayeranimation vismask
+    effectmanager util renderinginterface rendermode screenshotmanager
     bulletdebugdraw globalmap characterpreview menuscene facepreview camera localmap water clipcullnode waterframes waterlook terrainstorage ripplesimulation
-    renderbin actoranimation landmanager navmesh actorspaths recastmesh fogmanager objectpaging falloutlod groundcover
+    renderbin landmanager navmesh actorspaths recastmesh fogmanager objectpaging falloutlod groundcover
     postprocessor pingpongcull luminancecalculator pingpongcanvas transparentpass opaqueblit waterawaretransparentbin precipitationocclusion ripples
     actorutil distortion animationpriority bonegroup blendmask animblendcontroller
     )
@@ -43,7 +43,7 @@ add_openfallout_dir (mwgui
     )
 
 add_openfallout_dir (mwscript
-    falloutscripts falloutprogress falloutreputation falloutobjectstate falloutdetection falloutinterface falloutpresentation falloutpipboy falloutinteraction falloutmusic falloutambient falloutradio falloutcrafting falloutbarter falloutrepair falloutlook falloutmods falloutcompanion falloutcasino falloutcaravan fallouthotkeys falloutregionline falloutvats falloutsave falloutdamage falloutchallenges falloutperks falloutdebug
+    falloutscripts falloutprogress falloutreputation falloutobjectstate falloutdetection falloutinterface falloutmovement falloutpresentation falloutpipboy falloutinteraction falloutmusic falloutambient falloutradio falloutcrafting falloutbarter falloutrepair falloutlook falloutmods falloutcompanion falloutcasino falloutcaravan fallouthotkeys falloutregionline falloutvats falloutsave falloutdamage falloutchallenges falloutperks falloutdebug
     falloutvatscommands
     falloutmines
     falloutspawn
@@ -63,12 +63,12 @@ add_openfallout_dir (mwlua
     questbindings conversationbindings chargenbindings messagebindings menuscenebindings lockpickbindings specialscreenbindings combatbindings casinobindings spawnbindings hudbindings menubindings interactbindings pipboybindings vatsbindings camerabindings vfsbindings uibindings soundbindings inputbindings nearbybindings dialoguebindings
     falloutworldbindings
     actorstatusbindings
-    postprocessingbindings stats recordstore debugbindings corebindings worldbindings worker landbindings magicbindings factionbindings
+    postprocessingbindings recordstore debugbindings corebindings worldbindings worker landbindings factionbindings
     classbindings itemdata inputprocessor animationbindings birthsignbindings racebindings markupbindings weatherbindings regionbindings
-    types/types types/door types/item types/actor types/container types/lockable types/weapon types/npc types/bodypart
-    types/creature types/player types/activator types/book types/lockpick types/probe types/apparatus
+    types/types types/door types/item types/actor types/container types/lockable types/weapon types/bodypart
+    types/player types/activator types/book types/lockpick types/probe types/apparatus
     types/potion types/ingredient types/misc types/repair types/armor types/light types/static
-    types/clothing types/levelledlist types/terminal magictypebindings
+    types/clothing types/levelledlist types/terminal
     )
 
 set(OPENFALLOUT_LUA_FILES ${OPENFALLOUT_FILES})
@@ -84,12 +84,12 @@ add_openfallout_dir (mwsound
 add_openfallout_dir (mwworld
     refdata worldimp scene globals class action nullaction actionteleport
     containerstore actiontalk actiontake manualref player cellvisitors failedaction
-    worldmodel customdata inventorystore ptr actionharvest
-    actionequip timestamp cellstore actionapply actioneat
+    worldmodel customdata ptr actionharvest
+    timestamp cellstore actionapply actioneat
     store esmstore fallback livecellref actiondoor
     contentloader esmloader actiontrap cellreflist cellref weather projectilemanager
-    cellpreloader datetimemanager groundcoverstore magiceffects cell ptrregistry
-    positioncellgrid placeholderrecords worldspacestart
+    cellpreloader datetimemanager groundcoverstore cell ptrregistry
+    positioncellgrid worldspacestart
     )
 
 add_openfallout_dir (mwphysics
@@ -99,18 +99,14 @@ add_openfallout_dir (mwphysics
     )
 
 add_openfallout_dir (mwclass
-    classes activator creature npc weapon armor potion apparatus book clothing container door
-    ingredient creaturelevlist itemlevlist light lockpick misc probe repair static actor bodypart
-    esm4base esm4creature esm4npc light4
+    classes activator weapon armor potion apparatus book clothing container door
+    ingredient itemlevlist light lockpick misc probe repair static bodypart
+    esm4base esm4creature esm4npc falloutplayer light4
     )
 
 add_openfallout_dir (mwmechanics
-    mechanicsmanagerimp stat creaturestats magiceffects movement actorutil spelllist
-    drawstate spells activespells npcstats aipackage aisequence aipursue alchemy aiwander aitravel aifollow aiavoiddoor aibreathe
-    aicast aiescort aiface aiactivate aicombat recharge pathfinding pathgrid security spellcasting spellresistance
-    disease levelledlist combat steering obstacle autocalcspell difficultyscaling aicombataction summoning
-    character actors objects aistate weaponpriority spellpriority weapontype spellutil
-    spelleffects falloutpackages falloutactors
+    mechanicsmanagerimp processlists falloutactor stat movement actorutil drawstate levelledlist weapontype
+    falloutpackages falloutactors
     )
 
 add_openfallout_dir (mwstate

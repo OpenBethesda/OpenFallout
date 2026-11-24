@@ -19,7 +19,6 @@
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/failedaction.hpp"
-#include "../mwworld/inventorystore.hpp"
 #include "../mwworld/nullaction.hpp"
 #include "../mwworld/worldmodel.hpp"
 
@@ -30,7 +29,6 @@
 #include "../mwrender/renderinginterface.hpp"
 
 #include "../mwmechanics/inventory.hpp"
-#include "../mwmechanics/npcstats.hpp"
 
 #include "classmodel.hpp"
 #include "nameorid.hpp"
@@ -138,13 +136,6 @@ namespace OFClass
         if (!OFBase::Environment::get().getWindowManager()->isAllowed(OFGui::GW_Inventory))
             return std::make_unique<OFWorld::NullAction>();
 
-        std::unique_ptr<OFWorld::Action> werewolfAction = getWerewolfRefusalAction(actor);
-        if (werewolfAction)
-            return werewolfAction;
-
-        OFWorld::Ptr player = OFBase::Environment::get().getWorld()->getPlayerPtr();
-        OFWorld::InventoryStore& invStore = player.getClass().getInventoryStore(player);
-
         bool isLocked = ptr.getCellRef().isLocked();
         bool isTrapped = !ptr.getCellRef().getTrap().empty();
         bool hasKey = false;
@@ -153,12 +144,7 @@ namespace OFClass
         const ESM::RefId& keyId = ptr.getCellRef().getKey();
         if (!keyId.empty())
         {
-            OFWorld::Ptr keyPtr = invStore.search(keyId);
-            if (!keyPtr.isEmpty())
-            {
-                hasKey = true;
-                keyName = keyPtr.getClass().getName(keyPtr);
-            }
+            // The player of Fallout carries no Morrowind items, so it has no Morrowind key
         }
 
         if (isLocked && hasKey)
@@ -267,27 +253,10 @@ namespace OFClass
         return info;
     }
 
-    float Container::getCapacity(const OFWorld::Ptr& ptr) const
-    {
-        OFWorld::LiveCellRef<ESM::Container>* ref = ptr.get<ESM::Container>();
-
-        return ref->mBase->mWeight;
-    }
-
-    float Container::getEncumbrance(const OFWorld::Ptr& ptr) const
-    {
-        return getContainerStore(ptr).getWeight();
-    }
-
     bool Container::canLock(const OFWorld::ConstPtr& ptr) const
     {
         const OFWorld::LiveCellRef<ESM::Container>* ref = ptr.get<ESM::Container>();
         return !(ref->mBase->mFlags & ESM::Container::Organic);
-    }
-
-    void Container::modifyBaseInventory(const ESM::RefId& containerId, const ESM::RefId& itemId, int amount) const
-    {
-        OFMechanics::modifyBaseInventory<ESM::Container>(containerId, itemId, amount);
     }
 
     OFWorld::Ptr Container::copyToCellImpl(const OFWorld::ConstPtr& ptr, OFWorld::CellStore& cell) const

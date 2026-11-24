@@ -367,34 +367,7 @@ namespace OFScript
         stats.mActionPoints = mActorValues.current(mPlayer, AV::actionPoints);
         stats.mMaxActionPoints = mActorValues.permanent(mPlayer, AV::actionPoints);
         stats.mNewVegas = mGame == FalloutScript::Game::NewVegas;
-        // What is carried weighs what its cards say (a perk can lighten the small things)
-        std::vector<std::pair<FalloutScript::FormId, int>> held;
-        if (mActors.items(mPlayer, held))
-        {
-            const bool packRat = stats.mNewVegas && mPerks.apply(FalloutScript::EntryPoint::packRat, mPlayer, 0.0) > 0;
-            for (const auto& [item, count] : held)
-            {
-                FalloutScript::ItemInfo info;
-                if (itemInfo(item, info))
-                {
-                    stats.mWeight += carriedWeight(info.mWeight, packRat) * count;
-                    // A mod of the effect 4 makes the weapon it is installed in lighter
-                    if (info.mKind == FalloutScript::ItemKind::Weapon)
-                    {
-                        FalloutScript::ItemMods::Slots slots;
-                        if (modSlotsOf(item, slots))
-                            for (const FalloutScript::ActorState::ConditionStack& stack : mActors.conditions(mPlayer, item))
-                                if (const std::optional<double> less = stack.mMods != 0
-                                        ? FalloutScript::ItemMods::installedValue(
-                                            stack.mMods, slots, FalloutScript::ItemMods::Weight)
-                                        : std::nullopt)
-                                    stats.mWeight -= (carriedWeight(info.mWeight, packRat)
-                                                         - carriedWeight(std::max(info.mWeight - *less, 0.0), packRat))
-                                        * stack.mCount;
-                    }
-                }
-            }
-        }
+        stats.mWeight = carriedWeightOf(mPlayer);
         stats.mMaxWeight = maxCarryWeight(mPlayer);
         stats.mCaps = mActors.itemCount(mPlayer, masterForm(capsNumber));
         stats.mSkillPoints = mProgress.skillPoints();

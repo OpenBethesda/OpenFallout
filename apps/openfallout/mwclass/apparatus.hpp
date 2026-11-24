@@ -25,8 +25,6 @@ namespace OFClass
 
         bool isItem(const OFWorld::ConstPtr&) const override { return true; }
 
-        std::string_view getWerewolfRefusalSoundId() const override { return "WolfItem"; }
-
         std::unique_ptr<OFWorld::Action> activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const override;
         ///< Generate action for activation
 

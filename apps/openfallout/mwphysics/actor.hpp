@@ -24,11 +24,20 @@ namespace OFPhysics
 {
     class PhysicsTaskScheduler;
 
+    /// The body of a character on character physics, as the executables make it (rule A.C2 of
+    /// docs/openfallout/fallout-rules.md): an upright capsule of the radius of the controller (31 units in both exes,
+    /// times the size of the actor) and the height of the human skeleton's bound (half height 66.22), standing on the
+    /// position of the actor
+    struct CharacterShape
+    {
+        float mRadius = 31.f;
+        float mHalfHeight = 66.22f;
+    };
+
     class Actor final : public PtrHolder
     {
     public:
-        Actor(const OFWorld::Ptr& ptr, const Resource::BulletShape& shape, PhysicsTaskScheduler* scheduler,
-            bool canWaterWalk, DetourNavigator::CollisionShapeType collisionShapeType);
+        Actor(const OFWorld::Ptr& ptr, const CharacterShape& shape, PhysicsTaskScheduler* scheduler);
         ~Actor() override;
 
         Actor(const Actor&) = delete;
