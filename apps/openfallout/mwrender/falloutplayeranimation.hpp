@@ -8,7 +8,7 @@
 
 namespace osg
 {
-    class PositionAttitudeTransform;
+    class MatrixTransform;
 }
 
 namespace OFRender
@@ -41,7 +41,7 @@ namespace OFRender
         static constexpr float sEyeHeight = 124.f;
 
     private:
-        osg::ref_ptr<osg::PositionAttitudeTransform> mHead;
+        osg::ref_ptr<osg::MatrixTransform> mHead;
         ViewMode mViewMode = VM_Normal;
     };
 }

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -259,6 +260,54 @@ namespace ESM
             ASSERT_EQ(result.mLuaScripts.mScripts[0].mTimers.size(), 1u);
             EXPECT_EQ(result.mLuaScripts.mScripts[0].mTimers[0].mType, LuaTimer::Type::REAL_TIME);
             EXPECT_DOUBLE_EQ(result.mLuaScripts.mScripts[0].mTimers[0].mTime, 1.25);
+        }
+
+        TEST(FalloutScriptPlayerStateTest, theCellOfAPluginFollowsTheLoadOrderOfTheGameThatLoadsTheSave)
+        {
+            // Saved with the plugin of the cell at index 2; the game that loads the save has it at index 3
+            FalloutScript::PlayerState state;
+            state.mCell = RefId::formIdRefId(FormId{ 0x1234, 2 }).serializeText();
+            FalloutScript::SaveWriter out;
+            FalloutScript::writePlayerState(state, out);
+            FalloutScript::SaveReader in(
+                out.bytes(), [](FalloutScript::FormId form) -> std::optional<FalloutScript::FormId> {
+                    if ((form >> 24) == 2)
+                        return (form & 0xffffff) | (3u << 24);
+                    return form;
+                });
+            FalloutScript::PlayerState result;
+            FalloutScript::readPlayerState(result, in, FalloutScript::playerSectionVersion);
+            EXPECT_EQ(RefId::deserializeText(result.mCell), RefId::formIdRefId(FormId{ 0x1234, 3 }));
+        }
+
+        TEST(FalloutScriptPlayerStateTest, theCellOfAPluginThatIsGoneIsNoCell)
+        {
+            FalloutScript::PlayerState state;
+            state.mCell = RefId::formIdRefId(FormId{ 0x1234, 2 }).serializeText();
+            FalloutScript::SaveWriter out;
+            FalloutScript::writePlayerState(state, out);
+            FalloutScript::SaveReader in(out.bytes(),
+                [](FalloutScript::FormId) -> std::optional<FalloutScript::FormId> { return std::nullopt; });
+            FalloutScript::PlayerState result;
+            FalloutScript::readPlayerState(result, in, FalloutScript::playerSectionVersion);
+            EXPECT_TRUE(result.mCell.empty());
+        }
+
+        TEST(FalloutScriptPlayerStateTest, aSectionOfVersionOneHasTheCellAsText)
+        {
+            // Version 1: the text of the cell first, then the rest as version 2 has it
+            const std::string cell = RefId::esm3ExteriorCell(2, -5).serializeText();
+            FalloutScript::SaveWriter out;
+            out.string(cell);
+            FalloutScript::PlayerState rest;
+            FalloutScript::SaveWriter tail;
+            FalloutScript::writePlayerState(rest, tail);
+            // (the rest of version 2 after its one byte for a cell of no kind)
+            std::string bytes = out.bytes() + tail.bytes().substr(1);
+            FalloutScript::SaveReader in(bytes);
+            FalloutScript::PlayerState result;
+            FalloutScript::readPlayerState(result, in, 1);
+            EXPECT_EQ(result.mCell, cell);
         }
 
         TEST(FalloutScriptPlayerStateTest, aPlayerWithNoCellAndNoScriptsKeepsThatToo)

@@ -76,6 +76,9 @@ namespace OFMechanics
     void ProcessLists::clear()
     {
         mActors.clear();
+        // The player's actor too: a load or a new game keeps the same reference of the player (OFWorld::Player reuses
+        // it), so setPlayer would keep the old actor and with it a fall, a jump or a stance of the game before
+        mPlayer.reset();
     }
 
     Actor* ProcessLists::find(const OFWorld::Ptr& ptr)

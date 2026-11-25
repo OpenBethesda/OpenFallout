@@ -19,8 +19,9 @@ namespace ESM
 
 namespace FalloutScript
 {
-    /// The version of the "player" section of the save of the Fallout scripts (FOSV)
-    constexpr std::uint32_t playerSectionVersion = 1;
+    /// The version of the "player" section of the save of the Fallout scripts (FOSV). 2: a cell of a plugin is a form
+    /// id (so a save follows a change of the load order), any other cell its text; 1 had the text for every cell.
+    constexpr std::uint32_t playerSectionVersion = 2;
 
     /// What a save keeps of the player that is not a stat of the games (those are in the other sections of FOSV): where
     /// it is, how it stands, and the data of its Lua scripts. It takes the place of the PLAY record of Morrowind, which

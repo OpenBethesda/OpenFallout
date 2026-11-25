@@ -1,7 +1,7 @@
 #include "falloutplayeranimation.hpp"
 
 #include <osg/Group>
-#include <osg/PositionAttitudeTransform>
+#include <osg/MatrixTransform>
 
 namespace OFRender
 {
@@ -11,9 +11,10 @@ namespace OFRender
     {
         mObjectRoot = new osg::Group;
         mObjectRoot->setName("FalloutPlayer");
-        mHead = new osg::PositionAttitudeTransform;
+        // A matrix transform: the node map of the animation (getNode, which the camera asks for "Head") holds only
+        // those
+        mHead = new osg::MatrixTransform(osg::Matrixf::translate(0.f, 0.f, sEyeHeight));
         mHead->setName("Head");
-        mHead->setPosition(osg::Vec3f(0.f, 0.f, sEyeHeight));
         mObjectRoot->addChild(mHead);
         if (mInsert != nullptr)
             mInsert->addChild(mObjectRoot);
@@ -21,6 +22,6 @@ namespace OFRender
 
     void FalloutPlayerAnimation::setFirstPersonOffset(const osg::Vec3f& offset)
     {
-        mHead->setPosition(osg::Vec3f(0.f, 0.f, sEyeHeight) + offset);
+        mHead->setMatrix(osg::Matrixf::translate(osg::Vec3f(0.f, 0.f, sEyeHeight) + offset));
     }
 }

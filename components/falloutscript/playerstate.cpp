@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <map>
+#include <optional>
 
 namespace FalloutScript
 {
@@ -24,11 +25,60 @@ namespace FalloutScript
             for (float& component : value)
                 component = in.f32();
         }
+
+        /// How the section tells the cell (version 2)
+        enum class CellKind : std::uint8_t
+        {
+            None = 0,
+            /// A cell of a plugin: its form id, which the reader moves to the load order of the game that loads it
+            Form = 1,
+            /// Any other cell (a Morrowind cell of a converted save): ESM::RefId::serializeText
+            Text = 2,
+        };
+
+        void writeCell(const std::string& cell, SaveWriter& out)
+        {
+            if (cell.empty())
+            {
+                out.u8(static_cast<std::uint8_t>(CellKind::None));
+                return;
+            }
+            const ESM::RefId id = ESM::RefId::deserializeText(cell);
+            if (const ESM::FormId* form = id.getIf<ESM::FormId>())
+            {
+                out.u8(static_cast<std::uint8_t>(CellKind::Form));
+                out.form(form->toUint32());
+                return;
+            }
+            out.u8(static_cast<std::uint8_t>(CellKind::Text));
+            out.string(cell);
+        }
+
+        std::string readCell(SaveReader& in)
+        {
+            switch (static_cast<CellKind>(in.u8()))
+            {
+                case CellKind::None:
+                    return {};
+                case CellKind::Form:
+                {
+                    // None when the plugin of the cell is no longer loaded: the player starts where a game without a
+                    // cell starts
+                    const std::optional<FormId> form = in.form();
+                    if (!form.has_value())
+                        return {};
+                    return ESM::RefId::formIdRefId(ESM::FormId::fromUint32(*form)).serializeText();
+                }
+                case CellKind::Text:
+                    return in.string();
+            }
+            throw SaveError("The player section names a cell of an unknown kind");
+        }
     }
 
     void writePlayerState(const PlayerState& state, SaveWriter& out)
     {
-        out.string(state.mCell);
+        writeCell(state.mCell, out);
         writeVector(out, state.mPosition);
         writeVector(out, state.mRotation);
         writeVector(out, state.mLastExteriorPosition);
@@ -54,9 +104,8 @@ namespace FalloutScript
 
     void readPlayerState(PlayerState& state, SaveReader& in, std::uint32_t version)
     {
-        (void)version;
         state = PlayerState();
-        state.mCell = in.string();
+        state.mCell = version >= 2 ? readCell(in) : in.string();
         readVector(in, state.mPosition);
         readVector(in, state.mRotation);
         readVector(in, state.mLastExteriorPosition);
