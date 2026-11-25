@@ -41,10 +41,10 @@ return {
         save = { { quest = 'CG03', stage = 60 }, { quest = 'VCG01', stage = 79 } },
         load = { { quest = 'CG04', stage = 21 }, { quest = 'VCG01', stage = 80 } },
         -- The saves that the rounds of step 4 start from (an engine's own save, so that its players are the ones the engine makes), written
-        -- where the intro is over and the player is outside with its controls: Fallout 3 in the Wasteland on the quest after the vault
-        -- (MQ01 stage 40 stands for 229 s in a Mac run), New Vegas on VMQ01 stage 50 (92 s). Each is saved once, `after` seconds in.
+        -- where the intro is over and the player is outside with its controls and no screen is open: New Vegas on VMQ01 stage 50 (92 s),
+        -- saved once, `after` seconds in. Fallout 3 has none: its stage 40 (229 s in a Mac run) is a conversation, a screen is open all that
+        -- time, and a save written then left the game in that mode for good (the run stalled until its limit); the next stage ends the run.
         fixtures = {
-            { quest = 'MQ01', stage = 40, description = 's4-fixture-fo3' },
             { quest = 'VMQ01', stage = 50, description = 's4-fixture-nv' },
         },
     },

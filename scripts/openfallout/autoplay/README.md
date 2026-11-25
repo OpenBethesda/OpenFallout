@@ -91,9 +91,10 @@ after the load, so that `digest check ok` means the quests **and** the player ar
 stats function, are in the comment at the top of `autoplayprobe.lua` and in `scripts/openfallout/round/README.md`. A save from before
 that (the old-save round) has no player in its digest: the line says so and only the quests are compared.
 
-The `fixtures` of the `saves` table are saves that the rounds of step 4 start from (`s4-fixture-fo3`, `s4-fixture-nv`): written once, five
-seconds into a stage past the intro (Fallout 3 `MQ01` 40, New Vegas `VMQ01` 50), and only while no screen is open (the player script tells
-the probe every second: a save written while a terminal is open left Fallout 3 in that mode and stopped the run).
+The `fixtures` of the `saves` table are saves that the rounds of step 4 start from (only `s4-fixture-nv`): written once, five seconds into a stage past
+the intro (New Vegas `VMQ01` 50), and only while no screen is open (the player script tells the probe every second). Fallout 3 has no such
+moment before the run ends: its stage `MQ01` 40 is a conversation, and a save written then left the game in that mode for good (the run
+stalled until its limit), so its save for the rounds is made outside the tool (see the README of the rounds).
 
 `savediff.py` compares the sections of the state of Fallout in two saved games. A game that is loaded and saved again at once has
 the same bytes in every section except for what really changed in between: the clock and the timers of the quests, and what the

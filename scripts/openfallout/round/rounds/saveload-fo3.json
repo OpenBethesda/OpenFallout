@@ -36,7 +36,6 @@
     "AUTOPLAY\\tintro over\\t",
     "AUTOPLAY\\tplayer\\tsaved\\t",
     "AUTOPLAY\\tplayer\\tloaded\\t",
-    "AUTOPLAY\\tsave\\ts4-fixture-fo3\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+",
     "(?s)AUTOPLAY\\tdigest\\tsaved\\t.*AUTOPLAY\\tsave\\tautoplay-save\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+.*AUTOPLAY\\tload\\tautoplay-save\\t.*AUTOPLAY\\tdigest\\tloaded\\t.*AUTOPLAY\\tdigest\\tcheck ok.*AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+.*AUTOPLAY\\tintro over\\t"
   ],
   "expect_count": {

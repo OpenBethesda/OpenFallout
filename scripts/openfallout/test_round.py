@@ -442,9 +442,11 @@ class AutoplayRounds(unittest.TestCase):
         """The lines of a save/load round up to the end of the probe: the quests' digest, then the player's digest (step 4: saved and
         loaded with the same player) and the save that the rounds of step 4 start from (named after the game of the round)."""
         game = name.split("-")[1]
-        return cls.SAVED + ("AUTOPLAY\tplayer\tsaved\tcell=w:0,0 level=1 xp=0",
-                            "AUTOPLAY\tplayer\tloaded\tcell=w:0,0 level=1 xp=0",
-                            f"AUTOPLAY\tsave\ts4-fixture-{game}\tok\tdir=Player\tfiles=s4_fixture.omwsave")
+        lines = cls.SAVED + ("AUTOPLAY\tplayer\tsaved\tcell=w:0,0 level=1 xp=0",
+                             "AUTOPLAY\tplayer\tloaded\tcell=w:0,0 level=1 xp=0")
+        if game == "nv":     # Fallout 3 has no moment without a screen open to save one at
+            lines += (f"AUTOPLAY\tsave\ts4-fixture-{game}\tok\tdir=Player\tfiles=s4_fixture.omwsave",)
+        return lines
 
     GIVE_UP = ("AUTOPLAY\ttime is up",
                "AUTOPLAY\tlevel stuck",

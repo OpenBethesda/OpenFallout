@@ -210,12 +210,14 @@ are in `scripts/s4common.lua`. The numbers come from the player script (`roundpl
 `Actor.isOnGround`, `Actor.getCurrentSpeed`, `core.pipboy.stats()` / `attributes()` / `skills()` and the level-up calls of `core.pipboy`,
 `core.hud.takeMessages()`. None is a Morrowind stats function. The first lines of that block of `roundplayer.lua` list them.
 
-**The saves.** The rounds start from a save that the autoplay tool writes and that is not in the repository (it is a game file):
-`scripts/openfallout/autoplay` saves the game once its quest `MQ01` (Fallout 3, stage 40) or `VMQ01` (New Vegas, stage 50) has stood
-at its stage for five seconds (description `s4-fixture-fo3` and `s4-fixture-nv`, in `saves.fixtures` of `autoplaygates.lua`), so that
-every `saveload-*` round leaves one: the player is outside the intro, with its controls, at level 1. Run `saveload-nv` and
-`saveload-fo3` once, and give the files to the rounds with environment variables (the path is the one the log names on the line
-`AUTOPLAY save s4-fixture-nv ok dir=... files=...`, in the `userdata/saves` of the run):
+**The saves.** The rounds start from a save that is not in the repository (it is a game file). New Vegas: `scripts/openfallout/autoplay` saves the game
+once `VMQ01` stage 50 has stood for five seconds with no screen open (description `s4-fixture-nv`, in `saves.fixtures` of `autoplaygates.lua`),
+so `saveload-nv` leaves one: the player is outside the intro, with its controls, at level 1. Fallout 3: the tool cannot write one (the
+stage after the vault, `MQ01` 40, is a conversation with a screen open the whole time, and a save then stalls the run), so make one by
+hand: play New Game to the Wasteland and save, or take any save past the vault (the one the rounds of this branch ran on was written by an
+earlier build of the tool at `MQ01` 40, level 2, in the interior cell 0x1003a35; the rounds teleport the player to the arena and turn god mode
+on or off themselves, so where it stood does not matter). Give the files to the rounds with environment variables (for New Vegas the path
+is the one the log names on the line `AUTOPLAY save s4-fixture-nv ok dir=... files=...`, in the `userdata/saves` of the run):
 
 ```
 export OPENFALLOUT_ROUND_SAVE_NV=/path/to/s4_fixture_nv.omwsave        # for rounds/s4-*-nv.json
