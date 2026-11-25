@@ -35,6 +35,7 @@
 #include <components/esm4/loadstat.hpp>
 #include <components/esm4/loadwrld.hpp>
 #include <components/falloutscript/footsteps.hpp>
+#include <components/falloutscript/movement.hpp>
 
 #include <components/misc/constants.hpp>
 #include <components/misc/convert.hpp>
@@ -202,7 +203,6 @@ namespace OFWorld
         , mUserDataPath(userDataPath)
         , mActivationDistanceOverride(activationDistanceOverride)
         , mStartCell(startCell)
-        , mSwimHeightScale(0.f)
         , mDistanceToFocusObject(-1.f)
         , mTeleportEnabled(true)
         , mLevitationEnabled(true)
@@ -235,8 +235,6 @@ namespace OFWorld
                     Misc::ResourceHelpers::correctMeshPath(tree.mModel.getNormalized()),
                     Resource::SpeedTreeStandIn{ tree.mLeafTexture, tree.mBillboardWidth, tree.mBillboardHeight });
         }
-
-        mSwimHeightScale = mStore.get<ESM::GameSetting>().find("fSwimHeightScale")->mValue.getFloat();
     }
 
     void World::init(Debug::Level maxRecastLogLevel, osgViewer::Viewer* viewer, osg::ref_ptr<osg::Group> rootNode,
@@ -247,7 +245,7 @@ namespace OFWorld
         if (Settings::navigator().mEnable)
         {
             auto navigatorSettings = DetourNavigator::makeSettingsFromSettingsManager(maxRecastLogLevel);
-            navigatorSettings.mRecast.mSwimHeightScale = mSwimHeightScale;
+            navigatorSettings.mRecast.mSwimHeightScale = static_cast<float>(FalloutScript::Movement::swimmingLine);
             mNavigator = DetourNavigator::makeNavigator(navigatorSettings, mUserDataPath);
         }
         else
@@ -1906,20 +1904,22 @@ namespace OFWorld
         return false;
     }
 
+    // The lines of the share of the body under water of the executables (FalloutNV.exe 0x889917, 0x889946,
+    // 0x889975): the head is under at 0.875, the actor swims from 0.7, and wades from 0.01
+
     bool World::isSubmerged(const OFWorld::ConstPtr& object) const
     {
-        return isUnderwater(object, 1.0f / mSwimHeightScale);
+        return isUnderwater(object, static_cast<float>(FalloutScript::Movement::headUnderLine));
     }
 
     bool World::isSwimming(const OFWorld::ConstPtr& object) const
     {
-        return isUnderwater(object, mSwimHeightScale);
+        return isUnderwater(object, static_cast<float>(FalloutScript::Movement::swimmingLine));
     }
 
     bool World::isWading(const OFWorld::ConstPtr& object) const
     {
-        const float kneeDeep = 0.25f;
-        return isUnderwater(object, kneeDeep);
+        return isUnderwater(object, static_cast<float>(FalloutScript::Movement::wadingLine));
     }
 
     bool World::isUnderwater(const OFWorld::ConstPtr& object, const float heightRatio) const

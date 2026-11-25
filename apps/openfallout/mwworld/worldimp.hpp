@@ -119,7 +119,6 @@ namespace OFWorld
 
         std::string mStartCell;
 
-        float mSwimHeightScale;
 
         float mDistanceToFocusObject;
         OFPhysics::RayCastingResult mFocusRay;
