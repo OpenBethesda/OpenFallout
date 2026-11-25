@@ -265,7 +265,7 @@ namespace OFMechanics
             mFallStart = z;
         if (onGround && !mWasOnGround && mFallStart)
         {
-            // The ground is touched: the height lost is judged where the player comes to stand (C.F1), a frame or two on
+            // The ground is touched: the height lost is judged where the player comes to stand (C.F1), a frame later
             mLanding = Landing{ *mFallStart, z, 0 };
             mFallStart.reset();
             mInJump = false;
