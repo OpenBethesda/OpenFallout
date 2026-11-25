@@ -2335,6 +2335,7 @@ PR "Make the player a Fallout actor with the original games' rules" builds these
 - **Stats (E).** Action points, carry weight, critical chance and melee damage use the current attribute. Melee damage is floored. Unarmed damage and the poison and radiation resistances are derived. Half the Luck rounds up in the skills. The player's skills follow the SPECIAL of now (E.1.9): a skill has no stored base, the points of the level-ups and of the skill books are its permanent modifier, and a save of an engine before this keeps its points that way (the base it had minus the chargen value of the base attributes). Not done in 4a: the stored player level (E.unclear 3).
 - **NPC speed (B).** A character walks and runs at the speed of the movement rules, the player's own formula. A creature goes at its animation's speed times its SpeedMult and its legs.
 - **Sneak camera.** The games have no sneak eye-height setting (the first-person skeleton has a `Camera1st` node). The eye stays at 124 units while sneaking; the camera drop is a known gap.
+- **Jump in water (C.W2).** Not done: the movement solver keeps a swimmer under the swim line, so a jump while swimming (twice the height) needs a solver change. The player does not jump in water.
 - **Left for 4c.** The get-up health of an essential actor.
 
 ## Sources

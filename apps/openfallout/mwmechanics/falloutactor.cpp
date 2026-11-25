@@ -185,10 +185,16 @@ namespace OFMechanics
             velocity.normalize();
         velocity *= asked * mStanceSpeed;
 
-        // A jump: the height of the rule, as a speed that takes the player there under gravity (C.J1); the speed the
-        // player had is kept. A jump in water is the swim's (the movement solver has no jump there).
+        // A landing of this frame counts before a new jump starts: a jump on the frame of the landing does not take
+        // the fall away (C.F1)
         mInJump = mInJump && !onGround;
-        if (movement.mPosition[2] > 0.f && onGround && !mSwimming && !flying && collides && !mInJump)
+        updateFall(onGround, flying || !collides);
+
+        // A jump: the height of the rule, as a speed that takes the player there under gravity (C.J1); the speed the
+        // player had is kept. No jump in water yet: the movement solver keeps a swimmer under the swim line, so the
+        // doubled height of C.W2 is a known gap.
+        if (movement.mPosition[2] > 0.f && onGround && !mSwimming && !flying && collides && !mInJump
+            && !(scripts != nullptr && scripts->isDead(ptr)))
         {
             const double height = scripts != nullptr ? scripts->jumpHeight(ptr, false) : 64.0;
             const double gravity = Constants::GravityConst * Constants::UnitsPerMeter;
@@ -210,8 +216,6 @@ namespace OFMechanics
         // forgotten
         if (velocity.z() <= 0.f)
             movement.mPosition[2] = 0.f;
-
-        updateFall(onGround, flying || !collides);
 
         world.queueMovement(ptr, velocity);
         movement.mPosition[0] = movement.mPosition[1] = 0.f;
@@ -264,8 +268,7 @@ namespace OFMechanics
             if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
                 scripts->landed(getPtr(), lost);
         }
-        // (not on the frame a jump starts: the player is still on the ground then, and the take-off height is the
-        // start of the fall)
+        // (a jump sets its take-off height after this, on the frame it starts)
         if (onGround && !mInJump)
             mFallStart.reset();
         mWasOnGround = onGround;

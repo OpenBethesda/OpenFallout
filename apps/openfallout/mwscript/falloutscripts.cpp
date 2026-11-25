@@ -5368,7 +5368,8 @@ namespace OFScript
 
     bool FalloutScripts::isDead(const OFWorld::Ptr& actor) const
     {
-        const FalloutScript::FormId reference = referenceOf(actor);
+        // (the player by the identity of the scripts: a converted save keeps an old number for its reference)
+        const FalloutScript::FormId reference = scriptReferenceOf(actor);
         return reference != 0 && mActors.isDead(reference);
     }
 
