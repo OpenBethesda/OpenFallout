@@ -1819,6 +1819,10 @@ namespace OFScript
         /// yet.
         bool isDead(const OFWorld::Ptr& actor) const;
 
+        /// A character or creature near the player heals by its heal rate for that many simulated seconds (the player
+        /// heals in update())
+        void regenerate(const OFWorld::Ptr& actor, double seconds);
+
         /// The actor sits on, lies on or leans against the furniture, which IsCurrentFurnitureRef and
         /// IsCurrentFurnitureObj tell, until it gets up or is moved away from it. With `place` the actor is put on the
         /// entry of the marker of the furniture that it uses, facing as the entry says (the player who activates a

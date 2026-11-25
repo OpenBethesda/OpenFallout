@@ -2406,6 +2406,9 @@ namespace OFMechanics
                 continue;
             }
             mind.mSeenAlive = true;
+            // It heals by its heal rate, as the player does (fallout-rules.md D.R1)
+            if (frame.mScripts != nullptr)
+                frame.mScripts->regenerate(mind.mPtr, duration);
 
             // A blow threw it back, or it is falling: it does nothing else until it stands
             if (mind.mThrown)

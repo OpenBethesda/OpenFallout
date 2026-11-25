@@ -167,10 +167,8 @@ namespace
                 case ActorValue::actionPoints:
                     return actionPoints(DerivedStatSettings(), permanent(ActorValue::agility));
                 case ActorValue::healRate:
-                    // Only the player's is worked out
-                    if (actor == player)
-                        return healRate(DerivedStatSettings(), permanent(ActorValue::endurance));
-                    return std::nullopt;
+                    // Everyone's is worked out, as the executables do (every actor heals by it)
+                    return healRate(DerivedStatSettings(), permanent(ActorValue::endurance));
                 default:
                     return std::nullopt;
             }
@@ -207,7 +205,7 @@ namespace
         EXPECT_EQ(values.current(player, ActorValue::health), 100 + 11 * 20 + 2 * 5);
     }
 
-    TEST(FalloutScriptDerivedStatsTest, the_heal_rate_of_the_player_follows_its_endurance)
+    TEST(FalloutScriptDerivedStatsTest, the_heal_rate_of_an_actor_follows_its_endurance)
     {
         DerivingRecords records;
         ActorValues values(&records);
@@ -219,8 +217,8 @@ namespace
         EXPECT_EQ(values.current(player, ActorValue::healRate), 5);
         values.setBase(player, ActorValue::endurance, 9);
         EXPECT_EQ(values.current(player, ActorValue::healRate), 10);
-        // Another character has the value that is set for it, none otherwise
-        EXPECT_EQ(values.current(guard, ActorValue::healRate), 0);
+        // Another character works it out from its own endurance (8), and a value set for it replaces that
+        EXPECT_EQ(values.current(guard, ActorValue::healRate), 5);
         values.setBase(guard, ActorValue::healRate, 3);
         EXPECT_EQ(values.current(guard, ActorValue::healRate), 3);
     }

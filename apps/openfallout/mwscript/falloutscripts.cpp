@@ -1049,7 +1049,7 @@ namespace OFScript
         }
         // The health of the player comes back by its heal rate, a little each simulated second (fallout-rules.md D.R1:
         // healRate / 3600 per second, FalloutNV.exe 0x88B510; only damage is healed). The perk term of entry point 0xC
-        // is not applied.
+        // (from 0, in points a second) is added by ItemUse::update. The other actors heal in regenerate().
         if (mPlayer != 0 && !mActors.isDead(mPlayer))
         {
             namespace AV = FalloutScript::ActorValue;
@@ -4418,10 +4418,7 @@ namespace OFScript
             case AV::radResist:
                 return Derived::radResist(settings, current(AV::endurance));
             case AV::healRate:
-                // Only the player's is worked out: the breath lasts by it (the executables work it out for everyone,
-                // but nothing else of the port looks at it)
-                if (actor != mPlayer)
-                    return std::nullopt;
+                // Everyone's, as the executables do: the player's breath lasts by it, and every actor heals by it
                 return Derived::healRate(settings, permanent(AV::endurance));
             case AV::health:
                 break;
@@ -5371,6 +5368,22 @@ namespace OFScript
         // (the player by the identity of the scripts: a converted save keeps an old number for its reference)
         const FalloutScript::FormId reference = scriptReferenceOf(actor);
         return reference != 0 && mActors.isDead(reference);
+    }
+
+    void FalloutScripts::regenerate(const OFWorld::Ptr& actor, double seconds)
+    {
+        // A character or creature near the player heals as the player does: heal rate / 3600 each simulated second
+        // (fallout-rules.md D.R1). FalloutNV.exe 0x8C3C40, the update of an actor with a process, calls 0x88B510 for
+        // any actor whose cached health is below its most (flag 0x20000000); the perk term of 0x88B510 is the player's
+        // only. The player's own share is in update().
+        namespace AV = FalloutScript::ActorValue;
+        const FalloutScript::FormId reference = scriptReferenceOf(actor);
+        if (reference == 0 || reference == mPlayer || mActors.isDead(reference))
+            return;
+        const double gain
+            = FalloutScript::DerivedStats::regeneration(mActorValues.current(reference, AV::healRate), seconds);
+        if (gain > 0)
+            mActorValues.restore(reference, AV::health, gain);
     }
 
     FalloutScript::FormId FalloutScripts::scriptReferenceOf(const OFWorld::Ptr& actor) const
