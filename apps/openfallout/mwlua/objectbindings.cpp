@@ -340,7 +340,9 @@ namespace OFLua
                 const OFWorld::Ptr& objPtr = object.ptr();
                 const OFWorld::Ptr& actorPtr = actor.ptr();
                 uint32_t esmRecordType = actorPtr.getType();
-                if (esmRecordType != ESM::REC_CREA && esmRecordType != ESM::REC_NPC_)
+                // (the player and the characters and creatures of Fallout are NPC_ and CREA records of ESM4)
+                if (esmRecordType != ESM::REC_CREA && esmRecordType != ESM::REC_NPC_ && esmRecordType != ESM::REC_NPC_4
+                    && esmRecordType != ESM::REC_CREA4)
                     throw std::runtime_error(
                         "The argument of `activateBy` must be an actor who activates the object. Got: "
                         + actor.toString());

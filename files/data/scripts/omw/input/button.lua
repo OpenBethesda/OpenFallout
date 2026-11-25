@@ -5,9 +5,13 @@ local core = require('openfallout.core')
 local ambient = require('openfallout.ambient')
 local ui = require('openfallout.ui')
 
-local normalColor = util.color.commaString(core.getGMST("FontColor_color_normal"))
-local normalColorOver = util.color.commaString(core.getGMST('fontcolor_color_normal_over'))
-local normalColorPressed = util.color.commaString(core.getGMST('fontcolor_color_normal_pressed'))
+-- (the games of Fallout have no font colours among their settings: the colours the menus had before then)
+local function fontColor(name, default)
+    return util.color.commaString(core.getGMST(name) or default)
+end
+local normalColor = fontColor('FontColor_color_normal', '202,165,96')
+local normalColorOver = fontColor('FontColor_color_normal_over', '223,201,159')
+local normalColorPressed = fontColor('FontColor_color_normal_pressed', '243,237,221')
 
 local function paddedBox(content)
     return {
