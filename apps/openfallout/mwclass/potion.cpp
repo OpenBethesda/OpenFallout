@@ -18,7 +18,6 @@
 #include "../mwrender/objects.hpp"
 #include "../mwrender/renderinginterface.hpp"
 
-
 #include "classmodel.hpp"
 #include "nameorid.hpp"
 

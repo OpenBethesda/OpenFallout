@@ -22,7 +22,6 @@
 
 #include "../mwgui/tooltips.hpp"
 
-
 namespace OFWorld
 {
     std::map<unsigned, Class*>& Class::getClasses()
@@ -319,5 +318,4 @@ namespace OFWorld
         result.z() = magicEffect->mData.mBlue / 255.f;
         return result;
     }
-
 }

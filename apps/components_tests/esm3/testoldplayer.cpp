@@ -214,12 +214,11 @@ namespace ESM
             // PLAY: read to fill the player section when the save has none, and not kept
             if (GetParam() <= MaxOldSkillsAndAttributesFormatVersion)
                 return;
-            skipTheOldRecordAndLoadTheNext(GetParam(), static_cast<std::uint32_t>(REC_PLAY),
-                [](ESMWriter& writer) {
-                    Player record{};
-                    fillOldPlayer(record);
-                    record.save(writer);
-                });
+            skipTheOldRecordAndLoadTheNext(GetParam(), static_cast<std::uint32_t>(REC_PLAY), [](ESMWriter& writer) {
+                Player record{};
+                fillOldPlayer(record);
+                record.save(writer);
+            });
         }
 
         INSTANTIATE_TEST_SUITE_P(FormatVersions, Esm3OldPlayerTest, ValuesIn(getFormats()));

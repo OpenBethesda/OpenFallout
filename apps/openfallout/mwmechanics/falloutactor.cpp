@@ -21,8 +21,8 @@ namespace OFMechanics
     namespace
     {
         /// The share of the requested movement a character steers with while it is in the air (rule C.J2: NV keeps
-        /// 0.3 as a constant at 0x11B0140 and a zero base; the scalar it is multiplied by in the controller is not known
-        /// and is taken as 1)
+        /// 0.3 as a constant at 0x11B0140 and a zero base; the scalar it is multiplied by in the controller is not
+        /// known and is taken as 1)
         constexpr float airSteering = 0.3f;
 
         /// The time sOverEncumbered stays on the screen (rule B.M5c: 2 s)

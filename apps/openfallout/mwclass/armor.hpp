@@ -64,7 +64,6 @@ namespace OFClass
         int getEnchantmentPoints(const OFWorld::ConstPtr& ptr) const override;
 
         bool canSell(const OFWorld::ConstPtr& item, int npcServices) const override;
-
     };
 }
 

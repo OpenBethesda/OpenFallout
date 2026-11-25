@@ -39,8 +39,8 @@
 
 #include "../mwmechanics/actorutil.hpp"
 #include "../mwmechanics/falloutactor.hpp"
-#include "../mwscript/falloutscripts.hpp"
 #include "../mwmechanics/movement.hpp"
+#include "../mwscript/falloutscripts.hpp"
 
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"

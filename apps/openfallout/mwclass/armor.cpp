@@ -14,10 +14,10 @@
 
 #include "../mwlua/localscripts.hpp"
 
-#include "../mwworld/nullaction.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/containerstore.hpp"
 #include "../mwworld/esmstore.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include "../mwmechanics/weapontype.hpp"

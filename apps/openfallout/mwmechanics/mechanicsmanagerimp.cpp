@@ -108,7 +108,8 @@ namespace OFMechanics
         // The player runs when it asks to (or a script forces it) and is not over the carry weight (rule B.M5c)
         OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
         const Actor* actor = getActor(ptr);
-        const bool asked = (actor != nullptr && actor->isRunning()) || (scripts != nullptr && scripts->actorForcesRun(ptr));
+        const bool asked
+            = (actor != nullptr && actor->isRunning()) || (scripts != nullptr && scripts->actorForcesRun(ptr));
         if (!asked)
             return false;
         return scripts == nullptr || !scripts->overEncumbered(ptr);

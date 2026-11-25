@@ -108,7 +108,8 @@ namespace FalloutScript
         result.mDropped = {
             "the Morrowind stats (attributes, skills, health, magicka, fatigue, level): the Fallout actor values and "
             "progress are in FOSV",
-            "the draw state and the forced run and sneak: the weapon drawn is in FOSV (equipment), the forced stance in "
+            "the draw state and the forced run and sneak: the weapon drawn is in FOSV (equipment), the forced stance "
+            "in "
             "FOSV (actoroverrides)",
             "the Morrowind inventory: the Fallout items are in FOSV (actors)",
             "the spells, active spells, magic effects, AI packages and the record of the player's NPC_",

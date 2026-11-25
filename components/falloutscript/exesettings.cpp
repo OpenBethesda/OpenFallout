@@ -6,9 +6,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <initializer_list>
 #include <optional>
-#include <fstream>
 #include <system_error>
 
 #include <components/misc/strings/algorithm.hpp>
@@ -179,7 +179,8 @@ namespace FalloutScript::ExeSettings
                 if (address < section.mAddress || address - section.mAddress >= section.mLength
                     || section.mLength - (address - section.mAddress) < count)
                     continue;
-                bytes = image.mData.substr(section.mOffset + static_cast<std::size_t>(address - section.mAddress), count);
+                bytes
+                    = image.mData.substr(section.mOffset + static_cast<std::size_t>(address - section.mAddress), count);
                 return true;
             }
             return false;
@@ -209,8 +210,8 @@ namespace FalloutScript::ExeSettings
         }
 
         /// The value that the code before `at` (where the name is pushed) loads for the constructor
-        std::optional<double> loadedBefore(const Image& image, std::string_view region, std::size_t at,
-            std::string_view name)
+        std::optional<double> loadedBefore(
+            const Image& image, std::string_view region, std::size_t at, std::string_view name)
         {
             const auto bytesBefore = [&](std::size_t back, std::initializer_list<std::uint32_t> expected) {
                 if (back > at)
@@ -263,8 +264,8 @@ namespace FalloutScript::ExeSettings
             return std::nullopt;
         }
 
-        /// The code of a static initialiser of a numeric setting: the value loaded, `68 <name>`, the object into ecx and
-        /// the call of the constructor
+        /// The code of a static initialiser of a numeric setting: the value loaded, `68 <name>`, the object into ecx
+        /// and the call of the constructor
         void scanCodeNumbers(const Image& image, Numbers& numbers, Numbers& ini)
         {
             for (const Section& section : image.mSections)

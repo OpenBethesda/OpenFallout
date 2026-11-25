@@ -80,7 +80,6 @@
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/soundmanager.hpp"
-#include "../mwsound/falloutsound.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwclass/esm4base.hpp"
@@ -92,6 +91,7 @@
 #include "../mwrender/animation.hpp"
 #include "../mwrender/falloutactoranimation.hpp"
 #include "../mwrender/falloutface.hpp"
+#include "../mwsound/falloutsound.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -1052,8 +1052,8 @@ namespace OFScript
         if (mPlayer != 0 && !mActors.isDead(mPlayer))
         {
             namespace AV = FalloutScript::ActorValue;
-            const double gain = FalloutScript::DerivedStats::regeneration(
-                mActorValues.current(mPlayer, AV::healRate), frametime);
+            const double gain
+                = FalloutScript::DerivedStats::regeneration(mActorValues.current(mPlayer, AV::healRate), frametime);
             if (gain > 0)
                 mActorValues.restore(mPlayer, AV::health, gain);
         }
@@ -4400,8 +4400,8 @@ namespace OFScript
         const FalloutScript::DerivedStatSettings& settings = derivedSettings();
         switch (value)
         {
-            // These go by the current attributes, with what a chem or a crippled limb takes away (fallout-rules.md E.1.2
-            // to E.1.7; the executables read them with the flag 0 at 0x643CE3)
+            // These go by the current attributes, with what a chem or a crippled limb takes away (fallout-rules.md
+            // E.1.2 to E.1.7; the executables read them with the flag 0 at 0x643CE3)
             case AV::actionPoints:
                 return Derived::actionPoints(settings, current(AV::agility));
             case AV::carryWeight:

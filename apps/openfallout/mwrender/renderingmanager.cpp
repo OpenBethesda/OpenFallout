@@ -82,11 +82,11 @@
 #include "camera.hpp"
 #include "effectmanager.hpp"
 #include "falloutlod.hpp"
+#include "falloutplayeranimation.hpp"
 #include "falloutplayerbody.hpp"
 #include "fogmanager.hpp"
 #include "groundcover.hpp"
 #include "navmesh.hpp"
-#include "falloutplayeranimation.hpp"
 #include "objectpaging.hpp"
 #include "postprocessor.hpp"
 #include "recastmesh.hpp"
@@ -1914,7 +1914,6 @@ namespace OFRender
                 rootNode->setAttitude(osg::Quat(rotation[0], osg::Vec3(-1, 0, 0))
                     * osg::Quat(rotation[1], osg::Vec3(0, -1, 0)) * osg::Quat(rotation[2], osg::Vec3(0, 0, -1)));
             rootNode->setPosition(ptr.getCellRef().getPosition().asVec3());
-
         }
 
         SceneUtil::CullSafeBoundsVisitor computeBounds;

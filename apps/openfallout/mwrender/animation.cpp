@@ -58,8 +58,8 @@
 #include "../mwworld/containerstore.hpp"
 #include "../mwworld/esmstore.hpp"
 
-#include "animationpriority.hpp"
 #include "../mwmechanics/weapontype.hpp"
+#include "animationpriority.hpp"
 
 #include "actorutil.hpp"
 #include "rotatecontroller.hpp"

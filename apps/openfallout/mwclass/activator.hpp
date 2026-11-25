@@ -47,7 +47,6 @@ namespace OFClass
         ///< Whether or not to use animated variant of model (default false)
 
         bool isActivator() const override;
-
     };
 }
 

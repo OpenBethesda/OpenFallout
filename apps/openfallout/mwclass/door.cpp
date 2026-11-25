@@ -34,7 +34,6 @@
 #include "../mwrender/renderinginterface.hpp"
 #include "../mwrender/vismask.hpp"
 
-
 #include "classmodel.hpp"
 #include "nameorid.hpp"
 

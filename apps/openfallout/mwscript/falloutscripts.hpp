@@ -24,15 +24,12 @@
 #include <components/esm/refid.hpp>
 #include <components/esm4/effectlist.hpp>
 #include <components/esm4/loadnpc.hpp>
-#include <components/falloutscript/movement.hpp>
-#include <components/falloutscript/footsteps.hpp>
-#include <components/falloutscript/hitreactions.hpp>
-#include <components/files/gameini.hpp>
 #include <components/falloutscript/actors.hpp>
 #include <components/falloutscript/actorstatus.hpp>
 #include <components/falloutscript/actortraits.hpp>
 #include <components/falloutscript/actorvalues.hpp>
 #include <components/falloutscript/aimemory.hpp>
+#include <components/falloutscript/ambient.hpp>
 #include <components/falloutscript/animationcommands.hpp>
 #include <components/falloutscript/barter.hpp>
 #include <components/falloutscript/blackjack.hpp>
@@ -47,64 +44,67 @@
 #include <components/falloutscript/conditions.hpp>
 #include <components/falloutscript/crafting.hpp>
 #include <components/falloutscript/damage.hpp>
-#include <components/falloutscript/destruction.hpp>
-#include <components/falloutscript/dismember.hpp>
 #include <components/falloutscript/derivedstats.hpp>
+#include <components/falloutscript/destruction.hpp>
 #include <components/falloutscript/detection.hpp>
 #include <components/falloutscript/dialogue.hpp>
+#include <components/falloutscript/dismember.hpp>
 #include <components/falloutscript/enableparents.hpp>
 #include <components/falloutscript/equipment.hpp>
 #include <components/falloutscript/facecontrolfile.hpp>
 #include <components/falloutscript/facelook.hpp>
+#include <components/falloutscript/footsteps.hpp>
 #include <components/falloutscript/formlists.hpp>
 #include <components/falloutscript/furniture.hpp>
 #include <components/falloutscript/hacking.hpp>
 #include <components/falloutscript/hardcore.hpp>
-#include <components/falloutscript/restrictions.hpp>
+#include <components/falloutscript/hitreactions.hpp>
 #include <components/falloutscript/hotkeys.hpp>
 #include <components/falloutscript/hud.hpp>
 #include <components/falloutscript/interpreter.hpp>
-#include <components/falloutscript/levelledlists.hpp>
 #include <components/falloutscript/itemmods.hpp>
 #include <components/falloutscript/itemuse.hpp>
-#include <components/falloutscript/ambient.hpp>
-#include <components/falloutscript/radio.hpp>
+#include <components/falloutscript/levelledlists.hpp>
 #include <components/falloutscript/limbs.hpp>
 #include <components/falloutscript/magic.hpp>
 #include <components/falloutscript/mapmarkers.hpp>
-#include <components/falloutscript/music.hpp>
 #include <components/falloutscript/messagecommands.hpp>
+#include <components/falloutscript/movement.hpp>
+#include <components/falloutscript/music.hpp>
 #include <components/falloutscript/objectcommands.hpp>
 #include <components/falloutscript/objects.hpp>
 #include <components/falloutscript/objectstate.hpp>
 #include <components/falloutscript/packagecommands.hpp>
 #include <components/falloutscript/perks.hpp>
 #include <components/falloutscript/pipboy.hpp>
+#include <components/falloutscript/placedexplosives.hpp>
 #include <components/falloutscript/placementcommands.hpp>
 #include <components/falloutscript/playercontrols.hpp>
 #include <components/falloutscript/playerprogress.hpp>
 #include <components/falloutscript/presentation.hpp>
 #include <components/falloutscript/queries.hpp>
 #include <components/falloutscript/quests.hpp>
+#include <components/falloutscript/radio.hpp>
 #include <components/falloutscript/referencestate.hpp>
-#include <components/falloutscript/respawn.hpp>
 #include <components/falloutscript/regionline.hpp>
-#include <components/falloutscript/spawncommands.hpp>
-#include <components/falloutscript/spawnrules.hpp>
 #include <components/falloutscript/repair.hpp>
 #include <components/falloutscript/reputation.hpp>
+#include <components/falloutscript/respawn.hpp>
+#include <components/falloutscript/restrictions.hpp>
 #include <components/falloutscript/roulette.hpp>
 #include <components/falloutscript/saveaccess.hpp>
 #include <components/falloutscript/slots.hpp>
+#include <components/falloutscript/spawncommands.hpp>
+#include <components/falloutscript/spawnrules.hpp>
 #include <components/falloutscript/switches.hpp>
 #include <components/falloutscript/triggervolumes.hpp>
 #include <components/falloutscript/vanillacommands.hpp>
-#include <components/falloutscript/placedexplosives.hpp>
 #include <components/falloutscript/vats.hpp>
 #include <components/falloutscript/vatsvalue.hpp>
 #include <components/falloutscript/voicefiles.hpp>
 #include <components/falloutscript/wear.hpp>
 #include <components/falloutscript/worldcommands.hpp>
+#include <components/files/gameini.hpp>
 
 // What characters say outside of a conversation, which a saved game keeps
 #include <components/falloutscript/sayings.hpp>
@@ -416,8 +416,9 @@ namespace OFScript
         /// names are not case sensitive); 0, with an error in the log once, when neither has it (no executable was
         /// found next to the data)
         double gameSettingValue(std::string_view name);
-        /// The defaults of the numeric settings that the executables of the games build (fallout-rules.md D.S7), by name
-        /// in lower case; loadExecutableTexts sets them from the player's own copy of the game, a test sets its own
+        /// The defaults of the numeric settings that the executables of the games build (fallout-rules.md D.S7), by
+        /// name in lower case; loadExecutableTexts sets them from the player's own copy of the game, a test sets its
+        /// own
         void setExecutableNumbers(std::map<std::string, double> numbers);
         /// The text of a game setting, empty when the files have none
         std::string gameSettingText(std::string_view name);
@@ -2128,7 +2129,8 @@ namespace OFScript
         /// The settings of the speed and the jump of the games (part B and C.J1 of docs/openfallout/fallout-rules.md),
         /// read once from the loaded game settings (the exe default for one that no plugin has)
         const FalloutScript::Movement::Settings& movementSettings();
-        /// What the speed rules read of an actor now: its SpeedMult, legs, weight, armor and weapon (falloutmovement.cpp)
+        /// What the speed rules read of an actor now: its SpeedMult, legs, weight, armor and weapon
+        /// (falloutmovement.cpp)
         FalloutScript::Movement::Mover moverOf(const OFWorld::Ptr& ptr, bool sneaking);
         /// The speed the actor walks, runs or swims at by the rules of its game (units a second; B.M1 to B.M10). A run
         /// asked for while over the carry weight is a walk. Main thread.

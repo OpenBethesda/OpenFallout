@@ -233,7 +233,6 @@ namespace OFGui
         void setLuaCursorOverride(const std::string& name) override;
         std::string getCurrentCursorName() const override;
 
-
         std::size_t getMessagesCount() const override;
 
         const Translation::Storage& getTranslationDataStorage() const override;

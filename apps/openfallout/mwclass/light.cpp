@@ -14,7 +14,6 @@
 #include "../mwbase/windowmanager.hpp"
 
 #include "../mwphysics/physicssystem.hpp"
-#include "../mwworld/nullaction.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/failedaction.hpp"
 #include "../mwworld/nullaction.hpp"

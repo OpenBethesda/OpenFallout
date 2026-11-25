@@ -11,7 +11,8 @@ namespace OFRender
     class RenderingManager;
 
     /// Makes what hangs below `root` draw as the player's own arms and weapon do in the first person: in the render bin
-    /// that clears the depth buffer first, so that nothing of the world is drawn over them (they never poke into a wall)
+    /// that clears the depth buffer first, so that nothing of the world is drawn over them (they never poke into a
+    /// wall)
     void setFirstPersonRenderBin(osg::Node& root);
 
     /// Draws what hangs below `root` with the field of view of the first person (`fov`, in degrees) instead of the one

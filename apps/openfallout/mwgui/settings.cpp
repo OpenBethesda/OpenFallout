@@ -79,5 +79,4 @@ namespace OFGui
             .mIsMaximized = Settings::windows().mSettingsMaximized,
         };
     }
-
 }

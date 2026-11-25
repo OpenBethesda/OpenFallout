@@ -24,7 +24,6 @@
 #include <components/lua/configuration.hpp>
 #include <components/misc/algorithm.hpp>
 
-
 namespace
 {
     struct Ref

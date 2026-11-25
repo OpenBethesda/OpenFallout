@@ -33,8 +33,8 @@ namespace FalloutScript::ExeSettings
 
     /// The default values of the numeric settings (`f`, `i`, `u` and `b` before a capital: floats, integers, unsigned
     /// integers and booleans), by the name of the setting in lower case. The plugins hold only the settings that were
-    /// changed, and the defaults of the others (fPlayerDeathReloadTime, iActivatePickLength, the knockdown and knockback
-    /// settings...) are in the executables, built the same two ways as the texts:
+    /// changed, and the defaults of the others (fPlayerDeathReloadTime, iActivatePickLength, the knockdown and
+    /// knockback settings...) are in the executables, built the same two ways as the texts:
     ///  - code that loads the value and pushes the name before the constructor: `D9 05 <float>` / `DD 05 <double>` /
     ///    `D9 EE` (0) / `D9 E8` (1), then `D9 1C 24` (with a `51` before or after the load), or `6A <8 bits>` or
     ///    `68 <32 bits>`, then `68 <name>` and `B9 <object> E8` or `8B C8+n E8` (FalloutNV.exe);

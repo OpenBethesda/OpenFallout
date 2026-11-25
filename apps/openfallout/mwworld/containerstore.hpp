@@ -287,7 +287,6 @@ namespace OFWorld
         bool mResolved = false;
 
     protected:
-
         virtual void storeEquipmentState(
             const OFWorld::LiveCellRefBase& ref, size_t index, ESM::InventoryState& inventory) const;
 

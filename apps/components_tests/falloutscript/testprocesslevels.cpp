@@ -18,7 +18,8 @@ namespace
         return result;
     }
 
-    TEST(FalloutScriptProcessLevelsTest, an_actor_with_its_3d_is_high_in_an_attached_cell_and_middle_high_in_a_loaded_one)
+    TEST(FalloutScriptProcessLevelsTest,
+        an_actor_with_its_3d_is_high_in_an_attached_cell_and_middle_high_in_a_loaded_one)
     {
         EXPECT_EQ(desiredProcessLevel(inputs(CellLoad::Attached, true)), ProcessLevel::High);
         EXPECT_EQ(desiredProcessLevel(inputs(CellLoad::Loaded, true)), ProcessLevel::MiddleHigh);

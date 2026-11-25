@@ -79,7 +79,6 @@
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
 
-
 #include "class.hpp"
 #include "containerstore.hpp"
 #include "esmstore.hpp"

@@ -17,9 +17,9 @@ namespace OFRender
     namespace
     {
         /// @brief A RenderBin callback to clear the depth buffer before rendering.
-        /// Switches depth attachments to a proxy renderbuffer, reattaches original depth then redraws first person root.
-        /// This gives a complete depth buffer which can be used for postprocessing, buffer resolves as if depth was never
-        /// cleared.
+        /// Switches depth attachments to a proxy renderbuffer, reattaches original depth then redraws first person
+        /// root. This gives a complete depth buffer which can be used for postprocessing, buffer resolves as if depth
+        /// was never cleared.
         class DepthClearCallback : public osgUtil::RenderBin::DrawCallback
         {
         public:
@@ -29,7 +29,8 @@ namespace OFRender
                 mDepth->setWriteMask(true);
 
                 mStateSet = new osg::StateSet;
-                mStateSet->setAttributeAndModes(new osg::ColorMask(false, false, false, false), osg::StateAttribute::ON);
+                mStateSet->setAttributeAndModes(
+                    new osg::ColorMask(false, false, false, false), osg::StateAttribute::ON);
             }
 
             void drawImplementation(
@@ -37,7 +38,8 @@ namespace OFRender
             {
                 osg::State* state = renderInfo.getState();
 
-                PostProcessor* postProcessor = static_cast<PostProcessor*>(renderInfo.getCurrentCamera()->getUserData());
+                PostProcessor* postProcessor
+                    = static_cast<PostProcessor*>(renderInfo.getCurrentCamera()->getUserData());
 
                 state->applyAttribute(mDepth);
 

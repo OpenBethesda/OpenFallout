@@ -6,7 +6,6 @@
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/world.hpp"
 
-
 #include "../mwscript/falloutscripts.hpp"
 
 #include "../mwworld/cellstore.hpp"

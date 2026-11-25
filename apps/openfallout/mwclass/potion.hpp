@@ -35,7 +35,6 @@ namespace OFClass
         int getValue(const OFWorld::ConstPtr& ptr) const override;
         ///< Return trade value of the object. Throws an exception, if the object can't be traded.
 
-
         const ESM::RefId& getUpSoundId(const OFWorld::ConstPtr& ptr) const override;
         ///< Return the pick up sound Id
 

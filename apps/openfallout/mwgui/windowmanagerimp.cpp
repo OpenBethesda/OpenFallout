@@ -76,7 +76,6 @@
 #include "../mwworld/globals.hpp"
 #include "../mwworld/player.hpp"
 
-
 #include "../mwrender/postprocessor.hpp"
 
 #include "../mwscript/falloutscripts.hpp"
@@ -1460,8 +1459,6 @@ namespace OFGui
         }
 
         mMessageBoxManager->clear();
-
-
 
         // The air meter is not part of the display that the scripts of the game that is left take down with them
         if (mAirMeter)

@@ -31,7 +31,6 @@ namespace Loading
     class Listener;
 }
 
-
 namespace ESM
 {
     class ReadersCache;
@@ -239,7 +238,6 @@ namespace OFWorld
 
         uint64_t mDynamicCount;
 
-
         /// Validate entries in store after setup
         void validate();
 
@@ -367,7 +365,6 @@ namespace OFWorld
 
         /// @return Cells defining the ref, exteriors first.
         std::span<const ESM::Cell* const> getRefCells(const ESM::RefId& id) const;
-
     };
     template <>
     const ESM::Cell* ESMStore::insert<ESM::Cell>(const ESM::Cell& cell);

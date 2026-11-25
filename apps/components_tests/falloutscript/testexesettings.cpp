@@ -312,13 +312,15 @@ namespace
         Executable exe;
         // push ecx, fld dword [value], fstp dword [esp] (FalloutNV.exe: fPlayerDeathReloadTime)
         const std::uint32_t value = exe.floatAt(0x300, 5.0f);
-        std::size_t at = exe.code(0x20, { 0x51, 0xD9, 0x05, value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF,
-                                            value >> 24, 0xD9, 0x1C, 0x24 });
+        std::size_t at = exe.code(0x20,
+            { 0x51, 0xD9, 0x05, value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF, value >> 24, 0xD9, 0x1C,
+                0x24 });
         exe.numberInitialiser(at, exe.text(0x10, "fDeathTime"));
         // fld dword [value], push ecx, fstp dword [esp] (the order in Fallout3.exe)
         const std::uint32_t other = exe.floatAt(0x304, -0.25f);
-        at = exe.code(0x60, { 0xD9, 0x05, other & 0xFF, (other >> 8) & 0xFF, (other >> 16) & 0xFF, other >> 24, 0x51,
-                                0xD9, 0x1C, 0x24 });
+        at = exe.code(0x60,
+            { 0xD9, 0x05, other & 0xFF, (other >> 8) & 0xFF, (other >> 16) & 0xFF, other >> 24, 0x51, 0xD9, 0x1C,
+                0x24 });
         exe.numberInitialiser(at, exe.text(0x40, "fOtherThing"));
         const ExeSettings::Numbers numbers = ExeSettings::scanDefaults(exe.bytes()).mNumbers;
         EXPECT_EQ(numbers.at("fdeathtime"), 5.0);
@@ -389,8 +391,9 @@ namespace
         Executable exe;
         // fCreatureRadioMax:Audio (FalloutNV.exe), and an INI setting with the name of a setting of the game
         const std::uint32_t value = exe.floatAt(0x300, 2000.0f);
-        exe.numberInitialiser(exe.code(0x20, { 0x51, 0xD9, 0x05, value & 0xFF, (value >> 8) & 0xFF,
-                                                (value >> 16) & 0xFF, value >> 24, 0xD9, 0x1C, 0x24 }),
+        exe.numberInitialiser(exe.code(0x20,
+                                  { 0x51, 0xD9, 0x05, value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF,
+                                      value >> 24, 0xD9, 0x1C, 0x24 }),
             exe.text(0x10, "fRadioMax:Audio"));
         exe.numberInitialiser(exe.code(0x60, { 0x68, 5, 0, 0, 0 }), exe.text(0x40, "iShared:Display"));
         exe.numberInitialiser(exe.code(0x80, { 0x68, 6, 0, 0, 0 }), exe.text(0x60, "iShared"));

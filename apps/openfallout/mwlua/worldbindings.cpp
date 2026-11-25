@@ -77,9 +77,7 @@ namespace OFLua
             if (hours <= 0.0f)
                 throw std::runtime_error("Time may only be advanced forward");
 
-            context.mLuaManager->addAction([world, hours] {
-                world->advanceTime(hours);
-            });
+            context.mLuaManager->addAction([world, hours] { world->advanceTime(hours); });
         };
 
         api["setGameTimeScale"] = [timeManager](const FiniteFloat scale) { timeManager->setGameTimeScale(scale); };

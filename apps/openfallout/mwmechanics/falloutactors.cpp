@@ -2075,8 +2075,7 @@ namespace OFMechanics
                 }
                 // Far from the player it does nothing, and keeps the order (fAIUseWeaponDistance: 5000 in the
                 // executable, 15000 in both master files; FalloutNV.exe 0x8f7776)
-                if (distanceAcross(mind.position(), frame.mPlayer)
-                    > scripts.gameSettingValue("fAIUseWeaponDistance"))
+                if (distanceAcross(mind.position(), frame.mPlayer) > scripts.gameSettingValue("fAIUseWeaponDistance"))
                     return true;
                 // It turns toward the place the order names when there is one, and the shot is still at the target
                 const osg::Vec3f victim = order.mTarget.getRefData().getPosition().asVec3();

@@ -88,8 +88,8 @@ namespace OFScript
         const FalloutScript::FormId actor = scriptReferenceOf(ptr);
         if (actor == 0)
             return false;
-        // PlayerCharacter::IsOverEncumbered (FalloutNV.exe 0x954CC0, Fallout3.exe 0x76D310): more than the carry weight;
-        // a creature carries nothing that counts
+        // PlayerCharacter::IsOverEncumbered (FalloutNV.exe 0x954CC0, Fallout3.exe 0x76D310): more than the carry
+        // weight; a creature carries nothing that counts
         FalloutScript::ActorTraits traits;
         if (traitsOf(actor, traits) && traits.mCreature)
             return false;
@@ -139,8 +139,8 @@ namespace OFScript
         {
             mover.mCarriedWeight = carriedWeightOf(actor);
             mover.mOverEncumbered = mover.mCarriedWeight > maxCarryWeight(actor);
-            // The heaviest class of the armor that is worn (New Vegas reads the body armor; the heaviest of what is worn
-            // is the same for the armor of the games, whose helmets have the class of their suit)
+            // The heaviest class of the armor that is worn (New Vegas reads the body armor; the heaviest of what is
+            // worn is the same for the armor of the games, whose helmets have the class of their suit)
             for (const FalloutScript::FormId piece : mEquipment.armor(actor))
                 if (const ESM4::Armor* armor = mStore.get<ESM4::Armor>().search(refId(piece)))
                     mover.mArmor = std::max(mover.mArmor, armorClassOf(*armor));

@@ -108,9 +108,10 @@ namespace OFScript
                 << "Settings texts: no executable of the game found next to its data, the port's own words "
                    "are used for the labels";
         if (numbers.empty())
-            Log(Debug::Error) << "Settings numbers: no executable of the game found next to its data. The settings that "
-                                 "the plugins do not carry (fPlayerDeathReloadTime, iActivatePickLength and many more) "
-                                 "have no value, and the rules that use them fall back to the engine's own choices";
+            Log(Debug::Error)
+                << "Settings numbers: no executable of the game found next to its data. The settings that "
+                   "the plugins do not carry (fPlayerDeathReloadTime, iActivatePickLength and many more) "
+                   "have no value, and the rules that use them fall back to the engine's own choices";
         {
             const std::lock_guard lock(mDerivedSettingsMutex);
             mExecutableTexts = std::move(texts);

@@ -11,7 +11,6 @@
 #include "doorstate.hpp"
 #include "ptr.hpp"
 
-
 #include <components/esm/refid.hpp>
 #include <components/vfs/pathutil.hpp>
 
@@ -243,7 +242,6 @@ namespace OFWorld
         virtual ESM::RefId getSound(const OFWorld::ConstPtr& ptr) const;
 
         virtual osg::Vec4f getEnchantmentColor(const OFWorld::ConstPtr& item) const;
-
     };
 }
 

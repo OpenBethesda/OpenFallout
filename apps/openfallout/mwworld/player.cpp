@@ -236,8 +236,8 @@ namespace OFWorld
                 Log(Debug::Warning) << "Player cell " << cell << " no longer exists";
         }
 
-        mLastKnownExteriorPosition
-            = osg::Vec3f(state.mLastExteriorPosition[0], state.mLastExteriorPosition[1], state.mLastExteriorPosition[2]);
+        mLastKnownExteriorPosition = osg::Vec3f(
+            state.mLastExteriorPosition[0], state.mLastExteriorPosition[1], state.mLastExteriorPosition[2]);
         mTeleported = false;
         mJumping = false;
 

@@ -125,7 +125,8 @@ namespace FalloutScript
     double DerivedStats::sleepingRegeneration(const DerivedStatSettings& settings, double healRate, double seconds)
     {
         const double perSecond
-            = (std::max(healRate, 0.0) * settings.mHealingRateSleepingMult + settings.mHealingRateSleepingBase) / 3600.0;
+            = (std::max(healRate, 0.0) * settings.mHealingRateSleepingMult + settings.mHealingRateSleepingBase)
+            / 3600.0;
         return std::max(perSecond, 0.0) * std::max(seconds, 0.0);
     }
 

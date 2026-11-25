@@ -18,9 +18,9 @@ namespace OFMechanics
     using FalloutScript::ProcessLevel;
 
     /// The part of an actor's life that the world keeps by its process tier (rule A.T1 of
-    /// docs/openfallout/fallout-rules.md). Each tier is the one below with more: Low keeps what an actor far away needs,
-    /// Middle High adds the knock state and the character controller, High is updated in every frame. The level is the
-    /// one byte the executables keep at process+0x28.
+    /// docs/openfallout/fallout-rules.md). Each tier is the one below with more: Low keeps what an actor far away
+    /// needs, Middle High adds the knock state and the character controller, High is updated in every frame. The level
+    /// is the one byte the executables keep at process+0x28.
     class BaseProcess
     {
     public:

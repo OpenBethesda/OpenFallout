@@ -249,8 +249,8 @@ namespace OFScript
                     mActors.setDead(victim, true, laid.mOwner, -1, laid.mWeapon);
                     evaluatePackage(victim);
                 }
-                else if (!FalloutScript::outOfHealth(mActorValues.current(victim, AV::health)) && laid.mOwner != 0 && laid.mOwner != victim
-                    && !tolerated)
+                else if (!FalloutScript::outOfHealth(mActorValues.current(victim, AV::health)) && laid.mOwner != 0
+                    && laid.mOwner != victim && !tolerated)
                 {
                     // A character that survives a blast fights the one that laid it, and that one is in the fight too (as
                     // for a blow in strike; one with no package gets the one that is to fight)

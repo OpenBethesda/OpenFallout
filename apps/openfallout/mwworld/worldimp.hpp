@@ -121,14 +121,12 @@ namespace OFWorld
         /// sDefaultCellName of the game (an exe default, "Wilderness"), read once the Fallout scripts are there
         mutable std::string mDefaultCellName;
 
-
         float mDistanceToFocusObject;
         OFPhysics::RayCastingResult mFocusRay;
 
         bool mTeleportEnabled;
         bool mLevitationEnabled;
         bool mPlayerTraveling;
-
 
         std::map<OFWorld::Ptr, OFWorld::DoorState> mDoorStates;
         ///< only holds doors that are currently moving. 1 = opening, 2 = closing
@@ -147,7 +145,6 @@ namespace OFWorld
         Ptr copyObjectToCell(const ConstPtr& ptr, CellStore* cell, ESM::Position pos, int count, bool adjustPos);
 
         void updateSoundListener();
-
 
         OFWorld::Ptr getFocusObject(float maxDistance, bool ignorePlayer = true);
 
@@ -174,7 +171,6 @@ namespace OFWorld
         void loadGroundcoverFiles(const Files::Collections& fileCollections,
             const std::vector<std::string>& groundcoverFiles, ToUTF8::Utf8Encoder* encoder,
             Loading::Listener* listener);
-
 
         OFWorld::ConstPtr getClosestMarker(const OFWorld::ConstPtr& ptr, const ESM::RefId& id);
         OFWorld::ConstPtr getClosestMarkerFromExteriorPosition(const osg::Vec3f& worldPos, const ESM::RefId& id);

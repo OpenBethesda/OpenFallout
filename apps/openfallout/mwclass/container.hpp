@@ -80,7 +80,6 @@ namespace OFClass
         VFS::Path::NormalizedView getModel(const OFWorld::ConstPtr& ptr) const override;
 
         bool useAnim() const override;
-
     };
 }
 

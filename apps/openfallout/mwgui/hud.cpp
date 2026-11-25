@@ -20,7 +20,6 @@
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
 
-
 #include "../mwscript/falloutscripts.hpp"
 
 namespace OFGui

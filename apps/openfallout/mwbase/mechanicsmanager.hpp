@@ -43,7 +43,8 @@ namespace Loading
 namespace OFBase
 {
     /// \brief The actors of the world: the player and the characters and creatures of Fallout (implemented in
-    /// OFMechanics). Each has its process tier; the player moves by the rules of its game, the others by their packages.
+    /// OFMechanics). Each has its process tier; the player moves by the rules of its game, the others by their
+    /// packages.
     class MechanicsManager
     {
         MechanicsManager(const MechanicsManager&);
@@ -103,8 +104,8 @@ namespace OFBase
 
         /// The player took an item (from the ground, or from the container): the crime rules of the Fallout scripts
         /// judge it when `alarm` is set (a pocket that was picked raises none)
-        virtual void itemTaken(
-            const OFWorld::Ptr& ptr, const OFWorld::Ptr& item, const OFWorld::Ptr& container, int count, bool alarm = true)
+        virtual void itemTaken(const OFWorld::Ptr& ptr, const OFWorld::Ptr& item, const OFWorld::Ptr& container,
+            int count, bool alarm = true)
             = 0;
 
         /// The actors and objects that move by themselves within `radius` units of `position`

@@ -135,8 +135,9 @@ namespace
         EXPECT_DOUBLE_EQ(unarmedDamage(DerivedStatSettings(), 15), 1.25);
         EXPECT_EQ(poisonResist(DerivedStatSettings(), 5), 20);
         EXPECT_EQ(radResist(DerivedStatSettings(), 5), 8);
-        const DerivedStatSettings files = settingsOf({ { "fAVDUnarmedDamageBase", 2 }, { "fAVDUnarmedDamageMult", 0.15 },
-            { "fAVDPoisonResistEnduranceOffset", 0 }, { "fAVDRadResistEnduranceMult", 3 } });
+        const DerivedStatSettings files
+            = settingsOf({ { "fAVDUnarmedDamageBase", 2 }, { "fAVDUnarmedDamageMult", 0.15 },
+                { "fAVDPoisonResistEnduranceOffset", 0 }, { "fAVDRadResistEnduranceMult", 3 } });
         EXPECT_DOUBLE_EQ(unarmedDamage(files, 10), 3.5);
         EXPECT_EQ(poisonResist(files, 5), 25);
         EXPECT_EQ(radResist(files, 5), 12);

@@ -29,7 +29,6 @@
 
 #include "../mwgui/tooltips.hpp"
 
-
 #include "classmodel.hpp"
 
 namespace OFClass

@@ -19,7 +19,6 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-
 #include "../mwworld/esmstore.hpp"
 
 namespace OFGui::Widgets

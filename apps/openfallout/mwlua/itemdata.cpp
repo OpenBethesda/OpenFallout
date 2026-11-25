@@ -82,8 +82,7 @@ namespace OFLua
                     const auto* enchantment = store->get<ESM::Enchantment>().find(enchantmentName);
 
                     if (charge == -1) // return the full charge
-                        return sol::make_object(
-                            context.mLua->unsafeState(), enchantment->mData.mCharge);
+                        return sol::make_object(context.mLua->unsafeState(), enchantment->mData.mCharge);
 
                     return sol::make_object(context.mLua->unsafeState(), charge);
                 }

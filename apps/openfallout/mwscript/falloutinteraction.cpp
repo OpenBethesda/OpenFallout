@@ -1502,9 +1502,8 @@ namespace OFScript
             {
                 const double healRate = mActorValues.current(mPlayer, AV::healRate);
                 mActorValues.restore(mPlayer, AV::health,
-                    sleeping
-                        ? FalloutScript::DerivedStats::sleepingRegeneration(derivedSettings(), healRate, seconds)
-                        : FalloutScript::DerivedStats::regeneration(healRate, seconds));
+                    sleeping ? FalloutScript::DerivedStats::sleepingRegeneration(derivedSettings(), healRate, seconds)
+                             : FalloutScript::DerivedStats::regeneration(healRate, seconds));
             }
             // The effects that are running age by the hour as well. Both halves of an effect go on together, what it
             // does to the actor values (the item use: boosts that end, points over time) and the record that it is

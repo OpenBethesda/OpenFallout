@@ -19,7 +19,6 @@
 #include "../mwrender/renderingmanager.hpp"
 #include "../mwscript/falloutscripts.hpp"
 
-
 #include "../mwbase/environment.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"

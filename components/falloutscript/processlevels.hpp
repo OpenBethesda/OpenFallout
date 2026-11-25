@@ -8,7 +8,8 @@ namespace FalloutScript
 {
     /// The process tier of an actor (the level byte at process+0x28 in both executables, saved as a signed byte): what
     /// the world keeps of the actor's life. High is updated every frame, has a character controller and a ragdoll when
-    /// its 3D is loaded; Middle High can have them too; Middle Low and Low keep only what an actor that is not near needs.
+    /// its 3D is loaded; Middle High can have them too; Middle Low and Low keep only what an actor that is not near
+    /// needs.
     enum class ProcessLevel : std::int8_t
     {
         None = -1,
@@ -22,8 +23,8 @@ namespace FalloutScript
     std::string_view processLevelName(ProcessLevel level);
 
     /// What the world has made of the cell an actor is in: the cell state byte (cell+0x26) the executables read. A cell
-    /// that is attached is one of the scene, around the player (states 5 and 6); one that is loaded is in memory but not
-    /// in the scene (states 2 to 4).
+    /// that is attached is one of the scene, around the player (states 5 and 6); one that is loaded is in memory but
+    /// not in the scene (states 2 to 4).
     enum class CellLoad : std::uint8_t
     {
         None, ///< no cell, or a cell that is not loaded
@@ -48,8 +49,8 @@ namespace FalloutScript
     /// The level an actor should have (FalloutNV.exe 0x9334b0, Fallout3.exe 0x766d80): it is about cells, not
     /// distance. An interesting actor (its 3D loaded, a follower, or a bulk load) is High in an attached cell and
     /// Middle High in a loaded one; any other actor in a loaded or attached cell, or in a cell with the keep flag, is
-    /// Middle Low; everything else, an actor with no cell among them, is Low (the cell-state helper 0x4511e0 says no for
-    /// a null cell).
+    /// Middle Low; everything else, an actor with no cell among them, is Low (the cell-state helper 0x4511e0 says no
+    /// for a null cell).
     ProcessLevel desiredProcessLevel(const ProcessInputs& inputs);
 
     /// The life state of an actor (Actor+0x108 in New Vegas, +0xFC in Fallout 3), with the names of the executables'

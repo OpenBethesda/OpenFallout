@@ -107,8 +107,8 @@ namespace OFLua
         actor["inventory"] = sol::overload([](const LObject& o) { return Inventory<LObject>{ o }; },
             [](const GObject& o) { return Inventory<GObject>{ o }; });
 
-        // What the actor holds and wears in the Fallout scripts: the weapon in the hands and its ammunition (record ids,
-        // nil for none) and the armor (a list of record ids, in the order it was put on)
+        // What the actor holds and wears in the Fallout scripts: the weapon in the hands and its ammunition (record
+        // ids, nil for none) and the armor (a list of record ids, in the order it was put on)
         actor["getEquipment"] = [](sol::this_state thisState, const Object& o) {
             sol::table equipment(thisState, sol::create);
             const FormId form = formOfActor(o);

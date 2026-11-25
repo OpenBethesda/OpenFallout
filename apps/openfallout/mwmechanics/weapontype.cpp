@@ -1,6 +1,5 @@
 #include "weapontype.hpp"
 
-
 #include "../mwbase/environment.hpp"
 #include "../mwworld/esmstore.hpp"
 

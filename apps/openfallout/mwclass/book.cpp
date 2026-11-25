@@ -23,7 +23,6 @@
 
 #include "../mwgui/tooltips.hpp"
 
-
 #include "classmodel.hpp"
 #include "nameorid.hpp"
 

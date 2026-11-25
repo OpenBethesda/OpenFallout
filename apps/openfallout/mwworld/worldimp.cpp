@@ -381,8 +381,7 @@ namespace OFWorld
     size_t World::countSavedGameRecords() const
     {
         return mWorldModel.countSavedGameRecords() + mStore.countSavedGameRecords()
-            + mGlobalVariables.countSavedGameRecords()
-            + 1 // weather record
+            + mGlobalVariables.countSavedGameRecords() + 1 // weather record
             + 1 // levitation/teleport enabled state
             + 1 // camera
             + 1; // random state.
@@ -2128,7 +2127,8 @@ namespace OFWorld
         const ESM4::Npc* player = mStore.get<ESM4::Npc>().search(record);
         if (player == nullptr)
             throw std::runtime_error("The content has no player: the NPC_ record 0x7 of the first Fallout plugin ("
-                + (static_cast<std::size_t>(plugin) < mContentFiles.size() ? mContentFiles[plugin] : std::string("none"))
+                + (static_cast<std::size_t>(plugin) < mContentFiles.size() ? mContentFiles[plugin]
+                                                                           : std::string("none"))
                 + ") is missing");
         return { player, ESM::RefNum{ 0x14, plugin } };
     }
@@ -2169,8 +2169,7 @@ namespace OFWorld
         OFBase::Environment::get().getMechanicsManager()->add(getPlayerPtr());
 
         mPhysics->remove(getPlayerPtr());
-        getPlayerPtr().getClass().insertObjectPhysics(
-            getPlayerPtr(), {}, osg::Quat(), *mPhysics);
+        getPlayerPtr().getClass().insertObjectPhysics(getPlayerPtr(), {}, osg::Quat(), *mPhysics);
 
         const DetourNavigator::AgentBounds agentBounds = getPathfindingAgentBounds(getPlayerConstPtr());
         if (!mNavigator->addAgent(agentBounds))
