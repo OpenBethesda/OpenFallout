@@ -144,6 +144,8 @@ function M.jump(game)
         r.wait(2)
         common.goArena(r, game, 'again')
         r.wait(3)
+        -- the DLC boxes that come late are answered before the jump: a box pauses the world in the air
+        r.settle(3, 30)
         -- three more presses of the key while the player is in the air: the games have no double jump (fJumpDoubleMult is read by nothing)
         local extra = r.s4jump{ label = 'with extra presses', seconds = 4, again = { 0.25, 0.5, 0.75 } }
         if extra == nil then
@@ -177,6 +179,7 @@ function M.fall(game)
         for _, drop in ipairs({ 350, 700 }) do
             common.goArena(r, game, 'before the drop')
             r.wait(4)
+            r.settle(3, 30)
             fill()
             local ground = r.ground('drop ' .. drop, {})
             local z = ground and ground.heights and ground.heights[1]
