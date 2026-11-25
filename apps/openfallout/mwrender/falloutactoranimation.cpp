@@ -772,7 +772,12 @@ namespace OFRender
     void FalloutActorAnimation::updateGait(float duration)
     {
         if (!mGaits.mHasWalk && !mGaits.mHasRun)
+        {
+            // (the arms of the first person still sneak and stand up again)
+            if (mFirstPerson)
+                updateMovement();
             return;
+        }
 
         // The actor has no mechanics to say how fast it moves, so the speed is that at which whatever moves it
         // (a script, the physics) changes its place from one frame to the next, across the ground. A jump from one
@@ -857,14 +862,18 @@ namespace OFRender
     {
         // What the actor does: stands (the idle plays on its own, or the sneaking idle over it), walks or runs
         const OFWorld::Ptr& source = mMotionSource.isEmpty() ? mPtr : mMotionSource;
-        // Only the player's body is asked: the characters of the world have no stats of the engine's creatures to
-        // say whether they sneak (the stance of a Fallout character is its own, and nothing sets it for them yet)
+        // Only the player's body and arms are asked: the characters of the world have no stats of the engine's
+        // creatures to say whether they sneak (the stance of a Fallout character is its own, and nothing sets it for
+        // them yet). The arms of the first person sneak when the player does: their sneak idle lowers the Camera1st
+        // node, which the eye follows
+        const OFWorld::Ptr stance = mFirstPerson ? OFMechanics::getPlayer() : source;
         bool sneak = false;
-        if (mPoseKind == 0 && !mMotionSource.isEmpty() && mMotionSource.getClass().isActor())
+        if (mPoseKind == 0 && (mFirstPerson || !mMotionSource.isEmpty()) && !stance.isEmpty()
+            && stance.getClass().isActor())
         {
             try
             {
-                sneak = OFBase::Environment::get().getMechanicsManager()->isSneaking(source);
+                sneak = OFBase::Environment::get().getMechanicsManager()->isSneaking(stance);
             }
             catch (const std::exception& error)
             {
@@ -877,7 +886,7 @@ namespace OFRender
         }
         // A character that a script forced to sneak (SetForceSneak) sneaks, whether the mechanics know it or not
         if (!sneak && mPoseKind == 0 && OFBase::Environment::get().hasFalloutScripts())
-            sneak = OFBase::Environment::get().getFalloutScripts()->actorForcesSneak(source);
+            sneak = OFBase::Environment::get().getFalloutScripts()->actorForcesSneak(stance);
         const std::string_view prefix = mDrawn ? falloutWeaponPrefix(mWeaponType) : std::string_view();
 
         // In the air, touching the ground again, and swimming: the characters of the world are told whether they are in

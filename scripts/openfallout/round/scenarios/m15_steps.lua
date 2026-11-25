@@ -51,6 +51,8 @@ return { limit = 300, delay = 4, run = function(r)
     gaits('first person')
     -- The eye of the first person while the player sneaks: the games put the camera on the Camera1st node of the skeleton of
     -- the first person, which its sneak animations lower by 40 units (Bip01 NonAccum at -40 in _1stperson/sneakmtidle.kf)
+    -- (the DLC boxes that come late are answered first: a box pauses the world)
+    r.settle(3, 30)
     local standing = r.eye('first person, standing')
     r.crouch(true)
     r.wait(3)
@@ -72,6 +74,8 @@ return { limit = 300, delay = 4, run = function(r)
     phase('C the doctor\'s house')
     r.teleport{ pos = { HOUSE_FRONT.x, HOUSE_FRONT.y, HOUSE_FRONT.z }, worldspace = mojave, yaw = 0, onGround = true, label = 'house front' }
     r.wait(4)
+    -- (an activation made while a box pauses the world is lost)
+    r.settle(3, 30)
     r.activate(HOUSE_DOOR, 'door in')
     -- A door that did not take the player in leaves the house phase outdoors: the round fails rather than pass without
     -- having looked at the floors of a house
