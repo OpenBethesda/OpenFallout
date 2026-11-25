@@ -463,6 +463,21 @@ namespace
         EXPECT_TRUE(setup.mActors.isDead(guard));
     }
 
+    TEST(FalloutScriptActorValueCommandsTest, a_character_with_less_than_a_point_of_health_is_dead)
+    {
+        // The games kill an actor whose health is below 1.0 after a change of it (FalloutNV.exe 0x898650), not at 0
+        Runner setup;
+        ScriptBuilder builder;
+        builder.code(scriptName() + begin(BlockType::OnActivate)
+            + command(OpSetActorValue, valueAndInteger(ActorValue::health, 10))
+            + command(OpDamageActorValue, valueAndFloat(ActorValue::health, 9.5f)) + end());
+
+        setup.run(guard, builder);
+
+        EXPECT_DOUBLE_EQ(setup.mValues.current(guard, ActorValue::health), 0.5);
+        EXPECT_TRUE(setup.mActors.isDead(guard));
+    }
+
     TEST(FalloutScriptActorValueCommandsTest, a_character_is_alive_again_only_with_its_health_back)
     {
         Runner setup;

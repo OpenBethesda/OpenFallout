@@ -129,7 +129,7 @@ namespace FalloutScript
     void ItemUse::dieIfSpent(FormId actor)
     {
         // A character with no health left is dead, unless it is one that falls (an essential one)
-        if (mValues.current(actor, ActorValue::health) <= 0 && !mState.isDead(actor) && !mState.falls(actor))
+        if (outOfHealth(mValues.current(actor, ActorValue::health)) && !mState.isDead(actor) && !mState.falls(actor))
             mState.setDead(actor, true);
     }
 

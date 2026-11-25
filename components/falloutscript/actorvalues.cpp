@@ -59,6 +59,9 @@ namespace FalloutScript
             case ActorValue::healRate:
             case ActorValue::health:
             case ActorValue::meleeDamage:
+            case ActorValue::poisonResist:
+            case ActorValue::radResist:
+            case ActorValue::unarmedDamage:
                 return true;
             default:
                 return false;
@@ -70,6 +73,15 @@ namespace FalloutScript
         const auto found = mEntries.find({ actor, value });
         return found == mEntries.end() ? startOf(actor, value)
                                        : baseOf(actor, found->second, value) + found->second.mModifier;
+    }
+
+    double ActorValues::currentOf(FormId actor, int value) const
+    {
+        const auto found = mEntries.find({ actor, value });
+        if (found == mEntries.end())
+            return shown(value, startOf(actor, value));
+        const Entry& entry = found->second;
+        return shown(value, baseOf(actor, entry, value) + entry.mModifier - entry.mDamage);
     }
 
     double ActorValues::startOf(FormId actor, int value) const
@@ -99,7 +111,8 @@ namespace FalloutScript
             if (isDerived(value))
             {
                 const std::optional<double> derived = mRecords->derivedValue(
-                    actor, value, [this, actor](int other) { return bounded(permanentOf(actor, other)); });
+                    actor, value, [this, actor](int other) { return bounded(permanentOf(actor, other)); },
+                    [this, actor](int other) { return bounded(currentOf(actor, other)); });
                 if (derived)
                     return bounded(*derived);
             }
@@ -135,11 +148,7 @@ namespace FalloutScript
     double ActorValues::current(FormId actor, int value) const
     {
         const std::lock_guard lock(mMutex);
-        const auto found = mEntries.find({ actor, value });
-        if (found == mEntries.end())
-            return shown(value, startOf(actor, value));
-        const Entry& entry = found->second;
-        return shown(value, baseOf(actor, entry, value) + entry.mModifier - entry.mDamage);
+        return currentOf(actor, value);
     }
 
     void ActorValues::setBase(FormId actor, int value, double amount)
@@ -328,7 +337,7 @@ namespace FalloutScript
                 const auto transitions = actors.holdTransitions();
                 values.damage(call.mReference, value, argument(call, 1));
                 // A character with no health left is dead, unless it is one that falls (an essential one)
-                if (values.current(call.mReference, value) <= 0 && !actors.falls(call.mReference))
+                if (outOfHealth(values.current(call.mReference, value)) && !actors.falls(call.mReference))
                     actors.setDead(call.mReference, true);
                 return 0.0;
             });

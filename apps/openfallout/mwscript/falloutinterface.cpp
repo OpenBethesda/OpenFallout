@@ -137,7 +137,7 @@ namespace OFScript
         const auto transitions = mActors.holdTransitions();
         mActorValues.damage(mPlayer, AV::health, step.mDamage);
         // (a player with less than a point of health is out as well: see SwimBreathStep::mFatal)
-        if (step.mFatal || mActorValues.current(mPlayer, AV::health) <= 0)
+        if (step.mFatal || FalloutScript::outOfHealth(mActorValues.current(mPlayer, AV::health)))
             mActors.kill(mPlayer);
     }
 
@@ -285,7 +285,7 @@ namespace OFScript
             mActorValues.damage(actor, leftLegCondition, damage * settings.mLegMultiplier);
         if (Fall::legHurt(settings, rightRoll))
             mActorValues.damage(actor, rightLegCondition, damage * settings.mLegMultiplier);
-        if (mActorValues.current(actor, AV::health) > 0 || fallsInsteadOfDying(actor))
+        if (!FalloutScript::outOfHealth(mActorValues.current(actor, AV::health)) || fallsInsteadOfDying(actor))
             return;
         // It dies of the fall (no killer: the world did it)
         if (mActors.setDead(actor, true, 0, -1))
@@ -340,7 +340,7 @@ namespace OFScript
             mActorValues.damage(mPlayer, leftLegCondition, damage * settings.mLegMultiplier);
         if (Fall::legHurt(settings, rightRoll))
             mActorValues.damage(mPlayer, rightLegCondition, damage * settings.mLegMultiplier);
-        if (mActorValues.current(mPlayer, AV::health) <= 0)
+        if (FalloutScript::outOfHealth(mActorValues.current(mPlayer, AV::health)))
             mActors.kill(mPlayer);
         return true;
     }

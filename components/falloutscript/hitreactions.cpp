@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <iterator>
 
+#include "actorvalues.hpp"
+
 namespace FalloutScript::HitReactions
 {
     bool knockedAnswer(int state)
@@ -83,7 +85,7 @@ namespace FalloutScript::HitReactions
     Knockdown knockdownKind(const Settings& settings, double damage, double health, double baseHealth)
     {
         // Nobody that is dead already, or that the blow kills, falls: it dies
-        if (!(health > 0) || !(health - damage > 0))
+        if (!(health >= deathHealth) || !(health - damage >= deathHealth))
             return Knockdown::Never;
         if (baseHealth > 0 && damage / baseHealth * 100 > settings.mKnockdownBaseHealthThreshold)
             return Knockdown::Always;

@@ -2497,8 +2497,8 @@ namespace OFScript
         bool fallsInsteadOfDying(FalloutScript::FormId victim);
         bool initialValues(FalloutScript::FormId actor, std::vector<std::pair<int, double>>& values) override;
         bool levelOf(FalloutScript::FormId actor, int playerLevel, int& level) override;
-        std::optional<double> derivedValue(
-            FalloutScript::FormId actor, int value, const std::function<double(int)>& permanent) override;
+        std::optional<double> derivedValue(FalloutScript::FormId actor, int value,
+            const std::function<double(int)>& permanent, const std::function<double(int)>& current) override;
         /// The settings of the files for the actor values that are worked out, read when the first is asked for
         const FalloutScript::DerivedStatSettings& derivedSettings();
         /// How the games move a character from the entry of a marker to where it stays on the furniture, from the

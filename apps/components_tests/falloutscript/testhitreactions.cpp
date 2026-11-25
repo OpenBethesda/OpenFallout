@@ -59,6 +59,10 @@ namespace
         EXPECT_EQ(knockdownKind(settings, 10, 0, 100), Knockdown::Never);
         EXPECT_EQ(knockdownKind(settings, 100, 100, 100), Knockdown::Never);
         EXPECT_EQ(knockdownKind(settings, 150, 100, 100), Knockdown::Never);
+        // a blow that leaves less than a point kills (the games' death below 1.0), and one that is dead with half a
+        // point does not fall
+        EXPECT_EQ(knockdownKind(settings, 99.5, 100, 100), Knockdown::Never);
+        EXPECT_EQ(knockdownKind(settings, 0.1, 0.5, 100), Knockdown::Never);
     }
 
     TEST(FalloutScriptHitReactionsTest, a_blow_of_most_of_the_base_health_knocks_down_for_sure)

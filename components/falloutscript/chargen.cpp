@@ -429,7 +429,8 @@ namespace FalloutScript
         const int governing = mAttributes[static_cast<std::size_t>(found->mAttribute - firstAttribute)];
         const int lucky = mAttributes[static_cast<std::size_t>(luck - firstAttribute)];
         const bool isTagged = std::find(mTagSlots.begin(), mTagSlots.end(), skill) != mTagSlots.end();
-        return skillBase + 2 * governing + lucky / 2 + (isTagged ? tagBonus : 0);
+        // Half the luck rounded up (FalloutNV.exe 0x643C6C ceil): Luck 5 gives 3, so all-5 untagged skills are 15
+        return skillBase + 2 * governing + (lucky + 1) / 2 + (isTagged ? tagBonus : 0);
     }
 
     bool Chargen::tagged(int skill) const

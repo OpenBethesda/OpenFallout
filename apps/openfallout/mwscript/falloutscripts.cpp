@@ -1046,6 +1046,17 @@ namespace OFScript
             if (gain > 0)
                 mActorValues.restore(mPlayer, AV::actionPoints, gain);
         }
+        // The health of the player comes back by its heal rate, a little each simulated second (fallout-rules.md D.R1:
+        // healRate / 3600 per second, FalloutNV.exe 0x88B510; only damage is healed). The perk term of entry point 0xC
+        // is not applied.
+        if (mPlayer != 0 && !mActors.isDead(mPlayer))
+        {
+            namespace AV = FalloutScript::ActorValue;
+            const double gain = FalloutScript::DerivedStats::regeneration(
+                mActorValues.current(mPlayer, AV::healRate), frametime);
+            if (gain > 0)
+                mActorValues.restore(mPlayer, AV::health, gain);
+        }
         updateBreath(frametime);
         updateMusic(frametime);
         updateAmbient(frametime);
@@ -3113,7 +3124,7 @@ namespace OFScript
                         target, away * static_cast<float>(force), static_cast<float>(seconds));
                 });
         }
-        if (mActorValues.current(victim, AV::health) > 0)
+        if (!FalloutScript::outOfHealth(mActorValues.current(victim, AV::health)))
         {
             // A character that is hit reels, when its files have an animation for it
             if (dealt > 0 && victim != mPlayer)
@@ -4064,7 +4075,7 @@ namespace OFScript
             for (const FalloutScript::FormId actor : mCombat.takeWoken())
             {
                 namespace AV = FalloutScript::ActorValue;
-                if (mActorValues.current(actor, AV::health) > 0)
+                if (!FalloutScript::outOfHealth(mActorValues.current(actor, AV::health)))
                     continue;
                 const double regained = std::clamp(gameSettingValue("fEssentialHealthPercentReGain"), 0.0, 1.0);
                 mActorValues.heal(actor, AV::health);
@@ -4381,22 +4392,30 @@ namespace OFScript
             mEquipment.wear(victim, chosen, points);
     }
 
-    std::optional<double> FalloutScripts::derivedValue(
-        FalloutScript::FormId actor, int value, const std::function<double(int)>& permanent)
+    std::optional<double> FalloutScripts::derivedValue(FalloutScript::FormId actor, int value,
+        const std::function<double(int)>& permanent, const std::function<double(int)>& current)
     {
         namespace AV = FalloutScript::ActorValue;
         namespace Derived = FalloutScript::DerivedStats;
         const FalloutScript::DerivedStatSettings& settings = derivedSettings();
         switch (value)
         {
+            // These go by the current attributes, with what a chem or a crippled limb takes away (fallout-rules.md E.1.2
+            // to E.1.7; the executables read them with the flag 0 at 0x643CE3)
             case AV::actionPoints:
-                return Derived::actionPoints(settings, permanent(AV::agility));
+                return Derived::actionPoints(settings, current(AV::agility));
             case AV::carryWeight:
-                return Derived::carryWeight(settings, permanent(AV::strength));
+                return Derived::carryWeight(settings, current(AV::strength));
             case AV::criticalChance:
-                return Derived::criticalChance(settings, permanent(AV::luck));
+                return Derived::criticalChance(settings, current(AV::luck));
             case AV::meleeDamage:
-                return Derived::meleeDamage(settings, permanent(AV::strength));
+                return Derived::meleeDamage(settings, current(AV::strength));
+            case AV::unarmedDamage:
+                return Derived::unarmedDamage(settings, current(AV::unarmed));
+            case AV::poisonResist:
+                return Derived::poisonResist(settings, current(AV::endurance));
+            case AV::radResist:
+                return Derived::radResist(settings, current(AV::endurance));
             case AV::healRate:
                 // Only the player's is worked out: the breath lasts by it (the executables work it out for everyone,
                 // but nothing else of the port looks at it)

@@ -1496,10 +1496,16 @@ namespace OFScript
             const double timeScale = std::max(static_cast<double>(world->getTimeManager()->getGameTimeScale()), 1.0);
             const double seconds = 3600.0 / timeScale;
             // The hour heals as the time of any frame does: by the heal rate of the player over 3600 for each of those
-            // seconds (FalloutNV.exe 0x88B510, item 17 of m13-exe-reads.md)
+            // seconds (FalloutNV.exe 0x88B510, item 17 of m13-exe-reads.md); an hour of sleep by the sleeping rate
+            // (0x648B00: the heal rate times fHealingRateSleepingMult plus fHealingRateSleepingBase)
             if (!mActors.isDead(mPlayer))
+            {
+                const double healRate = mActorValues.current(mPlayer, AV::healRate);
                 mActorValues.restore(mPlayer, AV::health,
-                    FalloutScript::DerivedStats::regeneration(mActorValues.current(mPlayer, AV::healRate), seconds));
+                    sleeping
+                        ? FalloutScript::DerivedStats::sleepingRegeneration(derivedSettings(), healRate, seconds)
+                        : FalloutScript::DerivedStats::regeneration(healRate, seconds));
+            }
             // The effects that are running age by the hour as well. Both halves of an effect go on together, what it
             // does to the actor values (the item use: boosts that end, points over time) and the record that it is
             // running (the magic), as the frames of the game do when it is not paused
