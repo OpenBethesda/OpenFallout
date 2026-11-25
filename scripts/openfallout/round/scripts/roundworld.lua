@@ -562,7 +562,8 @@ end
 
 -- The player is let fall (the caller has put it in the air with r.teleport): the height lost and the health taken on landing
 function r.s4drop(o)
-    local started_reply = ask('s4drop', o)
+    -- (only what the player script needs goes over the event: `teleport` holds a cell, which an event cannot carry)
+    local started_reply = ask('s4drop', { label = o.label, z = o.z, hold = o.hold, timeout = o.timeout })
     if started_reply == nil then return nil end
     -- the fall begins where the scenario says (`teleport`: the arguments of r.teleport, with the height `z` of the drop)
     if o.teleport then r.teleport(o.teleport) end
