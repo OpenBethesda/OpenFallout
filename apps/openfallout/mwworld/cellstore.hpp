@@ -130,9 +130,6 @@ namespace OFWorld
         /// @return updated OFWorld::Ptr with the new CellStore pointer set.
         OFWorld::Ptr moveTo(const OFWorld::Ptr& object, OFWorld::CellStore* cellToMoveTo);
 
-        void rest(double hours);
-        void recharge(float duration);
-
         /// Make a copy of the given object and insert it into this cell.
         /// @note If you get a linker error here, this means the given type can not be inserted into a cell.
         /// The supported types are defined at the bottom of this file.
@@ -332,9 +329,6 @@ namespace OFWorld
         /// references)
         void readReferences(ESM::ESMReader& reader, GetCellStoreCallback* callback);
 
-        void respawn();
-        ///< Check mLastRespawn and respawn references if necessary. This is a no-op if the cell is not loaded.
-
         CellStore* getOriginCell(const Ptr& object) const;
 
         Ptr getPtr(ESM::RefId id);
@@ -405,14 +399,6 @@ namespace OFWorld
         void updateMergedRefs(bool includeDeleted = false) const;
 
         // (item, max charge)
-        typedef std::vector<std::pair<LiveCellRefBase*, float>> TRechargingItems;
-        TRechargingItems mRechargingItems;
-
-        bool mRechargingItemsUpToDate;
-
-        void updateRechargingItems();
-        void rechargeItems(float duration);
-        void checkItem(const Ptr& ptr);
 
         /// Run through references and store IDs
         void listRefs(const ESM::Cell& cell);

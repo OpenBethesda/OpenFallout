@@ -9,7 +9,6 @@
 #include <components/esm3/loadalch.hpp>
 #include <components/esm3/loadnpc.hpp>
 
-#include "../mwworld/actionapply.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/ptr.hpp"
 
@@ -113,17 +112,6 @@ namespace OFClass
         info.text = std::move(text);
 
         return info;
-    }
-
-    std::unique_ptr<OFWorld::Action> Potion::use(const OFWorld::Ptr& ptr, bool force) const
-    {
-        OFWorld::LiveCellRef<ESM::Potion>* ref = ptr.get<ESM::Potion>();
-
-        auto action = std::make_unique<OFWorld::ActionApply>(ptr, ref->mBase->mId);
-
-        action->setSound(ESM::RefId::stringRefId("Drink"));
-
-        return action;
     }
 
     OFWorld::Ptr Potion::copyToCellImpl(const OFWorld::ConstPtr& ptr, OFWorld::CellStore& cell) const

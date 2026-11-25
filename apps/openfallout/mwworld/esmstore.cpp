@@ -24,7 +24,6 @@
 #include <components/lua/configuration.hpp>
 #include <components/misc/algorithm.hpp>
 
-#include "../mwmechanics/spelllist.hpp"
 
 namespace
 {
@@ -335,8 +334,6 @@ namespace OFWorld
         for (const auto& store : mDynamicStores)
             store->clearDynamic();
         mStoreImp->mIds = mStoreImp->mStaticIds;
-
-        movePlayerRecord();
     }
 
     static bool isCacheableRecord(int id)
@@ -662,13 +659,6 @@ namespace OFWorld
         }
     }
 
-    void ESMStore::movePlayerRecord()
-    {
-        auto& npcs = getWritable<ESM::NPC>();
-        auto player = npcs.find(ESM::RefId::stringRefId("Player"));
-        npcs.insert(*player);
-    }
-
     void ESMStore::validateDynamic()
     {
         auto& npcs = getWritable<ESM::NPC>();
@@ -805,33 +795,6 @@ namespace OFWorld
         }
     }
 
-    void ESMStore::checkPlayer()
-    {
-        const ESM::NPC* player = get<ESM::NPC>().find(ESM::RefId::stringRefId("Player"));
-
-        if (!get<ESM::Race>().find(player->mRace) || !get<ESM::Class>().find(player->mClass))
-            throw std::runtime_error("Invalid player record (race or class unavailable");
-    }
-
-    std::pair<std::shared_ptr<OFMechanics::SpellList>, bool> ESMStore::getSpellList(ESM::RefId id, bool autoCalc) const
-    {
-        auto result = mSpellListCache.find(id);
-        std::shared_ptr<OFMechanics::SpellList> ptr;
-        if (result != mSpellListCache.end())
-            ptr = result->second.lock();
-        if (!ptr)
-        {
-            int type = find(id);
-            ptr = std::make_shared<OFMechanics::SpellList>(id, type, autoCalc);
-            if (result != mSpellListCache.end())
-                result->second = ptr;
-            else
-                mSpellListCache.insert({ id, ptr });
-            return { ptr, false };
-        }
-        return { ptr, true };
-    }
-
     template <>
     const ESM::Cell* ESMStore::insert<ESM::Cell>(const ESM::Cell& cell)
     {
@@ -843,10 +806,6 @@ namespace OFWorld
     {
 
         auto& npcs = getWritable<ESM::NPC>();
-        if (npc.mId == "Player")
-        {
-            return npcs.insert(npc);
-        }
         const ESM::RefId id = ESM::RefId::generated(mDynamicCount++);
         if (npcs.search(id) != nullptr)
             throw std::runtime_error("Try to override existing record: " + id.toDebugString());

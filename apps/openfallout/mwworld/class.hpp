@@ -222,11 +222,6 @@ namespace OFWorld
         // True if it is an item that can be picked up.
         virtual bool isItem(const OFWorld::ConstPtr& ptr) const { return false; }
 
-        bool isPureWaterCreature(const OFWorld::ConstPtr& ptr) const;
-        bool isPureFlyingCreature(const OFWorld::ConstPtr& ptr) const;
-        bool isPureLandCreature(const OFWorld::Ptr& ptr) const;
-        bool isMobile(const OFWorld::Ptr& ptr) const;
-
         virtual void readAdditionalState(const OFWorld::Ptr& ptr, const ESM::ObjectState& state) const;
         ///< Read additional state from \a state into \a ptr.
 

@@ -225,7 +225,6 @@ namespace OFWorld
 
         mStore.setUp();
         mStore.validateRecords(mReaders);
-        mStore.movePlayerRecord();
 
         // The trees of Fallout are SpeedTree files, which are not read: each is drawn from its record. The scene manager
         // is asked for the model by its path in the archives, which is the one of the record under meshes/.
@@ -1170,7 +1169,7 @@ namespace OFWorld
             esmPos.pos[1] = traced.y();
             esmPos.pos[2] = traced.z();
             ESM::RefId cell = actor.getCell()->getCell()->getId();
-            OFWorld::ActionTeleport(cell, esmPos, false).execute(actor);
+            OFWorld::ActionTeleport(cell, esmPos).execute(actor);
         }
     }
 
@@ -2858,11 +2857,6 @@ namespace OFWorld
             }
         }
         return closestMarker;
-    }
-
-    void World::rest(double hours)
-    {
-        mWorldModel.forEachLoadedCellStore([hours](CellStore& store) { store.rest(hours); });
     }
 
     void World::updateWeather(float duration, bool paused)

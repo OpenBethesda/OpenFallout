@@ -497,8 +497,6 @@ namespace OFBase
 
         virtual bool isWalkingOnWater(const OFWorld::ConstPtr& actor) const = 0;
 
-        virtual void rest(double hours) = 0;
-
         virtual void setPlayerTraveling(bool traveling) = 0;
         virtual bool isPlayerTraveling() const = 0;
 

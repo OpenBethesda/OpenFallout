@@ -636,8 +636,6 @@ namespace OFPhysics
                 continue;
 
             auto ptr = physicActor->getPtr();
-            if (!ptr.getClass().isMobile(ptr))
-                continue;
 
             const OFWorld::CellStore& cell = *ptr.getCell();
 
@@ -903,7 +901,6 @@ namespace OFPhysics
         , mStuckFrames(0)
         , mFlying(OFBase::Environment::get().getWorld()->isFlying(actor.getPtr()))
         , mWasOnGround(actor.getOnGround())
-        , mIsAquatic(actor.getPtr().getClass().isPureWaterCreature(actor.getPtr()))
         , mWaterCollision(waterCollision)
         , mSkipCollisionDetection(!actor.getCollisionMode())
         , mIsPlayer(isPlayer)

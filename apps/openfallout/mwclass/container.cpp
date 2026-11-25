@@ -15,7 +15,6 @@
 
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwworld/actionharvest.hpp"
-#include "../mwworld/actiontrap.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/failedaction.hpp"
@@ -175,11 +174,8 @@ namespace OFClass
             }
             else
             {
-                // Activate trap
-                std::unique_ptr<OFWorld::Action> action
-                    = std::make_unique<OFWorld::ActionTrap>(ptr.getCellRef().getTrap(), ptr);
-                action->setSound(ESM::RefId::stringRefId("Disarm Trap Fail"));
-                return action;
+                // The trap of a Morrowind object is a spell, and the magic of Morrowind is gone: it does nothing
+                return std::make_unique<OFWorld::NullAction>();
             }
         }
         else

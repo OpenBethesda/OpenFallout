@@ -1,11 +1,11 @@
 #include "containerstore.hpp"
-#include "inventorystore.hpp"
 
 #include <cassert>
 #include <stdexcept>
 
 #include <components/debug/debuglog.hpp>
 #include <components/esm3/inventorystate.hpp>
+#include <components/esm3/loadcont.hpp>
 #include <components/esm3/loadench.hpp>
 #include <components/esm3/loadlevlist.hpp>
 #include <components/misc/strings/algorithm.hpp>
@@ -17,8 +17,6 @@
 #include "../mwbase/world.hpp"
 
 #include "../mwmechanics/levelledlist.hpp"
-#include "../mwmechanics/recharge.hpp"
-#include "../mwmechanics/spellutil.hpp"
 
 #include "class.hpp"
 #include "esmstore.hpp"
@@ -158,7 +156,6 @@ OFWorld::ContainerStore::ContainerStore(const OFWorld::ContainerStore& store)
     , mWeightUpToDate(store.mWeightUpToDate)
     , mModified(store.mModified)
     , mResolved(store.mResolved)
-    , mRechargingItemsUpToDate(false)
 {
     const std::ptrdiff_t distance = store.index(store.mSelectedEnchantItem);
     if (distance != -1)
@@ -178,7 +175,6 @@ OFWorld::ContainerStore::ContainerStore(OFWorld::ContainerStore&& store)
     , mWeightUpToDate(store.mWeightUpToDate)
     , mModified(store.mModified)
     , mResolved(store.mResolved)
-    , mRechargingItemsUpToDate(false)
 {
     const std::ptrdiff_t distance = store.index(store.mSelectedEnchantItem);
     mLists = std::move(store.mLists);
@@ -202,7 +198,6 @@ OFWorld::ContainerStore& OFWorld::ContainerStore::operator=(const ContainerStore
     mWeightUpToDate = store.mWeightUpToDate;
     mModified = store.mModified;
     mResolved = store.mResolved;
-    mRechargingItemsUpToDate = false;
     const std::ptrdiff_t distance = store.index(store.mSelectedEnchantItem);
     if (distance != -1)
     {
@@ -226,7 +221,6 @@ OFWorld::ContainerStore& OFWorld::ContainerStore::operator=(ContainerStore&& sto
     mWeightUpToDate = store.mWeightUpToDate;
     mModified = store.mModified;
     mResolved = store.mResolved;
-    mRechargingItemsUpToDate = false;
     if (distance != -1)
     {
         mSelectedEnchantItem = begin();
@@ -351,20 +345,6 @@ bool OFWorld::ContainerStore::stacks(const ConstPtr& ptr1, const ConstPtr& ptr2)
     if (!(ptr1.getCellRef().getRefId() == ptr2.getCellRef().getRefId()))
         return false;
 
-    // If it has an enchantment, don't stack when some of the charge is already used
-    if (!ptr1.getClass().getEnchantment(ptr1).empty())
-    {
-        const ESM::Enchantment* enchantment = OFBase::Environment::get().getESMStore()->get<ESM::Enchantment>().find(
-            ptr1.getClass().getEnchantment(ptr1));
-        const float maxCharge = static_cast<float>(OFMechanics::getEnchantmentCharge(*enchantment));
-        float enchantCharge1
-            = ptr1.getCellRef().getEnchantmentCharge() == -1 ? maxCharge : ptr1.getCellRef().getEnchantmentCharge();
-        float enchantCharge2
-            = ptr2.getCellRef().getEnchantmentCharge() == -1 ? maxCharge : ptr2.getCellRef().getEnchantmentCharge();
-        if (enchantCharge1 != maxCharge || enchantCharge2 != maxCharge)
-            return false;
-    }
-
     return ptr1 != ptr2 // an item never stacks onto itself
         && ptr1.getCellRef().getSoul() == ptr2.getCellRef().getSoul()
 
@@ -477,11 +457,6 @@ OFWorld::ContainerStoreIterator OFWorld::ContainerStore::addImp(const ConstPtr& 
     // determine whether to stack or not
     for (OFWorld::ContainerStoreIterator iter(begin(type)); iter != end(); ++iter)
     {
-        // Don't stack with equipped items
-        if (auto* inventoryStore = dynamic_cast<InventoryStore*>(this))
-            if (inventoryStore->isEquipped(*iter))
-                continue;
-
         if (stacks(*iter, ptr))
         {
             // stack
@@ -574,48 +549,6 @@ OFWorld::ContainerStoreIterator OFWorld::ContainerStore::getSelectedEnchantItem(
 OFWorld::ConstContainerStoreIterator OFWorld::ContainerStore::getSelectedEnchantItem() const
 {
     return mSelectedEnchantItem;
-}
-
-void OFWorld::ContainerStore::rechargeItems(float duration)
-{
-    if (!mRechargingItemsUpToDate)
-    {
-        updateRechargingItems();
-        mRechargingItemsUpToDate = true;
-    }
-    for (auto& it : mRechargingItems)
-    {
-        if (!OFMechanics::rechargeItem(*it.first, it.second, duration))
-            continue;
-
-        // attempt to restack when fully recharged
-        if (it.first->getCellRef().getEnchantmentCharge() == it.second)
-            it.first = restack(*it.first);
-    }
-}
-
-void OFWorld::ContainerStore::updateRechargingItems()
-{
-    mRechargingItems.clear();
-    for (ContainerStoreIterator it = begin(); it != end(); ++it)
-    {
-        const auto& enchantmentId = it->getClass().getEnchantment(*it);
-        if (!enchantmentId.empty())
-        {
-            const ESM::Enchantment* enchantment
-                = OFBase::Environment::get().getESMStore()->get<ESM::Enchantment>().search(enchantmentId);
-            if (!enchantment)
-            {
-                Log(Debug::Warning) << "Warning: Can't find enchantment '" << enchantmentId << "' on item "
-                                    << it->getCellRef().getRefId();
-                continue;
-            }
-
-            if (enchantment->mData.mType == ESM::Enchantment::WhenUsed
-                || enchantment->mData.mType == ESM::Enchantment::WhenStrikes)
-                mRechargingItems.emplace_back(it, static_cast<float>(OFMechanics::getEnchantmentCharge(*enchantment)));
-        }
-    }
 }
 
 int OFWorld::ContainerStore::remove(const ESM::RefId& itemId, int count, bool equipReplacement, bool resolveFirst)
@@ -770,7 +703,6 @@ void OFWorld::ContainerStore::clear()
 void OFWorld::ContainerStore::flagAsModified()
 {
     mWeightUpToDate = false;
-    mRechargingItemsUpToDate = false;
 }
 
 bool OFWorld::ContainerStore::isResolved() const

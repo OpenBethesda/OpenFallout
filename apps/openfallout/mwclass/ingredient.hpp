@@ -35,8 +35,6 @@ namespace OFClass
         int getValue(const OFWorld::ConstPtr& ptr) const override;
         ///< Return trade value of the object. Throws an exception, if the object can't be traded.
 
-        std::unique_ptr<OFWorld::Action> use(const OFWorld::Ptr& ptr, bool force = false) const override;
-        ///< Generate action for using via inventory menu
 
         const ESM::RefId& getUpSoundId(const OFWorld::ConstPtr& ptr) const override;
         ///< Return the pick up sound Id

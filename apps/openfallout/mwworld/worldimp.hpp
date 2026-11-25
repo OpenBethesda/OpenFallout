@@ -491,8 +491,6 @@ namespace OFWorld
         int canRest() const override;
         ///< check if the player is allowed to rest
 
-        void rest(double hours) override;
-
         /// \todo Probably shouldn't be here
         OFRender::Animation* getAnimation(const OFWorld::Ptr& ptr) override;
         const OFRender::Animation* getAnimation(const OFWorld::ConstPtr& ptr) const override;

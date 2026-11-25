@@ -242,7 +242,6 @@ namespace OFPhysics
 
             // We hit something. Check if we can step up.
             float hitHeight = tracer.mHitPoint.z() - tracer.mEndPos.z() + actor.mHalfExtentsZ;
-            osg::Vec3f oldPosition = newPosition;
             bool usedStepLogic = false;
             if (!isActor(tracer.mHitObject))
             {
@@ -261,9 +260,7 @@ namespace OFPhysics
             }
             if (usedStepLogic)
             {
-                if (actor.mIsAquatic && newPosition.z() + actor.mHalfExtentsZ > actor.mWaterlevel)
-                    newPosition = oldPosition;
-                else if (!actor.mFlying && actor.mPosition.z() >= swimlevel)
+                if (!actor.mFlying && actor.mPosition.z() >= swimlevel)
                     forceGroundTest = true;
             }
             else

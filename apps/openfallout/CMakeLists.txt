@@ -85,9 +85,9 @@ add_openfallout_dir (mwworld
     refdata worldimp scene globals class action nullaction actionteleport
     containerstore actiontalk actiontake manualref player cellvisitors failedaction
     worldmodel customdata ptr actionharvest
-    timestamp cellstore actionapply actioneat
+    timestamp cellstore
     store esmstore fallback livecellref actiondoor
-    contentloader esmloader actiontrap cellreflist cellref weather
+    contentloader esmloader cellreflist cellref weather
     cellpreloader datetimemanager groundcoverstore cell ptrregistry
     positioncellgrid worldspacestart
     )

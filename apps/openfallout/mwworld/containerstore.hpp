@@ -270,8 +270,6 @@ namespace OFWorld
         void updateRefNums();
 
         // (item, max charge)
-        typedef std::vector<std::pair<ContainerStoreIterator, float>> TRechargingItems;
-        TRechargingItems mRechargingItems;
 
         // selected magic item (for using enchantments of type "Cast once" or "Cast when used")
         ContainerStoreIterator mSelectedEnchantItem;
@@ -289,7 +287,6 @@ namespace OFWorld
         bool mResolved = false;
 
     protected:
-        bool mRechargingItemsUpToDate = false;
 
         virtual void storeEquipmentState(
             const OFWorld::LiveCellRefBase& ref, size_t index, ESM::InventoryState& inventory) const;
@@ -315,8 +312,6 @@ namespace OFWorld
         template <typename T>
         void storeStates(const CellRefList<T>& collection, ESM::InventoryState& inventory, size_t& index,
             bool equipable = false) const;
-
-        void updateRechargingItems();
 
     public:
         ContainerStore();
@@ -382,9 +377,6 @@ namespace OFWorld
         ConstContainerStoreIterator getSelectedEnchantItem() const;
         ///< @return selected magic item (for using enchantments of type "Cast once" or "Cast when used")
         /// \note if no item selected, return end() iterator
-
-        void rechargeItems(float duration);
-        ///< Restore charge on enchanted items. Note this should only be done for the player.
 
         ContainerStoreIterator unstack(const Ptr& ptr, int count = 1);
         ///< Unstack an item in this container. The item's count will be set to count, then a new stack will be added

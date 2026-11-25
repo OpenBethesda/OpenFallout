@@ -1,15 +1,11 @@
 #include "actionteleport.hpp"
 
 #include <components/esm3/loadcell.hpp>
-#include <components/esm3/loadmgef.hpp>
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
-#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/creaturestats.hpp"
 
 #include "../mwscript/falloutscripts.hpp"
 
@@ -21,42 +17,22 @@
 
 namespace OFWorld
 {
-    ActionTeleport::ActionTeleport(ESM::RefId cellId, const ESM::Position& position, bool teleportFollowers)
+    ActionTeleport::ActionTeleport(ESM::RefId cellId, const ESM::Position& position)
         : Action(true)
         , mCellId(cellId)
         , mPosition(position)
-        , mTeleportFollowers(teleportFollowers)
     {
     }
 
     void ActionTeleport::executeImp(const Ptr& actor)
     {
-        if (mTeleportFollowers)
-        {
-            // Find any NPCs that are following the actor and teleport them with him
-            std::set<OFWorld::Ptr> followers;
-
-            bool toExterior = OFBase::Environment::get().getWorldModel()->getCell(mCellId).isExterior();
-            getFollowers(actor, followers, toExterior, true);
-
-            for (std::set<OFWorld::Ptr>::iterator it = followers.begin(); it != followers.end(); ++it)
-                teleport(*it);
-        }
-
-        teleport(actor);
-    }
-
-    void ActionTeleport::teleport(const Ptr& actor)
-    {
         OFBase::World* world = OFBase::Environment::get().getWorld();
         OFWorld::WorldModel* worldModel = OFBase::Environment::get().getWorldModel();
-        auto& stats = actor.getClass().getCreatureStats(actor);
-        stats.land(actor == world->getPlayerPtr());
-        stats.setTeleported(true);
 
         Ptr teleported;
         if (actor == world->getPlayerPtr())
         {
+            // A fall in progress ends where the player arrives (PlayerCharacter::teleported)
             world->getPlayer().setTeleported(true);
             // IsPlayerMovingIntoNewSpace is on while a door or a fast travel moves the player
             OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
@@ -68,43 +44,8 @@ namespace OFWorld
             teleported = world->getPlayerPtr();
         }
         else
-        {
-            if (actor.getClass().getCreatureStats(actor).getAiSequence().isInCombat(world->getPlayerPtr()))
-            {
-                actor.getClass().getCreatureStats(actor).getAiSequence().stopCombat();
-                return;
-            }
-            else
-                teleported = world->moveObject(actor, &worldModel->getCell(mCellId), mPosition.asVec3(), true, true);
-        }
-
-        if (!world->isWaterWalkingCastableOnTarget(teleported) && OFMechanics::hasWaterWalking(teleported))
-            teleported.getClass()
-                .getCreatureStats(teleported)
-                .getActiveSpells()
-                .purgeEffect(actor, ESM::MagicEffect::WaterWalking);
+            teleported = world->moveObject(actor, &worldModel->getCell(mCellId), mPosition.asVec3(), true, true);
 
         OFBase::Environment::get().getLuaManager()->objectTeleported(teleported);
-    }
-
-    void ActionTeleport::getFollowers(
-        const OFWorld::Ptr& actor, std::set<OFWorld::Ptr>& out, bool toExterior, bool includeHostiles)
-    {
-        std::set<OFWorld::Ptr> followers;
-        OFBase::Environment::get().getMechanicsManager()->getActorsFollowing(actor, followers);
-
-        for (std::set<OFWorld::Ptr>::iterator it = followers.begin(); it != followers.end(); ++it)
-        {
-            OFWorld::Ptr follower = *it;
-
-            if (!includeHostiles && follower.getClass().getCreatureStats(follower).getAiSequence().isInCombat(actor))
-                continue;
-
-            if ((follower.getRefData().getPosition().asVec3() - actor.getRefData().getPosition().asVec3()).length2()
-                > 800 * 800)
-                continue;
-
-            out.emplace(follower);
-        }
     }
 }

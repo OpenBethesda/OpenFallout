@@ -1,5 +1,7 @@
 #include "cellref.hpp"
 
+#include <components/esm3/loadench.hpp>
+
 #include <cassert>
 
 #include <components/debug/debuglog.hpp>
@@ -10,7 +12,6 @@
 
 #include "apps/openfallout/mwbase/environment.hpp"
 #include "apps/openfallout/mwbase/world.hpp"
-#include "apps/openfallout/mwmechanics/spellutil.hpp"
 #include "apps/openfallout/mwworld/esmstore.hpp"
 
 namespace OFWorld
@@ -145,7 +146,8 @@ namespace OFWorld
 
     float CellRef::getNormalizedEnchantmentCharge(const ESM::Enchantment& enchantment) const
     {
-        const int maxCharge = OFMechanics::getEnchantmentCharge(enchantment);
+        // (the charge of the record: the automatic charge of Morrowind went with its magic)
+        const int maxCharge = enchantment.mData.mCharge;
         if (maxCharge == 0)
         {
             return 0;

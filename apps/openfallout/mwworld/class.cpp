@@ -16,14 +16,12 @@
 #include "actiontake.hpp"
 #include "containerstore.hpp"
 #include "failedaction.hpp"
-#include "inventorystore.hpp"
 #include "nullaction.hpp"
 #include "ptr.hpp"
 #include "worldmodel.hpp"
 
 #include "../mwgui/tooltips.hpp"
 
-#include "../mwmechanics/npcstats.hpp"
 
 namespace OFWorld
 {
@@ -237,10 +235,6 @@ namespace OFWorld
         if (!OFBase::Environment::get().getWindowManager()->isAllowed(OFGui::GW_Inventory))
             return std::make_unique<NullAction>();
 
-        std::unique_ptr<Action> werewolfAction = getWerewolfRefusalAction(actor);
-        if (werewolfAction)
-            return werewolfAction;
-
         std::unique_ptr<Action> action = std::make_unique<ActionTake>(ptr);
         action->setSound(getUpSoundId(ptr));
 
@@ -284,26 +278,6 @@ namespace OFWorld
         newPtr.getRefData().setPosition(pos);
         newPtr.getCellRef().setPosition(pos);
         return newPtr;
-    }
-
-    bool Class::isPureWaterCreature(const ConstPtr& ptr) const
-    {
-        return canSwim(ptr) && !isBipedal(ptr) && !canFly(ptr) && !canWalk(ptr);
-    }
-
-    bool Class::isPureFlyingCreature(const ConstPtr& ptr) const
-    {
-        return canFly(ptr) && !isBipedal(ptr) && !canSwim(ptr) && !canWalk(ptr);
-    }
-
-    bool Class::isPureLandCreature(const Ptr& ptr) const
-    {
-        return canWalk(ptr) && !isBipedal(ptr) && !canFly(ptr) && !canSwim(ptr);
-    }
-
-    bool Class::isMobile(const OFWorld::Ptr& ptr) const
-    {
-        return canSwim(ptr) || canWalk(ptr) || canFly(ptr);
     }
 
     void Class::readAdditionalState(const OFWorld::Ptr& ptr, const ESM::ObjectState& state) const {}

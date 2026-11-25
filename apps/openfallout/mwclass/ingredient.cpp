@@ -10,7 +10,6 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwworld/actioneat.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/nullaction.hpp"
@@ -67,17 +66,6 @@ namespace OFClass
         const OFWorld::LiveCellRef<ESM::Ingredient>* ref = ptr.get<ESM::Ingredient>();
 
         return ref->mBase->mData.mValue;
-    }
-
-    std::unique_ptr<OFWorld::Action> Ingredient::use(const OFWorld::Ptr& ptr, bool force) const
-    {
-        if (ptr.get<ESM::Ingredient>()->mBase->mData.mEffectID[0].empty())
-            return std::make_unique<OFWorld::NullAction>();
-        std::unique_ptr<OFWorld::Action> action = std::make_unique<OFWorld::ActionEat>(ptr);
-
-        action->setSound(ESM::RefId::stringRefId("Swallow"));
-
-        return action;
     }
 
     const ESM::RefId& Ingredient::getUpSoundId(const OFWorld::ConstPtr& ptr) const

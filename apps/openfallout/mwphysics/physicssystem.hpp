@@ -107,7 +107,6 @@ namespace OFPhysics
         unsigned int mStuckFrames;
         const bool mFlying;
         const bool mWasOnGround;
-        const bool mIsAquatic;
         const bool mWaterCollision;
         const bool mSkipCollisionDetection;
         const bool mIsPlayer;

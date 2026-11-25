@@ -164,9 +164,6 @@ namespace
         if (ptr.getClass().isActor())
             rendering.addWaterRippleEmitter(ptr);
 
-        // Restore effect particles
-        world.applyLoopingParticles(ptr);
-
         if (!model.empty())
             ptr.getClass().insertObject(ptr, model, rotation, physics);
 
@@ -526,9 +523,7 @@ namespace OFWorld
                    },
             *cell.getCell());
 
-        if (respawn)
-            cell.respawn();
-
+        // (the respawn of the Fallout references is the Fallout scripts' own: iHoursToRespawnCell, FOSV "spawn")
         insertCell(cell, loadingListener, navigatorUpdateGuard);
 
         mRendering.addCell(&cell);
@@ -674,7 +669,7 @@ namespace OFWorld
                 // Only teleport if that teleport point is > the lowest point, rare edge case
                 if (!refId.empty() && newPos.pos[2] >= mLowestPoint - lowestPointAdjustment)
                 {
-                    OFWorld::ActionTeleport(refId, newPos, false).execute(playerPtr);
+                    OFWorld::ActionTeleport(refId, newPos).execute(playerPtr);
                     Log(Debug::Warning) << "Player position has been reset due to falling into the void";
                 }
             }
