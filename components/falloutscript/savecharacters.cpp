@@ -371,6 +371,7 @@ namespace FalloutScript
             progress.mExperience = experience;
             progress.mKarma = karma;
             progress.mAwardedLevel = awarded;
+            progress.mLevel = std::max(awarded, 1);
             progress.mSkillPoints = skillPoints;
             progress.mPerkPoints = perkPoints;
             progress.mPerkLevels = std::move(perkLevels);

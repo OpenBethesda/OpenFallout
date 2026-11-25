@@ -117,15 +117,34 @@ namespace
         EXPECT_GT(highest * (75 * (highest + 1) + 50), std::numeric_limits<int>::max());
     }
 
-    TEST(FalloutScriptPlayerProgressTest, the_level_of_the_player_is_told_from_its_experience)
+    TEST(FalloutScriptPlayerProgressTest, the_level_reached_is_told_from_the_experience)
     {
         PlayerProgress progress;
-        EXPECT_EQ(progress.level(), 1);
+        EXPECT_EQ(progress.reachedLevel(), 1);
 
         progress.rewardExperience(650);
-        EXPECT_EQ(progress.level(), 3);
+        EXPECT_EQ(progress.reachedLevel(), 3);
         progress.rewardExperience(-200);
+        EXPECT_EQ(progress.reachedLevel(), 2);
+    }
+
+    TEST(FalloutScriptPlayerProgressTest, the_player_is_at_a_new_level_when_its_screen_is_done)
+    {
+        // fallout-rules.md E.unclear 3: the stored level goes up by one when the screen of the level up closes
+        // (FalloutNV.exe 0x7851F2 calls 0x8D5270), not when the experience gets there
+        PlayerProgress progress;
+        progress.rewardExperience(650);
+        EXPECT_EQ(progress.level(), 1);
+        ASSERT_TRUE(progress.awardNextLevel(5).has_value());
+        EXPECT_EQ(progress.level(), 1);
+        progress.finishLevel();
         EXPECT_EQ(progress.level(), 2);
+        ASSERT_TRUE(progress.awardNextLevel(5).has_value());
+        progress.finishLevel();
+        EXPECT_EQ(progress.level(), 3);
+        // a screen that was not handed out raises nothing
+        progress.finishLevel();
+        EXPECT_EQ(progress.level(), 3);
     }
 
     TEST(FalloutScriptPlayerProgressTest, karma_moves_both_ways_within_its_limits)
@@ -247,7 +266,8 @@ namespace
         setup.run(player, builder);
 
         EXPECT_EQ(setup.mProgress.experience(), 300);
-        EXPECT_EQ(setup.mProgress.level(), 2);
+        EXPECT_EQ(setup.mProgress.reachedLevel(), 2);
+        EXPECT_EQ(setup.mProgress.level(), 1);
         EXPECT_THAT(setup.mHost.mLog, IsEmpty());
     }
 

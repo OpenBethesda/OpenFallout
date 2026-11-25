@@ -186,7 +186,7 @@ namespace
         progress.setRules(rulesOf(Game::NewVegas, { { "iMaxCharacterLevel", 30 } }));
         progress.rewardExperience(1000000);
         EXPECT_EQ(progress.experience(), 66700);
-        EXPECT_EQ(progress.level(), 30);
+        EXPECT_EQ(progress.reachedLevel(), 30);
         EXPECT_EQ(progress.experienceForNextLevel(), 66700);
     }
 
@@ -197,7 +197,7 @@ namespace
         EXPECT_FALSE(progress.awardNextLevel(5).has_value());
 
         progress.rewardExperience(560);
-        EXPECT_EQ(progress.level(), 3);
+        EXPECT_EQ(progress.reachedLevel(), 3);
         const auto second = progress.awardNextLevel(5);
         ASSERT_TRUE(second.has_value());
         EXPECT_EQ(second->mLevel, 2);
@@ -221,7 +221,7 @@ namespace
 
         // one award of three levels: a perk at level 2 and one at level 4, the level of the player being 5
         progress.rewardExperience(1700);
-        ASSERT_EQ(progress.level(), 5);
+        ASSERT_EQ(progress.reachedLevel(), 5);
         while (progress.awardNextLevel(5))
         {
         }

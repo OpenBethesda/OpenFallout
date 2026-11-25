@@ -339,6 +339,9 @@ namespace OFScript
 
     void FalloutScripts::finishLevelUp()
     {
+        // The player is at the new level now (fallout-rules.md E.unclear 3: the stored level goes up when the screen is
+        // done, FalloutNV.exe 0x7851F2 and 0x8D5270)
+        mProgress.finishLevel();
         const std::lock_guard lock(mLevelUpMutex);
         mLevelUpOpen = false;
     }

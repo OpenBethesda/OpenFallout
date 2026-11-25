@@ -22,6 +22,7 @@ namespace FalloutScript
         mExperience = 0;
         mKarma = 0;
         mAwardedLevel = 1;
+        mLevel = 1;
         mSkillPoints = 0;
         mPerkPoints = 0;
         mPerkLevels.clear();
@@ -81,7 +82,19 @@ namespace FalloutScript
     int PlayerProgress::level() const
     {
         const std::lock_guard lock(mMutex);
+        return mLevel;
+    }
+
+    int PlayerProgress::reachedLevel() const
+    {
+        const std::lock_guard lock(mMutex);
         return levelUnderLock();
+    }
+
+    void PlayerProgress::finishLevel()
+    {
+        const std::lock_guard lock(mMutex);
+        mLevel = std::min(mLevel + 1, std::max(mAwardedLevel, mLevel));
     }
 
     bool PlayerProgress::atHighestLevel() const
@@ -104,6 +117,7 @@ namespace FalloutScript
             level = std::min(level, mRules.mMaxLevel);
         mExperience = Levelling::experienceForLevel(mRules, level);
         mAwardedLevel = level;
+        mLevel = level;
     }
 
     void PlayerProgress::resetExperience()
@@ -111,6 +125,7 @@ namespace FalloutScript
         const std::lock_guard lock(mMutex);
         mExperience = 0;
         mAwardedLevel = 1;
+        mLevel = 1;
     }
 
     std::optional<PlayerProgress::LevelUp> PlayerProgress::awardNextLevel(double intelligence)

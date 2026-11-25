@@ -695,10 +695,13 @@ namespace
     }
 
     TEST(FalloutScriptActorValueCommandsTest,
-        the_level_of_the_player_follows_its_experience_and_anyone_elses_is_the_records)
+        the_level_of_the_player_is_its_stored_level_and_anyone_elses_is_the_records)
     {
         Runner setup;
+        // the experience of level 2, and the screen of that level done (the stored level, fallout-rules.md E.unclear 3)
         setup.mProgress.rewardExperience(250);
+        setup.mProgress.awardNextLevel(5);
+        setup.mProgress.finishLevel();
         ScriptBuilder builder;
         builder.code(scriptName() + begin(BlockType::OnActivate)
             + setTo(var('f', 1), callToken(OpGetLevel, arguments(0))) + end());
