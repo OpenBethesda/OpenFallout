@@ -114,6 +114,11 @@ namespace OFPhysics
         mPositionOffset = osg::Vec3f();
         mStandingOnPtr = nullptr;
         mSkipSimulation = true;
+        // A placed actor starts its count of stuck frames again. The unstuck step gives up after 10 frames stuck at one
+        // place (MovementSolver::unstuck), and without this a teleport back to that place left the actor stuck for
+        // good.
+        mStuckFrames = 0;
+        mLastStuckPosition = osg::Vec3f();
     }
 
     void Actor::setSimulationPosition(const osg::Vec3f& position)
