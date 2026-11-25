@@ -218,6 +218,8 @@ namespace OFMechanics
         };
         std::optional<Landing> mLanding;
         float mLastZ = 0.f;
+        /// Set by a teleport (which comes before the move): the next update takes the height it finds as the last one
+        bool mPlaced = false;
         bool mWasOnGround = true;
         bool mSwimming = false;
         bool mInJump = false;

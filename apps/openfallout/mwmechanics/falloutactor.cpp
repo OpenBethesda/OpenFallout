@@ -107,6 +107,7 @@ namespace OFMechanics
         mLanding.reset();
         mWasOnGround = true;
         mInJump = false;
+        mPlaced = true;
     }
 
     void PlayerCharacter::takeControls()
@@ -256,6 +257,12 @@ namespace OFMechanics
     void PlayerCharacter::updateFall(bool onGround, bool weightless)
     {
         const float z = getPtr().getRefData().getPosition().pos[2];
+        // (after a teleport the height of the arrival is the one the player was last at)
+        if (mPlaced)
+        {
+            mLastZ = z;
+            mPlaced = false;
+        }
         // Water and flight end a fall without a landing (C.F4 has no exe basis for damage in water)
         if (mSwimming || weightless)
         {
@@ -266,9 +273,10 @@ namespace OFMechanics
             return;
         }
         // The height the player left the ground at: the take-off of a jump (set there) or the edge it walked off
-        // (rule C.F1)
+        // (rule C.F1). The edge is the height of the last frame on the ground: on the first frame that finds the player
+        // in the air the physics has already taken it down a little.
         if (!onGround && mWasOnGround && !mFallStart)
-            mFallStart = z;
+            mFallStart = mLastZ;
         if (onGround && !mWasOnGround && mFallStart)
         {
             // The ground is touched: the height lost is judged where the player comes to stand (C.F1), a frame later
