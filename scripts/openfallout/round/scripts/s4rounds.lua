@@ -80,8 +80,9 @@ function M.movement(game)
 
         leg('walk_holstered', {})
         if haveWeapon then leg('walk_drawn', { drawn = true }) end
-        leg('run_holstered', { run = true })
-        if haveWeapon then leg('run_drawn', { run = true, drawn = true }) end
+        -- (a run lasts 4 s: at 338.8 units a second a run of 5 s reaches what stands about 1,500 units north of the New Vegas arena)
+        leg('run_holstered', { run = true, seconds = 4 })
+        if haveWeapon then leg('run_drawn', { run = true, drawn = true, seconds = 4 }) end
         leg('sneak_holstered', { sneak = true })
         if haveWeapon then leg('sneak_drawn', { sneak = true, drawn = true }) end
 
@@ -98,7 +99,7 @@ function M.movement(game)
         common.addItem(r, game, heavy, more)
         r.wait(1)
         leg('weight_150_walk_holstered', {})
-        leg('weight_150_run_holstered', { run = true })
+        leg('weight_150_run_holstered', { run = true, seconds = 4 })
 
         -- over the carry weight: no running (the run flag is never set), the message of the game once, the walking speed of the weight
         stats = r.s4stats('before the overload')

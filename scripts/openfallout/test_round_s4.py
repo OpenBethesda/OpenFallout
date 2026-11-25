@@ -299,7 +299,8 @@ package.preload['openfallout.types'] = function()
 end
 package.preload['openfallout.interfaces'] = function()
     return { UI = { getMode = function() return state.ui_mode end, removeMode = function(m) if state.ui_mode == m then state.ui_mode = nil end end },
-             Controls = { overrideMovementControls = function() end } }
+             Controls = { overrideMovementControls = function() end },
+             FalloutHud = { state = function() return state.hud end } }
 end
 function load_player() return load(player_source)() end
 
@@ -418,8 +419,19 @@ class MeasuringHandlers(unittest.TestCase):
         self.lua.execute("messages = { { text = 'You are overencumbered' }, { text = 'other' } }")
         self.ask("s4message", setting="sOverEncumbered")
         (line,) = self.lines("s4message")
-        self.assertEqual(line, "ROUND\ts4message\tsOverEncumbered\tseen=true\tmessages=2\ttextKnown=true")
+        self.assertEqual(line, "ROUND\ts4message\tsOverEncumbered\tseen=true\tmessages=2\tshown=0\ttextKnown=true")
         self.assertNotIn("overencumbered", line)
+
+    def test_a_message_the_display_took_is_seen_on_its_lines(self):
+        # the display takes the engine's messages each frame: the round finds the text on the lines the display shows
+        self.lua.execute("messages = {}; state.hud = { lines = { { text = 'You are overencumbered' } } }")
+        self.run_frames(0.1)
+        self.lua.execute("state.hud = nil")
+        self.ask("s4message", setting="sOverEncumbered")
+        self.ask("s4message", setting="sOverEncumbered")
+        first, second = self.lines("s4message")
+        self.assertEqual(first, "ROUND\ts4message\tsOverEncumbered\tseen=true\tmessages=0\tshown=1\ttextKnown=true")
+        self.assertIn("seen=false", second)
 
     def test_dead_is_the_pipboys_answer(self):
         self.lua.execute("state.hp = 0.5")

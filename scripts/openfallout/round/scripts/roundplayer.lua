@@ -905,16 +905,33 @@ function handlers.s4levelup(args)
 end
 
 -- Whether the HUD gave the text of a game setting (`sOverEncumbered`) since the last call: the answer is a boolean, the text is not logged
+-- The texts the display showed since the last s4message: the display (falloutstatus.lua) takes the engine's messages each frame, so
+-- they are read from what it shows (its lines, and the messages it hands to the display of the game's file), each frame
+local hudSeen = {}
+local function watchHud()
+    local okState, state = pcall(function() return I.FalloutHud and I.FalloutHud.state() end)
+    if not okState or type(state) ~= 'table' then return end
+    for _, list in ipairs({ state.lines or {}, state.messages or {} }) do
+        for _, line in ipairs(list) do
+            if type(line) == 'table' and type(line.text) == 'string' then hudSeen[line.text] = true end
+        end
+    end
+end
+
 function handlers.s4message(args)
     local want = core.pipboy.text(args.setting)
     local ok, list = pcall(core.hud.takeMessages)
-    local seen = false
+    local seen = want ~= '' and hudSeen[want] == true
     if ok then
         for _, message in ipairs(list) do
             if want ~= '' and message.text == want then seen = true end
         end
     end
-    log('s4message', tostring(args.setting), 'seen=' .. tostring(seen), 'messages=' .. (ok and #list or -1), 'textKnown=' .. tostring(want ~= ''))
+    local shown = 0
+    for _ in pairs(hudSeen) do shown = shown + 1 end
+    hudSeen = {}
+    log('s4message', tostring(args.setting), 'seen=' .. tostring(seen), 'messages=' .. (ok and #list or -1), 'shown=' .. shown,
+        'textKnown=' .. tostring(want ~= ''))
     return { seen = seen, count = ok and #list or -1, textKnown = want ~= '' }
 end
 
@@ -1036,6 +1053,7 @@ return {
         onFrame = function()
             local now = core.getRealTime()
             s4Frame()
+            watchHud()
             if wantedMode ~= nil and camera.getMode() ~= wantedMode then
                 modeForced = modeForced + 1
                 if modeForced <= 3 then log('camera', 'mode forced back', 'from=' .. tostring(camera.getMode()), 'to=' .. tostring(wantedMode)) end

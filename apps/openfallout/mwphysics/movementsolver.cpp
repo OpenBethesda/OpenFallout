@@ -164,7 +164,13 @@ namespace OFPhysics
 
             if ((velocity.z() > 0.f && actor.mIsOnGround && !actor.mIsOnSlope)
                 || (velocity.z() > 0.f && velocity.z() + actor.mInertia.z() <= -velocity.z() && actor.mIsOnSlope))
+            {
                 actor.mInertia = velocity;
+                // The jump is in the inertia now: the later steps of this frame must not add its speed again (with two
+                // or more steps in a frame the take-off speed counted twice, and the height of a jump went with the
+                // frame rate: 77 and 113 units for the 64 of rule C.J1)
+                actor.mMovement.z() = 0.f;
+            }
             else if (!actor.mIsOnGround || actor.mIsOnSlope)
                 velocity = velocity + actor.mInertia;
         }
