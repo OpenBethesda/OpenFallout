@@ -139,6 +139,9 @@ namespace FalloutScript
         double permanent(FormId actor, int value) const;
         /// The permanent value minus the damage
         double current(FormId actor, int value) const;
+        /// The modifier that stays (what ModActorValue, the points of a level-up and the skill books added), not
+        /// clamped
+        double modifier(FormId actor, int value) const;
 
         void setBase(FormId actor, int value, double amount);
         /// Whether a script or the game set the base (else it is the record's, the derived one or the starting one)

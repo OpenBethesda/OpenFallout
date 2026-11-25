@@ -653,13 +653,13 @@ namespace
         f.mValues.setBase(thePlayer, smallGuns, 98);
         const ItemUse::Result first = f.mUse.use(thePlayer, guns);
         EXPECT_EQ(first.mGained, 3);
-        EXPECT_EQ(f.mValues.permanent(thePlayer, smallGuns), 101);
         // The skill is read as 100 at most, so the book that is read now still adds to what is stored
         EXPECT_EQ(f.mValues.current(thePlayer, smallGuns), 100);
         const ItemUse::Result second = f.mUse.use(thePlayer, guns);
         EXPECT_EQ(second.mOutcome, ItemUse::Outcome::Read);
         EXPECT_EQ(second.mGained, 3);
-        EXPECT_EQ(f.mValues.permanent(thePlayer, smallGuns), 104);
+        // The books are a permanent modifier of 6 on top of the base
+        EXPECT_EQ(f.mValues.modifier(thePlayer, smallGuns), 6);
         EXPECT_EQ(f.mState.itemCount(thePlayer, guns), 0);
     }
 

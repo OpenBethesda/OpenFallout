@@ -540,7 +540,7 @@ namespace OFScript
         if (skill < AV::firstSkill || skill > AV::lastSkill || points <= 0)
             return 0;
         // Only points that were spent come back: the permanent modifier
-        const double spent = mActorValues.permanent(mPlayer, skill) - mActorValues.base(mPlayer, skill);
+        const double spent = mActorValues.modifier(mPlayer, skill);
         points = std::min(points, static_cast<int>(std::floor(std::max(spent, 0.0))));
         if (points <= 0)
             return 0;

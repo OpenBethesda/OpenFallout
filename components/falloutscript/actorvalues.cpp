@@ -146,6 +146,13 @@ namespace FalloutScript
         return shown(value, permanentOf(actor, value));
     }
 
+    double ActorValues::modifier(FormId actor, int value) const
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = mEntries.find({ actor, value });
+        return found == mEntries.end() ? 0.0 : found->second.mModifier;
+    }
+
     double ActorValues::current(FormId actor, int value) const
     {
         const std::lock_guard lock(mMutex);
