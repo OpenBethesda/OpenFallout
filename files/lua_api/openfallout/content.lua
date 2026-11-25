@@ -5,11 +5,6 @@
 -- @module content
 -- @usage local content = require('openfallout.content')
 
-
---- @{openfallout.core#SpellRange}: Magic ranges
--- @field [parent=#content] openfallout.core#SpellRange RANGE
-
-
 --- @{#ActivatorContent}: Activator manipulation.
 -- @field [parent=#content] #ActivatorContent activators
 
@@ -32,15 +27,6 @@
 -- content.apparatuses.records.MyAlembic = { name = 'Industrial Alembic', model = 'meshes/a/alembic.nif', icon = 'icons/a/alembic.dds', type = content.apparatuses.TYPE.Alembic, quality = 2.5, weight = 4, value = 300 }
 -- @usage
 -- content.apparatuses.records.BetterAlembic = { template = content.apparatuses.records.MyAlembic, quality = 10 }
-
---- @{#AttributeContent}: Attribute manipulation.
--- @field [parent=#content] #AttributeContent attributes
-
----
--- A mutable list of all @{openfallout.core#AttributeRecord}s.
--- @field [parent=#AttributeContent] #list<openfallout.core#AttributeRecord> records
--- @usage
--- content.attributes.records.MyAttribute = { name = 'Toddhood', description = 'n% of the power to reach Bethesda.', werewolfValue = 100 }
 
 --- @{#BookContent}: Book manipulation.
 -- @field [parent=#content] #BookContent books
@@ -68,18 +54,6 @@
 -- @field [parent=#DoorContent] #list<openfallout.types#DoorRecord> records
 -- @usage
 -- content.doors.records.MyDoor = { template = content.doors.records['door_dwrv_double00'], mwscript = 'blockedDoor', name = 'Overly Heavy Dwemer Door' }
-
---- @{#EnchantmentContent}: Enchantment manipulation.
--- @field [parent=#content] #EnchantmentContent enchantments
-
---- @{openfallout.core#EnchantmentType}: Enchantment types
--- @field [parent=#EnchantmentContent] openfallout.core#EnchantmentType TYPE
-
----
--- A mutable list of all @{openfallout.core#Enchantment}s.
--- @field [parent=#EnchantmentContent] #list<openfallout.core#Enchantment> records
--- @usage
--- content.enchantments.records.MyEnchantment = { type = content.enchantments.TYPE.CastOnUse, charge = 1, cost = 1, effects = { { id = 'FortifySkill', affectedSkill = 'enchant', duration = 5, magnitudeMin = 50, magnitudeMax = 100 } } }
 
 --- @{#FactionContent}: Faction manipulation.
 -- @field [parent=#content] #FactionContent factions
@@ -159,15 +133,6 @@
 -- @usage
 -- content.lockpicks.records.MyLockpick = { template = content.lockpicks.records['skeleton_key'], name = 'Digipick' }
 
---- @{#MagicEffectContent}: Magic effect manipulation.
--- @field [parent=#content] #MagicEffectContent magicEffects
-
----
--- A mutable list of all @{openfallout.core#MagicEffect}s.
--- @field [parent=#MagicEffectContent] #list<openfallout.core#MagicEffect> records
--- @usage
--- content.magicEffects.records.MyMagicEffect = { template = content.magicEffects.records['summonscamp'], name = 'Summon Nothing' }
-
 --- @{#MiscContent}: Misc manipulation.
 -- @field [parent=#content] #MiscContent miscs
 
@@ -176,15 +141,6 @@
 -- @field [parent=#MiscContent] #list<openfallout.types#MiscellaneousRecord> records
 -- @usage
 -- content.miscs.records.MyMisc = { template = content.miscs.records['gold_001'], mwscript = 'BILL_MarksSpiritSummon', weight = 5 }
-
---- @{#PotionContent}: Potion manipulation.
--- @field [parent=#content] #PotionContent potions
-
----
--- A mutable list of all @{openfallout.types#PotionRecord}s.
--- @field [parent=#PotionContent] #list<openfallout.types#PotionRecord> records
--- @usage
--- content.potions.records.MyPotion = { template = content.potions.records['p_dispel_s'], name = 'Too Strong', effects = { { id = 'FireDamage', duration = 10, range = content.RANGE.Self, magnitudeMin = 100 } } }
 
 --- @{#ProbeContent}: Probe manipulation.
 -- @field [parent=#content] #ProbeContent probes
@@ -212,27 +168,6 @@
 -- @field [parent=#RepairContent] #list<openfallout.types#RepairRecord> records
 -- @usage
 -- content.repairs.records.MyRepair = { template = content.repairs.records['hammer_repair'], name = 'Hammer Time' }
-
---- @{#SkillContent}: Skill manipulation.
--- @field [parent=#content] #SkillContent skills
-
----
--- A mutable list of all @{openfallout.core#SkillRecord}s.
--- @field [parent=#SkillContent] #list<openfallout.core#SkillRecord> records
--- @usage
--- content.skills.records.MySkill = { name = 'C++', werewolfValue = 0, attribute = 'MyAttribute', specialization = 'magic' }
-
---- @{#SpellContent}: Spell manipulation.
--- @field [parent=#content] #SpellContent spells
-
---- @{openfallout.core#SpellType}: Spell types
--- @field [parent=#SpellContent] openfallout.core#SpellType TYPE
-
----
--- A mutable list of all @{openfallout.core#Spell}s.
--- @field [parent=#SpellContent] #list<openfallout.core#Spell> records
--- @usage
--- content.spells.records.MySpell = { name = 'Enchantment?', type = content.spells.TYPE.Spell, cost = 1000, starterSpellFlag = true, isAutocalc = true, effects = { { id = 'FortifyAttribute', affectedAttribute = 'intelligence', duration = 5, magnitudeMin = 5, magnitudeMax = 10 } } }
 
 --- @{#StaticContent}: Static manipulation.
 -- @field [parent=#content] #StaticContent statics

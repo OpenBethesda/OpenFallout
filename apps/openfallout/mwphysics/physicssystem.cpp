@@ -916,12 +916,6 @@ namespace OFPhysics
     {
     }
 
-    WorldFrameData::WorldFrameData()
-        : mIsInStorm(OFBase::Environment::get().getWorld()->isInStorm())
-        , mStormDirection(OFBase::Environment::get().getWorld()->getStormDirection())
-    {
-    }
-
     LOSRequest::LOSRequest(const std::weak_ptr<Actor>& a1, const std::weak_ptr<Actor>& a2)
         : mResult(false)
         , mStale(false)

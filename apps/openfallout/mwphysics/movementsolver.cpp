@@ -4,12 +4,7 @@
 #include <BulletCollision/CollisionDispatch/btCollisionWorld.h>
 #include <BulletCollision/CollisionShapes/btConvexShape.h>
 
-#include <components/esm3/loadgmst.hpp>
 #include <components/misc/convert.hpp>
-
-#include "../mwbase/environment.hpp"
-
-#include "../mwworld/esmstore.hpp"
 
 #include "actor.hpp"
 #include "collisiontype.hpp"
@@ -125,8 +120,7 @@ namespace OFPhysics
         return tracer.mEndPos - offset + osg::Vec3f(0.f, 0.f, sGroundOffset);
     }
 
-    void MovementSolver::move(
-        ActorFrameData& actor, float time, const btCollisionWorld* collisionWorld, const WorldFrameData& worldData)
+    void MovementSolver::move(ActorFrameData& actor, float time, const btCollisionWorld* collisionWorld)
     {
         // Reset per-frame data
         actor.mWalkingOnWater = false;
@@ -173,15 +167,6 @@ namespace OFPhysics
                 actor.mInertia = velocity;
             else if (!actor.mIsOnGround || actor.mIsOnSlope)
                 velocity = velocity + actor.mInertia;
-        }
-
-        // Now that we have the effective movement vector, apply wind forces to it
-        if (worldData.mIsInStorm && velocity.length() > 0)
-        {
-            const OFWorld::ESMStore& store = *OFBase::Environment::get().getESMStore();
-            const float fStromWalkMult = store.get<ESM::GameSetting>().find("fStromWalkMult")->mValue.getFloat();
-            const float angleCos = worldData.mStormDirection * velocity / velocity.length();
-            velocity *= 1.f + fStromWalkMult * angleCos;
         }
 
         Stepper stepper(collisionWorld, actor.mCollisionObject);

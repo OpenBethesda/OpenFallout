@@ -118,6 +118,8 @@ namespace OFWorld
         int mActivationDistanceOverride;
 
         std::string mStartCell;
+        /// sDefaultCellName of the game (an exe default, "Wilderness"), read once the Fallout scripts are there
+        mutable std::string mDefaultCellName;
 
 
         float mDistanceToFocusObject;

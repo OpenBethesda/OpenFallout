@@ -852,7 +852,9 @@ namespace OFWorld
     {
         mShared.clear();
         mStatic.clear();
-        static const float fStromWindSpeed = store.get<ESM::GameSetting>().find("fStromWindSpeed")->mValue.getFloat();
+        // The wind speed above which one of the Morrowind weathers is a storm (its old fStromWindSpeed). The weathers of
+        // Fallout are never storms (Weather of an ESM4 record), and nothing in Fallout moves the player by the wind.
+        constexpr float fStromWindSpeed = 0.7f;
         const auto addWeather
             = [&](const std::string& name, float dlFactor, float dlOffset, std::string_view particleEffect = {}) {
                   const int index = static_cast<int>(getSize());

@@ -573,7 +573,11 @@ namespace OFWorld
                     return worldspace->mFullName;
         }
 
-        return mStore.get<ESM::GameSetting>().find("sDefaultCellname")->mValue.getString();
+        // An exterior cell with no name of its own (NV 0x551740)
+        if (mDefaultCellName.empty())
+            if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+                mDefaultCellName = scripts->gameSettingText("sDefaultCellName");
+        return mDefaultCellName;
     }
 
     Ptr World::searchPtr(const ESM::RefId& name, bool activeOnly, bool searchInContainers)

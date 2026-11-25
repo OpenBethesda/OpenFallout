@@ -1,7 +1,6 @@
 #include "types.hpp"
 
 #include <components/esm3/loadmisc.hpp>
-#include <components/esm3/loadspel.hpp>
 #include <components/misc/resourcehelpers.hpp>
 #include <components/resource/resourcesystem.hpp>
 
@@ -42,22 +41,6 @@ namespace OFLua
 
             object.ptr().getCellRef().setLockLevel(-object.ptr().getCellRef().getLockLevel());
         };
-        lockable["setTrapSpell"] = [](const GObject& object, const sol::object& spellOrId) {
-            if (spellOrId == sol::nil)
-            {
-                object.ptr().getCellRef().setTrap(ESM::RefId()); // remove the trap value
-                return;
-            }
-            if (spellOrId.is<ESM::Spell>())
-                object.ptr().getCellRef().setTrap(spellOrId.as<const ESM::Spell*>()->mId);
-            else
-            {
-                ESM::RefId spellId = ESM::RefId::deserializeText(LuaUtil::cast<std::string_view>(spellOrId));
-                const auto& spellStore = OFBase::Environment::get().getESMStore()->get<ESM::Spell>();
-                const ESM::Spell* spell = spellStore.find(spellId);
-                object.ptr().getCellRef().setTrap(spell->mId);
-            }
-        };
         lockable["setKeyRecord"] = [](const GObject& object, const sol::object& itemOrRecordId) {
             if (itemOrRecordId == sol::nil)
             {
@@ -73,12 +56,6 @@ namespace OFLua
                 const ESM::Miscellaneous* key = keyStore.find(miscId);
                 object.ptr().getCellRef().setKey(key->mId);
             }
-        };
-        lockable["getTrapSpell"] = [](sol::this_state lua, const Object& o) -> sol::optional<const ESM::Spell*> {
-            ESM::RefId trap = o.ptr().getCellRef().getTrap();
-            if (trap.empty())
-                return sol::nullopt;
-            return OFBase::Environment::get().getESMStore()->get<ESM::Spell>().find(trap);
         };
     }
 }

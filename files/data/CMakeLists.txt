@@ -113,7 +113,6 @@ set(BUILTIN_DATA_FILES
     builtin.omwscripts
 
     scripts/omw/activationhandlers.lua
-    scripts/omw/esmfallbacks.lua
     scripts/omw/camera/camera.lua
     scripts/omw/camera/head_bobbing.lua
     scripts/omw/camera/third_person.lua
@@ -125,7 +124,6 @@ set(BUILTIN_DATA_FILES
     scripts/omw/console/player.lua
     scripts/omw/console/menu.lua
     scripts/omw/mechanics/actorcontroller.lua
-    scripts/omw/mechanics/animationcontroller.lua
     scripts/omw/mechanics/globalcontroller.lua
     scripts/omw/mechanics/playercontroller.lua
     scripts/omw/settings/menu.lua
@@ -140,8 +138,6 @@ set(BUILTIN_DATA_FILES
     scripts/omw/mwui/textEdit.lua
     scripts/omw/mwui/space.lua
     scripts/omw/mwui/init.lua
-    scripts/omw/skillhandlers.lua
-    scripts/omw/crimes.lua
     scripts/omw/falloutbarter.lua
     scripts/omw/falloutrepairservices.lua
     scripts/omw/falloutpipboyrepair.lua

@@ -16,8 +16,6 @@
 #include <components/sdlutil/events.hpp>
 
 #include "../mwmechanics/attacktype.hpp"
-#include "../mwmechanics/damagesourcetype.hpp"
-#include "../mwrender/animationpriority.hpp"
 
 namespace OFWorld
 {
@@ -93,22 +91,7 @@ namespace OFBase
         /// object with an OnActivate block calls this with Activate)
         virtual void defaultActivation(const OFWorld::Ptr& object, const OFWorld::Ptr& actor) = 0;
         virtual void useItem(const OFWorld::Ptr& object, const OFWorld::Ptr& actor, bool force) = 0;
-        virtual void animationTextKey(const OFWorld::Ptr& actor, const std::string& key) = 0;
-        virtual void playAnimation(const OFWorld::Ptr& object, const std::string& groupname,
-            const OFRender::AnimPriority& priority, int blendMask, bool autodisable, float speedmult,
-            std::string_view start, std::string_view stop, float startpoint, uint32_t loops, bool loopfallback)
-            = 0;
-        virtual void animationEnded(const OFWorld::Ptr& actor, std::string_view groupname, float time, float completion,
-            std::string_view startKey, std::string_view stopKey)
-            = 0;
-        virtual void skillLevelUp(const OFWorld::Ptr& actor, ESM::RefId skillId, std::string_view source) = 0;
-        virtual void skillUse(const OFWorld::Ptr& actor, ESM::RefId skillId, int useType, float scale) = 0;
-        virtual void onHit(const OFWorld::Ptr& attacker, const OFWorld::Ptr& victim, const OFWorld::Ptr& weapon,
-            const OFWorld::Ptr& ammo, int attackType, float attackStrength, float attackWindUp, float damage,
-            bool isHealth, const osg::Vec3f& hitPos, bool successful, OFMechanics::DamageSourceType)
-            = 0;
         virtual void exteriorCreated(OFWorld::CellStore& cell) = 0;
-        virtual void actorDied(const OFWorld::Ptr& actor) = 0;
         virtual void onDialogueResponse(
             const OFWorld::Ptr& actor, const ESM::DialInfo& info, const ESM::Dialogue& record)
             = 0;
@@ -117,17 +100,6 @@ namespace OFBase
         virtual void uiModeChanged(const OFWorld::Ptr& arg) = 0;
         virtual void viewportResized(int width, int height) = 0;
         virtual void savePermanentStorage(const std::filesystem::path& userConfigPath) = 0;
-        virtual void applyMagicEffects(ESM::RefId id, const OFWorld::Ptr& caster, ESM::RefNum item,
-            const OFWorld::Ptr& target, const std::vector<int>& effects, bool ignoreReflect, bool ignoreSpellAbsorption,
-            bool stackable, bool isReflect)
-            = 0;
-        virtual void magicProjectileHit(ESM::RefId spellId, const OFWorld::Ptr& caster, ESM::RefNum item,
-            const OFWorld::Ptr& victim, const osg::Vec3f& position, const osg::Vec3f& normal)
-            = 0;
-        // TODO: notify LuaManager about other events
-        // virtual void objectOnHit(const OFWorld::Ptr &ptr, float damage, bool ishealth, const OFWorld::Ptr &object,
-        //                          const OFWorld::Ptr &attacker, const osg::Vec3f &hitPosition, bool successful,
-        //                          DamageSourceType sourceType) = 0;
 
         struct InputEvent
         {

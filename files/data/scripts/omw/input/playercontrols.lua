@@ -3,7 +3,6 @@ local debug = require('openfallout.debug')
 local input = require('openfallout.input')
 local self = require('openfallout.self')
 local storage = require('openfallout.storage')
-local ui = require('openfallout.ui')
 local async = require('openfallout.async')
 local Actor = require('openfallout.types').Actor
 local Player = require('openfallout.types').Player
@@ -66,15 +65,6 @@ do
     end
 end
 
-local function checkNotWerewolf()
-    if Player.isWerewolf(self) then
-        ui.showMessage(core.getGMST('sWerewolfRefusal'))
-        return false
-    else
-        return true
-    end
-end
-
 local movementControlsOverridden = false
 
 local autoMove = false
@@ -105,8 +95,7 @@ local function controlsAllowed()
     if not Player.getControlSwitch(self, Player.CONTROL_SWITCH.Controls) then return false end
     if I.UI.getMode() then return false end
     if debug.isGodMode() then return true end
-    local paralysis = Actor.activeEffects(self):getEffect(core.magic.EFFECT_TYPE.Paralyze)
-    return paralysis.magnitude <= 0
+    return not Actor.isParalyzed(self)
 end
 
 local function movementAllowed()
@@ -141,16 +130,7 @@ local function combatAllowed()
     return controlsAllowed() and not combatControlsOverridden
 end
 
-input.registerTriggerHandler('ToggleSpell', async:callback(function()
-    if not combatAllowed() then return end
-    if Actor.getStance(self) == Actor.STANCE.Spell then
-        Actor.setStance(self, Actor.STANCE.Nothing)
-    elseif Player.getControlSwitch(self, Player.CONTROL_SWITCH.Magic) then
-        if checkNotWerewolf() then
-            Actor.setStance(self, Actor.STANCE.Spell)
-        end
-    end
-end))
+-- ToggleSpell stays a trigger of the bindings, but Fallout has no spells to ready: nothing handles it
 
 input.registerTriggerHandler('ToggleWeapon', async:callback(function()
     if not combatAllowed() then return end
@@ -166,11 +146,7 @@ input.registerActionHandler('Use', async:callback(function(value)
     if value and combatAllowed() then startUse = true end
 end))
 local function processAttacking()
-    -- for spell-casting, set controls.use to true for exactly one frame
-    -- otherwise spell casting is attempted every frame while Use is true
-    if Actor.getStance(self) == Actor.STANCE.Spell then
-        self.controls.use = startUse and self.ATTACK_TYPE.Any or self.ATTACK_TYPE.NoAttack
-    elseif Actor.getStance(self) == Actor.STANCE.Weapon and input.getBooleanActionValue('Use') then
+    if Actor.getStance(self) == Actor.STANCE.Weapon and input.getBooleanActionValue('Use') then
         self.controls.use = self.ATTACK_TYPE.Any
     else
         self.controls.use = self.ATTACK_TYPE.NoAttack

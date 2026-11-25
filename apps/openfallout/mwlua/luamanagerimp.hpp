@@ -99,19 +99,6 @@ namespace OFLua
             const osg::Quat& rotation) override;
         void objectPlaced(const OFWorld::Ptr& object, const OFWorld::Ptr& actor, const osg::Vec3f& position,
             const osg::Quat& rotation) override;
-        void animationTextKey(const OFWorld::Ptr& actor, const std::string& key) override;
-        void playAnimation(const OFWorld::Ptr& actor, const std::string& groupname,
-            const OFRender::AnimPriority& priority, int blendMask, bool autodisable, float speedmult,
-            std::string_view start, std::string_view stop, float startpoint, uint32_t loops,
-            bool loopfallback) override;
-        void animationEnded(const OFWorld::Ptr& actor, std::string_view groupname, float time, float completion,
-            std::string_view startKey, std::string_view stopKey) override;
-        void skillUse(const OFWorld::Ptr& actor, ESM::RefId skillId, int useType, float scale) override;
-        void skillLevelUp(const OFWorld::Ptr& actor, ESM::RefId skillId, std::string_view source) override;
-        void onHit(const OFWorld::Ptr& attacker, const OFWorld::Ptr& victim, const OFWorld::Ptr& weapon,
-            const OFWorld::Ptr& ammo, int attackType, float attackStrength, float attackWindUp, float damage,
-            bool isHealth, const osg::Vec3f& hitPos, bool successful,
-            OFMechanics::DamageSourceType sourceType) override;
         void exteriorCreated(OFWorld::CellStore& cell) override
         {
             mEngineEvents.addToQueue(EngineEvents::OnNewExterior{ cell });
@@ -120,14 +107,8 @@ namespace OFLua
         void questUpdated(const ESM::RefId& questId, int stage) override;
         void uiModeChanged(const OFWorld::Ptr& arg) override;
         void viewportResized(int width, int height) override;
-        void actorDied(const OFWorld::Ptr& actor) override;
         void onDialogueResponse(
             const OFWorld::Ptr& actor, const ESM::DialInfo& info, const ESM::Dialogue& record) override;
-        void applyMagicEffects(ESM::RefId id, const OFWorld::Ptr& caster, ESM::RefNum item, const OFWorld::Ptr& target,
-            const std::vector<int>& effects, bool ignoreReflect, bool ignoreSpellAbsorption, bool stackable,
-            bool isReflect) override;
-        void magicProjectileHit(ESM::RefId spellId, const OFWorld::Ptr& caster, ESM::RefNum item,
-            const OFWorld::Ptr& victim, const osg::Vec3f& position, const osg::Vec3f& normal) override;
 
         OFBase::LuaManager::ActorControls* getActorControls(const OFWorld::Ptr&) const override;
 

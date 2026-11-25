@@ -36,10 +36,6 @@ local function onActivate(obj, actor)
     if handled then
         return
     end
-    -- The activator of a script can be any object (a door that activates itself), and only an actor loses its invisibility
-    if types.Actor.objectIsInstance(actor) then
-        types.Actor.activeEffects(actor):remove('invisibility')
-    end
     world._runStandardActivationAction(obj, actor)
 end
 

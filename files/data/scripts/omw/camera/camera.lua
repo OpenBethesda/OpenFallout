@@ -216,8 +216,7 @@ local function onFrame(dt)
         primaryMode = mode
     end
     if mode ~= MODE.Static then
-        local paralysis = Actor.activeEffects(self):getEffect(core.magic.EFFECT_TYPE.Paralyze)
-        local paralyzed = not debug.isGodMode() and paralysis.magnitude > 0
+        local paralyzed = not debug.isGodMode() and Actor.isParalyzed(self)
         if not next(noModeControl) and not paralyzed then
             updatePOV(dt)
             updateVanity(dt)

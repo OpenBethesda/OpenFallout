@@ -227,10 +227,9 @@ namespace
         {
             const float mPhysicsDt;
             const btCollisionWorld* mCollisionWorld;
-            const OFPhysics::WorldFrameData& mWorldFrameData;
             void operator()(const LockedActorSimulation& sim) const
             {
-                OFPhysics::MovementSolver::move(sim.second, mPhysicsDt, mCollisionWorld, mWorldFrameData);
+                OFPhysics::MovementSolver::move(sim.second, mPhysicsDt, mCollisionWorld);
             }
             void operator()(const LockedProjectileSimulation& sim) const
             {
@@ -541,9 +540,6 @@ namespace OFPhysics
         mNextJob.store(0, std::memory_order_release);
 
         if (mAdvanceSimulation)
-            mWorldFrameData = std::make_unique<WorldFrameData>();
-
-        if (mAdvanceSimulation)
             mBudgetCursor += 1;
 
         if (mNumThreads == 0)
@@ -773,7 +769,7 @@ namespace OFPhysics
         {
             mPreStepBarrier->wait([this] { afterPreStep(); });
             int job = 0;
-            const Visitors::Move impl{ mPhysicsDt, mCollisionWorld, *mWorldFrameData };
+            const Visitors::Move impl{ mPhysicsDt, mCollisionWorld };
             const Visitors::WithLockedPtr<Visitors::Move, MaybeLock> vis{ impl, mCollisionWorldMutex, mLockingPolicy };
             while ((job = mNextJob.fetch_add(1, std::memory_order_relaxed)) < mNumJobs)
                 std::visit(vis, (*mSimulations)[job]);

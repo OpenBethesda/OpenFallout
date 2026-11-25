@@ -122,13 +122,6 @@ namespace OFPhysics
         Projectile* mProjectile;
     };
 
-    struct WorldFrameData
-    {
-        WorldFrameData();
-        bool mIsInStorm;
-        osg::Vec3f mStormDirection;
-    };
-
     template <class Ptr, class FrameData>
     class SimulationImpl
     {

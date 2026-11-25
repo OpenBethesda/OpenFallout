@@ -1,6 +1,5 @@
 local types = require('openfallout.types')
 local Lockable = types.Lockable
-local Item = require('openfallout.types').Item
 local world = require('openfallout.world')
 local core = require('openfallout.core')
 
@@ -22,16 +21,6 @@ local function onPlaySound3d(data)
     end
 end
 
-local function onModifyItemCondition(data)
-    local itemData = Item.itemData(data.item)
-    itemData.condition = math.min(data.item.type.record(data.item).health, math.max(0, itemData.condition + data.amount))
-
-    -- Force unequip broken items
-    if data.actor and itemData.condition <= 0 then
-        data.actor:sendEvent('Unequip', {item = data.item})
-    end
-end
-
 return {
     eventHandlers = {
         SpawnVfx = function(data)
@@ -45,6 +34,5 @@ return {
         Unlock = function(data)
             Lockable.unlock(data.target)
         end,
-        ModifyItemCondition = onModifyItemCondition,
     },
 }
