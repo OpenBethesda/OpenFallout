@@ -530,7 +530,7 @@ function r.s4stats(label) return ask('s4stats', { label = label }) end
 function r.s4move(o)
     local started_reply = ask('s4move', o)
     if started_reply == nil then return nil end
-    local deadline = now() + (o.seconds or 5) + 30
+    local deadline = now() + (o.seconds or 5) + 90
     local result
     repeat
         r.wait(0.25)
