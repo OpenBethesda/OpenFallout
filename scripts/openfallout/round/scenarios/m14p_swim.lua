@@ -29,6 +29,8 @@ return { limit = 200, delay = 4, run = function(r)
     -- back into it
     phase('W jumps in the water')
     r.wait(2)
+    -- (the DLC boxes that come late are answered first: a box pauses the world in the air)
+    r.settle(3, 30)
     local jump = r.s4jump{ label = 'in the water', seconds = 3 }
     if jump == nil or jump.apex == nil then
         r.error('water jump', 'no result')
