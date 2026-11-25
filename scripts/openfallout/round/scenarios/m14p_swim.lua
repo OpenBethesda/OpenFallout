@@ -25,5 +25,18 @@ return { limit = 200, delay = 4, run = function(r)
     r.eye('after swimming fast')
     r.wait(2)
     r.shot('W1_swimming', false)
+    -- A jump while swimming goes twice as high as on the ground (rule C.W2: fJumpHeightMin 64, doubled), out of the water and
+    -- back into it
+    phase('W jumps in the water')
+    r.wait(2)
+    local jump = r.s4jump{ label = 'in the water', seconds = 3 }
+    if jump == nil or jump.apex == nil then
+        r.error('water jump', 'no result')
+    elseif jump.apex >= 112 and jump.apex <= 144 then
+        r.log('water jump', string.format('apex=%.1f', jump.apex), 'ok')
+    else
+        r.error('water jump', string.format('apex=%.1f', jump.apex), 'the rule is 128 units (twice the jump on the ground)')
+    end
+    r.eye('after the jump')
     r.log('PHASE done')
 end }

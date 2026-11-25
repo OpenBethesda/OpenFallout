@@ -142,6 +142,17 @@ namespace OFPhysics
 
         float swimlevel = actor.mSwimLevel + actor.mHalfExtentsZ;
 
+        // A jump while swimming (rule C.W2): the actor asks for it at the swim line or under it. It goes into the
+        // inertia, so gravity takes it and the swimmer may leave the water; the later steps of the frame do not add it
+        // again.
+        if (!actor.mFlying && !actor.mInert && actor.mMovement.z() > 0.f && actor.mPosition.z() < swimlevel + 1.f)
+        {
+            actor.mInertia = osg::Vec3f(0.f, 0.f, actor.mMovement.z());
+            actor.mMovement.z() = 0.f;
+        }
+        // (a swimmer rises out of the water while its inertia goes up)
+        const bool risingFromWater = !actor.mFlying && actor.mInertia.z() > 0.f;
+
         ActorTracer tracer;
 
         osg::Vec3f velocity;
@@ -157,6 +168,8 @@ namespace OFPhysics
             velocity = (osg::Quat(actor.mRotation.x(), osg::Vec3f(-1, 0, 0))
                            * osg::Quat(actor.mRotation.y(), osg::Vec3f(0, 0, -1)))
                 * actor.mMovement;
+            if (risingFromWater)
+                velocity += actor.mInertia;
         }
         else
         {
@@ -195,8 +208,8 @@ namespace OFPhysics
             osg::Vec3f nextpos = newPosition + velocity * remainingTime;
             bool underwater = newPosition.z() < swimlevel;
 
-            // If not able to fly, don't allow to swim up into the air
-            if (!actor.mFlying && nextpos.z() > swimlevel && underwater)
+            // If not able to fly, don't allow to swim up into the air (but a jump takes the swimmer out)
+            if (!actor.mFlying && !risingFromWater && nextpos.z() > swimlevel && underwater)
             {
                 const osg::Vec3f down(0, 0, -1);
                 velocity = reject(velocity, down);
@@ -413,7 +426,7 @@ namespace OFPhysics
             }
         }
 
-        if ((isOnGround && !isOnSlope) || newPosition.z() < swimlevel || actor.mFlying)
+        if ((isOnGround && !isOnSlope) || (newPosition.z() < swimlevel && actor.mInertia.z() <= 0.f) || actor.mFlying)
             actor.mInertia = osg::Vec3f(0.f, 0.f, 0.f);
         else
         {

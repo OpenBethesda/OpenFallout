@@ -187,21 +187,27 @@ namespace OFMechanics
         velocity *= asked * mStanceSpeed;
 
         // A landing of this frame counts before a new jump starts: a jump on the frame of the landing does not take
-        // the fall away (C.F1)
+        // the fall away (C.F1). A jump out of the water is over when the player is back in it and no longer rises.
+        const float z = ptr.getRefData().getPosition().pos[2];
+        if (mSwimming && z <= mLastZ)
+            mInJump = false;
         mInJump = mInJump && !onGround;
         updateFall(onGround, flying || !collides);
 
         // A jump: the height of the rule, as a speed that takes the player there under gravity (C.J1); the speed the
-        // player had is kept. No jump in water yet: the movement solver keeps a swimmer under the swim line, so the
-        // doubled height of C.W2 is a known gap.
-        if (movement.mPosition[2] > 0.f && onGround && !mSwimming && !flying && collides && !mInJump
-            && !(scripts != nullptr && scripts->isDead(ptr)))
+        // player had is kept. A swimmer whose head is out of the water jumps twice as high (C.W2); the movement solver
+        // lets that jump take it out of the water.
+        const bool waterJump = mSwimming && !world.isSubmerged(ptr);
+        if (movement.mPosition[2] > 0.f && (onGround || waterJump) && (!mSwimming || waterJump) && !flying && collides
+            && !mInJump && !(scripts != nullptr && scripts->isDead(ptr)))
         {
-            const double height = scripts != nullptr ? scripts->jumpHeight(ptr, false) : 64.0;
+            const double height = scripts != nullptr ? scripts->jumpHeight(ptr, mSwimming) : (mSwimming ? 128.0 : 64.0);
             const double gravity = Constants::GravityConst * Constants::UnitsPerMeter;
             velocity.z() = static_cast<float>(FalloutScript::Movement::jumpSpeed(height, gravity));
             mInJump = true;
-            mFallStart = ptr.getRefData().getPosition().pos[2];
+            // (water ends a fall: a jump from it has no take-off height)
+            if (!mSwimming)
+                mFallStart = ptr.getRefData().getPosition().pos[2];
             if (scripts != nullptr)
                 scripts->jumped(ptr);
             world.getPlayer().setJumping(true);
