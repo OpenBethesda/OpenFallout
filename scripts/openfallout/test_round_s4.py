@@ -4,6 +4,7 @@
 import importlib.util
 import json
 import sys
+import re
 import unittest
 from pathlib import Path
 
@@ -328,7 +329,10 @@ function step(dt, module)
             state.fall_from = nil
         end
     end
-    self_module.position = vec(state.x, state.y, state.z)
+    -- (with `state.lag` the scripts see the position of the frame before, as with the physics on a thread of its own)
+    local here = vec(state.x, state.y, state.z)
+    self_module.position = state.lag and (last_here or here) or here
+    last_here = here
     module.engineHandlers.onFrame()
     module.engineHandlers.onUpdate()
 end
@@ -362,9 +366,21 @@ class MeasuringHandlers(unittest.TestCase):
         self.run_frames(5.5)
         (line,) = self.lines("s4move")
         self.assertIn("walk", line)
-        self.assertRegex(line, r"path=84\.70 net=84\.70 api=84\.70 apiMin=84\.70 apiMax=84\.70 window=4\.00 frames=\d+")
+        self.assertRegex(line, r"path=84\.70 ends=84\.70 net=84\.70 api=84\.70 apiMin=84\.70 apiMax=84\.70 window=4\.00 frames=\d+")
         # the controls are let go
         self.assertEqual(self.lua.eval("self_module.controls.movement"), 0)
+
+    def test_the_ground_speed_is_fitted_through_every_frame_when_the_position_lags_a_frame(self):
+        # the physics on its own thread: the position is the frame before's; frames of uneven length, a long one at the end
+        self.lua.execute("state.lag = true")
+        self.ask("s4move", label="walk", forward=1, seconds=3.5, skip=1.0)
+        for dt in [1 / 30] * 40 + [0.03, 0.12] * 13 + [0.25]:
+            self.step(dt, self.module)
+        (line,) = self.lines("s4move")
+        fitted = float(re.search(r"path=([\d.]+)", line).group(1))
+        ends = float(re.search(r"ends=([\d.]+)", line).group(1))
+        self.assertAlmostEqual(fitted, 84.7, delta=84.7 * 0.02)
+        self.assertGreater(abs(ends - 84.7), abs(fitted - 84.7))
 
     def test_a_run_and_the_speed_number_that_is_not_the_ground_speed_are_both_logged(self):
         self.lua.execute("state.run = 270")
@@ -373,7 +389,7 @@ class MeasuringHandlers(unittest.TestCase):
         self.lua.execute("state.api_override = true")
         self.run_frames(4.5)
         (line,) = self.lines("s4move")
-        self.assertRegex(line, r"path=2[67]\d\.\d+ net=2[67]\d\.\d+ api=270\.00")
+        self.assertRegex(line, r"path=2[67]\d\.\d+ ends=2[67]\d\.\d+ net=2[67]\d\.\d+ api=270\.00")
 
     def test_a_jump_gives_its_apex_and_the_landing(self):
         self.ask("s4jump", label="plain", seconds=3.5)

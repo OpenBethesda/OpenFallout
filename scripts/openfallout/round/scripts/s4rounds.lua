@@ -5,7 +5,9 @@
 -- Where each tolerance comes from (the method of measuring, not what makes a build pass):
 --   the speed number (Actor.getCurrentSpeed)   0.05 units a second: the value is one product of float32 settings, so only rounding is left
 --   the distance covered on the ground         5 %: the window starts 1 s after the first step (the ramp is over), lasts 3 to 4 s, and
---                                              is the sum of the steps in x and y, so a slope or a bump does not count; a frame is a
+--                                              is the sum of the steps in x and y, so a slope or a bump does not count; the speed is
+--                                              the slope of a least-squares line through it, each position at the time of the frame
+--                                              before (the physics gives its result a frame late; roundplayer.lua); a frame is a
 --                                              step of 3 (walk) to 11 (run) units at 30 frames a second, 1 % of the 300 to 1,300 units
 --                                              of the window; the spec keeps 5 % until it is known that the speed number is the ground
 --                                              speed (movement.md, unclear item 1), and the round logs both numbers and their ratio

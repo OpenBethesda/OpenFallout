@@ -844,7 +844,23 @@ local function moveResult(mv)
     if first == nil or last == nil or last.t <= first.t then return { done = true, error = 'no window', frames = #mv.samples } end
     local window = last.t - first.t
     local net = math.sqrt((last.x - first.x) ^ 2 + (last.y - first.y) ^ 2)
-    return { done = true, window = window, frames = #mv.samples, path = path / window, net = net / window,
+    -- The speed on the ground is the slope of a least-squares line through the distance walked against the time, over every frame
+    -- of the window: the physics runs on a thread of its own and its result comes a frame late, so with frames of uneven length
+    -- the two ends of a window alone are a frame's distance off (5 % of a run over 3 s at 15 frames a second)
+    -- (each position goes with the time of the frame before: that is the time the physics had run to when it gave it)
+    local n, st, sd, stt, std, walked, previous, before = 0, 0, 0, 0, 0, 0, nil, nil
+    for _, sample in ipairs(mv.samples) do
+        if sample.t >= mv.t0 + mv.skip and before ~= nil then
+            if previous ~= nil then walked = walked + math.sqrt((sample.x - previous.x) ^ 2 + (sample.y - previous.y) ^ 2) end
+            previous = sample
+            local t = before.t - first.t
+            n, st, sd, stt, std = n + 1, st + t, sd + walked, stt + t * t, std + t * walked
+        end
+        before = sample
+    end
+    local spread = n * stt - st * st
+    local fitted = spread > 0 and (n * std - st * sd) / spread or path / window
+    return { done = true, window = window, frames = #mv.samples, path = fitted, ends = path / window, net = net / window,
         api = count > 0 and sum / count or nil, apiMin = count > 0 and low or nil, apiMax = count > 0 and high or nil,
         startZ = first.z, endZ = last.z }
 end
@@ -969,7 +985,7 @@ local function s4Frame()
                 log('error', 's4move', mv.label, result.error)
             else
                 log('s4move', mv.label, string.format('forward=%.0f side=%.0f run=%s sneak=%s', mv.forward, mv.side, tostring(mv.run), tostring(mv.sneak)),
-                    string.format('path=%.2f net=%.2f api=%s apiMin=%s apiMax=%s window=%.2f frames=%d', result.path, result.net,
+                    string.format('path=%.2f ends=%.2f net=%.2f api=%s apiMin=%s apiMax=%s window=%.2f frames=%d', result.path, result.ends, result.net,
                         number(result.api, 2), number(result.apiMin, 2), number(result.apiMax, 2), result.window, result.frames))
             end
         end
@@ -1030,6 +1046,9 @@ local function s4Frame()
             if d.airborne and ground then
                 d.groundFrames = d.groundFrames + 1
                 if d.groundFrames == 1 then d.landZ, d.landT = z, simTime() end
+                -- (where the player comes to stand: the position of the first frame on the ground is between the last two
+                -- steps of the physics and can be a few units above it, so the lowest height while it stands counts)
+                if z < d.landZ then d.landZ = z end
             end
             if d.landT ~= nil and simTime() - d.landT >= d.hold then
                 d.done = true
