@@ -2,13 +2,12 @@
   "name": "s4-oldsave-nv",
   "game": "nv",
   "save": "${OPENFALLOUT_ROUND_OLDSAVE_NV}",
-  "scenario": "../scenarios/s4_wait.lua",
   "resolution": [
     1280,
     720
   ],
   "framerate": 30,
-  "limit": 100,
+  "limit": 900,
   "settings": {
     "Sound": {
       "master volume": "0"
@@ -31,7 +30,8 @@
     "AUTOPLAY\\tplayer\\tloaded\\t",
     "AUTOPLAY\\tplayer\\tno digest in this save",
     "AUTOPLAY\\tdigest\\tcheck ok",
-    "AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+"
+    "AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+",
+    "AUTOPLAY\\tintro over\\t"
   ],
   "forbid_log": [
     "unknown GUI (mode|window) '",
@@ -40,11 +40,18 @@
     "AUTOPLAY\\tsave\\tautoplay-again\\t(?!ok\\t)",
     "Failed to save game: ",
     "Ignoring unknown record",
-    "AUTOPLAY\\tgate\\t.*\\t(?!ok$)[^\\t]*$"
+    "AUTOPLAY\\tgate\\t.*\\t(?!ok$)[^\\t]*$",
+    "AUTOPLAY\\ttime is up",
+    "AUTOPLAY\\tlevel stuck",
+    "AUTOPLAY\\tscreens error\\t",
+    "AUTOPLAY\\ttalk wait error\\t",
+    "AUTOPLAY\\tfire error\\t",
+    "AUTOPLAY\\tfire done\\t(time|ammo|error)\\t"
   ],
   "variants": [
     {
       "name": "plain"
     }
-  ]
+  ],
+  "expect_exit": 0
 }

@@ -226,10 +226,11 @@ export OPENFALLOUT_ROUND_OLDSAVE_NV=/path/to/master94366e3-autoplay_save.omwsave
 A save is the engine's own and loads on the engine that wrote it and later ones; `s4-oldsave-nv` is the save written by master's engine
 at `94366e3` (before the step that removed the Morrowind dialogue), kept to check that old saves go on loading with the whole player.
 
-**The old-save round** (`rounds/s4-oldsave-nv.json`, scenario `scenarios/s4_wait.lua`) loads that save with the probe of the saves
-(`autoplaysaves.omwscripts`), waits a minute while the game runs on, and expects `digest loaded` with the quests of the save, the line
-that says the player of the loaded game and `digest check ok`, and that the save written after (`autoplay-again`) is whole. It was
-`s3-oldsave-nv.json` of the step-3 proof.
+**The old-save round** (`rounds/s4-oldsave-nv.json`, no scenario) loads that save with the probe of the saves (`autoplaysaves.omwscripts`)
+and lets the tool play the intro on to its end: it expects `digest loaded` with the quests of the save, the line that says the player of
+the loaded game, `digest check ok`, the save written after (`autoplay-again`) whole, and `intro over` (the engine ends by itself with
+status 0), and forbids every line by which the tool gives up. It was `s3-oldsave-nv.json` of the step-3 proof, which waited a fixed
+minute: a wait of a fixed time failed when the Vigor tester held the world for longer, so the end is the tool's own.
 
 **The digest of the saves** (`scripts/openfallout/autoplay/scripts/autoplayprobe.lua`, `saveload-nv` and `saveload-fo3`): besides the
 quests, the probe saves the **player** with the game (in `onSave`) and compares it on the first frame after the load; `digest check ok`

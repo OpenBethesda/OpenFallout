@@ -56,12 +56,15 @@ class RoundFiles(unittest.TestCase):
         self.assertEqual(config["save"], "${OPENFALLOUT_ROUND_OLDSAVE_NV}")
         self.assertEqual(config["data"], [round_runner.absolute(HERE / "autoplay")])
         self.assertEqual(config["extra_args"][-1], "autoplaysaves.omwscripts")
+        self.assertIsNone(config["scenario"])
+        self.assertEqual(config["expect_exit"], 0)
         self.assertNotIn("/Users/", (ROUNDS / "s4-oldsave-nv.json").read_text())
         text = ("[10:00:01.000 I] Global[scripts/autoplayprobe.lua]:\tAUTOPLAY\tdigest\tloaded\tVCG01=60/r\n"
                 "[10:00:01.000 I] Global[scripts/autoplayprobe.lua]:\tAUTOPLAY\tplayer\tloaded\tcell=x level=1\n"
                 "[10:00:01.000 I] Global[scripts/autoplayprobe.lua]:\tAUTOPLAY\tplayer\tno digest in this save\n"
                 "[10:00:01.000 I] Global[scripts/autoplayprobe.lua]:\tAUTOPLAY\tdigest\tcheck ok\n"
-                "[10:00:05.000 I] Global[scripts/autoplayprobe.lua]:\tAUTOPLAY\tsave\tautoplay-again\tok\tdir=P\tfiles=a.omwsave\n")
+                "[10:00:05.000 I] Global[scripts/autoplayprobe.lua]:\tAUTOPLAY\tsave\tautoplay-again\tok\tdir=P\tfiles=a.omwsave\n"
+                "[10:02:05.000 I] Global[scripts/autoworld.lua]:\tAUTOPLAY\tintro over\tVMQ01\treal=120.0\n")
         expect = round_runner.outcome_expectations(config, config["variants"][0])
         self.assertEqual(round_runner.expectations(text, 0, False, expect), [])
         for fault in ("AUTOPLAY\tdigest\tcheck MISMATCH", "AUTOPLAY\tplayer\tMISMATCH\tlevel 1 -> 2", "AUTOPLAY\tplayer\terror\tload\tx",

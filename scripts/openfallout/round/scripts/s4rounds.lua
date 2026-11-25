@@ -60,7 +60,9 @@ function M.movement(game)
             r.drawn(o.drawn == true)
             r.wait(1)
             local stats = r.s4stats(name)
-            local want = common.speed(game, { drawn = o.drawn, run = o.run, sneak = o.sneak, weight = stats and stats.weight or 0 })
+            -- (`rule`: what the rule says of the gait when it is not the one asked for: over the carry weight the run key gives the walk)
+            local gait = o.rule or o
+            local want = common.speed(game, { drawn = gait.drawn, run = gait.run, sneak = gait.sneak, weight = stats and stats.weight or 0 })
             local res = r.s4move{ label = name, forward = 1, run = o.run, sneak = o.sneak, seconds = o.seconds or 5, skip = 1.0 }
             if res == nil then
                 r.error('s4 measure ' .. name .. ' no measurement')
@@ -109,7 +111,7 @@ function M.movement(game)
             'the round could not put the player over the carry weight (the weights it read are in the line above)')
         local said = r.s4message('sOverEncumbered')
         common.flag(r, 'overencumbered_message', said, true, 'the HUD did not say sOverEncumbered when the weight crossed the carry weight')
-        local res, want = leg('overencumbered_run_key', { run = true })
+        local res, want = leg('overencumbered_run_key', { run = true, rule = { run = false } })
         if res and want then
             local walking = common.speed(game, { weight = stats and stats.weight or 0 })
             common.flag(r, 'overencumbered_ran', res.api ~= nil and res.api > walking * 1.5, false,
@@ -357,11 +359,6 @@ function M.levelup(game)
         common.check(r, 'levelup_level_after_two', last.level, newLevel + 2, { abs = 0 }, 'the level did not rise by two')
         r.eye('end')
     end }
-end
-
--- A round that only waits (the old-save round: the save is loaded, the tool's probe logs the player, and the game goes on)
-function M.wait(seconds)
-    return { limit = seconds + 40, delay = 4, run = function(r) r.wait(seconds) end }
 end
 
 return M
