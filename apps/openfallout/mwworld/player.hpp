@@ -34,6 +34,8 @@ namespace OFWorld
     class Player
     {
         LiveCellRef<ESM4::Npc> mPlayer;
+        // PlayerRef in the content files of this run (its plugin's index is the one of this load order)
+        ESM::RefNum mReference;
         OFWorld::CellStore* mCellStore = nullptr;
 
         osg::Vec3f mLastKnownExteriorPosition;

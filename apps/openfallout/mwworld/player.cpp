@@ -63,6 +63,7 @@ namespace OFWorld
 
     Player::Player(const ESM4::Npc* player, ESM::RefNum reference)
         : mPlayer(makePlayer(player, reference))
+        , mReference(reference)
         , mLastKnownExteriorPosition(0, 0, 0)
     {
     }
@@ -180,8 +181,7 @@ namespace OFWorld
 
     void Player::clear()
     {
-        const ESM::RefNum reference = mPlayer.mRef.getRefNum();
-        mPlayer = makePlayer(mPlayer.mBase, reference);
+        mPlayer = makePlayer(mPlayer.mBase, mReference);
         mCellStore = nullptr;
         mTeleported = false;
         mJumping = false;
@@ -216,11 +216,12 @@ namespace OFWorld
     {
         OFWorld::WorldModel& worldModel = *OFBase::Environment::get().getWorldModel();
 
-        // The reference number is the one the Lua scripts of the save know the player by (PlayerRef for a save of
-        // this version, the number the engine gave the Morrowind character for an older one)
+        // The reference number is the one the Lua scripts of the save know the player by. For a save of this version
+        // it is PlayerRef, and the Lua data of the save is moved to the plugin's index of this load order
+        // (OFLua::Serializer::adjustRefNum), so it is this run's PlayerRef. An older save has the number the engine
+        // gave the Morrowind character (no content file), which is kept as it is.
         worldModel.deregisterLiveCellRef(mPlayer);
-        if (state.mRefNum.isSet())
-            mPlayer.mRef.setRefNum(state.mRefNum);
+        mPlayer.mRef.setRefNum(state.mRefNum.isSet() && !state.mRefNum.hasContentFile() ? state.mRefNum : mReference);
         const ESM::Position position = positionOf(state.mPosition, state.mRotation);
         mPlayer.mRef.setPosition(position);
         mPlayer.mData.setPosition(position);
