@@ -264,7 +264,9 @@ namespace OFMechanics
             if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
                 scripts->landed(getPtr(), lost);
         }
-        if (onGround)
+        // (not on the frame a jump starts: the player is still on the ground then, and the take-off height is the
+        // start of the fall)
+        if (onGround && !mInJump)
             mFallStart.reset();
         mWasOnGround = onGround;
     }
