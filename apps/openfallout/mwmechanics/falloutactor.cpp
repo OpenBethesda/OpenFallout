@@ -115,8 +115,11 @@ namespace OFMechanics
         if (controls == nullptr)
             return;
         Movement& movement = getMovement();
-        // The built-in script of the controls (playercontrols.lua) says what the player asks for; the turn of the
-        // mouse is added to it by the input (OFWorld::Player::yaw and pitch)
+        // The turn of the mouse that the input (OFWorld::Player::yaw and pitch) gathered since the last frame: it goes
+        // to the Lua scripts (the camera reads it), not what they set the frame before
+        const float pitch = movement.mRotation[0];
+        const float yaw = movement.mRotation[2];
+        // The built-in script of the controls (playercontrols.lua) says what the player asks for
         if (controls->mChanged)
         {
             movement.mPosition[0] = controls->mSideMovement;
@@ -131,8 +134,8 @@ namespace OFMechanics
             mUse = controls->mUse;
             controls->mChanged = false;
         }
-        controls->mPitchChange = movement.mRotation[0];
-        controls->mYawChange = movement.mRotation[2];
+        controls->mPitchChange = pitch;
+        controls->mYawChange = yaw;
     }
 
     void PlayerCharacter::update(float duration, bool paused)
