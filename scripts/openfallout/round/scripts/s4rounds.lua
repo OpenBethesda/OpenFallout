@@ -244,11 +244,13 @@ function M.death(game)
         local stats = r.s4stats('before')
         r.command('ForceActorValue', 'player', { 16, stats.maxHealth })
         r.wait(1)
-        -- The boxes that the load brought (New Vegas: one for each add-on) are answered first: one still open when the
-        -- boxes are left alone would be taken for a box of the death
-        for _ = 1, 60 do
+        -- The boxes that the load brought (New Vegas: one for each add-on, in waves some seconds apart) are answered first:
+        -- one still open when the boxes are left alone would be taken for a box of the death. Quiet means 6 s with no box.
+        local quiet = 0
+        for _ = 1, 160 do
             local open = r.s4dead('settling')
-            if open == nil or not open.box then break end
+            if open ~= nil and open.box then quiet = 0 else quiet = quiet + 0.25 end
+            if quiet >= 6 then break end
             r.wait(0.25)
         end
         r.boxes(false)               -- a box that comes is looked at, not answered

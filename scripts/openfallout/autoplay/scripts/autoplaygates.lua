@@ -128,6 +128,12 @@ return {
         { quest = 'CG04', stage = 21, file = 'Fallout3.esm', ref = 0x054285, how = 'activate', tries = 2 },
         { quest = 'CG04', stage = 33, file = 'Fallout3.esm', ref = 0x02D4B6, how = 'walk', tries = 2 },
         { quest = 'CG04', stage = 35, file = 'Fallout3.esm', ref = 0x0230E1, how = 'activate' },
+        -- The interrogation can take the other branch of the game: when Amata has reached the player in the apartment and
+        -- given away her pistol (stages 4 and 10), she has none to shoot Officer Mack with at 36 (CG04AmataWithGun wants the
+        -- pistol 0x434F), and the scene waits for the player: the Overseer or Mack seeing the player (their scripts), or the
+        -- player talking to the Overseer (CG04Interrogation) sets 38. Stage 36 follows 35 in the same frame, so the gate above
+        -- never fires then; this one walks the player to the Overseer and talks to him
+        { quest = 'CG04', stage = 36, file = 'Fallout3.esm', ref = 0x0230E1, how = 'activate' },
         { quest = 'CG04', stage = 38, file = 'Fallout3.esm', ref = 0x0230E4, how = 'activate' },
         { quest = 'CG04', stage = 50, file = 'Fallout3.esm', ref = 0x057E98, how = 'walk' },
         -- The switches in the reactor room (cell 0x02A186, which no door of the data leads to: the player is taken there): the
