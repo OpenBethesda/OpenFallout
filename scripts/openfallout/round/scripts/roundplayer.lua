@@ -761,10 +761,281 @@ function handlers.vats(args)
     return {}
 end
 
+-- ---- Step 4 (S4): the rules of the player, measured -----------------------------------------------------------------------------
+-- What a round of step 4 reads, and from where (these are the calls that the player of the Fallout rules must keep answering):
+--   position, onGround            self.position, Actor.isOnGround(self)       (the engine's own position of the player's reference)
+--   the speed number              Actor.getCurrentSpeed(self)                 (the speed the rules give the player's movement now)
+--   level, experience, health, action points, weights, points to spend      core.pipboy.stats()
+--   SPECIAL and the skills (value now and base)                              core.pipboy.attributes(), core.pipboy.skills()
+--   the level-up screen            core.pipboy.stats(), spendSkillPoints, offeredPerks, choosePerk, I.UI.getMode / removeMode('Interface')
+--   what the HUD said              core.hud.takeMessages()
+-- None of them is a Morrowind stats function (types.Actor.stats, types.NPC.stats). Lines start with `s4`, and hold numbers only.
+local s4 = { move = nil, jump = nil, drop = nil }
+-- the results of the measurements, by kind (the scenario asks for them until they are there)
+local s4done = {}
+
+local function simTime() return core.getSimulationTime() end
+
+local function s4Controls(forward, side, run, sneak)
+    self.controls.movement, self.controls.sideMovement, self.controls.run, self.controls.sneak = forward, side, run, sneak
+end
+
+-- The player's character as the Pip-Boy has it, in one line and in tables: level, experience (and where this level and the
+-- next begin), health, action points, weights, the points to spend, SPECIAL (number:value/base) and the skills (number:value/base,
+-- a `t` after a tagged one)
+function handlers.s4stats(args)
+    local ok, stats = pcall(core.pipboy.stats)
+    if not ok then
+        log('error', 's4stats', tostring(stats))
+        return { error = tostring(stats) }
+    end
+    local attributes, skills, attributeText, skillText = {}, {}, {}, {}
+    local okA, rowsA = pcall(core.pipboy.attributes)
+    if okA then
+        for _, row in ipairs(rowsA) do
+            table.insert(attributes, { number = row.number, value = row.value, base = row.base })
+            table.insert(attributeText, string.format('%d:%g/%g', row.number, row.value, row.base))
+        end
+    end
+    local okS, rowsS = pcall(core.pipboy.skills)
+    if okS then
+        for _, row in ipairs(rowsS) do
+            table.insert(skills, { number = row.number, value = row.value, base = row.base, tagged = row.tagged })
+            table.insert(skillText, string.format('%d:%g/%g%s', row.number, row.value, row.base, row.tagged and 't' or ''))
+        end
+    end
+    local p = self.position
+    log('s4stats', tostring(args.label or '-'),
+        string.format('level=%.0f xp=%.0f levelStart=%.0f nextLevel=%.0f hp=%.2f/%.2f ap=%.1f/%.1f weight=%.1f/%.1f skillPoints=%.0f perkPoints=%.0f pos=%.0f,%.0f,%.0f',
+            stats.level, stats.experience, stats.levelStart, stats.nextLevel, stats.health, stats.maxHealth, stats.actionPoints,
+            stats.maxActionPoints, stats.weight, stats.maxWeight, stats.skillPoints, stats.perkPoints, p.x, p.y, p.z),
+        'special=' .. table.concat(attributeText, ','), 'skills=' .. table.concat(skillText, ','))
+    return { level = stats.level, experience = stats.experience, levelStart = stats.levelStart, nextLevel = stats.nextLevel,
+        health = stats.health, maxHealth = stats.maxHealth, actionPoints = stats.actionPoints, maxActionPoints = stats.maxActionPoints,
+        weight = stats.weight, maxWeight = stats.maxWeight, skillPoints = stats.skillPoints, perkPoints = stats.perkPoints,
+        attributes = attributes, skills = skills, newVegas = stats.newVegas }
+end
+
+-- Walking, running or sneaking in a direction for `seconds` of simulation time; each frame the position and the speed number are
+-- sampled, and the window after the first `skip` seconds is measured: the distance covered on the ground (the sum of the steps
+-- in x and y, so that a slope or a bump does not count), the straight distance between the two ends, and the speed number
+function handlers.s4move(args)
+    I.Controls.overrideMovementControls(true)
+    s4done.move = nil
+    s4.move = { label = tostring(args.label or '-'), forward = args.forward or 0, side = args.side or 0, run = args.run == true,
+        sneak = args.sneak == true, seconds = args.seconds or 5, skip = args.skip or 1.0, samples = {}, done = false }
+    return {}
+end
+
+local function moveResult(mv)
+    local first, last, path = nil, nil, 0
+    local sum, count, low, high = 0, 0, math.huge, -math.huge
+    for _, sample in ipairs(mv.samples) do
+        if sample.t >= mv.t0 + mv.skip then
+            if first == nil then first = sample end
+            if last ~= nil then path = path + math.sqrt((sample.x - last.x) ^ 2 + (sample.y - last.y) ^ 2) end
+            last = sample
+            if sample.speed ~= nil then
+                sum, count = sum + sample.speed, count + 1
+                low, high = math.min(low, sample.speed), math.max(high, sample.speed)
+            end
+        end
+    end
+    if first == nil or last == nil or last.t <= first.t then return { done = true, error = 'no window', frames = #mv.samples } end
+    local window = last.t - first.t
+    local net = math.sqrt((last.x - first.x) ^ 2 + (last.y - first.y) ^ 2)
+    return { done = true, window = window, frames = #mv.samples, path = path / window, net = net / window,
+        api = count > 0 and sum / count or nil, apiMin = count > 0 and low or nil, apiMax = count > 0 and high or nil,
+        startZ = first.z, endZ = last.z }
+end
+
+-- The result of the last s4move, once it is done
+function handlers.s4moveResult() return s4done.move or { done = false } end
+
+-- One jump, standing: the key is pressed on the first frame (and again at each of the times in `again`, seconds after the take-off,
+-- for the check that a second press in the air does nothing); the height of the player is sampled each frame until it lands
+function handlers.s4jump(args)
+    I.Controls.overrideMovementControls(true)
+    s4done.jump = nil
+    s4.jump = { label = tostring(args.label or '-'), seconds = args.seconds or 3.5, again = args.again or {}, pressed = {}, samples = {},
+        done = false, airborne = false }
+    return {}
+end
+
+function handlers.s4jumpResult() return s4done.jump or { done = false } end
+
+-- A fall: armed here, then the scenario puts the player in the air at height `z` (r.teleport); the player is followed from the frame at
+-- which it is there until it has landed and a moment more, for the damage to come. The height lost is the start height minus the
+-- height at which the character stands on the ground again; the health is the Pip-Boy's.
+function handlers.s4drop(args)
+    s4done.drop = nil
+    s4.drop = { label = tostring(args.label or '-'), z = args.z, hold = args.hold or 2.0, timeout = args.timeout or 20, started = false, samples = 0,
+        airborne = false, groundFrames = 0, hp0 = nil, minHp = nil, done = false, wait = core.getRealTime() }
+    return {}
+end
+
+function handlers.s4dropResult() return s4done.drop or { done = false } end
+
+-- The level-up screen, answered as autoplay does: the points go to the skills in the order of the list, a perk is picked when one is
+-- offered, the screen is left. Not answered (and nothing changed) when no screen is open. Gives what the screen offered.
+function handlers.s4levelup(args)
+    local pipboy = core.pipboy
+    local mode = I.UI.getMode()
+    local stats = pipboy.stats()
+    local offered = stats.perkPoints > 0 and pipboy.offeredPerks() or {}
+    if mode ~= 'Interface' or (stats.skillPoints <= 0 and #offered == 0) then
+        return { answered = false, ui = tostring(mode), skillPoints = stats.skillPoints, perkPoints = stats.perkPoints }
+    end
+    local left, perk = stats.skillPoints, nil
+    for _, skill in ipairs(pipboy.skills()) do
+        if left <= 0 then break end
+        left = left - pipboy.spendSkillPoints(skill.number, left)
+    end
+    for _, offer in ipairs(offered) do
+        if offer.available ~= false and pipboy.choosePerk(offer.id) then
+            perk = offer.id
+            break
+        end
+    end
+    log('s4levelup', tostring(args.label or '-'), string.format('level=%.0f skillPoints=%.0f spent=%.0f perkPoints=%.0f offered=%d perkChosen=%s maxHp=%.2f',
+        stats.level, stats.skillPoints, stats.skillPoints - left, stats.perkPoints, #offered, tostring(perk ~= nil), stats.maxHealth))
+    I.UI.removeMode('Interface')
+    return { answered = true, level = stats.level, skillPoints = stats.skillPoints, spent = stats.skillPoints - left,
+        perkPoints = stats.perkPoints, offered = #offered, perkChosen = perk ~= nil, maxHealth = stats.maxHealth }
+end
+
+-- Whether the HUD gave the text of a game setting (`sOverEncumbered`) since the last call: the answer is a boolean, the text is not logged
+function handlers.s4message(args)
+    local want = core.pipboy.text(args.setting)
+    local ok, list = pcall(core.hud.takeMessages)
+    local seen = false
+    if ok then
+        for _, message in ipairs(list) do
+            if want ~= '' and message.text == want then seen = true end
+        end
+    end
+    log('s4message', tostring(args.setting), 'seen=' .. tostring(seen), 'messages=' .. (ok and #list or -1), 'textKnown=' .. tostring(want ~= ''))
+    return { seen = seen, count = ok and #list or -1, textKnown = want ~= '' }
+end
+
+-- Whether the player is dead (the Pip-Boy's own answer), whether a message box of the game is open (its number of buttons: the box
+-- that asks Reload or Main Menu has two), and whether a save to reload exists; logged when one of them changes
+local lastDead = nil
+function handlers.s4dead(args)
+    local okDead, dead = pcall(core.pipboy.playerDead)
+    local okSave, save = pcall(core.pipboy.hasRecentSave)
+    local box = openBox()
+    local state = string.format('dead=%s box=%s save=%s', tostring(okDead and dead), box and ('buttons=' .. #box.buttons) or 'none', tostring(okSave and save))
+    if state ~= lastDead then
+        lastDead = state
+        log('s4dead', tostring(args.label or '-'), state)
+    end
+    return { dead = okDead and dead == true, box = box ~= nil, buttons = box and #box.buttons or 0, hasSave = okSave and save == true }
+end
+
+-- The per-frame part of the above
+local function s4Frame()
+    local mv = s4.move
+    if mv ~= nil and not mv.done then
+        local t = simTime()
+        mv.t0 = mv.t0 or t
+        s4Controls(mv.forward, mv.side, mv.run, mv.sneak)
+        local p = self.position
+        local ok, speed = pcall(Actor.getCurrentSpeed, self)
+        table.insert(mv.samples, { t = t, x = p.x, y = p.y, z = p.z, speed = ok and speed or nil })
+        if t - mv.t0 >= mv.seconds then
+            mv.done = true
+            s4Controls(0, 0, false, crouch == true)
+            local result = moveResult(mv)
+            s4done.move = result
+            if result.error then
+                log('error', 's4move', mv.label, result.error)
+            else
+                log('s4move', mv.label, string.format('forward=%.0f side=%.0f run=%s sneak=%s', mv.forward, mv.side, tostring(mv.run), tostring(mv.sneak)),
+                    string.format('path=%.2f net=%.2f api=%s apiMin=%s apiMax=%s window=%.2f frames=%d', result.path, result.net,
+                        number(result.api, 2), number(result.apiMin, 2), number(result.apiMax, 2), result.window, result.frames))
+            end
+        end
+    end
+
+    local j = s4.jump
+    if j ~= nil and not j.done then
+        local t = simTime()
+        if j.t0 == nil then j.t0, j.baseZ, j.maxZ = t, self.position.z, self.position.z end
+        local rel = t - j.t0
+        local press = (#j.samples == 0)
+        for i, at in ipairs(j.again) do
+            if not j.pressed[i] and rel >= at then
+                j.pressed[i], press = true, true
+                j.apexAtPress = j.apexAtPress or {}
+                j.apexAtPress[i] = j.maxZ - j.baseZ
+            end
+        end
+        self.controls.jump = press
+        s4Controls(0, 0, false, crouch == true)
+        local z = self.position.z
+        local ground = Actor.isOnGround(self)
+        j.maxZ = math.max(j.maxZ, z)
+        table.insert(j.samples, { t = rel, z = z, ground = ground })
+        if not ground and not j.airborne then j.airborne, j.airAt = true, rel end
+        local landed = j.airborne and ground and rel > j.airAt + 0.2
+        if landed or rel >= j.seconds then
+            j.done = true
+            self.controls.jump = false
+            local result = { done = true, apex = j.maxZ - j.baseZ, airborne = j.airborne, takeoff = j.airAt, air = landed and (rel - (j.airAt or 0)) or nil,
+                landed = landed, presses = 1 + #j.again, apexAtPress = j.apexAtPress, frames = #j.samples }
+            s4done.jump = result
+            log('s4jump', j.label, string.format('apex=%.2f airborne=%s takeoff=%s air=%s landed=%s presses=%d frames=%d', result.apex,
+                tostring(result.airborne), number(result.takeoff, 2), number(result.air, 2), tostring(landed), result.presses, result.frames),
+                'apexAtPress=' .. (j.apexAtPress and table.concat((function()
+                    local out = {}
+                    for i, v in ipairs(j.apexAtPress) do out[i] = string.format('%.2f', v) end
+                    return out
+                end)(), ',') or '-'))
+        end
+    end
+
+    local d = s4.drop
+    if d ~= nil and not d.done then
+        local now = core.getRealTime()
+        local z = self.position.z
+        -- the scenario puts the player at height d.z: the fall is followed from the first frame at which it is there
+        if not d.started and math.abs(z - d.z) <= 12 then
+            d.started, d.startZ, d.startT, d.hp0 = true, z, simTime(), health(self.object)
+            d.minHp = d.hp0
+        end
+        if d.started then
+            d.samples = d.samples + 1
+            local hp = health(self.object)
+            if hp ~= nil and (d.minHp == nil or hp < d.minHp) then d.minHp = hp end
+            local ground = Actor.isOnGround(self)
+            if not ground then d.airborne, d.groundFrames = true, 0 end
+            if d.airborne and ground then
+                d.groundFrames = d.groundFrames + 1
+                if d.groundFrames == 1 then d.landZ, d.landT = z, simTime() end
+            end
+            if d.landT ~= nil and simTime() - d.landT >= d.hold then
+                d.done = true
+                local result = { done = true, landed = true, startZ = d.startZ, landZ = d.landZ, lost = d.startZ - d.landZ, hp0 = d.hp0,
+                    hp1 = hp, minHp = d.minHp, air = d.landT - d.startT, dead = hp ~= nil and hp < 1 }
+                s4done.drop = result
+                log('s4drop', d.label, string.format('startZ=%.1f landZ=%.1f lost=%.1f hp0=%s hp1=%s minHp=%s air=%.2f', d.startZ, d.landZ,
+                    result.lost, number(d.hp0, 2), number(hp, 2), number(d.minHp, 2), result.air))
+            end
+        end
+        if not d.done and now - d.wait >= d.timeout then
+            d.done = true
+            s4done.drop = { done = true, landed = false, started = d.started, airborne = d.airborne, startZ = d.startZ, hp0 = d.hp0 }
+            log('s4drop', d.label, 'no landing', 'started=' .. tostring(d.started), 'airborne=' .. tostring(d.airborne))
+        end
+    end
+end
+
 return {
     engineHandlers = {
         onFrame = function()
             local now = core.getRealTime()
+            s4Frame()
             if wantedMode ~= nil and camera.getMode() ~= wantedMode then
                 modeForced = modeForced + 1
                 if modeForced <= 3 then log('camera', 'mode forced back', 'from=' .. tostring(camera.getMode()), 'to=' .. tostring(wantedMode)) end

@@ -34,6 +34,9 @@
     "AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+",
     "AUTOPLAY\\tintro done\\t",
     "AUTOPLAY\\tintro over\\t",
+    "AUTOPLAY\\tplayer\\tsaved\\t",
+    "AUTOPLAY\\tplayer\\tloaded\\t",
+    "AUTOPLAY\\tsave\\ts4-fixture-nv\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+",
     "(?s)AUTOPLAY\\tdigest\\tsaved\\t.*AUTOPLAY\\tsave\\tautoplay-save\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+.*AUTOPLAY\\tload\\tautoplay-save\\t.*AUTOPLAY\\tdigest\\tloaded\\t.*AUTOPLAY\\tdigest\\tcheck ok.*AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+.*AUTOPLAY\\tintro over\\t"
   ],
   "expect_count": {
@@ -46,6 +49,7 @@
     "unknown GUI (mode|window) '",
     "AUTOPLAY\\tdigest\\tcheck MISMATCH",
     "AUTOPLAY\\tload\\tautoplay-save\\tno slot",
+    "AUTOPLAY\\tplayer\\t(MISMATCH|error)\\t",
     "AUTOPLAY\\tload\\terror\\t",
     "AUTOPLAY\\tsave\\tautoplay-(save|again)\\t(?!ok\\t)",
     "Failed to save game: ",

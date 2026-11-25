@@ -1,0 +1,33 @@
+{
+  "name": "s4-death-nv",
+  "game": "nv",
+  "save": "${OPENFALLOUT_ROUND_SAVE_NV}",
+  "scenario": "../scenarios/s4_death_nv.lua",
+  "resolution": [
+    1280,
+    720
+  ],
+  "framerate": 30,
+  "limit": 400,
+  "settings": {
+    "Sound": {
+      "master volume": "0"
+    }
+  },
+  "env": {
+    "OPENFALLOUT_HEADLESS_SOUND": "1"
+  },
+  "expect_gap": [
+    {
+      "from": "ROUND\\tnote\\ts4 death t0",
+      "to": "Loading saved game 's4-death'",
+      "min": 4.4,
+      "max": 5.6
+    }
+  ],
+  "variants": [
+    {
+      "name": "plain"
+    }
+  ]
+}

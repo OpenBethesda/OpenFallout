@@ -1,0 +1,25 @@
+{
+  "name": "s4-movement-fo3",
+  "game": "fo3",
+  "save": "${OPENFALLOUT_ROUND_SAVE_FO3}",
+  "scenario": "../scenarios/s4_movement_fo3.lua",
+  "resolution": [
+    1280,
+    720
+  ],
+  "framerate": 30,
+  "limit": 1200,
+  "settings": {
+    "Sound": {
+      "master volume": "0"
+    }
+  },
+  "env": {
+    "OPENFALLOUT_HEADLESS_SOUND": "1"
+  },
+  "variants": [
+    {
+      "name": "plain"
+    }
+  ]
+}
