@@ -92,7 +92,8 @@ stats function, are in the comment at the top of `autoplayprobe.lua` and in `scr
 that (the old-save round) has no player in its digest: the line says so and only the quests are compared.
 
 The `fixtures` of the `saves` table are saves that the rounds of step 4 start from (`s4-fixture-fo3`, `s4-fixture-nv`): written once, five
-seconds into a stage past the intro (Fallout 3 `MQ01` 40, New Vegas `VMQ01` 50), where the player is outside with its controls.
+seconds into a stage past the intro (Fallout 3 `MQ01` 40, New Vegas `VMQ01` 50), and only while no screen is open (the player script tells
+the probe every second: a save written while a terminal is open left Fallout 3 in that mode and stopped the run).
 
 `savediff.py` compares the sections of the state of Fallout in two saved games. A game that is loaded and saved again at once has
 the same bytes in every section except for what really changed in between: the clock and the timers of the quests, and what the

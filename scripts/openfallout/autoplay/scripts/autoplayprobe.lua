@@ -127,6 +127,9 @@ local function playerMismatches(saved, now)
     return bad
 end
 
+-- Whether a screen is open (the player script tells every second); a fixture is written only while none is
+local screenOpen = true
+
 local function askMenu(event, data)
     types.Player.sendMenuEvent(world.players[1], event, data)
 end
@@ -144,6 +147,9 @@ local function stoodAt(wants, real)
 end
 
 return {
+    eventHandlers = {
+        AutoplayMode = function(data) screenOpen = data == nil or data.open ~= false end,
+    },
     engineHandlers = {
         onSave = function()
             -- the player of the moment the file is written (a save from before this had none: `player` is nil there)
@@ -213,7 +219,7 @@ return {
             -- The fixtures: a save for the rounds of step 4 to start from, written where the game is outside its intro and the player has
             -- its controls (a quest at a stage for `after` seconds), once each, whatever the phase of the probe is
             for index, want in ipairs(saves.fixtures or {}) do
-                if not fixtureDone[index] and stoodAt({ want }, real) then
+                if not fixtureDone[index] and not screenOpen and stoodAt({ want }, real) then
                     fixtureDone[index] = true
                     print('AUTOPLAY', 'fixture', want.description, want.quest, 'stage=' .. tostring(want.stage))
                     askMenu('AutoplaySave', { description = want.description })
