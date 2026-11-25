@@ -233,7 +233,6 @@ namespace OFGui
         void setLuaCursorOverride(const std::string& name) override;
         std::string getCurrentCursorName() const override;
 
-        void setEnemy(const OFWorld::Ptr& enemy) override;
 
         std::size_t getMessagesCount() const override;
 
@@ -373,8 +372,6 @@ namespace OFGui
         bool mCursorVisible;
         bool mCursorActive;
         bool mCursorInteractionEnabled;
-
-        int mPlayerBounty;
 
         void setCursorVisible(bool visible) override;
 

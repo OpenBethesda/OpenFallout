@@ -332,7 +332,6 @@ namespace OFRender
             const AnimBlendStateData& stateData, const osg::ref_ptr<const SceneUtil::AnimBlendRules>& blendRules,
             const AnimState& active);
 
-        void animationEnded(AnimState& state) const;
 
     public:
         Animation(

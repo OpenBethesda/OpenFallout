@@ -52,7 +52,6 @@
 #include <components/settings/values.hpp>
 
 #include "../mwbase/environment.hpp"
-#include "../mwbase/luamanager.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/class.hpp"
@@ -947,7 +946,6 @@ namespace OFRender
         {
             if (stateiter->second.mPriority == priority && stateiter->first != groupname)
             {
-                animationEnded(stateiter->second);
                 stateiter = mStates.erase(stateiter);
             }
             else
@@ -1311,7 +1309,6 @@ namespace OFRender
         AnimStateMap::iterator iter = mStates.find(groupname);
         if (iter != mStates.end())
         {
-            animationEnded(iter->second);
             mStates.erase(iter);
         }
         resetActiveGroups();
@@ -1452,7 +1449,6 @@ namespace OFRender
 
             if (!state.mPlaying && state.mAutoDisable)
             {
-                animationEnded(stateiter->second);
                 stateiter = mStates.erase(stateiter);
 
                 resetActiveGroups();
@@ -2057,12 +2053,6 @@ namespace OFRender
 
         if (mObjectRoot != nullptr)
             mInsert->removeChild(mObjectRoot);
-    }
-
-    void Animation::animationEnded(AnimState& state) const
-    {
-        OFBase::Environment::get().getLuaManager()->animationEnded(
-            mPtr, state.mGroupname, state.getTime(), state.getCompletion(), state.mStartKey, state.mStopKey);
     }
 
     OFWorld::MovementDirectionFlags Animation::getSupportedMovementDirections(

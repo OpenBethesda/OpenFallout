@@ -19,7 +19,6 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwmechanics/magiceffects.hpp"
 
 #include "../mwworld/esmstore.hpp"
 
@@ -390,7 +389,13 @@ namespace OFGui::Widgets
         std::string sec = " " + std::string{ windowManager->getGameSettingString("ssecond", {}) };
         std::string secs = " " + std::string{ windowManager->getGameSettingString("sseconds", {}) };
 
-        std::string spellLine = OFMechanics::getMagicEffectString(*magicEffect, attribute, skill);
+        // The name of the effect, and what it works on (the Morrowind words "Fortify", "Drain", ... before it went
+        // with the magic of Morrowind: no record of the Fallout games has a Morrowind effect)
+        std::string spellLine = magicEffect->mName;
+        if ((magicEffect->mData.mFlags & ESM::MagicEffect::TargetSkill) && skill != nullptr)
+            spellLine += ' ' + skill->mName;
+        else if ((magicEffect->mData.mFlags & ESM::MagicEffect::TargetAttribute) && attribute != nullptr)
+            spellLine += ' ' + attribute->mName;
 
         if ((mEffectParams.mMagnMin || mEffectParams.mMagnMax) && !mEffectParams.mNoMagnitude)
         {

@@ -45,20 +45,14 @@ namespace OFGui
 
         bool getWorldMouseOver() { return mWorldMouseOver; }
 
-        void setEnemy(const OFWorld::Ptr& enemy);
-
         void clear() override;
 
     private:
-        MyGUI::ProgressBar *mHealth = nullptr, *mMagicka = nullptr, *mStamina = nullptr, *mEnemyHealth = nullptr,
-                           *mDrowning = nullptr;
+        MyGUI::ProgressBar *mHealth = nullptr, *mMagicka = nullptr, *mStamina = nullptr, *mDrowning = nullptr;
         MyGUI::Widget* mHealthFrame = nullptr;
         MyGUI::ImageBox* mCrosshair = nullptr;
         MyGUI::ImageBox* mMouseEmulationCursor = nullptr;
         MyGUI::Widget *mDrowningBar = nullptr, *mDrowningFrame = nullptr, *mDrowningFlash = nullptr;
-        ESM::RefNum mEnemyActor;
-
-        float mEnemyHealthTimer = -1;
         float mDrowningFlashTheta = 0.f;
 
         bool mWorldMouseOver = false;
@@ -68,8 +62,6 @@ namespace OFGui
         void onWorldClicked(MyGUI::Widget* sender);
         void onWorldMouseOver(MyGUI::Widget* sender, int x, int y);
         void onWorldMouseLostFocus(MyGUI::Widget* sender, MyGUI::Widget* newWidget);
-
-        void updateEnemyHealthBar();
     };
 }
 

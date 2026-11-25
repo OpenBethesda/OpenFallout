@@ -18,11 +18,8 @@
 #include <components/widgets/box.hpp>
 
 #include "../mwbase/environment.hpp"
-#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/spellutil.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
 
@@ -310,14 +307,8 @@ namespace OFGui
 
     bool ToolTips::checkOwned()
     {
-        if (mFocusObject.isEmpty())
-            return false;
-
-        OFWorld::Ptr ptr = OFMechanics::getPlayer();
-        OFWorld::Ptr victim;
-
-        OFBase::MechanicsManager* mm = OFBase::Environment::get().getMechanicsManager();
-        return !mm->isAllowedToUse(ptr, mFocusObject, victim);
+        // The Morrowind rule of who may take what is gone with its crimes: the Fallout HUD shows an owned thing
+        return false;
     }
 
     MyGUI::IntSize ToolTips::createToolTip(const OFGui::ToolTipInfo& info, bool isOwned)
@@ -446,7 +437,8 @@ namespace OFGui
             if (enchant->mData.mType == ESM::Enchantment::WhenStrikes
                 || enchant->mData.mType == ESM::Enchantment::WhenUsed)
             {
-                const int maxCharge = OFMechanics::getEnchantmentCharge(*enchant);
+                // The charge the record gives (the Morrowind formula of an automatic charge went with its magic)
+                const int maxCharge = enchant->mData.mCharge;
                 int charge = (info.remainingEnchantCharge == -1) ? maxCharge : info.remainingEnchantCharge;
 
                 const int chargeWidth = 204;
@@ -633,17 +625,6 @@ namespace OFGui
                         ret += getMiscString(rankName, "Rank");
                 }
             }
-        }
-
-        std::vector<std::pair<ESM::RefId, int>> itemOwners
-            = OFBase::Environment::get().getMechanicsManager()->getStolenItemOwners(cellref.getRefId());
-
-        for (std::pair<ESM::RefId, int>& owner : itemOwners)
-        {
-            if (owner.second == std::numeric_limits<int>::max())
-                ret += std::format("\nStolen from {}", owner.first.toDebugString()); // for legacy (ESS) savegames
-            else
-                ret += std::format("\nStolen {} from {}", owner.second, owner.first.toDebugString());
         }
 
         ret += getMiscString(cellref.getGlobalVariable(), "Global");

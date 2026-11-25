@@ -234,8 +234,6 @@ namespace OFBase
         virtual void setLuaCursorOverride(const std::string& name) = 0;
         virtual std::string getCurrentCursorName() const = 0;
 
-        virtual void setEnemy(const OFWorld::Ptr& enemy) = 0;
-
         virtual std::size_t getMessagesCount() const = 0;
 
         virtual const Translation::Storage& getTranslationDataStorage() const = 0;

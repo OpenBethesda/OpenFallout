@@ -19,10 +19,7 @@
 
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
-#include "../mwworld/worldmodel.hpp"
 
-#include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/npcstats.hpp"
 
 #include "../mwscript/falloutscripts.hpp"
 
@@ -49,7 +46,6 @@ namespace OFGui
         getWidget(mHealth, "Health");
         getWidget(mMagicka, "Magicka");
         getWidget(mStamina, "Stamina");
-        getWidget(mEnemyHealth, "EnemyHealth");
 
         // Drowning bar
         getWidget(mDrowningBar, "DrowningBar");
@@ -123,15 +119,6 @@ namespace OFGui
                 setHmsVisible(false);
         }
 
-        mEnemyHealthTimer -= dt;
-        if (mEnemyHealth->getVisible() && mEnemyHealthTimer < 0)
-            mEnemyHealth->setVisible(false);
-
-        if (mEnemyActor.isSet() && mEnemyHealth->getVisible())
-        {
-            updateEnemyHealthBar();
-        }
-
         if (mDrowningBar->getVisible())
             mDrowningBar->setPosition(
                 mMainWidget->getWidth() / 2 - mDrowningFrame->getWidth() / 2, mMainWidget->getTop());
@@ -189,41 +176,5 @@ namespace OFGui
         }
     }
 
-    void HUD::updateEnemyHealthBar()
-    {
-        OFWorld::Ptr enemy = OFBase::Environment::get().getWorldModel()->getPtr(mEnemyActor);
-        if (enemy.isEmpty())
-            return;
-        OFMechanics::CreatureStats& stats = enemy.getClass().getCreatureStats(enemy);
-        mEnemyHealth->setProgressRange(100);
-        // Health is usually cast to int before displaying. Actors die whenever they are < 1 health.
-        // Therefore any value < 1 should show as an empty health bar.
-        mEnemyHealth->setProgressPosition(static_cast<size_t>(stats.getHealth().getRatio() * 100));
-
-        static const float fNPCHealthBarFade = OFBase::Environment::get()
-                                                   .getESMStore()
-                                                   ->get<ESM::GameSetting>()
-                                                   .find("fNPCHealthBarFade")
-                                                   ->mValue.getFloat();
-        if (fNPCHealthBarFade > 0.f)
-            mEnemyHealth->setAlpha(std::clamp(mEnemyHealthTimer / fNPCHealthBarFade, 0.f, 1.f));
-    }
-
-    void HUD::setEnemy(const OFWorld::Ptr& enemy)
-    {
-        mEnemyActor = enemy.getCellRef().getRefNum();
-        mEnemyHealthTimer = OFBase::Environment::get()
-                                .getESMStore()
-                                ->get<ESM::GameSetting>()
-                                .find("fNPCHealthBarTime")
-                                ->mValue.getFloat();
-        mEnemyHealth->setVisible(true);
-        updateEnemyHealthBar();
-    }
-
-    void HUD::clear()
-    {
-        mEnemyActor = {};
-        mEnemyHealthTimer = -1;
-    }
+    void HUD::clear() {}
 }

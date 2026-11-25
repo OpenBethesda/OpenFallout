@@ -76,8 +76,6 @@
 #include "../mwworld/globals.hpp"
 #include "../mwworld/player.hpp"
 
-#include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/npcstats.hpp"
 
 #include "../mwrender/postprocessor.hpp"
 
@@ -137,7 +135,6 @@ namespace OFGui
         , mCursorVisible(true)
         , mCursorActive(true)
         , mCursorInteractionEnabled(false)
-        , mPlayerBounty(-1)
         , mGuiModes()
         , mVersionDescription(versionDescription)
         , mWindowVisible(true)
@@ -746,38 +743,8 @@ namespace OFGui
         if (!gameRunning)
             return;
 
-        // We should display message about crime only once per frame, even if there are several crimes.
-        // Otherwise we will get message spam when stealing several items via Take All button.
-        const OFWorld::Ptr player = OFMechanics::getPlayer();
-        const OFWorld::Class& playerCls = player.getClass();
-        int currentBounty = playerCls.getNpcStats(player).getBounty();
-        if (currentBounty != mPlayerBounty)
-        {
-            if (mPlayerBounty >= 0 && currentBounty > mPlayerBounty)
-                messageBox("#{sCrimeMessage}");
-
-            mPlayerBounty = currentBounty;
-        }
-
-        OFBase::LuaManager::ActorControls* playerControls
-            = OFBase::Environment::get().getLuaManager()->getActorControls(player);
-        bool triedToMove = playerControls
-            && (playerControls->mMovement != 0 || playerControls->mSideMovement != 0 || playerControls->mJump);
-        if (mMessageBoxManager && triedToMove && playerCls.getEncumbrance(player) > playerCls.getCapacity(player))
-        {
-            const auto& msgboxs = mMessageBoxManager->getActiveMessageBoxes();
-            auto it
-                = std::find_if(msgboxs.begin(), msgboxs.end(), [](const std::unique_ptr<OFGui::MessageBox>& msgbox) {
-                      return (msgbox->getMessage() == "#{sNotifyMessage59}");
-                  });
-
-            // if an overencumbered messagebox is already present, reset its expiry timer,
-            // otherwise create a new one.
-            if (it != msgboxs.end())
-                (*it)->mCurrentTime = 0;
-            else
-                messageBox("#{sNotifyMessage59}");
-        }
+        // The bounty and the overencumbered messages of Morrowind are gone with its crimes and its stats: Fallout has
+        // no bounty, and the Fallout scripts tell the player it carries too much
 
         mHud->onFrame(frameDuration);
 
@@ -1349,9 +1316,7 @@ namespace OFGui
 
     void WindowManager::updatePlayer()
     {
-        const OFWorld::Ptr player = OFMechanics::getPlayer();
-        if (player.getClass().getNpcStats(player).isWerewolf())
-            setWerewolfOverlay(true);
+        // The player of Fallout is never a werewolf: nothing of the Morrowind overlay to restore
     }
 
     // Remove this wrapper once onKeyFocusChanged call is rendered unnecessary
@@ -1386,11 +1351,6 @@ namespace OFGui
             SDL_StartTextInput();
         else
             SDL_StopTextInput();
-    }
-
-    void WindowManager::setEnemy(const OFWorld::Ptr& enemy)
-    {
-        mHud->setEnemy(enemy);
     }
 
     std::size_t WindowManager::getMessagesCount() const
@@ -1492,7 +1452,6 @@ namespace OFGui
 
     void WindowManager::clear()
     {
-        mPlayerBounty = -1;
 
         for (const auto& window : mWindows)
         {
