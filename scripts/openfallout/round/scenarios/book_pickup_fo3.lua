@@ -40,4 +40,24 @@ return { limit = 120, delay = 4, run = function(r)
         return
     end
     r.log('book', 'picked up with no screen')
+
+    -- Reading it: Fallout 3 has no setting fBookPerkBonus, its book code adds 1.0 (Fallout3.exe 0x4B63C9) changed by perk
+    -- entry point 11; the player here has no perk that changes it, so Unarmed (actor value 45) goes up by exactly 1
+    local UNARMED = 45
+    local function unarmed(label)
+        local stats = r.s4stats(label)
+        for _, row in ipairs(stats and stats.skills or {}) do
+            if row.number == UNARMED then return row.value end
+        end
+    end
+    local skillBefore = unarmed('before reading')
+    local used = r.pipboyUse(tostring(r.core.getFormId(BOOK[1], BOOK[2])), 'read the book')
+    r.wait(1)
+    local skillAfter = unarmed('after reading')
+    if skillBefore == nil or skillAfter == nil or skillAfter - skillBefore ~= 1 then
+        r.error('book', 'reading did not add 1 to Unarmed', string.format('before=%s after=%s result=%s', tostring(skillBefore),
+            tostring(skillAfter), tostring(used and used.result)))
+        return
+    end
+    r.log('book', 'read: Unarmed +1', string.format('%g -> %g', skillBefore, skillAfter))
 end }

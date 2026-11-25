@@ -115,11 +115,16 @@ namespace OFScript
                 status.mMost[need] = most;
         }
 
+        // The thresholds of the Hardcore needs' text are New Vegas settings: Fallout 3 has no Hardcore mode and no
+        // such settings, so it keeps the defaults and logs no missing setting
         FalloutScript::NeedsDisplay::Thresholds thresholds;
-        thresholds.mHalfAlpha = gameSettingValue("fHCHalfAlphaTextThreshold");
-        thresholds.mFullAlpha = gameSettingValue("fHCFullAlphaTextThreshold");
-        thresholds.mRed = gameSettingValue("fHCRedTextThreshold");
-        thresholds.mFlash = gameSettingValue("fHCFlashTextThreshold");
+        if (isNewVegas())
+        {
+            thresholds.mHalfAlpha = gameSettingValue("fHCHalfAlphaTextThreshold");
+            thresholds.mFullAlpha = gameSettingValue("fHCFullAlphaTextThreshold");
+            thresholds.mRed = gameSettingValue("fHCRedTextThreshold");
+            thresholds.mFlash = gameSettingValue("fHCFlashTextThreshold");
+        }
         const double now = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch())
                                .count();
         const std::lock_guard lock(mNeedsDisplayMutex);

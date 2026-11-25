@@ -114,7 +114,9 @@ namespace OFScript
                 mGame, [this](std::string_view name) { return gameSetting(name); });
             rules.mMaxLevel = FalloutScript::Levelling::maxLevelForFiles(rules, mContentFiles);
             mProgress.setRules(rules);
-            mItemUse.setBookRules(gameSettingValue("fBookPerkBonus"));
+            // The points of a skill book: the setting fBookPerkBonus in New Vegas. Fallout 3 has no such setting:
+            // its book code loads 1.0 (Fallout3.exe 0x4B63C9). Perk entry point 11 changes the points in both games.
+            mItemUse.setBookRules(isNewVegas() ? gameSettingValue("fBookPerkBonus") : 1.0);
             mItemUse.setChemDurationNeedsAddiction(mGame == FalloutScript::Game::Fallout3);
             mMagic.setConditionInterval(gameSettingValue("fActiveEffectConditionUpdateInterval"));
         });
