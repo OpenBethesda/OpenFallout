@@ -222,7 +222,8 @@ end
 -- The player dies at a health below 1 (D1) and, five seconds on, the newest save is loaded without a box (D2, `fPlayerDeathReloadTime`
 -- 5). A save is made first (`s4-death`) and a mark says so; when the game loads it the scenario starts again from its first line in the
 -- loaded world, finds the mark and says what the loaded player is. The five seconds are judged by round.py (`expect_gap` of the round
--- file: from the line `s4 death t0` to the engine's own `Loading saved game 's4-death'`).
+-- file: from the line of `falloutdeath.lua` that sees the player dead to its line that the timer is over; the engine's `Loading saved game
+-- 's4-death'` must come after it). The line `s4 death t0` says only which way the player died.
 function M.death(game)
     return { limit = 400, delay = 4, run = function(r)
         if r.marked('phase') == 'reloaded' then

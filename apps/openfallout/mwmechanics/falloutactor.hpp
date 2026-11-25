@@ -207,6 +207,17 @@ namespace OFMechanics
         void updateFall(bool onGround, bool weightless);
 
         std::optional<float> mFallStart;
+        /// A landing that waits for the player to settle: the position of the world is between the last two steps of
+        /// the physics, so on the frame the ground is touched it can still be a step's fall above where the player
+        /// comes to stand
+        struct Landing
+        {
+            float mStart = 0.f;
+            float mLowest = 0.f;
+            int mFrames = 0;
+        };
+        std::optional<Landing> mLanding;
+        float mLastZ = 0.f;
         bool mWasOnGround = true;
         bool mSwimming = false;
         bool mInJump = false;

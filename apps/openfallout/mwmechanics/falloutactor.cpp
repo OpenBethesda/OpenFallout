@@ -104,6 +104,7 @@ namespace OFMechanics
     void PlayerCharacter::teleported()
     {
         mFallStart.reset();
+        mLanding.reset();
         mWasOnGround = true;
         mInJump = false;
     }
@@ -253,7 +254,9 @@ namespace OFMechanics
         if (mSwimming || weightless)
         {
             mFallStart.reset();
+            mLanding.reset();
             mWasOnGround = onGround;
+            mLastZ = z;
             return;
         }
         // The height the player left the ground at: the take-off of a jump (set there) or the edge it walked off
@@ -262,16 +265,31 @@ namespace OFMechanics
             mFallStart = z;
         if (onGround && !mWasOnGround && mFallStart)
         {
-            const float lost = *mFallStart - z;
+            // The ground is touched: the height lost is judged where the player comes to stand (C.F1), a frame or two on
+            mLanding = Landing{ *mFallStart, z, 0 };
             mFallStart.reset();
             mInJump = false;
-            if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
-                scripts->landed(getPtr(), lost);
+        }
+        else if (mLanding)
+        {
+            mLanding->mLowest = std::min(mLanding->mLowest, z);
+            ++mLanding->mFrames;
+            // Settled (the height no longer changes), off the ground again (a jump), or long enough
+            constexpr float settled = 0.5f;
+            constexpr int mostFrames = 8;
+            if (!onGround || std::abs(z - mLastZ) < settled || mLanding->mFrames >= mostFrames)
+            {
+                const float lost = mLanding->mStart - mLanding->mLowest;
+                mLanding.reset();
+                if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+                    scripts->landed(getPtr(), lost);
+            }
         }
         // (a jump sets its take-off height after this, on the frame it starts)
         if (onGround && !mInJump)
             mFallStart.reset();
         mWasOnGround = onGround;
+        mLastZ = z;
     }
 
     Actor* findActor(const OFWorld::Ptr& ptr)

@@ -72,17 +72,21 @@ class RoundFiles(unittest.TestCase):
             failed = round_runner.expectations(text + fault + "\n", 0, False, expect)
             self.assertTrue(any("forbidden" in line for line in failed), fault)
 
-    def test_the_death_round_judges_five_seconds_from_the_death_to_the_load_by_the_engines_own_lines(self):
+    def test_the_death_round_judges_five_seconds_from_the_death_to_the_load_by_the_games_own_lines(self):
         config = round_runner.load_round(ROUNDS / "s4-death-nv.json", Args())
         gaps = config["expect_gap"]
         self.assertEqual(len(gaps), 1)
         self.assertEqual((gaps[0]["min"], gaps[0]["max"]), (4.4, 5.6))
         expect = round_runner.outcome_expectations(config, config["variants"][0])
-        start = "[10:00:10.000 I] Global[scripts/roundworld.lua]:\tROUND\tnote\ts4 death t0 kind=half_a_point\n"
-        load = "[10:00:{:02d}.{:03d} I] Loading saved game 's4-death' for character 'Courier'\n"
-        self.assertEqual(round_runner.expectations(start + load.format(15, 100), 0, False, expect), [])
-        self.assertIn("the gap from", round_runner.expectations(start + load.format(16, 200), 0, False, expect)[0])
-        # a box that waited for a button (what the game did before the rule): no load at all fails too
+        # the death script's lines: the first frame it sees the player dead, and the end of its timer
+        start = "[10:00:10.000 I] L@0x1[scripts/omw/falloutdeath.lua]:\tthe player is dead (fPlayerDeathReloadTime 5)\n"
+        over = "[10:00:{:02d}.{:03d} I] L@0x1[scripts/omw/falloutdeath.lua]:\tthe death timer is over after 5.00 s: the newest save loads\n"
+        load = "[10:00:16.400 I] Loading saved game 's4-death' for character 'Courier'\n"
+        self.assertEqual(round_runner.expectations(start + over.format(15, 20) + load, 0, False, expect), [])
+        self.assertIn("the gap from", round_runner.expectations(start + over.format(16, 200) + load, 0, False, expect)[0])
+        # the timer is over but no save is loaded after it: that fails too
+        self.assertTrue(round_runner.expectations(start + over.format(15, 20), 0, False, expect))
+        # a box that waited for a button (what the game did before the rule): no end of the timer at all fails too
         self.assertIn("no log line matches", round_runner.expectations(start, 0, False, expect)[0])
 
 

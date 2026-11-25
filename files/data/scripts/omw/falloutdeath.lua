@@ -28,6 +28,8 @@ end
 -- The exe's two ends of the timer: the most recent save, or the main menu when there is none
 local function reload()
     shown = true
+    print(string.format('the death timer is over after %.2f s: %s', deadFor,
+        pipboy.hasRecentSave() and 'the newest save loads' or 'the main menu opens'))
     if pipboy.hasRecentSave() then
         pipboy.reloadRecent()
     else
@@ -69,6 +71,7 @@ return {
             end
             if shown then return end
             local reloadTime = pipboy.setting('fPlayerDeathReloadTime') or 5
+            if deadFor == 0 then print(string.format('the player is dead (fPlayerDeathReloadTime %g)', reloadTime)) end
             if reloadTime <= 0 then
                 ask()
                 return

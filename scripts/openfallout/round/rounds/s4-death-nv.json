@@ -19,8 +19,8 @@
   },
   "expect_gap": [
     {
-      "from": "ROUND\\tnote\\ts4 death t0",
-      "to": "Loading saved game 's4-death'",
+      "from": "falloutdeath\\.lua\\]:\\tthe player is dead",
+      "to": "falloutdeath\\.lua\\]:\\tthe death timer is over",
       "min": 4.4,
       "max": 5.6
     }
@@ -29,5 +29,8 @@
     {
       "name": "plain"
     }
+  ],
+  "expect_log": [
+    "(?s)the death timer is over.*Loading saved game 's4-death'"
   ]
 }
