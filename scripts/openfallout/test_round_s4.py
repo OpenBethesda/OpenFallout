@@ -189,6 +189,19 @@ class Rules(unittest.TestCase):
         for number, want in ((37, 19), (32, 13), (36, 17), (38, 19), (45, 15), (41, 17)):
             self.assertEqual(self.common.skillValue(table({"number": number}), attributes), want, number)
 
+    def test_tagged_skills_are_read_from_the_first_look_and_the_formula_adds_their_fifteen(self):
+        table = self.lua.table_from
+        attributes = table([table({"number": n, "value": 5}) for n in range(5, 12)])
+        # master's rows: no tag flag; Barter (32) 14 untagged (Luck rounded down), Guns (38) 29 = tagged
+        stats = table({"attributes": attributes, "skills": table([table({"number": 32, "value": 14}), table({"number": 38, "value": 29})])})
+        tags = self.common.taggedSkills(stats)
+        self.assertTrue(tags[38])
+        self.assertIsNone(tags[32])
+        count, words = self.common.skillMismatches(stats, tags)
+        self.assertEqual(count, 2)     # both one under the rule (Luck 5 gives 3, not 2)
+        stats = table({"attributes": attributes, "skills": table([table({"number": 32, "value": 15}), table({"number": 38, "value": 30})])})
+        self.assertEqual(self.common.skillMismatches(stats, self.common.taggedSkills(stats))[0], 0)
+
     def test_a_check_logs_the_line_and_fails_with_an_error_outside_the_tolerance(self):
         lines = []
         r = self.lua.table_from({"log": lambda text: lines.append(("note", text)), "error": lambda text: lines.append(("error", text))})

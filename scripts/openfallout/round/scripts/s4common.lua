@@ -183,11 +183,24 @@ function M.attribute(stats, number, field)
     return nil
 end
 
--- How many skills are not what the formula says, with the first few of them as words (skill number: got, wanted)
-function M.skillMismatches(stats)
+-- The skills that are tagged. The Pip-Boy's skill rows carry no tag flag, so the tags are read from the first look at the character: a
+-- tagged skill stands 15 above the formula and an untagged one at most one under it (the rounding of Luck), so 7 above is a tag.
+function M.taggedSkills(stats)
+    local tags = {}
+    for _, skill in ipairs(stats.skills or {}) do
+        local untagged = M.skillValue({ number = skill.number, tagged = false }, stats.attributes or {})
+        if skill.tagged == true or (untagged ~= nil and skill.value - untagged >= 7) then tags[skill.number] = true end
+    end
+    return tags
+end
+
+-- How many skills are not what the formula says, with the first few of them as words (skill number: got, wanted). `tags`: the skills
+-- that are tagged (taggedSkills of the first look; the flag of the row itself counts too)
+function M.skillMismatches(stats, tags)
     local count, words = 0, {}
     for _, skill in ipairs(stats.skills or {}) do
-        local want = M.skillValue(skill, stats.attributes or {})
+        local want = M.skillValue({ number = skill.number, tagged = skill.tagged == true or (tags ~= nil and tags[skill.number] == true) },
+            stats.attributes or {})
         if want ~= nil and math.abs(skill.value - want) > 0.001 then
             count = count + 1
             if #words < 6 then table.insert(words, string.format('%d:%g/%g', skill.number, skill.value, want)) end

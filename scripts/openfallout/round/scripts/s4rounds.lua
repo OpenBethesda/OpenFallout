@@ -293,7 +293,8 @@ function M.levelup(game)
         -- the numbers of the screen of the character as it is: the experience that begins this level and the next, each skill
         common.check(r, 'xp_level_start', base.levelStart, common.xpForLevel(level), { abs = 0 }, 'the experience at which this level begins (1.12)')
         common.check(r, 'xp_to_next_level', base.nextLevel, common.xpForLevel(level + 1), { abs = 0 }, 'the experience at which the next level begins (1.12)')
-        local wrong, which = common.skillMismatches(base)
+        local tags = common.taggedSkills(base)
+        local wrong, which = common.skillMismatches(base, tags)
         common.check(r, 'skills_from_special_at_the_start', wrong, 0, { abs = 0 },
             'a skill is not 2 + 2 x its attribute + ceil(Luck / 2) + 15 if tagged (1.9); the first ones: skill:got/wanted ' .. which)
 
@@ -305,7 +306,7 @@ function M.levelup(game)
         if changed then
             common.check(r, 'special_changed_luck', special(changed, common.LUCK) or -1, (special(base, common.LUCK) or 0) + 2, { abs = 0 },
                 'the command did not change Luck')
-            wrong, which = common.skillMismatches(changed)
+            wrong, which = common.skillMismatches(changed, tags)
             common.check(r, 'skills_follow_current_special', wrong, 0, { abs = 0 },
                 'the skills must follow the SPECIAL of now (1.9): skill:got/wanted ' .. which)
         end
