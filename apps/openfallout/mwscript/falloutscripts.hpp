@@ -412,6 +412,13 @@ namespace OFScript
         void finishLevelUp();
         /// The value of a game setting (GMST) by its editor id, none when the files have no such setting
         std::optional<double> gameSetting(std::string_view name) override;
+        /// The number of a game setting: the one of the plugins, else the default of the executable of the game (the
+        /// names are not case sensitive); 0, with an error in the log once, when neither has it (no executable was
+        /// found next to the data)
+        double gameSettingValue(std::string_view name);
+        /// The defaults of the numeric settings that the executables of the games build (fallout-rules.md D.S7), by name
+        /// in lower case; loadExecutableTexts sets them from the player's own copy of the game, a test sets its own
+        void setExecutableNumbers(std::map<std::string, double> numbers);
         /// The text of a game setting, empty when the files have none
         std::string gameSettingText(std::string_view name);
         /// What a token `&name;` of a message stands for: the keys and buttons of the controls (`&sUActnVats;` is the
@@ -2163,7 +2170,7 @@ namespace OFScript
         /// The pad shakes because the player was hurt, as the games' settings fRumblePainStrength and fRumblePainTime say
         /// The pad of the player shakes for something that happened to it (the INI's `fRumble<Kind>Strength` and
         /// `fRumble<Kind>Time`: Pain, Struck, Hit), unless a menu is open (the executable's own rule at 0x89CEBA)
-        void rumbleFor(const char* strengthSetting, double strengthDefault, const char* timeSetting, double timeDefault);
+        void rumbleFor(const char* strengthSetting, const char* timeSetting);
         void painRumble();
         /// A blow of the weapon hit the character or creature: the impact that the weapon's impact data set has for its
         /// body is shown on the part that was hit (`limb`, the type of the part; -1 for the body, which is the torso).
@@ -3121,14 +3128,21 @@ namespace OFScript
         /// The settings of the files by their names in lower case, read when the first of them is asked for (the
         /// caller holds mDerivedSettingsMutex)
         const std::map<std::string, double>& gameSettingValues();
-        /// The number a game setting has in the files (the names are not case sensitive), else the fallback
-        double gameSetting(std::string_view name, double fallback);
+        /// The number of a game setting (the plugins', else the executable's default), else the default that a rule of
+        /// components/falloutscript gives with its own name for it (the rules there take their settings through a
+        /// function with a default, which their tests use)
+        double gameSettingOr(std::string_view name, double fallback);
+        /// The settings that were asked for and had no value (under mDerivedSettingsMutex)
+        std::set<std::string> mMissingSettings;
         std::optional<std::map<std::string, double>> mGameSettingValues;
         /// The settings that are texts, by name (under mDerivedSettingsMutex as well)
         std::optional<std::map<std::string, std::string>> mGameSettingTexts;
         /// The default texts of the settings that the executables of the games build, by name in lower case (under
         /// mDerivedSettingsMutex as well)
         std::map<std::string, std::string> mExecutableTexts;
+        /// The default values of the numeric settings that the executables of the games build, by name in lower case
+        /// (under mDerivedSettingsMutex as well); those of the plugins win over them
+        std::map<std::string, double> mExecutableNumbers;
         /// What the player has open to take things from, under mLootMutex
         std::mutex mLootMutex;
         std::optional<Loot> mLoot;

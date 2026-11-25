@@ -244,7 +244,7 @@ namespace OFScript
             music.mConfigured = true;
             const FalloutScript::Music::CombatSettings settings
                 = combatSettings([this](const char* name, float fallback) {
-                      return static_cast<float>(gameSetting(name, fallback));
+                      return static_cast<float>(gameSettingOr(name, fallback));
                   });
             music.mNearRange = settings.mNearOuter;
             music.mCombat = FalloutScript::Music::CombatMusic(settings);

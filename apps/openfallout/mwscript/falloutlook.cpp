@@ -581,7 +581,7 @@ namespace OFScript
     void FalloutScripts::lookRandomize()
     {
         FaceLook look = playerLook();
-        const double variation = gameSetting("fNPCGeneticVariation", 0.5);
+        const double variation = gameSettingValue("fNPCGeneticVariation");
         FalloutScript::Gauss gauss([this]() { return std::uniform_real_distribution<double>(0.0, 1.0)(mLookRandom); });
         FaceLook random = FalloutScript::randomFace(look, variation, gauss);
         // The age and the second number of the face file are settled after the draw (0x601830): the shape keeps the age

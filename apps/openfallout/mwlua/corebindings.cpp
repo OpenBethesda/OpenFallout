@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include <components/debug/debuglog.hpp>
+#include <components/fallback/fallback.hpp>
 #include <components/lua/l10n.hpp>
 #include <components/lua/luastate.hpp>
 #include <components/lua/serialization.hpp>
@@ -173,6 +174,16 @@ namespace OFLua
                         if (std::string text = host->gameSettingText(setting); !text.empty())
                             return sol::make_object<std::string>(lua, std::move(text));
                     }
+                    // The fallback= lines of openfallout.cfg (the colours of the fonts of the built-in widgets)
+                    const auto& texts = Fallback::Map::getNonNumericFallbackMap();
+                    if (const auto it = texts.find(setting); it != texts.end())
+                        return sol::make_object<std::string>(lua, it->second);
+                    const auto& floats = Fallback::Map::getFloatFallbackMap();
+                    if (const auto it = floats.find(setting); it != floats.end())
+                        return sol::make_object<double>(lua, it->second);
+                    const auto& ints = Fallback::Map::getIntFallbackMap();
+                    if (const auto it = ints.find(setting); it != ints.end())
+                        return sol::make_object<int>(lua, it->second);
                     return sol::nil;
                 }
                 const ESM::Variant& value = gmst->mValue;

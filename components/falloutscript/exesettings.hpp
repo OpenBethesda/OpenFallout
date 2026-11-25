@@ -31,8 +31,36 @@ namespace FalloutScript::ExeSettings
     /// damaged, not a Windows executable) gives no texts.
     Texts scan(std::string_view image, const ToUTF8::StatelessUtf8Encoder* encoder = nullptr);
 
+    /// The default values of the numeric settings (`f`, `i`, `u` and `b` before a capital: floats, integers, unsigned
+    /// integers and booleans), by the name of the setting in lower case. The plugins hold only the settings that were
+    /// changed, and the defaults of the others (fPlayerDeathReloadTime, iActivatePickLength, the knockdown and knockback
+    /// settings...) are in the executables, built the same two ways as the texts:
+    ///  - code that loads the value and pushes the name before the constructor: `D9 05 <float>` / `DD 05 <double>` /
+    ///    `D9 EE` (0) / `D9 E8` (1), then `D9 1C 24` (with a `51` before or after the load), or `6A <8 bits>` or
+    ///    `68 <32 bits>`, then `68 <name>` and `B9 <object> E8` or `8B C8+n E8` (FalloutNV.exe);
+    ///  - a record of three 32-bit words in the data: the value, the address of the name, the address of the table of
+    ///    functions of the setting (Fallout3.exe).
+    /// The values in the code win over those of a record. The settings of the INI file (`fCreatureRadioMax:Audio`) are
+    /// by their name without the section, under a setting of the game of the same name. Nothing of them is kept in the
+    /// port: they are read from the player's own copy of the game.
+    using Numbers = std::map<std::string, double>;
+
+    /// The default texts and numbers of the settings of one executable
+    struct Defaults
+    {
+        Texts mTexts;
+        Numbers mNumbers;
+    };
+
+    /// The texts and numbers in the image of a Windows executable; none for an image that is not one of the games'
+    /// executables
+    Defaults scanDefaults(std::string_view image, const ToUTF8::StatelessUtf8Encoder* encoder = nullptr);
+
     /// The texts of the executable in `path`; none if it cannot be read.
     Texts read(const std::filesystem::path& path, const ToUTF8::StatelessUtf8Encoder* encoder = nullptr);
+
+    /// The texts and numbers of the executable in `path`; none if it cannot be read.
+    Defaults readDefaults(const std::filesystem::path& path, const ToUTF8::StatelessUtf8Encoder* encoder = nullptr);
 
     /// The file called `fileName` (not case sensitive) in one of the directories or in the directory above it: the
     /// executable of a game is next to its `Data` directory. An empty path if there is none.

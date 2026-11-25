@@ -637,7 +637,7 @@ namespace OFScript
             // beyond that it says nothing (what it would say is not kept: the station goes on without it)
             if (ESM::FormId base; baseOf(actor, base) && mStore.get<ESM4::Creature>().search(base) != nullptr)
             {
-                const float reach = FalloutScript::Radio::creatureReach(static_cast<float>(gameSetting("fCreatureRadioMax", 2000.0)));
+                const float reach = FalloutScript::Radio::creatureReach(static_cast<float>(gameSettingValue("fCreatureRadioMax")));
                 if ((npc.getRefData().getPosition().asVec3() - player.getRefData().getPosition().asVec3()).length() > reach)
                     continue;
             }

@@ -155,7 +155,7 @@ namespace OFScript
         const double damage = laid.mNoDamage ? 0.0 : std::max<double>(data.mDamage, 0.0);
         const double radius = std::max<double>(data.mRadius, 0.0);
         const osg::Vec3f centre(laid.mPosition[0], laid.mPosition[1], laid.mPosition[2]);
-        const double buffer = gameSetting("fExplosionLOSBuffer", 16.0);
+        const double buffer = gameSettingValue("fExplosionLOSBuffer");
         OFBase::World* world = OFBase::Environment::get().getWorld();
         // What stands in the way of the blast keeps it off (a ray from just above the explosion to the middle of the target).
         // The ray of a thing that is not a character ends inside the box of that thing, and what it hits within the length

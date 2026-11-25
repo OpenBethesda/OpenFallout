@@ -116,10 +116,10 @@ namespace OFScript
         }
 
         FalloutScript::NeedsDisplay::Thresholds thresholds;
-        thresholds.mHalfAlpha = gameSetting("fHCHalfAlphaTextThreshold", 200);
-        thresholds.mFullAlpha = gameSetting("fHCFullAlphaTextThreshold", 400);
-        thresholds.mRed = gameSetting("fHCRedTextThreshold", 600);
-        thresholds.mFlash = gameSetting("fHCFlashTextThreshold", 800);
+        thresholds.mHalfAlpha = gameSettingValue("fHCHalfAlphaTextThreshold");
+        thresholds.mFullAlpha = gameSettingValue("fHCFullAlphaTextThreshold");
+        thresholds.mRed = gameSettingValue("fHCRedTextThreshold");
+        thresholds.mFlash = gameSettingValue("fHCFlashTextThreshold");
         const double now = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch())
                                .count();
         const std::lock_guard lock(mNeedsDisplayMutex);
@@ -238,8 +238,8 @@ namespace OFScript
         if (mActorValues.current(mPlayer, rightLegCondition) <= 0)
             ++legs;
         return Restrictions::travelSpeed(mActorValues.current(mPlayer, AV::speedMult), legs,
-            gameSetting("fMoveBaseSpeed", 77), gameSetting("fMoveRunMult", 4),
-            gameSetting("fMoveOneCrippledLegSpeedMult", 0.85), gameSetting("fMoveTwoCrippledLegsSpeedMult", 0.75));
+            gameSettingValue("fMoveBaseSpeed"), gameSettingValue("fMoveRunMult"),
+            gameSettingValue("fMoveOneCrippledLegSpeedMult"), gameSettingValue("fMoveTwoCrippledLegsSpeedMult"));
     }
 
     // ---- The commands of the menu of the rest ----

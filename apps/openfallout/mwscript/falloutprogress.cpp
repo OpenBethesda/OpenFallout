@@ -114,9 +114,9 @@ namespace OFScript
                 mGame, [this](std::string_view name) { return gameSetting(name); });
             rules.mMaxLevel = FalloutScript::Levelling::maxLevelForFiles(rules, mContentFiles);
             mProgress.setRules(rules);
-            mItemUse.setBookRules(gameSetting("fBookPerkBonus").value_or(1.0));
+            mItemUse.setBookRules(gameSettingValue("fBookPerkBonus"));
             mItemUse.setChemDurationNeedsAddiction(mGame == FalloutScript::Game::Fallout3);
-            mMagic.setConditionInterval(gameSetting("fActiveEffectConditionUpdateInterval").value_or(1.0));
+            mMagic.setConditionInterval(gameSettingValue("fActiveEffectConditionUpdateInterval"));
         });
     }
 

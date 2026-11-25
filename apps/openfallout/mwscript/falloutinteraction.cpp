@@ -141,7 +141,7 @@ namespace OFScript
         }
 
         const Interaction::Setting setting
-            = [this](std::string_view name, double fallback) { return gameSetting(name, fallback); };
+            = [this](std::string_view name, double fallback) { return gameSettingOr(name, fallback); };
         const bool leveled = record != nullptr && (record->mLockFlags & 0x04) != 0;
         const int level
             = Interaction::lockLevel(mReferenceState.lockLevel(reference), leveled, mProgress.level(), setting);
@@ -360,7 +360,7 @@ namespace OFScript
                     result.mHasKey = record != nullptr && !record->mKey.isZeroOrUnset()
                         && mActors.itemCount(mPlayer, record->mKey.toUint32()) > 0;
                     const Interaction::Setting setting
-                        = [this](std::string_view name, double fallback) { return gameSetting(name, fallback); };
+                        = [this](std::string_view name, double fallback) { return gameSettingOr(name, fallback); };
                     const bool leveled = record != nullptr && (record->mLockFlags & 0x04) != 0;
                     const int level = Interaction::lockLevel(
                         mReferenceState.lockLevel(reference), leveled, mProgress.level(), setting);
@@ -518,7 +518,7 @@ namespace OFScript
             return std::string();
 
         const Interaction::Setting setting
-            = [this](std::string_view name, double fallback) { return gameSetting(name, fallback); };
+            = [this](std::string_view name, double fallback) { return gameSettingOr(name, fallback); };
         mReferenceState.unlock(screen.mReference);
         // A lock that belongs to someone is a theft that the owner may see (0x78EB50)
         if (mLaw)
@@ -529,10 +529,7 @@ namespace OFScript
             if (const char* experience
                 = Interaction::lockClassExperience(Interaction::lockClass(screen.mLevel, setting)))
             {
-                static constexpr std::array<int, 5> defaults{ 20, 30, 40, 50, 60 };
-                const int category = std::clamp(screen.mClass, 0, 4);
-                const int reward
-                    = static_cast<int>(gameSetting(experience, defaults[static_cast<std::size_t>(category)]));
+                const int reward = static_cast<int>(gameSettingValue(experience));
                 if (reward > 0)
                     rewardExperience(reward);
             }
@@ -563,7 +560,7 @@ namespace OFScript
         // A terminal is closed until it is hacked or its password is carried, unless its record says it is not
         const bool closed = mReferenceState.isLocked(reference);
         const Interaction::Setting setting
-            = [this](std::string_view name, double fallback) { return gameSetting(name, fallback); };
+            = [this](std::string_view name, double fallback) { return gameSettingOr(name, fallback); };
         TerminalState state;
         state.mReference = reference;
         state.mPath.push_back(base.toUint32());
@@ -785,14 +782,14 @@ namespace OFScript
     {
         // The next board waits for a time from the closing of the screen of the last one
         if (mTerminal && (mTerminal->mPuzzle || mTerminal->mLockedOut))
-            mHackGate = gameSetting("iHackingRetryMilliseconds", 10000) / 1000.0;
+            mHackGate = gameSettingValue("iHackingRetryMilliseconds") / 1000.0;
         mTerminal.reset();
     }
 
     std::unique_ptr<FalloutScript::Hacking::Puzzle> FalloutScripts::newPuzzle(int level, int parity)
     {
         const Interaction::Setting setting
-            = [this](std::string_view name, double fallback) { return gameSetting(name, fallback); };
+            = [this](std::string_view name, double fallback) { return gameSettingOr(name, fallback); };
         std::uint32_t seed = 0;
         {
             const std::lock_guard lock(mCombatRandomMutex);
@@ -841,7 +838,7 @@ namespace OFScript
             const int level = state.mHackLevel;
             if (const char* experience = Interaction::hackClassExperience(level))
             {
-                const int reward = static_cast<int>(gameSetting(experience, 0));
+                const int reward = static_cast<int>(gameSettingValue(experience));
                 if (reward > 0)
                     rewardExperience(reward);
             }
@@ -974,7 +971,7 @@ namespace OFScript
         // The reach of the check: the executables look as far as fHostileActorInteriorDistance (2000) in an interior and
         // fHostileActorExteriorDistance (3000) outside, both absent from the master files (FalloutNV.exe 0x9764A0)
         const double reach = Restrictions::hostileReach(!player.getCell()->isExterior(),
-            gameSetting("fHostileActorExteriorDistance", 3000), gameSetting("fHostileActorInteriorDistance", 2000));
+            gameSettingValue("fHostileActorExteriorDistance"), gameSettingValue("fHostileActorInteriorDistance"));
         const osg::Vec3f here = player.getRefData().getPosition().asVec3();
         // The characters that are after the player (the executable also counts those that its factions and aggression
         // make enemies: the combat state here lists the ones that went for it)
@@ -1412,8 +1409,8 @@ namespace OFScript
         {
             // The settings are intervals in game minutes at the time scale of 60 (the executables' defaults are what
             // the master file of New Vegas says)
-            mHardcore.setRates(gameSetting("fHCDehydrationRate", 10), gameSetting("fHCStarvationRate", 25),
-                gameSetting("fHCSleepDeprivationRate", 50));
+            mHardcore.setRates(gameSettingValue("fHCDehydrationRate"), gameSettingValue("fHCStarvationRate"),
+                gameSettingValue("fHCSleepDeprivationRate"));
         }
         // The updater of the executable does nothing while the control of fighting is taken away (0x969C30 asks the
         // control byte of the player for its bit 4), and the time it left out is counted when it is given back
@@ -1511,7 +1508,7 @@ namespace OFScript
             mMagic.update(seconds);
             // Each hour of sleep lowers the sleep deprivation of the hardcore mode
             if (sleeping && hardcoreOn())
-                mHardcore.sleepHour(mPlayer, gameSetting("fHCSleepRestorationMod", 60));
+                mHardcore.sleepHour(mPlayer, gameSettingValue("fHCSleepRestorationMod"));
             // An effect that ran out can have taken the last of the health: the rest ends, with nothing given back
             died = mActors.isDead(mPlayer);
             if (died)
@@ -1603,7 +1600,7 @@ namespace OFScript
         if (space != 0)
             mLastOpenSpace = space;
         const osg::Vec3f here = player.getRefData().getPosition().asVec3();
-        const double reach = gameSetting("iMapMarkerRevealDistance", 1000);
+        const double reach = gameSettingValue("iMapMarkerRevealDistance");
         for (const PlacedMarker& marker : placedMarkers())
         {
             if (marker.mWorldspace != space || mMapMarkers.state(marker.mId) == 2)
@@ -1617,7 +1614,7 @@ namespace OFScript
             {
                 markerDiscovered(marker.mId);
                 noteChallengeMarker(marker.mId);
-                const int reward = static_cast<int>(gameSetting("iXPRewardDiscoverMapMarker", 10));
+                const int reward = static_cast<int>(gameSettingValue("iXPRewardDiscoverMapMarker"));
                 if (reward > 0)
                     rewardExperience(reward);
             }

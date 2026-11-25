@@ -27,6 +27,6 @@ namespace OFScript
 
     double FalloutScripts::setting(std::string_view name, double fallback)
     {
-        return gameSetting(name, fallback);
+        return gameSettingOr(name, fallback);
     }
 }

@@ -552,7 +552,7 @@ namespace OFScript
         FalloutScript::addChallengeConditionFunctions(mConditions, mChallenges);
         // A change of karma is told in the message area, with a picture for the kind of change
         mProgress.setKarmaNotice([this](int amount) {
-            const bool major = std::abs(amount) >= gameSetting("iKarmaChangeThreshold", 250);
+            const bool major = std::abs(amount) >= gameSettingValue("iKarmaChangeThreshold");
             const std::string kind = std::string(major ? "Major" : "Minor") + (amount < 0 ? "Lost" : "Gained");
             // The sound is UIKarmaUp or UIKarmaDown (FalloutNV.exe 0x94FD30)
             mHudMessages.push(gameSettingText("sKarma" + kind), gameSettingText("sKarma" + kind + "Image"),
@@ -2642,12 +2642,35 @@ namespace OFScript
         return true;
     }
 
-    double FalloutScripts::gameSetting(std::string_view name, double fallback)
+    double FalloutScripts::gameSettingValue(std::string_view name)
+    {
+        const std::lock_guard lock(mDerivedSettingsMutex);
+        const std::map<std::string, double>& settings = gameSettingValues();
+        std::string key = Misc::StringUtils::lowerCase(name);
+        const auto found = settings.find(key);
+        if (found != settings.end())
+            return found->second;
+        if (mMissingSettings.insert(std::move(key)).second)
+            Log(Debug::Error) << "Game setting " << name
+                              << " is in neither the plugins nor the executable of the game: 0 is used";
+        return 0.0;
+    }
+
+    double FalloutScripts::gameSettingOr(std::string_view name, double fallback)
     {
         const std::lock_guard lock(mDerivedSettingsMutex);
         const std::map<std::string, double>& settings = gameSettingValues();
         const auto found = settings.find(Misc::StringUtils::lowerCase(name));
         return found != settings.end() ? found->second : fallback;
+    }
+
+    void FalloutScripts::setExecutableNumbers(std::map<std::string, double> numbers)
+    {
+        const std::lock_guard lock(mDerivedSettingsMutex);
+        mExecutableNumbers = std::move(numbers);
+        // The settings by name are made again with the defaults of the executable under those of the plugins
+        mGameSettingValues.reset();
+        mMissingSettings.clear();
     }
 
     bool FalloutScripts::detects(FalloutScript::FormId viewer, FalloutScript::FormId target)
@@ -2888,8 +2911,8 @@ namespace OFScript
 
     double FalloutScripts::carriedWeight(double unit, bool packRat)
     {
-        if (packRat && unit > 0 && unit <= gameSetting("fPackRatThreshold", 2.0))
-            return unit * gameSetting("fPackRatModifier", 0.5);
+        if (packRat && unit > 0 && unit <= gameSettingValue("fPackRatThreshold"))
+            return unit * gameSettingValue("fPackRatModifier");
         return unit;
     }
 
@@ -2953,7 +2976,7 @@ namespace OFScript
         // A player who is in V.A.T.S. takes only a share of a blow (fVATSPlayerDamageMult: 0.75 in New Vegas, 0.1 in
         // Fallout 3), after the armor and before the part of the body
         if (victim == mPlayer && mVatsOpen)
-            hit.mDamage *= std::max(gameSetting("fVATSPlayerDamageMult", 1.0), 0.0);
+            hit.mDamage *= std::max(gameSettingValue("fVATSPlayerDamageMult"), 0.0);
         // The damage to the health: a blow at a part of the body does more or less than one at the body (a head shot
         // more), after the armor, and only a shot or a throw does (hands and melee weapons, and a blow with no weapon,
         // count the part as 1); a part that does not say anything (0) leaves the damage as it is
@@ -3022,7 +3045,7 @@ namespace OFScript
         // the threshold by what it took of the rest), by less in V.A.T.S. as the blow is
         if (victim == mPlayer)
             wearArmorOfHit(victim, limb, hit.mEntering, defense.mResistance, defense.mThreshold, hit.mAfterThreshold,
-                mVatsOpen ? std::max(gameSetting("fVATSPlayerDamageMult", 1.0), 0.0) : 1.0);
+                mVatsOpen ? std::max(gameSettingValue("fVATSPlayerDamageMult"), 0.0) : 1.0);
         // The blow that hurts the player flashes the screen red, as the fall of the engine does
         if (victim == mPlayer && dealt > 0)
         {
@@ -3047,8 +3070,7 @@ namespace OFScript
             if (victim == mPlayer)
             {
                 // Half of it when the settings say nothing (fCombatPlayerLimbDamageMult of both executables)
-                constexpr double playerLimbDamageMult = 0.5;
-                limbDamage *= gameSetting("fCombatPlayerLimbDamageMult", playerLimbDamageMult);
+                limbDamage *= gameSettingValue("fCombatPlayerLimbDamageMult");
             }
             if (const ESM4::Weapon* record = weapon != 0 ? mStore.get<ESM4::Weapon>().search(refId(weapon)) : nullptr)
                 if (record->mHasGameData && record->mGame.mLimbDamageMultiplier > 0)
@@ -3222,14 +3244,14 @@ namespace OFScript
             // One that is down or restrained already is not put down again: its health comes back to a share of the
             // most (fEssentialHealthPercentReGain, 0.3 in the executables of both games), whatever it was
             namespace AV = FalloutScript::ActorValue;
-            const double regained = std::clamp(gameSetting("fEssentialHealthPercentReGain", 0.3), 0.0, 1.0);
+            const double regained = std::clamp(gameSettingValue("fEssentialHealthPercentReGain"), 0.0, 1.0);
             mActorValues.heal(victim, AV::health);
             mActorValues.damage(victim, AV::health, mActorValues.permanent(victim, AV::health) * (1.0 - regained));
             return true;
         }
         // How long an essential character lies unconscious before it gets up is fEssentialDeathTime (read from the
         // executables of both games: 10 seconds).
-        mCombat.setUnconscious(victim, true, static_cast<float>(gameSetting("fEssentialDeathTime", 10.0)));
+        mCombat.setUnconscious(victim, true, static_cast<float>(gameSettingValue("fEssentialDeathTime")));
         mCombat.withdraw(victim);
         return true;
     }
@@ -3255,17 +3277,17 @@ namespace OFScript
             {
                 constexpr std::uint8_t giantType = 7;
                 const double giant
-                    = creature->mCreatureType == giantType ? gameSetting("fCombatGiantCreatureReachMult", 2.0) : 1.0;
+                    = creature->mCreatureType == giantType ? gameSettingValue("fCombatGiantCreatureReachMult") : 1.0;
                 return static_cast<double>(creature->mAttackReach) * giant;
             }
-        return gameSetting("fHandReachMult", 0.5) * gameSetting("fCombatDistance", 128.0);
+        return gameSettingValue("fHandReachMult") * gameSettingValue("fCombatDistance");
     }
 
     FalloutScripts::WeaponStats FalloutScripts::weaponStats(FalloutScript::FormId attacker)
     {
         // A blow of a melee weapon reaches its reach times fCombatDistance (128 in both executables); the hands reach
         // as far as the character does (unarmedReach)
-        const double combatDistance = gameSetting("fCombatDistance", 128.0);
+        const double combatDistance = gameSettingValue("fCombatDistance");
         WeaponStats stats;
         stats.mWeapon = attacker != 0 ? mEquipment.weapon(attacker) : 0;
         // A character that a script told to shoot (UseWeapon) holds the weapon the script names and uses no ammunition
@@ -4044,7 +4066,7 @@ namespace OFScript
                 namespace AV = FalloutScript::ActorValue;
                 if (mActorValues.current(actor, AV::health) > 0)
                     continue;
-                const double regained = std::clamp(gameSetting("fEssentialHealthPercentReGain", 0.3), 0.0, 1.0);
+                const double regained = std::clamp(gameSettingValue("fEssentialHealthPercentReGain"), 0.0, 1.0);
                 mActorValues.heal(actor, AV::health);
                 mActorValues.damage(actor, AV::health, mActorValues.permanent(actor, AV::health) * (1.0 - regained));
             }
@@ -4193,6 +4215,9 @@ namespace OFScript
                 if (number)
                     settings[Misc::StringUtils::lowerCase(setting.mEditorId)] = *number;
             }
+            // The settings that the plugins do not carry keep the default of the executable (fallout-rules.md D.S7)
+            for (const auto& [name, number] : mExecutableNumbers)
+                settings.emplace(name, number);
             mGameSettingValues = std::move(settings);
         }
         return *mGameSettingValues;
@@ -4883,7 +4908,7 @@ namespace OFScript
                     FalloutScript::Hud::Subtitle subtitle;
                     subtitle.mText = line.mText;
                     subtitle.mSeconds
-                        = static_cast<float>(line.mText.size() * gameSetting("fNoticeTextTimePerCharacter", 0.06));
+                        = static_cast<float>(line.mText.size() * gameSettingValue("fNoticeTextTimePerCharacter"));
                     subtitle.mDistance = distance;
                     subtitle.mForced = line.mForceSubtitles;
                     subtitle.mKind = speaker == player ? 0 : 2;

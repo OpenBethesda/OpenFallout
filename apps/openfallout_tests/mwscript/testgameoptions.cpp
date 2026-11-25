@@ -57,6 +57,10 @@ namespace
         OFWorld::ESMStore store;
         store.setUp();
         OFScript::FalloutScripts vegas(store, FalloutScript::Game::NewVegas, 0x14);
+        // the thresholds of the text are defaults of FalloutNV.exe (no plugin carries them), which the engine reads from
+        // the player's copy of the game
+        vegas.setExecutableNumbers({ { "fhchalfalphatextthreshold", 200 }, { "fhcfullalphatextthreshold", 400 },
+            { "fhcredtextthreshold", 600 }, { "fhcflashtextthreshold", 800 } });
 
         OFScript::FalloutScripts::NeedsStatus off = vegas.needsStatus();
         EXPECT_FALSE(off.mHardcore);

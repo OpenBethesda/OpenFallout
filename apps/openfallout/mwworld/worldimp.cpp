@@ -825,9 +825,8 @@ namespace OFWorld
         // The length of the pick ray of activation, from the camera (rule D.A1): iActivatePickLength, 150 in both
         // executables, which a plugin can change
         if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
-            if (const std::optional<double> length = scripts->gameSetting("iActivatePickLength"))
-                return static_cast<float>(*length);
-        return 150.f;
+            return static_cast<float>(scripts->gameSettingValue("iActivatePickLength"));
+        return 0.f;
     }
 
     OFWorld::Ptr World::getFocusObject()

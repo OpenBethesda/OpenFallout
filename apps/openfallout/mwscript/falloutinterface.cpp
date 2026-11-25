@@ -75,9 +75,9 @@ namespace OFScript
             return;
         }
         // Near enough to tell: the distance a sneaking player can be seen from, and more outside
-        double range = gameSetting("fSneakMaxDistance", 1500);
+        double range = gameSettingValue("fSneakMaxDistance");
         if (watcher.getCell()->isExterior())
-            range *= gameSetting("fSneakExteriorDistanceMult", 2);
+            range *= gameSettingValue("fSneakExteriorDistanceMult");
         const osg::Vec3f from = watcher.getRefData().getPosition().asVec3();
         const osg::Vec3f to = player.getRefData().getPosition().asVec3();
         if ((to - from).length() > range)
@@ -156,30 +156,29 @@ namespace OFScript
         OFSound::playFootstep(request);
     }
 
-    void FalloutScripts::rumbleFor(
-        const char* strengthSetting, double strengthDefault, const char* timeSetting, double timeDefault)
+    void FalloutScripts::rumbleFor(const char* strengthSetting, const char* timeSetting)
     {
         if (OFBase::WindowManager* windows = OFBase::Environment::get().getWindowManager(); windows != nullptr && windows->isGuiMode())
             return;
         if (OFBase::InputManager* input = OFBase::Environment::get().getInputManager())
-            input->rumble(static_cast<float>(gameSetting(strengthSetting, strengthDefault)),
-                static_cast<float>(gameSetting(timeSetting, timeDefault)));
+            input->rumble(static_cast<float>(gameSettingValue(strengthSetting)),
+                static_cast<float>(gameSettingValue(timeSetting)));
     }
 
     // The defaults are the ones the executables register (FalloutNV.exe 0xF68A7E and the ones after it)
     void FalloutScripts::painRumble()
     {
-        rumbleFor("fRumblePainStrength", 0.75, "fRumblePainTime", 0.5);
+        rumbleFor("fRumblePainStrength", "fRumblePainTime");
     }
 
     void FalloutScripts::struckRumble()
     {
-        rumbleFor("fRumbleStruckStrength", 0.75, "fRumbleStruckTime", 0.3);
+        rumbleFor("fRumbleStruckStrength", "fRumbleStruckTime");
     }
 
     void FalloutScripts::hitRumble()
     {
-        rumbleFor("fRumbleHitStrength", 0.5, "fRumbleHitTime", 0.3);
+        rumbleFor("fRumbleHitStrength", "fRumbleHitTime");
     }
 
     void FalloutScripts::updateTriggerFeel()
@@ -351,7 +350,10 @@ namespace OFScript
         namespace AV = FalloutScript::ActorValue;
         HudStatus status;
         status.mRads = mActorValues.current(mPlayer, 54);
-        status.mRadsMax = gameSetting("fRadiationMax", 1000);
+        // The meter of radiation ends at 1000 rads. No setting holds it: neither executable nor master file has an
+        // fRadiationMax (the name this used to ask for with 1000 as its fallback)
+        constexpr double radiationMeterEnd = 1000;
+        status.mRadsMax = radiationMeterEnd;
         status.mControlsOff = mControlsOff.load();
         const OFWorld::Ptr player = OFBase::Environment::get().getWorld()->getPlayerPtr();
         status.mSneaking = !player.isEmpty() && OFBase::Environment::get().getMechanicsManager()->isSneaking(player);
@@ -532,7 +534,7 @@ namespace OFScript
         // games show them from
         if (outside)
         {
-            const double most = gameSetting("iMapMarkerVisibleDistance", 20000);
+            const double most = gameSettingValue("iMapMarkerVisibleDistance");
             for (const PlacedMarker& placed : placedMarkers())
             {
                 if (placed.mWorldspace != playerSpace || mMapMarkers.state(placed.mId) == 0)
@@ -547,7 +549,7 @@ namespace OFScript
         }
 
         // The characters that fight the player
-        const std::size_t ticks = static_cast<std::size_t>(std::max(0.0, gameSetting("iHUDMaxCompassNPCTicks", 10)));
+        const std::size_t ticks = static_cast<std::size_t>(std::max(0.0, gameSettingValue("iHUDMaxCompassNPCTicks")));
         std::vector<HudMarker> enemies;
         for (const FalloutScript::FormId attacker : mCombat.attackersOf(mPlayer))
         {

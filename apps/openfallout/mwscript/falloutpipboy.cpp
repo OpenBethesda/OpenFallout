@@ -89,22 +89,33 @@ namespace OFScript
         const std::array<std::string_view, 2> executables
             = { newVegas ? "FalloutNV.exe" : "Fallout3.exe", newVegas ? "Fallout3.exe" : "FalloutNV.exe" };
         FalloutScript::ExeSettings::Texts texts;
+        FalloutScript::ExeSettings::Numbers numbers;
         for (const std::string_view executable : executables)
         {
             const std::filesystem::path path = FalloutScript::ExeSettings::find(dataDirs, executable);
             if (path.empty())
                 continue;
-            FalloutScript::ExeSettings::Texts found = FalloutScript::ExeSettings::read(path, encoder);
-            Log(Debug::Info) << "Settings texts: " << found.size() << " read from " << Files::pathToUnicodeString(path);
-            for (auto& [name, text] : found)
+            FalloutScript::ExeSettings::Defaults found = FalloutScript::ExeSettings::readDefaults(path, encoder);
+            Log(Debug::Info) << "Settings defaults: " << found.mTexts.size() << " texts and " << found.mNumbers.size()
+                             << " numbers read from " << Files::pathToUnicodeString(path);
+            for (auto& [name, text] : found.mTexts)
                 texts.emplace(name, std::move(text));
+            for (const auto& [name, number] : found.mNumbers)
+                numbers.emplace(name, number);
         }
         if (texts.empty())
             Log(Debug::Info)
                 << "Settings texts: no executable of the game found next to its data, the port's own words "
                    "are used for the labels";
-        const std::lock_guard lock(mDerivedSettingsMutex);
-        mExecutableTexts = std::move(texts);
+        if (numbers.empty())
+            Log(Debug::Error) << "Settings numbers: no executable of the game found next to its data. The settings that "
+                                 "the plugins do not carry (fPlayerDeathReloadTime, iActivatePickLength and many more) "
+                                 "have no value, and the rules that use them fall back to the engine's own choices";
+        {
+            const std::lock_guard lock(mDerivedSettingsMutex);
+            mExecutableTexts = std::move(texts);
+        }
+        setExecutableNumbers(std::move(numbers));
     }
 
     std::vector<FalloutScripts::PipboyItem> FalloutScripts::pipboyItems(FalloutScript::FormId holder)

@@ -98,12 +98,12 @@ namespace OFScript
         }
 
         const FalloutScript::Detection::Setting setting
-            = [this](std::string_view name, double fallback) { return gameSetting(name, fallback); };
+            = [this](std::string_view name, double fallback) { return gameSettingOr(name, fallback); };
         const double stealth = FalloutScript::Detection::stealth(input, setting);
         const Sighting sighting = FalloutScript::Detection::sighting(stealth, setting);
         // What is high enough to be seen is only heard when the target is behind the watcher or behind a wall
         const double facing = watcher.getRefData().getPosition().rot[2];
-        const double cone = gameSetting("fDetectionViewCone", 190);
+        const double cone = gameSettingValue("fDetectionViewCone");
         const bool inCone
             = FalloutScript::Detection::inViewCone(facing, to.x() - from.x(), to.y() - from.y(), cone);
         const Sighting result = sighting == Sighting::Seen && (!visible || !inCone) ? Sighting::Noticed : sighting;
@@ -136,6 +136,6 @@ namespace OFScript
     double FalloutScripts::detectionInterval()
     {
         return FalloutScript::Detection::checkInterval(
-            [this](std::string_view name, double fallback) { return gameSetting(name, fallback); });
+            [this](std::string_view name, double fallback) { return gameSettingOr(name, fallback); });
     }
 }

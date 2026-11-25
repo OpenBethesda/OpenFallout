@@ -117,7 +117,7 @@ namespace OFScript
             // The box of the target that a ray ends in: its place is at its feet, in the middle of it
             mTargetLow = { to.x() - extents.x(), to.y() - extents.y(), to.z() };
             mTargetHigh = { to.x() + extents.x(), to.y() + extents.y(), to.z() + 2.0 * extents.z() };
-            facts.mViewCone = mHost.gameSetting("fDetectionViewCone", 190);
+            facts.mViewCone = mHost.gameSettingValue("fDetectionViewCone");
             facts.mAllVisible = mHost.mWorldState.allVisible();
             if (facts.mViewerIsPlayer)
             {
