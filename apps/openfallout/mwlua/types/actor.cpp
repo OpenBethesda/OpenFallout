@@ -1,293 +1,99 @@
 #include "types.hpp"
 
-#include <array>
-
 #include <components/detournavigator/agentbounds.hpp>
+#include <components/esm/refid.hpp>
+#include <components/falloutscript/actorvalues.hpp>
 #include <components/lua/luastate.hpp>
-#include <components/misc/finitevalues.hpp>
-#include <components/settings/values.hpp>
 
 #include "apps/openfallout/mwbase/environment.hpp"
 #include "apps/openfallout/mwbase/mechanicsmanager.hpp"
-#include "apps/openfallout/mwbase/windowmanager.hpp"
 #include "apps/openfallout/mwbase/world.hpp"
-#include "apps/openfallout/mwmechanics/actorutil.hpp"
-#include "apps/openfallout/mwmechanics/creaturestats.hpp"
 #include "apps/openfallout/mwmechanics/drawstate.hpp"
+#include "apps/openfallout/mwmechanics/falloutactor.hpp"
+#include "apps/openfallout/mwscript/falloutscripts.hpp"
 #include "apps/openfallout/mwworld/class.hpp"
-#include "apps/openfallout/mwworld/inventorystore.hpp"
-#include "apps/openfallout/mwworld/worldmodel.hpp"
+#include "apps/openfallout/mwworld/player.hpp"
 
 #include "../localscripts.hpp"
 #include "../luamanagerimp.hpp"
-#include "../magicbindings.hpp"
-#include "../stats.hpp"
 
 namespace OFLua
 {
-    using EquipmentItem = std::variant<std::string, ObjectId>;
-    using Equipment = std::map<int, EquipmentItem>;
-    static constexpr int sAnySlot = -1;
-
-    static std::pair<OFWorld::ContainerStoreIterator, bool> findInInventory(
-        OFWorld::ContainerStore& store, const EquipmentItem& item, int slot, bool isInventoryStore)
+    namespace
     {
-        auto oldIt = slot != sAnySlot && isInventoryStore ? static_cast<OFWorld::InventoryStore&>(store).getSlot(slot)
-                                                          : store.end();
-        OFWorld::Ptr itemPtr;
+        using FalloutScript::FormId;
 
-        if (std::holds_alternative<ObjectId>(item))
+        OFScript::FalloutScripts* scripts()
         {
-            itemPtr = OFBase::Environment::get().getWorldModel()->getPtr(std::get<ObjectId>(item));
-            if (oldIt != store.end() && *oldIt == itemPtr)
-                return { oldIt, true }; // already equipped
-            if (itemPtr.isEmpty() || itemPtr.getCellRef().getCount() == 0 || itemPtr.getContainerStore() != &store)
-            {
-                Log(Debug::Warning) << "Object" << std::get<ObjectId>(item).toString() << " is not in inventory";
-                return { store.end(), false };
-            }
-        }
-        else
-        {
-            const auto& stringId = std::get<std::string>(item);
-            ESM::RefId recordId = ESM::RefId::deserializeText(stringId);
-            if (oldIt != store.end() && oldIt->getCellRef().getRefId() == recordId)
-                return { oldIt, true }; // already equipped
-            itemPtr = store.search(recordId);
-            if (itemPtr.isEmpty() || itemPtr.getCellRef().getCount() == 0)
-            {
-                Log(Debug::Warning) << "There is no object with recordId='" << stringId << "' in inventory";
-                return { store.end(), false };
-            }
+            return OFBase::Environment::get().getFalloutScripts();
         }
 
-        // TODO: Refactor InventoryStore to accept Ptr and get rid of this linear search.
-        OFWorld::ContainerStoreIterator it = std::find(store.begin(), store.end(), itemPtr);
-        if (it == store.end()) // should never happen
-            throw std::logic_error("Item not found in container");
-
-        return { it, false };
-    }
-
-    static void setEquipment(const OFWorld::Ptr& actor, const Equipment& equipment)
-    {
-        bool isPlayer = actor == OFBase::Environment::get().getWorld()->getPlayerPtr();
-        OFWorld::InventoryStore& store = actor.getClass().getInventoryStore(actor);
-        std::array<bool, OFWorld::InventoryStore::Slots> usedSlots;
-        std::fill(usedSlots.begin(), usedSlots.end(), false);
-
-        auto tryEquipToSlot = [&store, &usedSlots, isPlayer](int slot, const EquipmentItem& item) -> bool {
-            auto [it, alreadyEquipped] = findInInventory(store, item, slot, true);
-            if (alreadyEquipped)
-                return true;
-            if (it == store.end())
-                return false;
-            OFWorld::Ptr itemPtr = *it;
-
-            auto [allowedSlots, _] = itemPtr.getClass().getEquipmentSlots(itemPtr);
-            bool requestedSlotIsAllowed
-                = std::find(allowedSlots.begin(), allowedSlots.end(), slot) != allowedSlots.end();
-            if (!requestedSlotIsAllowed)
-            {
-                auto firstAllowed
-                    = std::find_if(allowedSlots.begin(), allowedSlots.end(), [&](int s) { return !usedSlots[s]; });
-                if (firstAllowed == allowedSlots.end())
-                {
-                    Log(Debug::Warning) << "No suitable slot for " << itemPtr.toString();
-                    return false;
-                }
-                slot = *firstAllowed;
-            }
-
-            store.equip(slot, it);
-
-            return requestedSlotIsAllowed; // return true if equipped to requested slot and false if slot was changed
-        };
-
-        for (int slot = 0; slot < OFWorld::InventoryStore::Slots; ++slot)
+        std::string idText(FormId id)
         {
-            auto oldIt = store.getSlot(slot);
-            auto newIt = equipment.find(slot);
-            if (newIt == equipment.end())
-            {
-                if (oldIt != store.end())
-                    store.unequipSlot(slot);
-                continue;
-            }
-            if (tryEquipToSlot(slot, newIt->second))
-                usedSlots[slot] = true;
-        }
-        for (const auto& [slot, item] : equipment)
-            if (slot >= OFWorld::InventoryStore::Slots)
-                tryEquipToSlot(sAnySlot, item);
-    }
-
-    static void setSelectedEnchantedItem(const OFWorld::Ptr& actor, const EquipmentItem& item)
-    {
-        OFWorld::ContainerStore& contStore = actor.getClass().getContainerStore(actor);
-        // We're not passing in a specific slot, so ignore the already equipped return value
-        auto [it, _] = findInInventory(contStore, item, sAnySlot, actor.getClass().hasInventoryStore(actor));
-        if (it == contStore.end())
-            return;
-        if (!actor.getClass().hasInventoryStore(actor))
-        {
-            contStore.setSelectedEnchantItem(it);
-            return;
+            return id == 0 ? std::string() : ESM::RefId::formIdRefId(ESM::FormId::fromUint32(id)).serializeText();
         }
 
-        OFWorld::InventoryStore& store = actor.getClass().getInventoryStore(actor);
-        OFWorld::Ptr itemPtr = *it;
-
-        // Equip the item if applicable
-        auto slots = itemPtr.getClass().getEquipmentSlots(itemPtr);
-        if (!slots.first.empty())
+        /// The form of the actor in the Fallout scripts; an error for an object that is not an actor
+        FormId formOfActor(const Object& o)
         {
-            bool alreadyEquipped = false;
-            for (auto slot : slots.first)
-            {
-                if (store.getSlot(slot) == it)
-                    alreadyEquipped = true;
-            }
-
-            if (!alreadyEquipped)
-            {
-                OFBase::Environment::get().getWindowManager()->useItem(itemPtr);
-                // make sure that item was successfully equipped
-                if (!store.isEquipped(itemPtr))
-                    return;
-            }
+            const OFWorld::Ptr& ptr = o.ptr();
+            if (!ptr.getClass().isActor())
+                throw std::runtime_error("Actor expected");
+            OFScript::FalloutScripts* host = scripts();
+            return host != nullptr ? host->formOfReference(ptr) : 0;
         }
-        store.setSelectedEnchantItem(it);
-        // to reset WindowManager::mSelectedSpell immediately
-        OFBase::Environment::get().getWindowManager()->setSelectedEnchantItem(*it);
+
+        /// The speed of a stance by the rules of the game (part B of docs/openfallout/fallout-rules.md)
+        float stanceSpeed(const Object& o, bool running)
+        {
+            const OFWorld::Ptr& ptr = o.ptr();
+            OFScript::FalloutScripts* host = scripts();
+            if (host == nullptr)
+                return 0.f;
+            const bool swimming = OFBase::Environment::get().getWorld()->isSwimming(ptr);
+            return static_cast<float>(host->moveSpeed(ptr, running, false, swimming));
+        }
     }
 
     void addActorBindings(sol::table actor, const Context& context)
     {
         sol::state_view lua = context.sol();
+        // The stances of Fallout: the weapon is in its holster or out (there is no stance of spells)
         actor["STANCE"]
             = LuaUtil::makeStrictReadOnly(LuaUtil::tableFromPairs<std::string_view, OFMechanics::DrawState>(lua,
                 {
                     { "Nothing", OFMechanics::DrawState::Nothing },
                     { "Weapon", OFMechanics::DrawState::Weapon },
-                    { "Spell", OFMechanics::DrawState::Spell },
                 }));
-        actor["EQUIPMENT_SLOT"] = LuaUtil::makeStrictReadOnly(LuaUtil::tableFromPairs<std::string_view, int>(lua,
-            { { "Helmet", OFWorld::InventoryStore::Slot_Helmet }, { "Cuirass", OFWorld::InventoryStore::Slot_Cuirass },
-                { "Greaves", OFWorld::InventoryStore::Slot_Greaves },
-                { "LeftPauldron", OFWorld::InventoryStore::Slot_LeftPauldron },
-                { "RightPauldron", OFWorld::InventoryStore::Slot_RightPauldron },
-                { "LeftGauntlet", OFWorld::InventoryStore::Slot_LeftGauntlet },
-                { "RightGauntlet", OFWorld::InventoryStore::Slot_RightGauntlet },
-                { "Boots", OFWorld::InventoryStore::Slot_Boots }, { "Shirt", OFWorld::InventoryStore::Slot_Shirt },
-                { "Pants", OFWorld::InventoryStore::Slot_Pants }, { "Skirt", OFWorld::InventoryStore::Slot_Skirt },
-                { "Robe", OFWorld::InventoryStore::Slot_Robe }, { "LeftRing", OFWorld::InventoryStore::Slot_LeftRing },
-                { "RightRing", OFWorld::InventoryStore::Slot_RightRing },
-                { "Amulet", OFWorld::InventoryStore::Slot_Amulet }, { "Belt", OFWorld::InventoryStore::Slot_Belt },
-                { "CarriedRight", OFWorld::InventoryStore::Slot_CarriedRight },
-                { "CarriedLeft", OFWorld::InventoryStore::Slot_CarriedLeft },
-                { "Ammunition", OFWorld::InventoryStore::Slot_Ammunition } }));
 
         actor["getStance"] = [](const Object& o) {
-            const OFWorld::Class& cls = o.ptr().getClass();
-            if (cls.isActor())
-                return cls.getCreatureStats(o.ptr()).getDrawState();
-            else
-                throw std::runtime_error("Actor expected");
+            const FormId form = formOfActor(o);
+            return form != 0 && scripts()->equipment().weaponDrawn(form) ? OFMechanics::DrawState::Weapon
+                                                                         : OFMechanics::DrawState::Nothing;
         };
         actor["stance"] = actor["getStance"]; // for compatibility; should be removed later
         actor["setStance"] = [](const SelfObject& self, int stance) {
-            const OFWorld::Class& cls = self.ptr().getClass();
-            if (!cls.isActor())
-                throw std::runtime_error("Actor expected");
-            auto& stats = cls.getCreatureStats(self.ptr());
             if (stance != static_cast<int>(OFMechanics::DrawState::Nothing)
-                && stance != static_cast<int>(OFMechanics::DrawState::Weapon)
-                && stance != static_cast<int>(OFMechanics::DrawState::Spell))
-            {
+                && stance != static_cast<int>(OFMechanics::DrawState::Weapon))
                 throw std::runtime_error("Incorrect stance");
-            }
-            OFMechanics::DrawState newDrawState = static_cast<OFMechanics::DrawState>(stance);
-            if (stats.getDrawState() == newDrawState)
-                return;
-            if (newDrawState == OFMechanics::DrawState::Spell)
-            {
-                bool hasSelectedSpell;
-                if (self.ptr() == OFBase::Environment::get().getWorld()->getPlayerPtr())
-                    // For the player selecting spell in UI doesn't change selected spell in CreatureStats (was
-                    // implemented this way to prevent changing spell during casting, probably should be refactored), so
-                    // we have to handle the player separately.
-                    hasSelectedSpell = !OFBase::Environment::get().getWindowManager()->getSelectedSpell().empty();
-                else
-                    hasSelectedSpell = !stats.getSpells().getSelectedSpell().empty();
-                if (!hasSelectedSpell)
-                {
-                    const OFWorld::ContainerStore& store = cls.getContainerStore(self.ptr());
-                    if (store.getSelectedEnchantItem() == store.end())
-                        return; // No selected spell and no selected enchanted item; can't use magic stance.
-                }
-            }
-            OFBase::MechanicsManager* mechanics = OFBase::Environment::get().getMechanicsManager();
-            // We want to interrupt animation only if attack is preparing, but still is not triggered.
-            // Otherwise we will get a "speedshooting" exploit, when player can skip reload animation by hitting "Toggle
-            // Weapon" key twice.
-            if (mechanics->isAttackPreparing(self.ptr()))
-                stats.setAttackingOrSpell(false); // interrupt attack
-            else if (mechanics->isAttackingOrSpell(self.ptr()))
-                return; // can't be interrupted; ignore setStance
-            stats.setDrawState(newDrawState);
+            const FormId form = formOfActor(self);
+            if (form != 0)
+                scripts()->equipment().setWeaponDrawn(form, stance == static_cast<int>(OFMechanics::DrawState::Weapon));
         };
 
-        actor["getSelectedEnchantedItem"] = [](sol::this_state thisState, const Object& o) -> sol::object {
-            const OFWorld::Ptr& ptr = o.ptr();
-            if (!ptr.getClass().isActor())
-                return sol::nil;
-            OFWorld::ContainerStore& store = ptr.getClass().getContainerStore(ptr);
-            auto it = store.getSelectedEnchantItem();
-            if (it == store.end())
-                return sol::nil;
-            OFBase::Environment::get().getWorldModel()->registerPtr(*it);
-            if (o.isGObject())
-                return sol::make_object(thisState, GObject(*it));
-            else
-                return sol::make_object(thisState, LObject(*it));
-        };
-        actor["setSelectedEnchantedItem"] = [context](const SelfObject& obj, const sol::object& item) {
-            const OFWorld::Ptr& ptr = obj.ptr();
-            if (!ptr.getClass().isActor())
-                return;
-
-            EquipmentItem ei;
-            if (item.is<Object>())
-            {
-                ei = LuaUtil::cast<Object>(item).id();
-            }
-            else
-            {
-                ei = LuaUtil::cast<std::string>(item);
-            }
-            context.mLuaManager->addAction(
-                [obj = Object(ptr), ei = std::move(ei)] { setSelectedEnchantedItem(obj.ptr(), ei); },
-                "setSelectedEnchantedItemAction");
-        };
-
+        // Speeds by the rules of the game: what a full push of the controls moves the actor at walking and running,
+        // and the speed it moved at in the last frame
         actor["canMove"] = [](const Object& o) {
-            const OFWorld::Class& cls = o.ptr().getClass();
-            return cls.getMaxSpeed(o.ptr()) > 0;
+            const OFWorld::Ptr& ptr = o.ptr();
+            OFScript::FalloutScripts* host = scripts();
+            return host != nullptr && !host->isDead(ptr) && !host->isParalyzed(ptr) && stanceSpeed(o, false) > 0.f;
         };
-        actor["getRunSpeed"] = [](const Object& o) {
-            const OFWorld::Class& cls = o.ptr().getClass();
-            return cls.getRunSpeed(o.ptr());
-        };
-        actor["getWalkSpeed"] = [](const Object& o) {
-            const OFWorld::Class& cls = o.ptr().getClass();
-            return cls.getWalkSpeed(o.ptr());
-        };
+        actor["getRunSpeed"] = [](const Object& o) { return stanceSpeed(o, true); };
+        actor["getWalkSpeed"] = [](const Object& o) { return stanceSpeed(o, false); };
         actor["getCurrentSpeed"] = [](const Object& o) {
-            const OFWorld::Class& cls = o.ptr().getClass();
-            return cls.getCurrentSpeed(o.ptr());
+            const OFMechanics::Actor* found = OFMechanics::findActor(o.ptr());
+            return found != nullptr ? found->getCurrentSpeed() : 0.f;
         };
-
         // for compatibility; should be removed later
         actor["runSpeed"] = actor["getRunSpeed"];
         actor["walkSpeed"] = actor["getWalkSpeed"];
@@ -300,69 +106,39 @@ namespace OFLua
 
         actor["inventory"] = sol::overload([](const LObject& o) { return Inventory<LObject>{ o }; },
             [](const GObject& o) { return Inventory<GObject>{ o }; });
-        auto getAllEquipment = [](sol::this_state thisState, const Object& o) {
-            const OFWorld::Ptr& ptr = o.ptr();
-            sol::table equipment(thisState, sol::create);
-            if (!ptr.getClass().hasInventoryStore(ptr))
-                return equipment;
 
-            OFWorld::InventoryStore& store = ptr.getClass().getInventoryStore(ptr);
-            for (int slot = 0; slot < OFWorld::InventoryStore::Slots; ++slot)
-            {
-                auto it = store.getSlot(slot);
-                if (it == store.end())
-                    continue;
-                OFBase::Environment::get().getWorldModel()->registerPtr(*it);
-                if (o.isGObject())
-                    equipment[slot] = sol::make_object(thisState, GObject(*it));
-                else
-                    equipment[slot] = sol::make_object(thisState, LObject(*it));
-            }
+        // What the actor holds and wears in the Fallout scripts: the weapon in the hands and its ammunition (record ids,
+        // nil for none) and the armor (a list of record ids, in the order it was put on)
+        actor["getEquipment"] = [](sol::this_state thisState, const Object& o) {
+            sol::table equipment(thisState, sol::create);
+            const FormId form = formOfActor(o);
+            if (form == 0)
+                return equipment;
+            FalloutScript::Equipment& worn = scripts()->equipment();
+            if (const FormId weapon = worn.weapon(form))
+                equipment["weapon"] = idText(weapon);
+            if (const FormId ammo = worn.ammo(form))
+                equipment["ammo"] = idText(ammo);
+            sol::table armor(thisState, sol::create);
+            int index = 1;
+            for (const FormId piece : worn.armor(form))
+                armor[index++] = idText(piece);
+            equipment["armor"] = armor;
             return equipment;
         };
-        auto getEquipmentFromSlot = [](sol::this_state thisState, const Object& o, int slot) -> sol::object {
-            const OFWorld::Ptr& ptr = o.ptr();
-            if (!ptr.getClass().hasInventoryStore(ptr))
-                return sol::nil;
-            OFWorld::InventoryStore& store = ptr.getClass().getInventoryStore(ptr);
-            auto it = store.getSlot(slot);
-            if (it == store.end())
-                return sol::nil;
-            OFBase::Environment::get().getWorldModel()->registerPtr(*it);
-            if (o.isGObject())
-                return sol::make_object(thisState, GObject(*it));
-            else
-                return sol::make_object(thisState, LObject(*it));
-        };
-        actor["getEquipment"] = sol::overload(getAllEquipment, getEquipmentFromSlot);
-        actor["equipment"] = actor["getEquipment"]; // for compatibility; should be removed later
-        actor["hasEquipped"] = [](const Object& o, const Object& item) {
-            const OFWorld::Ptr& ptr = o.ptr();
-            if (!ptr.getClass().hasInventoryStore(ptr))
+        actor["hasEquipped"] = [](const Object& o, std::string_view recordId) {
+            const FormId form = formOfActor(o);
+            if (form == 0)
                 return false;
-            OFWorld::InventoryStore& store = ptr.getClass().getInventoryStore(ptr);
-            return store.isEquipped(item.ptr());
+            FalloutScript::Equipment& worn = scripts()->equipment();
+            if (idText(worn.weapon(form)) == recordId || idText(worn.ammo(form)) == recordId)
+                return true;
+            for (const FormId piece : worn.armor(form))
+                if (idText(piece) == recordId)
+                    return true;
+            return false;
         };
-        actor["setEquipment"] = [context](const SelfObject& obj, const sol::table& equipment) {
-            const OFWorld::Ptr& ptr = obj.ptr();
-            if (!ptr.getClass().hasInventoryStore(ptr))
-            {
-                if (!equipment.empty())
-                    throw std::runtime_error(obj.toString() + " has no equipment slots");
-                return;
-            }
-            Equipment eqp;
-            for (auto& [key, value] : equipment)
-            {
-                int slot = LuaUtil::cast<int>(key);
-                if (value.is<Object>())
-                    eqp[slot] = LuaUtil::cast<Object>(value).id();
-                else
-                    eqp[slot] = LuaUtil::cast<std::string>(value);
-            }
-            context.mLuaManager->addAction(
-                [obj = Object(ptr), eqp = std::move(eqp)] { setEquipment(obj.ptr(), eqp); }, "SetEquipmentAction");
-        };
+
         actor["getPathfindingAgentBounds"] = [](sol::this_state thisState, const LObject& o) {
             const DetourNavigator::AgentBounds agentBounds
                 = OFBase::Environment::get().getWorld()->getPathfindingAgentBounds(o.ptr());
@@ -371,139 +147,43 @@ namespace OFLua
             result["halfExtents"] = agentBounds.mHalfExtents;
             return result;
         };
+        // Whether the actor is processed in full: in the High or Middle High process (rule A.T2 of the tiers)
         actor["isInActorsProcessingRange"] = [](const Object& o) {
-            const OFWorld::Ptr player = OFMechanics::getPlayer();
-            const auto& target = o.ptr();
-            if (target == player)
-                return true;
-
-            if (!target.getClass().isActor())
+            if (!o.ptr().getClass().isActor())
                 throw std::runtime_error("Actor expected");
-
-            if (target.getCell()->getCell()->getWorldSpace() != player.getCell()->getCell()->getWorldSpace())
+            const OFMechanics::Actor* found = OFMechanics::findActor(o.ptr());
+            if (found == nullptr)
                 return false;
-
-            const int actorsProcessingRange = Settings::game().mActorsProcessingRange;
-            const osg::Vec3f playerPos = player.getRefData().getPosition().asVec3();
-
-            const float dist = (playerPos - target.getRefData().getPosition().asVec3()).length2();
-            return dist <= (actorsProcessingRange * actorsProcessingRange);
+            const FalloutScript::ProcessLevel level = found->getProcessLevel();
+            return level == FalloutScript::ProcessLevel::High || level == FalloutScript::ProcessLevel::MiddleHigh;
         };
 
+        // Dead below one point of health (rule D.D1), as the Fallout scripts tell
         actor["isDead"] = [](const Object& o) {
-            const auto& target = o.ptr();
-            return target.getClass().getCreatureStats(target).isDead();
+            OFScript::FalloutScripts* host = scripts();
+            return host != nullptr && host->isDead(o.ptr());
+        };
+        // The Paralysis actor value is above 0: the actor can neither move nor act
+        actor["isParalyzed"] = [](const Object& o) {
+            OFScript::FalloutScripts* host = scripts();
+            return host != nullptr && host->isParalyzed(o.ptr());
+        };
+        // Knocked down or out (the knock state of the actor's process)
+        actor["getKnockedDown"] = [](const Object& o) {
+            const OFMechanics::Actor* found = OFMechanics::findActor(o.ptr());
+            return found != nullptr && found->getKnockState() != FalloutScript::KnockState::Normal;
         };
 
-        actor["isDeathFinished"] = [](const Object& o) {
-            const auto& target = o.ptr();
-            return target.getClass().getCreatureStats(target).isDeathAnimationFinished();
+        // What the actor carries (the weight of its items by their cards) and what it can carry (CarryWeight)
+        actor["getEncumbrance"] = [](const Object& o) -> float {
+            const FormId form = formOfActor(o);
+            return form != 0 ? static_cast<float>(scripts()->carriedWeightOf(form)) : 0.f;
         };
-
-        actor["getEncumbrance"] = [](const Object& object) -> float {
-            const OFWorld::Ptr ptr = object.ptr();
-            return ptr.getClass().getEncumbrance(ptr);
+        actor["getCapacity"] = [](const Object& o) -> float {
+            const FormId form = formOfActor(o);
+            return form != 0
+                ? static_cast<float>(scripts()->actorValues().current(form, FalloutScript::ActorValue::carryWeight))
+                : 0.f;
         };
-
-        actor["getCapacity"] = [](const Object& object) -> float {
-            const OFWorld::Ptr ptr = object.ptr();
-            return ptr.getClass().getCapacity(ptr);
-        };
-
-        actor["getBarterGold"] = [](const Object& object) -> int {
-            const OFWorld::Ptr ptr = object.ptr();
-            return ptr.getClass().getCreatureStats(ptr).getGoldPool();
-        };
-
-        actor["setBarterGold"] = [context](const Object& object, int gold) {
-            if (gold < 0)
-                throw std::runtime_error("Barter gold must be positive");
-            if (!object.isGObject() && !object.isSelfObject())
-                throw std::runtime_error("Can only be used in global scripts or in local scripts on self.");
-            context.mLuaManager->addAction(
-                [obj = Object(object), gold] {
-                    const OFWorld::Ptr ptr = obj.ptr();
-                    ptr.getClass().getCreatureStats(ptr).setGoldPool(gold);
-                },
-                "SetBarterGoldAction");
-        };
-
-        actor["_onHit"] = [context](const SelfObject& self, const sol::table& options) {
-            sol::optional<sol::table> damageLua = options.get<sol::optional<sol::table>>("damage");
-            std::map<std::string, float> damageCpp;
-            if (damageLua)
-            {
-                for (auto& [key, value] : damageLua.value())
-                {
-                    damageCpp[key.as<std::string>()] = value.as<Misc::FiniteFloat>();
-                }
-            }
-            std::string sourceTypeStr = options.get_or<std::string>("sourceType", "unspecified");
-            OFMechanics::DamageSourceType sourceType = OFMechanics::DamageSourceType::Unspecified;
-            if (sourceTypeStr == "melee")
-                sourceType = OFMechanics::DamageSourceType::Melee;
-            else if (sourceTypeStr == "ranged")
-                sourceType = OFMechanics::DamageSourceType::Ranged;
-            else if (sourceTypeStr == "magic")
-                sourceType = OFMechanics::DamageSourceType::Magical;
-            std::string_view ammoId = options.get_or<std::string_view>("ammo", {});
-            ESM::RefId weaponId = ESM::RefId::deserializeText(ammoId);
-            if (weaponId.empty())
-            {
-                if (sol::optional<Object> weapon = options.get<sol::optional<Object>>("weapon"))
-                {
-                    OFWorld::Ptr weaponPtr = weapon->ptrOrEmpty();
-                    if (!weaponPtr.isEmpty())
-                        weaponId = weaponPtr.getCellRef().getRefId();
-                }
-            }
-
-            context.mLuaManager->addAction(
-                [self = Object(self), damages = std::move(damageCpp),
-                    attacker = options.get<sol::optional<Object>>("attacker"), weaponId,
-                    successful = options.get<bool>("successful"), sourceType = sourceType] {
-                    OFWorld::Ptr attackerPtr;
-                    OFWorld::Ptr weaponPtr;
-                    if (attacker)
-                        attackerPtr = attacker->ptr();
-                    self.ptr().getClass().onHit(self.ptr(), damages, weaponId, attackerPtr, successful, sourceType);
-                },
-                "HitAction");
-        };
-
-        actor["setKnockedDown"] = [context](const Object& object, bool value) {
-            if (!object.isGObject() && !object.isSelfObject())
-                throw std::runtime_error("Can only be used in global scripts or in local scripts on self.");
-            context.mLuaManager->addAction(
-                [obj = Object(object), value] {
-                    const OFWorld::Ptr ptr = obj.ptr();
-                    ptr.getClass().getCreatureStats(ptr).setKnockedDown(value);
-                },
-                "SetKnockedDownAction");
-        };
-
-        actor["getKnockedDown"] = [](const Object& object) {
-            const OFWorld::Ptr ptr = object.ptr();
-            return ptr.getClass().getCreatureStats(ptr).getKnockedDown();
-        };
-
-        actor["setHitRecovery"] = [context](const Object& object, bool value) {
-            if (!object.isGObject() && !object.isSelfObject())
-                throw std::runtime_error("Can only be used in global scripts or in local scripts on self.");
-            context.mLuaManager->addAction(
-                [obj = Object(object), value] {
-                    const OFWorld::Ptr ptr = obj.ptr();
-                    ptr.getClass().getCreatureStats(ptr).setHitRecovery(value);
-                },
-                "SetHitRecoveryAction");
-        };
-
-        actor["getHitRecovery"] = [](const Object& object) {
-            const OFWorld::Ptr ptr = object.ptr();
-            return ptr.getClass().getCreatureStats(ptr).getHitRecovery();
-        };
-
-        addActorStatsBindings(actor, context);
-        addActorMagicBindings(actor, context);
     }
 }

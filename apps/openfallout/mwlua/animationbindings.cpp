@@ -5,10 +5,9 @@
 #include <components/misc/finitevalues.hpp>
 
 #include "../mwbase/environment.hpp"
-#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwrender/animationpriority.hpp"
+#include "../mwrender/animation.hpp"
 
 #include "context.hpp"
 #include "luamanagerimp.hpp"
@@ -83,7 +82,6 @@ namespace OFLua
         using Misc::FiniteFloat;
 
         auto view = context.sol();
-        auto mechanics = OFBase::Environment::get().getMechanicsManager();
 
         sol::table api(view, sol::create);
 
@@ -126,14 +124,6 @@ namespace OFLua
 
         api["hasAnimation"] = [](const LObject& object) -> bool {
             return OFBase::Environment::get().getWorld()->getAnimation(object.ptr()) != nullptr;
-        };
-
-        // equivalent to MWScript's SkipAnim
-        api["skipAnimationThisFrame"] = [mechanics](const SelfObject& object) {
-            const OFWorld::Ptr& ptr = getMutablePtrOrThrow(object);
-            // This sets a flag that is only used during the update pass, so
-            // there's no need to queue
-            mechanics->skipAnimation(ptr);
         };
 
         api["getTextKeyTime"] = [](const LObject& object, std::string_view key) -> sol::optional<float> {
@@ -187,30 +177,6 @@ namespace OFLua
                 throw std::runtime_error("Invalid bonegroup: " + std::to_string(boneGroup));
             return getConstAnimationOrThrow(object)->getActiveGroup(boneGroup);
         };
-
-        // Clears out the animation queue, and cancel any animation currently playing from the queue
-        api["clearAnimationQueue"] = [mechanics](const SelfObject& object, bool clearScripted) {
-            const OFWorld::Ptr& ptr = getMutablePtrOrThrow(object);
-            mechanics->clearAnimationQueue(ptr, clearScripted);
-        };
-
-        // Extended variant of MWScript's PlayGroup and LoopGroup
-        api["playQueued"] = sol::overload(
-            [mechanics](const SelfObject& object, const std::string& groupname, const sol::table& options) {
-                uint32_t numberOfLoops = options.get_or("loops", std::numeric_limits<uint32_t>::max());
-                float speed = options.get_or("speed", 1.f);
-                std::string startKey = options.get_or<std::string>("startKey", "start");
-                std::string stopKey = options.get_or<std::string>("stopKey", "stop");
-                bool forceLoop = options.get_or("forceLoop", false);
-
-                const OFWorld::Ptr& ptr = getMutablePtrOrThrow(object);
-                mechanics->playAnimationGroupLua(ptr, groupname, numberOfLoops, speed, startKey, stopKey, forceLoop);
-            },
-            [mechanics](const SelfObject& object, const std::string& groupname) {
-                const OFWorld::Ptr& ptr = getMutablePtrOrThrow(object);
-                mechanics->playAnimationGroupLua(
-                    ptr, groupname, std::numeric_limits<int>::max(), 1, "start", "stop", false);
-            });
 
         api["playBlended"] = [](const SelfObject& object, std::string_view groupName, const sol::table& options) {
             uint32_t loops = options.get_or("loops", 0u);

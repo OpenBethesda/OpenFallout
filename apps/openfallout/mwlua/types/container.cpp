@@ -67,27 +67,12 @@ namespace
 namespace OFLua
 {
 
-    static const OFWorld::Ptr& containerPtr(const Object& o)
-    {
-        return verifyType(ESM::REC_CONT, o.ptr());
-    }
-
     void addContainerBindings(sol::table container, const Context& context)
     {
         container["content"] = sol::overload([](const LObject& o) { return Inventory<LObject>{ o }; },
             [](const GObject& o) { return Inventory<GObject>{ o }; });
         container["inventory"] = container["content"];
-        container["getEncumbrance"] = [](const Object& obj) -> float {
-            const OFWorld::Ptr& ptr = containerPtr(obj);
-            return ptr.getClass().getEncumbrance(ptr);
-        };
         container["createRecordDraft"] = tableToContainer;
-        container["encumbrance"] = container["getEncumbrance"]; // for compatibility; should be removed later
-        container["getCapacity"] = [](const Object& obj) -> float {
-            const OFWorld::Ptr& ptr = containerPtr(obj);
-            return ptr.getClass().getCapacity(ptr);
-        };
-        container["capacity"] = container["getCapacity"]; // for compatibility; should be removed later
 
         addRecordFunctionBinding<ESM::Container>(container, context);
 

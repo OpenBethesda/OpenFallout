@@ -37,14 +37,12 @@
 #include "lockpickbindings.hpp"
 #include "specialscreenbindings.hpp"
 #include "luaevents.hpp"
-#include "magicbindings.hpp"
 #include "menubindings.hpp"
 #include "menuscenebindings.hpp"
 #include "messagebindings.hpp"
 #include "pipboybindings.hpp"
 #include "regionbindings.hpp"
 #include "soundbindings.hpp"
-#include "stats.hpp"
 #include "vatsbindings.hpp"
 #include "weatherbindings.hpp"
 
@@ -112,12 +110,6 @@ namespace OFLua
                 OFBase::Environment::get().getStateManager()->requestQuit();
             };
             addCoreTimeBindings(api, context);
-
-            api["magic"] = context.cachePackage(
-                "openfallout_core_magic", [context]() { return initCoreMagicBindings(context); });
-
-            api["stats"] = context.cachePackage(
-                "openfallout_core_stats", [context]() { return initCoreStatsBindings(context); });
 
             api["mwscripts"] = context.cachePackage(
                 "openfallout_core_mwscripts", [context]() { return initCoreMwScriptBindings(context); });

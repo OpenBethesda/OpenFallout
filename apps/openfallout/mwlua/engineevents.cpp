@@ -27,7 +27,7 @@ namespace OFLua
             OFWorld::Ptr ptr = getPtr(event.mObject);
             if (ptr.isEmpty())
                 return;
-            if (ptr.getCellRef().getRefId() == "player")
+            if (ptr.getType() == ESM::REC_INTERNAL_PLAYER)
                 mGlobalScripts.playerAdded(GObject(ptr));
             else
             {

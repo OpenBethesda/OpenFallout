@@ -79,7 +79,6 @@ namespace OFLua
 
             context.mLuaManager->addAction([world, hours] {
                 world->advanceTime(hours);
-                OFBase::Environment::get().getMechanicsManager()->fastForwardAi();
             });
         };
 

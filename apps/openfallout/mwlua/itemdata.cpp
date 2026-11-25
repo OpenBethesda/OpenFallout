@@ -8,7 +8,6 @@
 #include "objectvariant.hpp"
 
 #include "../mwbase/environment.hpp"
-#include "../mwmechanics/spellutil.hpp"
 
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -84,7 +83,7 @@ namespace OFLua
 
                     if (charge == -1) // return the full charge
                         return sol::make_object(
-                            context.mLua->unsafeState(), OFMechanics::getEnchantmentCharge(*enchantment));
+                            context.mLua->unsafeState(), enchantment->mData.mCharge);
 
                     return sol::make_object(context.mLua->unsafeState(), charge);
                 }

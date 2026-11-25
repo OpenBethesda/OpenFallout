@@ -235,6 +235,7 @@ namespace OFWorld
         bool isCellQuasiExterior() const override;
 
         const std::set<CellStore*, std::less<>>& getActiveCells() const override;
+        bool isCellActive(const CellStore& cell) const override;
 
         ESM::RefId getCurrentWorldspace() const;
 

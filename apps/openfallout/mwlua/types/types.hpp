@@ -42,9 +42,7 @@ namespace OFLua
     void addItemBindings(sol::table item, const Context& context);
     void addActorBindings(sol::table actor, const Context& context);
     void addWeaponBindings(sol::table weapon, const Context& context);
-    void addNpcBindings(sol::table npc, const Context& context);
     void addPlayerBindings(sol::table player, const Context& context);
-    void addCreatureBindings(sol::table creature, const Context& context);
     void addLockpickBindings(sol::table lockpick, const Context& context);
     ESM::Lockpick tableToLockpick(const sol::table& rec);
     void addMutableLockpickType(sol::state_view& lua);
@@ -62,7 +60,6 @@ namespace OFLua
     ESM::Miscellaneous tableToMisc(const sol::table& rec);
     void addMutableMiscType(sol::state_view& lua);
     void addPotionBindings(sol::table potion, const Context& context);
-    ESM::Potion tableToPotion(const sol::table& rec);
     void addIngredientBindings(sol::table ingredient, const Context& context);
     void addMutableIngredientType(sol::state_view& lua);
     ESM::Ingredient tableToIngredient(const sol::table& rec);

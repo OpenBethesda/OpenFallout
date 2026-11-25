@@ -19,7 +19,6 @@
 #include "../mwrender/renderingmanager.hpp"
 #include "../mwscript/falloutscripts.hpp"
 
-#include "../mwmechanics/creaturestats.hpp"
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
@@ -97,9 +96,7 @@ namespace OFLua
         {
             OFBase::World* world = OFBase::Environment::get().getWorld();
             OFWorld::Ptr ptr = world->getPlayerPtr();
-            auto& stats = ptr.getClass().getCreatureStats(ptr);
-            stats.land(true);
-            stats.setTeleported(true);
+            // A fall in progress ends where the player arrives (PlayerCharacter::teleported)
             world->getPlayer().setTeleported(true);
             bool differentCell = ptr.getCell() != destCell;
             world->changeToCell(destCell->getCell()->getId(), toPos(pos, rot), false, differentCell);
@@ -117,12 +114,6 @@ namespace OFLua
             OFBase::World* world = OFBase::Environment::get().getWorld();
             OFWorld::WorldModel* wm = OFBase::Environment::get().getWorldModel();
             const OFWorld::Class& cls = ptr.getClass();
-            if (cls.isActor())
-            {
-                auto& stats = cls.getCreatureStats(ptr);
-                stats.land(false);
-                stats.setTeleported(true);
-            }
             const OFWorld::CellStore* srcCell = ptr.getCell();
             OFWorld::Ptr newPtr;
             if (srcCell == &wm->getDraftCell())

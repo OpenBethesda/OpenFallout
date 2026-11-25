@@ -1603,6 +1603,12 @@ namespace OFWorld
         return mWorldScene->getActiveCells();
     }
 
+    bool World::isCellActive(const CellStore& cell) const
+    {
+        const auto& active = mWorldScene->getActiveCells();
+        return active.find(const_cast<CellStore*>(&cell)) != active.end();
+    }
+
     ESM::RefId World::getCurrentWorldspace() const
     {
         const CellStore* cellStore = mWorldScene->getCurrentCell();

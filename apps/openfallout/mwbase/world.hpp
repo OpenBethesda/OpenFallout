@@ -161,6 +161,9 @@ namespace OFBase
 
         virtual const std::set<OFWorld::CellStore*, std::less<>>& getActiveCells() const = 0;
 
+        /// The cell is one of the scene's (loaded and attached, as the executables say)
+        virtual bool isCellActive(const OFWorld::CellStore& cell) const = 0;
+
         virtual void getDoorMarkers(OFWorld::CellStore& cell, std::vector<DoorMarker>& out) = 0;
         ///< get a list of teleport door markers for a given cell, to be displayed on the local map
 

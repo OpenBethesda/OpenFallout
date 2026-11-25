@@ -2139,6 +2139,8 @@ namespace OFScript
         bool isPlayerTeammate(const OFWorld::Ptr& ptr);
         /// The Paralysis actor value (47) is above 0: the actor can neither move nor act
         bool isParalyzed(const OFWorld::Ptr& ptr);
+        /// The form id the Fallout scripts know the reference by (PlayerRef for the player; 0 for none)
+        FalloutScript::FormId formOfReference(const OFWorld::Ptr& ptr) { return scriptReferenceOf(ptr); }
         /// What scripts told the actor to do over what its AI would make it do (falloutactorstatus.cpp): SetActorsAI 0
         /// (it does nothing: no package, no fight), SetForceRun and SetForceSneak (the gait it walks with). Any thread.
         bool actorAiOff(const OFWorld::Ptr& ptr);
