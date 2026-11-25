@@ -64,7 +64,8 @@ namespace FalloutScript
             case ActorValue::unarmedDamage:
                 return true;
             default:
-                return false;
+                // The skills: the player's follow its SPECIAL (E.1.9)
+                return value >= ActorValue::firstSkill && value <= ActorValue::lastSkill;
         }
     }
 
@@ -157,6 +158,21 @@ namespace FalloutScript
             return;
         const std::lock_guard lock(mMutex);
         mEntries[{ actor, value }].mBase = bounded(amount);
+    }
+
+    bool ActorValues::hasBase(FormId actor, int value) const
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = mEntries.find({ actor, value });
+        return found != mEntries.end() && found->second.mBase.has_value();
+    }
+
+    void ActorValues::resetBase(FormId actor, int value)
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = mEntries.find({ actor, value });
+        if (found != mEntries.end())
+            found->second.mBase.reset();
     }
 
     void ActorValues::addBase(FormId actor, int value, double amount, double minimum)

@@ -42,7 +42,8 @@ namespace FalloutScript
         ActorState& state, Equipment& equipment, ReferenceState& references, SaveReader& in, std::uint32_t version);
 
     /// The base, the modifier and the damage of every actor value that scripts or rules changed
-    constexpr std::uint32_t actorValuesSectionVersion = 1;
+    /// 2: the player's skills follow the SPECIAL (no base), the points of the level-ups are the permanent modifier
+    constexpr std::uint32_t actorValuesSectionVersion = 2;
     void writeActorValues(ActorValues& values, SaveWriter& out);
     void readActorValues(ActorValues& values, SaveReader& in, std::uint32_t version);
 

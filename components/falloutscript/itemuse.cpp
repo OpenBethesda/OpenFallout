@@ -396,7 +396,6 @@ namespace FalloutScript
             result.mSkill = book.mSkill;
             // Two books read at the same time add up: the skill is read, raised and written by one at a time
             const std::lock_guard reading(mBookMutex);
-            const double skill = mValues.base(actor, book.mSkill);
             // The same as for an aid item: the call that takes the book is the one that reads it
             if (mState.removeItem(actor, item, 1) < 1)
                 return result;
@@ -404,7 +403,9 @@ namespace FalloutScript
             if (perks != nullptr)
                 points = perks->apply(EntryPoint::bookSkillPoints, actor, points);
             const double gained = std::max(points, 0.0);
-            mValues.setBase(actor, book.mSkill, skill + gained);
+            // On top of the skill as a permanent modifier, like the points of a level-up: the skill still follows the
+            // SPECIAL (fallout-rules.md E.1.9)
+            mValues.modify(actor, book.mSkill, gained);
             result.mOutcome = Outcome::Read;
             result.mGained = gained;
             // Only a skill book that was read counts as a book read

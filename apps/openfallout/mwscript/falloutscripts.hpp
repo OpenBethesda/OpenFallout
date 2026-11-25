@@ -2355,6 +2355,14 @@ namespace OFScript
         void beginChargenPage();
         /// The skills the player has, from the attributes and the tags that the making of the character gave
         void applyChargenSkills();
+        /// The player's skill by the rule (E.1.9), from the attributes of now and the tags; none for anyone else
+        std::optional<double> playerSkill(
+            FalloutScript::FormId actor, int skill, const std::function<double(int)>& current);
+        /// The skills of a save made before they followed the SPECIAL: their points of the level-ups become the
+        /// permanent modifier (called when the section of chargen of such a save is read)
+        void convertOldPlayerSkills();
+        /// Whether the save being read has the skills of the player as bases (actor values section 1)
+        bool mConvertOldSkills = false;
 
         /// The character says a response of the topic outside of a conversation: what the response does is done, and
         /// the lines are told to the player: the voice of the data and, when subtitles are on, the text

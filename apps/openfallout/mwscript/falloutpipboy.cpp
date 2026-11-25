@@ -530,7 +530,8 @@ namespace OFScript
         points = std::min(points, FalloutScript::Levelling::skillRoom(mActorValues.current(mPlayer, skill)));
         if (points <= 0 || !mProgress.spendSkillPoints(points))
             return 0;
-        mActorValues.setBase(mPlayer, skill, mActorValues.base(mPlayer, skill) + points);
+        // The points sit on top of the skill as a permanent modifier, so the skill still follows the SPECIAL (E.1.9)
+        mActorValues.modify(mPlayer, skill, points);
         return points;
     }
 
@@ -538,11 +539,12 @@ namespace OFScript
     {
         if (skill < AV::firstSkill || skill > AV::lastSkill || points <= 0)
             return 0;
-        const double base = mActorValues.base(mPlayer, skill);
-        points = std::min(points, static_cast<int>(std::floor(std::max(base, 0.0))));
+        // Only points that were spent come back: the permanent modifier
+        const double spent = mActorValues.permanent(mPlayer, skill) - mActorValues.base(mPlayer, skill);
+        points = std::min(points, static_cast<int>(std::floor(std::max(spent, 0.0))));
         if (points <= 0)
             return 0;
-        mActorValues.setBase(mPlayer, skill, base - points);
+        mActorValues.modify(mPlayer, skill, -points);
         mProgress.addSkillPoints(points);
         return points;
     }

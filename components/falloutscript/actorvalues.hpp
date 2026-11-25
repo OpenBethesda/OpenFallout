@@ -141,6 +141,10 @@ namespace FalloutScript
         double current(FormId actor, int value) const;
 
         void setBase(FormId actor, int value, double amount);
+        /// Whether a script or the game set the base (else it is the record's, the derived one or the starting one)
+        bool hasBase(FormId actor, int value) const;
+        /// Forgets the base that was set: the value is the record's, the derived one or the starting one again
+        void resetBase(FormId actor, int value);
         /// Adds to the base (a negative amount takes away), to no less than the minimum; the reading and the writing
         /// are one step, so that changes made at the same time all count
         void addBase(FormId actor, int value, double amount, double minimum);

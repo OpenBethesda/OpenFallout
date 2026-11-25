@@ -725,6 +725,7 @@ namespace OFScript
     void FalloutScripts::reset()
     {
         reportMissingCommands();
+        mConvertOldSkills = false;
         mGlobals.clear();
         mDisabled.clear();
         // A quick save that a script asked for in the game that ends is not made in the next one
@@ -4425,6 +4426,8 @@ namespace OFScript
             case AV::health:
                 break;
             default:
+                if (value >= AV::firstSkill && value <= AV::lastSkill)
+                    return playerSkill(actor, value, current);
                 return std::nullopt;
         }
         // The health starts from the base health of the record, which a record that has a template takes from it. A
@@ -7035,10 +7038,53 @@ namespace OFScript
         mChargen.setAttributes(attributes);
     }
 
+    std::optional<double> FalloutScripts::playerSkill(
+        FalloutScript::FormId actor, int skill, const std::function<double(int)>& current)
+    {
+        // Only the player's: a character's skills are the starting ones (its record's are the base of a sum that is not
+        // known here)
+        if (actor != mPlayer)
+            return std::nullopt;
+        const std::vector<FalloutScript::ChargenSkill>& skills = mChargen.skills();
+        const auto found = std::find_if(skills.begin(), skills.end(),
+            [skill](const FalloutScript::ChargenSkill& candidate) { return candidate.mNumber == skill; });
+        // A skill the game does not work out (Big Guns in New Vegas, Survival in Fallout 3)
+        if (found == skills.end())
+            return std::nullopt;
+        // fallout-rules.md E.1.9: 2 + floor(2 x the attribute) + ceil(Luck / 2) + 15 if tagged, with the attributes of
+        // now (FalloutNV.exe 0x643C20, floor at 0x643C45, ceil at 0x643C6C; the reads with the flag 0 at 0x643CE3)
+        const double governing = current(found->mAttribute);
+        const double luck = current(FalloutScript::ActorValue::luck);
+        return FalloutScript::Chargen::skillBase + std::floor(2.0 * governing) + std::ceil(0.5 * luck)
+            + (mChargen.tagged(skill) ? FalloutScript::Chargen::tagBonus : 0);
+    }
+
     void FalloutScripts::applyChargenSkills()
     {
+        // The skills follow the SPECIAL and the tags from now on (playerSkill): a base that was set before goes
         for (const FalloutScript::ChargenSkill& skill : mChargen.skills())
-            mActorValues.setBase(mPlayer, skill.mNumber, mChargen.skillValue(skill.mNumber));
+            mActorValues.resetBase(mPlayer, skill.mNumber);
+    }
+
+    void FalloutScripts::convertOldPlayerSkills()
+    {
+        // A save of an engine before the skills followed the SPECIAL (actor values section 1) has each skill as a base
+        // that chargen wrote (half the Luck rounded down then) plus the points of the level-ups. The points become the
+        // permanent modifier, as the games keep them, and the base follows the SPECIAL again. The attributes are the
+        // base ones of now: a permanent change of SPECIAL since chargen (a book, an implant) counts as points.
+        for (const FalloutScript::ChargenSkill& skill : mChargen.skills())
+        {
+            if (!mActorValues.hasBase(mPlayer, skill.mNumber))
+                continue;
+            const double governing = mActorValues.base(mPlayer, skill.mAttribute);
+            const double luck = mActorValues.base(mPlayer, FalloutScript::ActorValue::luck);
+            const double chargen = FalloutScript::Chargen::skillBase + 2.0 * governing + std::floor(luck / 2.0)
+                + (mChargen.tagged(skill.mNumber) ? FalloutScript::Chargen::tagBonus : 0);
+            const double points = mActorValues.base(mPlayer, skill.mNumber) - chargen;
+            mActorValues.resetBase(mPlayer, skill.mNumber);
+            if (points != 0)
+                mActorValues.modify(mPlayer, skill.mNumber, points);
+        }
     }
 
     void FalloutScripts::finishChargenPage()
@@ -7058,18 +7104,9 @@ namespace OFScript
                     applyChargenSkills();
                 break;
             case FalloutScript::ChargenPage::Skills:
+                // The tags count in the skills by themselves (playerSkill), also those of a screen that a perk opens
                 if (!mChargen.lastFinishAdded())
                     applyChargenSkills();
-                else
-                {
-                    // Only the skills the player tagged or let go of change, by the bonus of a tag
-                    for (const int skill : mChargen.lastTagged())
-                        mActorValues.setBase(
-                            mPlayer, skill, mActorValues.base(mPlayer, skill) + FalloutScript::Chargen::tagBonus);
-                    for (const int skill : mChargen.lastUntagged())
-                        mActorValues.setBase(
-                            mPlayer, skill, mActorValues.base(mPlayer, skill) - FalloutScript::Chargen::tagBonus);
-                }
                 break;
             case FalloutScript::ChargenPage::Traits:
             {

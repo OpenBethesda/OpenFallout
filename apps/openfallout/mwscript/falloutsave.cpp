@@ -938,6 +938,8 @@ namespace OFScript
             [this](FalloutScript::SaveWriter& out) { FalloutScript::writeActorValues(mActorValues, out); },
             [this](FalloutScript::SaveReader& in, std::uint32_t version) {
                 FalloutScript::readActorValues(mActorValues, in, version);
+                // (converted when the tags are known, after the section of chargen)
+                mConvertOldSkills = version < 2;
             });
         section(
             "progress", FalloutScript::progressSectionVersion,
@@ -1086,7 +1088,12 @@ namespace OFScript
         section(
             "chargen", FalloutScript::chargenSectionVersion,
             [this](FalloutScript::SaveWriter& out) { mChargen.write(out); },
-            [this](FalloutScript::SaveReader& in, std::uint32_t version) { mChargen.read(in, version); });
+            [this](FalloutScript::SaveReader& in, std::uint32_t version) {
+                mChargen.read(in, version);
+                if (mConvertOldSkills)
+                    convertOldPlayerSkills();
+                mConvertOldSkills = false;
+            });
         section(
             "hotkeys", FalloutScript::hotKeysSectionVersion,
             [this](FalloutScript::SaveWriter& out) { FalloutScript::writeHotKeys(mHotKeys, out); },

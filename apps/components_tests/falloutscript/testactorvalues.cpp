@@ -168,6 +168,23 @@ namespace
         int mAsked = 0;
     };
 
+    TEST(FalloutScriptActorValuesTest, a_base_that_is_forgotten_gives_way_to_the_starting_value_and_keeps_the_modifier)
+    {
+        ActorValues values;
+        const FormId player = 0x14;
+        const int sneak = ActorValue::sneak;
+        // The skills are worked out (the player's follow its SPECIAL, fallout-rules.md E.1.9)
+        EXPECT_TRUE(ActorValues::isDerived(sneak));
+        EXPECT_FALSE(values.hasBase(player, sneak));
+        values.setBase(player, sneak, 40);
+        values.modify(player, sneak, 5);
+        EXPECT_TRUE(values.hasBase(player, sneak));
+        EXPECT_EQ(values.current(player, sneak), 45);
+        values.resetBase(player, sneak);
+        EXPECT_FALSE(values.hasBase(player, sneak));
+        EXPECT_EQ(values.current(player, sneak), ActorValues::startingValue(sneak) + 5);
+    }
+
     TEST(FalloutScriptActorValuesTest, an_actor_value_nobody_set_starts_at_what_the_record_says)
     {
         GuardRecords records;
