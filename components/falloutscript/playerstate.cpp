@@ -2,6 +2,9 @@
 
 #include <components/esm3/player.hpp>
 
+#include <algorithm>
+#include <map>
+
 namespace FalloutScript
 {
     namespace
@@ -114,7 +117,12 @@ namespace FalloutScript
             result.mDropped.emplace_back("the Mark of the Morrowind spell");
         if (!player.mBirthsign.empty())
             result.mDropped.emplace_back("the birthsign");
-        if (!player.mSaveSkills.empty() || !player.mSaveAttributes.empty() || object.mNpcStats.mIsWerewolf)
+        // A save of format 39 or older always has the stats kept for the werewolf, as zeros when the player never
+        // was one
+        const auto kept = [](const std::map<ESM::RefId, float>& values) {
+            return std::any_of(values.begin(), values.end(), [](const auto& value) { return value.second != 0.f; });
+        };
+        if (object.mNpcStats.mIsWerewolf || kept(player.mSaveSkills) || kept(player.mSaveAttributes))
             result.mDropped.emplace_back("the werewolf state");
         if (!player.mPreviousItems.empty())
             result.mDropped.emplace_back("the items that bound items replaced");

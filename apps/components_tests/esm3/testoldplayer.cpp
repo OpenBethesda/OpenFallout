@@ -89,7 +89,10 @@ namespace ESM
             EXPECT_FLOAT_EQ(state.mLastExteriorPosition[2], 512.f);
             EXPECT_EQ(state.mRefNum, (RefNum{ 0x14, 0 }));
             ASSERT_EQ(state.mLuaScripts.mScripts.size(), 1u);
-            EXPECT_EQ(state.mLuaScripts.mScripts[0].mScriptId, 7);
+            // (a save of format 36 or older names the script by its path, which the configuration of the scripts turns
+            // into the number when the save is read: there is none here)
+            if (GetParam() > MaxLuaScriptPathFormatVersion)
+                EXPECT_EQ(state.mLuaScripts.mScripts[0].mScriptId, 7);
             EXPECT_EQ(state.mLuaScripts.mScripts[0].mData, std::string("lua\0data", 8));
             ASSERT_EQ(state.mLuaScripts.mScripts[0].mTimers.size(), 1u);
             EXPECT_EQ(state.mLuaScripts.mScripts[0].mTimers[0].mCallbackName, "onTimer");
