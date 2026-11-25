@@ -101,6 +101,9 @@ namespace
         const OFWorld::Store<ESM::Class>& classes, const OFWorld::Store<ESM::Race>& races,
         const OFWorld::Store<ESM::Script>& scripts, const std::unordered_map<ESM::RefId, ESM::NPC>& npcs)
     {
+        // A Fallout game has no Morrowind NPC (and no class or race to give one)
+        if (npcs.empty())
+            return {};
         // Cache first class from store - we will use it if current class is not found
         const ESM::RefId& defaultCls = getDefaultClass(classes);
         // Same for races
