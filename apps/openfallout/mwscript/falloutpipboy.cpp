@@ -528,7 +528,7 @@ namespace OFScript
         // The room is the room under 100 of the value, as on the screen of the level up: a bonus takes room away, a
         // penalty makes some
         points = std::min(points, FalloutScript::Levelling::skillRoom(mActorValues.current(mPlayer, skill)));
-        if (points <= 0 || !mProgress.spendSkillPoints(points))
+        if (points <= 0 || !mProgress.spendSkillPoints(skill, points))
             return 0;
         // The points sit on top of the skill as a permanent modifier, so the skill still follows the SPECIAL (E.1.9)
         mActorValues.modify(mPlayer, skill, points);
@@ -539,13 +539,10 @@ namespace OFScript
     {
         if (skill < AV::firstSkill || skill > AV::lastSkill || points <= 0)
             return 0;
-        // Only points that were spent come back: the permanent modifier
-        const double spent = mActorValues.modifier(mPlayer, skill);
-        points = std::min(points, static_cast<int>(std::floor(std::max(spent, 0.0))));
-        if (points <= 0)
-            return 0;
-        mActorValues.modify(mPlayer, skill, -points);
-        mProgress.addSkillPoints(points);
+        // Only points that were spent on this screen come back, whatever else has moved the modifier of the skill
+        points = mProgress.refundSkillPoints(skill, points);
+        if (points > 0)
+            mActorValues.modify(mPlayer, skill, -points);
         return points;
     }
 

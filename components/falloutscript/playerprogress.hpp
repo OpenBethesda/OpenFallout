@@ -87,6 +87,13 @@ namespace FalloutScript
         /// Spends points; false when there are not that many
         bool spendSkillPoints(int amount);
         bool spendPerkPoint();
+        /// Spends points on a skill on the screen of a level up; false when there are not that many. The screen keeps
+        /// what each skill got until it is done (finishLevel), so that only those points can be taken back
+        bool spendSkillPoints(int skill, int amount);
+        /// Takes back up to that many points that the skill got on this screen and returns how many were taken back.
+        /// It goes by what was spent, not by the modifier of the skill: an effect or a script can lower the modifier
+        /// below the points spent
+        int refundSkillPoints(int skill, int amount);
         /// The level that the next perk is chosen at: the level that gave the oldest perk point not spent yet (an
         /// award of several levels at once keeps the level of each point), or the level of the player when the points
         /// come from elsewhere
@@ -140,6 +147,8 @@ namespace FalloutScript
         /// The level the player is at (level()); a save keeps none of its own, a loaded game is at the level handed out
         int mLevel = 1;
         int mSkillPoints = 0;
+        /// The points each skill got on the screen of the level up that is open (spendSkillPoints(skill, amount))
+        std::map<int, int> mSpentOnScreen;
         int mPerkPoints = 0;
         /// The levels that gave the perk points that are not spent yet, oldest first (the points that a script gives
         /// have none)

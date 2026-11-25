@@ -270,6 +270,25 @@ namespace
         EXPECT_FALSE(progress.spendPerkPoint());
     }
 
+    TEST(FalloutScriptPlayerProgressLevellingTest, refundsOnlyThePointsSpentOnTheSkillOnThisScreen)
+    {
+        PlayerProgress progress;
+        progress.addSkillPoints(10);
+        EXPECT_TRUE(progress.spendSkillPoints(32, 4));
+        EXPECT_TRUE(progress.spendSkillPoints(33, 2));
+        EXPECT_EQ(progress.skillPoints(), 4);
+        // Not more than the skill got, and nothing from a skill that got none
+        EXPECT_EQ(progress.refundSkillPoints(32, 6), 4);
+        EXPECT_EQ(progress.refundSkillPoints(32, 1), 0);
+        EXPECT_EQ(progress.refundSkillPoints(34, 1), 0);
+        EXPECT_EQ(progress.skillPoints(), 8);
+        // A level up that is done keeps its points
+        progress.finishLevel();
+        EXPECT_EQ(progress.refundSkillPoints(33, 2), 0);
+        EXPECT_EQ(progress.skillPoints(), 8);
+        EXPECT_FALSE(progress.spendSkillPoints(33, 9));
+    }
+
     TEST(FalloutScriptPlayerProgressLevellingTest, setsTheLevelAtOnceWithoutGivingPoints)
     {
         PlayerProgress progress;

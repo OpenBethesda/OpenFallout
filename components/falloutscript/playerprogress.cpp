@@ -24,6 +24,7 @@ namespace FalloutScript
         mAwardedLevel = 1;
         mLevel = 1;
         mSkillPoints = 0;
+        mSpentOnScreen.clear();
         mPerkPoints = 0;
         mPerkLevels.clear();
         mMiscStats.clear();
@@ -95,6 +96,7 @@ namespace FalloutScript
     {
         const std::lock_guard lock(mMutex);
         mLevel = std::min(mLevel + 1, std::max(mAwardedLevel, mLevel));
+        mSpentOnScreen.clear();
     }
 
     bool PlayerProgress::atHighestLevel() const
@@ -166,6 +168,30 @@ namespace FalloutScript
             return false;
         mSkillPoints -= amount;
         return true;
+    }
+
+    bool PlayerProgress::spendSkillPoints(int skill, int amount)
+    {
+        const std::lock_guard lock(mMutex);
+        if (amount < 0 || amount > mSkillPoints)
+            return false;
+        mSkillPoints -= amount;
+        mSpentOnScreen[skill] += amount;
+        return true;
+    }
+
+    int PlayerProgress::refundSkillPoints(int skill, int amount)
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = mSpentOnScreen.find(skill);
+        if (amount <= 0 || found == mSpentOnScreen.end())
+            return 0;
+        amount = std::min(amount, found->second);
+        found->second -= amount;
+        if (found->second <= 0)
+            mSpentOnScreen.erase(found);
+        mSkillPoints += amount;
+        return amount;
     }
 
     bool PlayerProgress::spendPerkPoint()

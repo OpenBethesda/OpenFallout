@@ -2883,7 +2883,8 @@
 -- @return #number How many were spent.
 
 ---
--- Takes skill points back from a skill, as the screen of the level up does for the points it gave itself.
+-- Takes skill points back from a skill, as the screen of the level up does for the points it gave itself. Only the
+-- points spent on the skill since the last level up was done come back (pipboy.levelUpDone ends the screen).
 -- @function [parent=#Pipboy] refundSkillPoints
 -- @param #number skill The number of the skill.
 -- @param #number points

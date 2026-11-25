@@ -598,7 +598,8 @@ namespace OFScript
         /// Spends skill points on a skill (the skill stays at most 100); the points spent, 0 when none could be
         int spendSkillPoints(int skill, int points);
         /// Takes skill points back from a skill (the screen of the level up does when the player takes back what it
-        /// gave on that screen); the points given back, 0 when none could be
+        /// gave on that screen); the points given back, 0 when none could be. Only the points spent on that skill since
+        /// the last level up was done come back, whatever the modifier of the skill is
         int refundSkillPoints(int skill, int points);
         /// Spends the perk point on a perk the player is offered; false when it is not
         bool choosePerk(FalloutScript::FormId perk);
