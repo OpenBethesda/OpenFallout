@@ -495,6 +495,26 @@ namespace
         EXPECT_TRUE(setup.mActors.isDead(guard));
     }
 
+    TEST(FalloutScriptActorValueCommandsTest, a_health_set_below_a_point_by_a_command_kills_as_damage_does)
+    {
+        // Rule D1 holds whatever lowered the health: ForceActorValue, SetActorValue and ModActorValue too
+        for (const std::uint16_t command : { OpForceActorValue, OpSetActorValue, OpModActorValue })
+        {
+            Runner setup;
+            ScriptBuilder builder;
+            builder.code(scriptName() + begin(BlockType::OnActivate)
+                + FalloutScriptTest::command(OpSetActorValue, valueAndInteger(ActorValue::health, 10))
+                + FalloutScriptTest::command(
+                    command, valueAndFloat(ActorValue::health, command == OpModActorValue ? -9.5f : 0.5f))
+                + end());
+
+            setup.run(guard, builder);
+
+            EXPECT_DOUBLE_EQ(setup.mValues.current(guard, ActorValue::health), 0.5) << "command " << command;
+            EXPECT_TRUE(setup.mActors.isDead(guard)) << "command " << command;
+        }
+    }
+
     TEST(FalloutScriptActorValueCommandsTest, a_character_is_alive_again_only_with_its_health_back)
     {
         Runner setup;

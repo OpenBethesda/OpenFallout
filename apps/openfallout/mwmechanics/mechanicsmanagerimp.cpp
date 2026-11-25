@@ -62,7 +62,12 @@ namespace OFMechanics
         }
         mProcessLists.updateLevels();
         if (PlayerCharacter* player = mProcessLists.getPlayer())
+        {
+            // The player is on character physics: its physics actor takes part in each step of the simulation (the
+            // characters and creatures stay kinematic, moved by their packages)
+            OFBase::Environment::get().getWorld()->setActorActive(player->getPtr(), true);
             player->update(duration, paused);
+        }
         if (!paused && mAI)
             mFalloutActors.update(duration, mProcessLists);
         if (mAI)

@@ -800,7 +800,7 @@ function handlers.s4stats(args)
     local okS, rowsS = pcall(core.pipboy.skills)
     if okS then
         for _, row in ipairs(rowsS) do
-            table.insert(skills, { number = row.number, value = row.value, base = row.base, tagged = row.tagged })
+            table.insert(skills, { number = row.number, value = row.value, base = row.base, tagged = row.tagged, modifier = row.modifier })
             table.insert(skillText, string.format('%d:%g/%g%s', row.number, row.value, row.base, row.tagged and 't' or ''))
         end
     end

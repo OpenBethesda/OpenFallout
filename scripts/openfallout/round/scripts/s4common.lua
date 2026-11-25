@@ -189,7 +189,7 @@ function M.taggedSkills(stats)
     local tags = {}
     for _, skill in ipairs(stats.skills or {}) do
         local untagged = M.skillValue({ number = skill.number, tagged = false }, stats.attributes or {})
-        if skill.tagged == true or (untagged ~= nil and skill.value - untagged >= 7) then tags[skill.number] = true end
+        if skill.tagged == true or (untagged ~= nil and skill.value - (skill.modifier or 0) - untagged >= 7) then tags[skill.number] = true end
     end
     return tags
 end
@@ -201,9 +201,11 @@ function M.skillMismatches(stats, tags)
     for _, skill in ipairs(stats.skills or {}) do
         local want = M.skillValue({ number = skill.number, tagged = skill.tagged == true or (tags ~= nil and tags[skill.number] == true) },
             stats.attributes or {})
-        if want ~= nil and math.abs(skill.value - want) > 0.001 then
+        -- what the level-up points and the books added for good is on top of the formula (an engine without the field: none)
+        local got = skill.value - (skill.modifier or 0)
+        if want ~= nil and math.abs(got - want) > 0.001 then
             count = count + 1
-            if #words < 6 then table.insert(words, string.format('%d:%g/%g', skill.number, skill.value, want)) end
+            if #words < 6 then table.insert(words, string.format('%d:%g/%g', skill.number, got, want)) end
         end
     end
     return count, table.concat(words, ',')

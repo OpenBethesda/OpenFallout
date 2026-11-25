@@ -285,6 +285,13 @@ namespace FalloutScript
         const auto healthGuard = [&actors](int value) {
             return value == ActorValue::health ? actors.holdTransitions() : std::unique_lock<std::recursive_mutex>();
         };
+        // A health that a command sets below a point kills as damage does (rule D1: the executables kill below 1.0,
+        // whatever lowered it), unless the character is one that falls (an essential one)
+        const auto healthChanged = [&values, &actors](CallContext& call, int value) {
+            if (value == ActorValue::health && !actors.isDead(call.mReference)
+                && outOfHealth(values.current(call.mReference, value)) && !actors.falls(call.mReference))
+                actors.setDead(call.mReference, true);
+        };
 
         interpreter.setHandler("GetActorValue", [currentOf](CallContext& call) {
             const int value = intArgument(call, 0);
@@ -306,7 +313,7 @@ namespace FalloutScript
                                                       : values.permanent(call.mReference, value);
             });
         interpreter.setHandler("SetActorValue",
-            [&values, isPlayersProgress, progressValue, rewardProgress, healthGuard](CallContext& call) {
+            [&values, isPlayersProgress, progressValue, rewardProgress, healthGuard, healthChanged](CallContext& call) {
                 const int value = intArgument(call, 0);
                 if (call.mReference == 0 || !ActorValues::isValid(value))
                     return 0.0;
@@ -315,10 +322,11 @@ namespace FalloutScript
                     rewardProgress(value, whole(argument(call, 1) - progressValue(value)));
                 else
                     values.setBase(call.mReference, value, argument(call, 1));
+                healthChanged(call, value);
                 return 0.0;
             });
-        interpreter.setHandler(
-            "ModActorValue", [&values, isPlayersProgress, rewardProgress, healthGuard](CallContext& call) {
+        interpreter.setHandler("ModActorValue",
+            [&values, isPlayersProgress, rewardProgress, healthGuard, healthChanged](CallContext& call) {
                 const int value = intArgument(call, 0);
                 if (call.mReference == 0 || !ActorValues::isValid(value))
                     return 0.0;
@@ -327,10 +335,11 @@ namespace FalloutScript
                     rewardProgress(value, whole(argument(call, 1)));
                 else
                     values.modify(call.mReference, value, argument(call, 1));
+                healthChanged(call, value);
                 return 0.0;
             });
         interpreter.setHandler("ForceActorValue",
-            [&values, isPlayersProgress, progressValue, rewardProgress, healthGuard](CallContext& call) {
+            [&values, isPlayersProgress, progressValue, rewardProgress, healthGuard, healthChanged](CallContext& call) {
                 const int value = intArgument(call, 0);
                 if (call.mReference == 0 || !ActorValues::isValid(value))
                     return 0.0;
@@ -339,6 +348,7 @@ namespace FalloutScript
                     rewardProgress(value, whole(argument(call, 1) - progressValue(value)));
                 else
                     values.setCurrent(call.mReference, value, argument(call, 1));
+                healthChanged(call, value);
                 return 0.0;
             });
         interpreter.setHandler(

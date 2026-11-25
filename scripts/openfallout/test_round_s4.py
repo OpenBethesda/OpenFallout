@@ -202,6 +202,17 @@ class Rules(unittest.TestCase):
         stats = table({"attributes": attributes, "skills": table([table({"number": 32, "value": 15}), table({"number": 38, "value": 30})])})
         self.assertEqual(self.common.skillMismatches(stats, self.common.taggedSkills(stats))[0], 0)
 
+    def test_what_level_up_points_and_books_added_is_not_taken_for_a_wrong_formula(self):
+        table = self.lua.table_from
+        attributes = table([table({"number": n, "value": 5}) for n in range(5, 12)])
+        # Medicine (37) 20 with 5 added for good by spent points: the formula's 15 plus the modifier
+        stats = table({"attributes": attributes, "skills": table([table({"number": 37, "value": 20, "modifier": 5})])})
+        tags = self.common.taggedSkills(stats)
+        self.assertIsNone(tags[37])
+        self.assertEqual(self.common.skillMismatches(stats, tags)[0], 0)
+        stats = table({"attributes": attributes, "skills": table([table({"number": 37, "value": 20, "modifier": 0})])})
+        self.assertEqual(self.common.skillMismatches(stats, tags)[0], 1)
+
     def test_a_check_logs_the_line_and_fails_with_an_error_outside_the_tolerance(self):
         lines = []
         r = self.lua.table_from({"log": lambda text: lines.append(("note", text)), "error": lambda text: lines.append(("error", text))})

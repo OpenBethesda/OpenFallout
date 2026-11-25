@@ -331,6 +331,8 @@ namespace OFLua
                 row["value"] = value;
                 row["base"] = host.actorValues().base(player, skill.mNumber);
                 row["tagged"] = host.chargen().tagged(skill.mNumber);
+                // What the level-up points and the books added for good (rule E.1.9: on top of the SPECIAL's share)
+                row["modifier"] = host.actorValues().modifier(player, skill.mNumber);
                 row["level"] = host.gameSettingText(FalloutScript::Pipboy::skillLevelSetting(lookup, value));
                 rows[index++] = row;
             }

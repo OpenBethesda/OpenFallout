@@ -2428,6 +2428,8 @@
 -- @field #number value What the character has now.
 -- @field #number base What it has before anything adds to it.
 -- @field #boolean tagged Skills only.
+-- @field #number modifier Skills only: what the level-up points and the skill books added for good (the rest of `value`
+-- follows the SPECIAL of now).
 -- @field #string level The word for how good the skill is (skills only).
 
 ---
