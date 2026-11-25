@@ -313,13 +313,8 @@ namespace OFLua
                 [object, actor, force] {
                     const OFWorld::Ptr& actorPtr = actor.ptr();
                     const OFWorld::Ptr& objectPtr = object.ptr();
-                    if (actorPtr == OFBase::Environment::get().getWorld()->getPlayerPtr())
-                        OFBase::Environment::get().getWindowManager()->useItem(objectPtr, force);
-                    else
-                    {
-                        std::unique_ptr<OFWorld::Action> action = objectPtr.getClass().use(objectPtr, force);
-                        action->execute(actorPtr, true);
-                    }
+                    std::unique_ptr<OFWorld::Action> action = objectPtr.getClass().use(objectPtr, force);
+                    action->execute(actorPtr, true);
                 },
                 "_runStandardUseAction");
         };

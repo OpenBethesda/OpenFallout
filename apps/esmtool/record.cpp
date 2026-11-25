@@ -191,7 +191,7 @@ namespace EsmTool
         mCellState.mId = reader.getCellId();
         mCellState.load(reader);
         if (mCellState.mHasFogOfWar)
-            mFogState.load(reader);
+            ESM::skipFogState(reader);
         deleted = false;
         reader.skipRecord();
     }
@@ -1288,23 +1288,6 @@ namespace EsmTool
         std::cout << "  Last Respawn:" << std::endl;
         std::cout << "    Day:" << mData.mCellState.mLastRespawn.mDay << std::endl;
         std::cout << "    Hour:" << mData.mCellState.mLastRespawn.mHour << std::endl;
-        if (mData.mCellState.mHasFogOfWar)
-        {
-            std::cout << "  North Marker Angle: " << osg::RadiansToDegrees(mData.mFogState.mNorthMarkerAngle)
-                      << std::endl;
-            std::cout << "  Bounds:" << std::endl;
-            std::cout << "    Min X: " << mData.mFogState.mBounds.mMinX << std::endl;
-            std::cout << "    Min Y: " << mData.mFogState.mBounds.mMinY << std::endl;
-            std::cout << "    Max X: " << mData.mFogState.mBounds.mMaxX << std::endl;
-            std::cout << "    Max Y: " << mData.mFogState.mBounds.mMaxY << std::endl;
-            for (const ESM::FogTexture& fogTexture : mData.mFogState.mFogTextures)
-            {
-                std::cout << "  Fog Texture:" << std::endl;
-                std::cout << "    X: " << fogTexture.mX << std::endl;
-                std::cout << "    Y: " << fogTexture.mY << std::endl;
-                std::cout << "    Image Data: (" << fogTexture.mImageData.size() << ")" << std::endl;
-            }
-        }
     }
 
     template <>

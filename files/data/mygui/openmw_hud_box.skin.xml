@@ -16,9 +16,6 @@
 
     </Resource>
 
-    <Resource type="ResourceSkin" name="HUD_Box_Transparent" size="40 40">
-        <Child type="Widget" skin="MW_Box" offset="0 0 40 40" align="Left Stretch"/>
-    </Resource>
 
     <Resource type="ResourceSkin" name="HUD_Box_NoTransp" size="40 40">
 

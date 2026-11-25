@@ -132,8 +132,6 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Container::activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const
     {
-        if (!OFBase::Environment::get().getWindowManager()->isAllowed(OFGui::GW_Inventory))
-            return std::make_unique<OFWorld::NullAction>();
 
         bool isLocked = ptr.getCellRef().isLocked();
         bool isTrapped = !ptr.getCellRef().getTrap().empty();

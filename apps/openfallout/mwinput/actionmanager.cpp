@@ -116,20 +116,10 @@ namespace OFInput
                 quickLoad();
                 break;
             case A_CycleSpellLeft:
-                if (windowManager->isAllowed(OFGui::GW_Magic))
-                    OFBase::Environment::get().getWindowManager()->cycleSpell(false);
-                break;
             case A_CycleSpellRight:
-                if (windowManager->isAllowed(OFGui::GW_Magic))
-                    OFBase::Environment::get().getWindowManager()->cycleSpell(true);
-                break;
             case A_CycleWeaponLeft:
-                if (windowManager->isAllowed(OFGui::GW_Inventory))
-                    OFBase::Environment::get().getWindowManager()->cycleWeapon(false);
-                break;
             case A_CycleWeaponRight:
-                if (windowManager->isAllowed(OFGui::GW_Inventory))
-                    OFBase::Environment::get().getWindowManager()->cycleWeapon(true);
+                // The spell and the inventory windows of Morrowind that these cycled through are gone
                 break;
             case A_Inventory:
             case A_Journal:

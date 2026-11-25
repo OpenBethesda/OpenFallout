@@ -63,7 +63,6 @@ namespace EsmTool
     struct CellState
     {
         ESM::CellState mCellState;
-        ESM::FogState mFogState;
 
         void load(ESM::ESMReader& reader, bool& deleted);
 

@@ -79,11 +79,10 @@ class GuiTexturesTest(unittest.TestCase):
                 self.assertEqual((image.width, image.height), (192, 64), name)
 
     def test_the_hud_and_the_screens_have_their_signs(self):
-        # hud.cpp, quickkeysmenu.cpp, levelupdialog.cpp, windowmanagerimp.cpp and openmw_hud.layout name these
+        # esmfallbacks.lua names the icons of the skills (Sneak, Handtohand) and the picture of gold; the hit flash is the
+        # picture that the interface shows when the game has no bm_player_hit_01
         for name in ('icons/k/stealth_sneak', 'icons/k/stealth_handtohand', 'icons/tx_goldicon', 'player_hit_01'):
             self.assertIn(name, self.images)
-        with open(os.path.join(DATA, 'mygui', 'openmw_hud.layout'), errors='replace') as stream:
-            self.assertIn('icons\\k\\stealth_sneak.dds', stream.read())
 
     def test_text_is_drawn_in_the_letters_that_are_there(self):
         for _, label in make_gui_textures.MENU_BUTTONS:

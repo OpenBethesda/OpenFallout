@@ -31,9 +31,4 @@
         <Property key="Resource" value="HResizePointerImage"/>
         <Property key="Rotation" value="45"/>
     </Resource>
-    <Resource type="ResourceImageSetPointer" name="drop_ground">
-        <Property key="Point" value="0 24"/>
-        <Property key="Size" value="32 32"/>
-        <Property key="Resource" value="DropGroundPointerImage"/>
-    </Resource>
 </MyGUI>

@@ -418,7 +418,6 @@ OFWorld::ContainerStoreIterator OFWorld::ContainerStore::add(
     // we should not fire event for InventoryStore yet - it has some custom logic
     if (mListener && typeid(*this) == typeid(ContainerStore))
         mListener->itemAdded(item, count);
-    OFBase::Environment::get().getWindowManager()->inventoryUpdated(contPtr);
 
     return it;
 }
@@ -606,7 +605,6 @@ int OFWorld::ContainerStore::remove(const Ptr& item, int count, bool equipReplac
     // we should not fire event for InventoryStore yet - it has some custom logic
     if (mListener && typeid(*this) == typeid(ContainerStore))
         mListener->itemRemoved(item, count - toRemove);
-    OFBase::Environment::get().getWindowManager()->inventoryUpdated(getPtr());
 
     // number of removed items
     return count - toRemove;

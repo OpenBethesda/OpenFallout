@@ -24,7 +24,6 @@ namespace OFInput
 
         void executeAction(int action);
 
-
         void toggleMainMenu();
         void toggleConsole();
         void screenshot();

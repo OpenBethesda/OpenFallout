@@ -15,7 +15,7 @@ source_group(apps/openfallout FILES main.cpp ${OPENFALLOUT_SOURCES} ${OPENFALLOU
 add_openfallout_dir (mwrender
     actors objects renderingmanager animation rotatecontroller sky skyutil skyfallback esm4npcanimation esm4creatureanimation falloutactoranimation falloutanimation falloutface falloutplayerbody falloutplayeranimation firstperson vismask
     effectmanager util renderinginterface rendermode screenshotmanager
-    bulletdebugdraw globalmap characterpreview menuscene facepreview camera localmap water clipcullnode waterframes waterlook terrainstorage ripplesimulation
+    bulletdebugdraw menuscene facepreview camera water clipcullnode waterframes waterlook terrainstorage ripplesimulation
     renderbin landmanager navmesh actorspaths recastmesh fogmanager objectpaging falloutlod groundcover
     postprocessor pingpongcull luminancecalculator pingpongcanvas transparentpass opaqueblit waterawaretransparentbin precipitationocclusion ripples
     actorutil distortion animationpriority bonegroup blendmask animblendcontroller
@@ -29,17 +29,16 @@ add_openfallout_dir (mwinput
 
 add_openfallout_dir (mwgui
     layout widgets windowmanagerimp console
-    windowbase statswindow messagebox
-    mapwindow windowpinnablebase tooltips resourceskin
-    inventorywindow hud countdialog settingswindow
-    confirmationdialog referenceinterface spellwindow mainmenu menuscenes
+    windowbase messagebox
+    tooltips resourceskin
+    hud settingswindow
+    confirmationdialog referenceinterface mainmenu menuscenes
     loadingscreen falloutloading falloutairmeter falloutmenuresources
-    exposedwindow cursor spellicons
-    itemmodel inventoryitemmodel sortfilteritemmodel itemview
-    tradeitemmodel controllers savegamedialog
-    mode videowidget backgroundimage itemwidget screenfader debugwindow spellmodel spellview
-    draganddrop keyboardnavigation textcolours statswatcher
-    postprocessorhud settings worlditemmodel itemtransfer controllerbuttonsoverlay inventorytabsoverlay
+    exposedwindow cursor
+    controllers savegamedialog
+    mode videowidget backgroundimage screenfader debugwindow
+    keyboardnavigation textcolours
+    postprocessorhud settings controllerbuttonsoverlay
     )
 
 add_openfallout_dir (mwscript

@@ -399,12 +399,6 @@ namespace OFWorld
         writer.writeHNOString("RAND", Misc::Rng::serialize(mPrng));
         writer.endRecord(ESM::REC_RAND);
 
-        // Active cells could have a dirty fog of war, sync it to the CellStore first
-        for (CellStore* cellstore : mWorldScene->getActiveCells())
-        {
-            OFBase::Environment::get().getWindowManager()->writeFog(cellstore);
-        }
-
         mStore.write(writer, progress); // dynamic Store must be written (and read) before Cells, so that
                                         // references to custom made records will be recognized
         // (the player's place and Lua scripts are in the "player" section of the record of the Fallout scripts, which
@@ -2173,7 +2167,6 @@ namespace OFWorld
         rotateObject(player, osg::Vec3f(), OFBase::RotationFlag_inverseOrder | OFBase::RotationFlag_adjust);
 
         OFBase::Environment::get().getMechanicsManager()->add(getPlayerPtr());
-        OFBase::Environment::get().getWindowManager()->watchActor(getPlayerPtr());
 
         mPhysics->remove(getPlayerPtr());
         getPlayerPtr().getClass().insertObjectPhysics(

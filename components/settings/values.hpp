@@ -11,7 +11,6 @@
 #include "categories/hud.hpp"
 #include "categories/input.hpp"
 #include "categories/lua.hpp"
-#include "categories/map.hpp"
 #include "categories/models.hpp"
 #include "categories/navigator.hpp"
 #include "categories/physics.hpp"
@@ -42,7 +41,6 @@ namespace Settings
         CellsCategory mCells{ mIndex };
         TerrainCategory mTerrain{ mIndex };
         FogCategory mFog{ mIndex };
-        MapCategory mMap{ mIndex };
         GUICategory mGUI{ mIndex };
         HUDCategory mHUD{ mIndex };
         GameCategory mGame{ mIndex };
@@ -112,11 +110,6 @@ namespace Settings
     inline FogCategory& fog()
     {
         return values().mFog;
-    }
-
-    inline MapCategory& map()
-    {
-        return values().mMap;
     }
 
     inline GUICategory& gui()

@@ -16,16 +16,21 @@ for _, mode in pairs(MODE) do
 end
 
 -- A window of the engine that a script draws instead, or a window that only a script has (a Fallout screen such as
--- DialogMenu): the second kind has the name of a mode and is shown in that mode
+-- DialogMenu): the second kind has the name of a mode and is shown in that mode, or is one of the windows that are named
+-- below with the mode they are shown in
 local luaOnlyWindows = {}
+
+-- The windows that only a script has and that are not named after a mode, with the mode that shows each: the Pip-Boy
+-- (falloutpipboy.lua) is the window Inventory of the mode Interface
+local LUA_WINDOW_MODES = { Inventory = 'Interface' }
 
 local function registerWindow(window, showFn, hideFn)
     if WINDOW[window] then
         ui._setWindowDisabled(window, true)
-    elseif MODE[window] then
+    elseif MODE[window] or LUA_WINDOW_MODES[window] then
         luaOnlyWindows[window] = true
     else
-        error('Window "' .. tostring(window) .. '" is neither a window of the engine nor the name of a mode.')
+        error('Window "' .. tostring(window) .. '" is neither a window of the engine, nor a window of a script, nor the name of a mode.')
     end
     if replacedWindows[window] then
         replacedWindows[window].hideFn()
@@ -34,12 +39,24 @@ local function registerWindow(window, showFn, hideFn)
     hiddenWindows[window] = nil
 end
 
--- The windows a mode shows: those of the engine, and a window only a script has whose name is the mode's
-local function windowsOfMode(mode)
+-- The windows that a mode can show and that options.windows picks from: those of the engine, and the windows only a
+-- script has that are named with this mode
+local function pickableWindows(mode)
     local windows = {}
     for _, w in pairs(ui._getAllowedWindows(mode)) do
         windows[#windows + 1] = w
     end
+    for w, _ in pairs(luaOnlyWindows) do
+        if LUA_WINDOW_MODES[w] == mode then
+            windows[#windows + 1] = w
+        end
+    end
+    return windows
+end
+
+-- The windows a mode shows: those that can be picked, and a window only a script has whose name is the mode's
+local function windowsOfMode(mode)
+    local windows = pickableWindows(mode)
     if luaOnlyWindows[mode] then
         windows[#windows + 1] = mode
     end
@@ -49,7 +66,7 @@ end
 local function updateHidden(mode, options)
     local toHide = {}
     if options and options.windows then
-        for _, w in pairs(ui._getAllowedWindows(mode)) do
+        for _, w in pairs(pickableWindows(mode)) do
             toHide[w] = true
         end
         for _, w in pairs(options.windows) do
@@ -202,7 +219,7 @@ return {
         -- @function [parent=#UI] getWindowsForMode
         -- @param #string mode
         -- @return #table
-        getWindowsForMode = ui._getAllowedWindows,
+        getWindowsForMode = windowsOfMode,
 
         --- Stack of currently active modes
         -- @field [parent=#UI] modes
@@ -219,8 +236,8 @@ return {
         -- @param #table options (optional) Table with keys 'windows' and/or 'target' (see example).
         -- @usage I.UI.setMode() -- drop all modes
         -- @usage I.UI.setMode('Interface') -- drop all modes and open interface
-        -- @usage -- Drop all modes, open interface, but show only the map window.
-        -- I.UI.setMode('Interface', {windows = {'Map'}})
+        -- @usage -- Drop all modes, open interface, but show only the inventory window (the Pip-Boy).
+        -- I.UI.setMode('Interface', {windows = {'Inventory'}})
         setMode = setMode,
 
         --- Add mode to stack without dropping other active modes.

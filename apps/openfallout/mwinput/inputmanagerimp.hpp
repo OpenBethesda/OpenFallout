@@ -71,7 +71,6 @@ namespace OFInput
 
         void processChangedSettings(const Settings::CategorySettingVector& changed) override;
 
-        void setDragDrop(bool dragDrop) override;
         void setGamepadGuiCursorEnabled(bool enabled) override;
         bool isGamepadGuiCursorEnabled() override;
         void setPadPick(bool pick) override;

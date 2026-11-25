@@ -15,7 +15,6 @@
 #include <osg/ref_ptr>
 
 #include "../mwbase/windowmanager.hpp"
-#include "../mwrender/localmap.hpp"
 
 #include <components/misc/guarded.hpp>
 #include <components/myguiplatform/myguiplatform.hpp>
@@ -26,11 +25,8 @@
 #include <components/settings/settings.hpp>
 #include <components/toutf8/toutf8.hpp>
 
-#include "draganddrop.hpp"
-#include "mapwindow.hpp"
 #include "messagebox.hpp"
 #include "settings.hpp"
-#include "statswatcher.hpp"
 #include "textcolours.hpp"
 #include "tooltips.hpp"
 #include "windowbase.hpp"
@@ -91,24 +87,18 @@ namespace Gui
 namespace OFGui
 {
     class HUD;
-    class MapWindow;
     class MainMenu;
-    class StatsWindow;
-    class InventoryWindow;
     class MenuScenes;
     class SettingsWindow;
     class FalloutAirMeter;
     class LoadingScreen;
-    class SpellIcons;
     class VideoWidget;
     class WindowModal;
     class ScreenFader;
     class DebugWindow;
     class PostProcessorHud;
     class KeyboardNavigation;
-    class ItemTransfer;
     class ControllerButtonsOverlay;
-    class InventoryTabsOverlay;
 
     class WindowManager : public OFBase::WindowManager
     {
@@ -137,8 +127,6 @@ namespace OFGui
         /// Warning: do not use MyGUI::InputManager::setKeyFocusWidget directly. Instead use this.
         void setKeyFocusWidget(MyGUI::Widget* widget) override;
 
-        void setNewGame(bool newgame) override;
-
         void pushGuiMode(GuiMode mode, const OFWorld::Ptr& arg) override;
         void pushGuiMode(GuiMode mode) override;
         void popGuiMode(bool forceExit = false) override;
@@ -155,31 +143,10 @@ namespace OFGui
         bool isInteractiveMessageBoxActive() const override;
         std::uint64_t interactiveMessageBoxId() const override;
 
-        void toggleVisible(GuiWindow wnd) override;
-
-        void forceHide(OFGui::GuiWindow wnd) override;
-        void unsetForceHide(OFGui::GuiWindow wnd) override;
-
-        /// Disallow all inventory mode windows
-        void disallowAll() override;
-
-        /// Allow one or more windows
-        void allow(GuiWindow wnd) override;
-
-        bool isAllowed(GuiWindow wnd) const override;
-
-        /// \todo investigate, if we really need to expose every single lousy UI element to the outside world
-        OFGui::InventoryWindow* getInventoryWindow() override;
         OFGui::MenuScenes* getMenuScenes() override { return mMenuScenes.get(); }
-        OFGui::CountDialog* getCountDialog() override;
         OFGui::ConfirmationDialog* getConfirmationDialog() override;
         OFGui::HUD* getHud() override;
         OFGui::PostProcessorHud* getPostProcessorHud() override;
-
-        /// Make the player use an item, while updating GUI state accordingly
-        void useItem(const OFWorld::Ptr& item, bool bypassBeastRestrictions = false) override;
-
-        void updateSpellWindow() override;
 
         void setConsoleSelectedObject(const OFWorld::Ptr& object) override;
         OFWorld::Ptr getConsoleSelectedObject() const override;
@@ -192,41 +159,20 @@ namespace OFGui
         /// @param maxTime how long we can be underwater (in total) until drowning starts
         void setDrowningTimeLeft(float time, float maxTime) override;
 
-        void changeCell(const OFWorld::CellStore* cell) override; ///< change the active cell
-
         void setFocusObject(const OFWorld::Ptr& focus) override;
         void setFocusObjectScreenCoords(float x, float y) override;
 
         void getMousePosition(int& x, int& y) override;
         void getMousePosition(float& x, float& y) override;
-        void setDragDrop(bool dragDrop) override;
         bool getWorldMouseOver() override;
 
         float getScalingFactor() const override;
 
-        bool toggleFogOfWar() override;
         bool toggleFullHelp() override; ///< show extra info in item tooltips (owner, script)
         bool getFullHelp() const override;
 
         /// sets the visibility of the drowning bar
         void setDrowningBarVisibility(bool visible) override;
-
-        // sets the visibility of the hud health/magicka/stamina bars
-        void setHMSVisibility(bool visible) override;
-        // sets the visibility of the hud minimap
-        void setMinimapVisibility(bool visible) override;
-        void setWeaponVisibility(bool visible) override;
-        void setSpellVisibility(bool visible) override;
-        void setSneakVisibility(bool visible) override;
-
-        const ESM::RefId& getSelectedSpell() override { return mSelectedSpell; }
-        void setSelectedSpell(const ESM::RefId& spellId, int successChancePercent) override;
-        void setSelectedEnchantItem(const OFWorld::Ptr& item) override;
-        const OFWorld::Ptr& getSelectedEnchantItem() const override;
-        void setSelectedWeapon(const OFWorld::Ptr& item) override;
-        const OFWorld::Ptr& getSelectedWeapon() const override;
-        void unsetSelectedSpell() override;
-        void unsetSelectedWeapon() override;
 
         void updateConsoleObjectPtr(const OFWorld::Ptr& currentPtr, const OFWorld::Ptr& newPtr) override;
 
@@ -239,8 +185,6 @@ namespace OFGui
         void disallowMouse() override;
         void allowMouse() override;
         void notifyInputActionBound() override;
-
-        void addVisitedLocation(const std::string& name, int x, int y) override;
 
         /// Gracefully attempts to exit the topmost GUI mode
         void exitCurrentGuiMode() override;
@@ -280,11 +224,6 @@ namespace OFGui
         void saveUserSettings() override;
         bool isWindowVisible() const override;
 
-        void watchActor(const OFWorld::Ptr& ptr) override;
-        OFWorld::Ptr getWatchedActor() const override;
-
-        bool getJournalAllowed() override { return (mAllowed & GW_Magic) != 0; }
-
         void updatePlayer() override;
 
         void changePointer(const std::string& name) override;
@@ -309,10 +248,6 @@ namespace OFGui
         /// Clear all savegame-specific data
         void clear() override;
 
-        void write(ESM::ESMWriter& writer, Loading::Listener& progress) override;
-        void readRecord(ESM::ESMReader& reader, uint32_t type) override;
-        size_t countSavedGameRecords() const override;
-
         /// Does the current stack of GUI-windows permit saving?
         bool isSavingAllowed() const override;
 
@@ -328,7 +263,6 @@ namespace OFGui
             \param input Pointer to the current modal, to ensure proper modal is removed **/
         void removeCurrentModal(WindowModal* input) override;
 
-        void pinWindow(OFGui::GuiWindow window) override;
         void toggleMaximized(Layout* layout) override;
 
         /// Fade the screen in, over \a time seconds
@@ -355,16 +289,7 @@ namespace OFGui
         bool isMainMenuDrawnByLua() const override;
         bool isMainMenuEscapeLua() const override;
 
-        /// Cycle to next or previous spell
-        void cycleSpell(bool next) override;
-        /// Cycle to next or previous weapon
-        void cycleWeapon(bool next) override;
-
         void playSound(const ESM::RefId& soundId, float volume = 1.f, float pitch = 1.f) override;
-
-        void addCell(OFWorld::CellStore* cell) override;
-        void removeCell(OFWorld::CellStore* cell) override;
-        void writeFog(OFWorld::CellStore* cell) override;
 
         const OFGui::TextColours& getTextColours() override;
 
@@ -372,10 +297,6 @@ namespace OFGui
         bool injectKeyRelease(MyGUI::KeyCode key) override;
 
         const std::string& getVersionDescription() const override;
-
-        void onDeleteCustomData(const OFWorld::Ptr& ptr) override;
-
-        void asyncPrepareSaveMap() override;
 
         WindowBase* getActiveControllerWindow() override;
         int getControllerMenuHeight() override;
@@ -407,38 +328,21 @@ namespace OFGui
         osgViewer::Viewer* mViewer;
 
         std::unique_ptr<Gui::FontLoader> mFontLoader;
-        std::unique_ptr<StatsWatcher> mStatsWatcher;
         std::unique_ptr<FalloutAirMeter> mAirMeter;
 
         std::map<MyGUI::Window*, WindowSettingValues> mTrackedWindows;
         void trackWindow(Layout* layout, const WindowSettingValues& settings);
         void onWindowChangeCoord(MyGUI::Window* sender);
 
-        ESM::RefId mSelectedSpell;
-        OFWorld::Ptr mSelectedEnchantItem;
-        OFWorld::Ptr mSelectedWeapon;
-
         std::vector<WindowModal*> mCurrentModals;
 
-        // Markers placed manually by the player. Must be shared between both map views (the HUD map and the map
-        // window).
-        CustomMarkerCollection mCustomMarkers;
-
         HUD* mHud;
-        MapWindow* mMap;
-        std::unique_ptr<OFRender::LocalMap> mLocalMapRender;
         std::unique_ptr<MenuScenes> mMenuScenes;
         std::unique_ptr<ToolTips> mToolTips;
-        StatsWindow* mStatsWindow;
         std::unique_ptr<MessageBoxManager> mMessageBoxManager;
         Console* mConsole;
-        std::unique_ptr<DragAndDrop> mDragAndDrop;
-        std::unique_ptr<ItemTransfer> mItemTransfer;
-        InventoryWindow* mInventoryWindow;
-        CountDialog* mCountDialog;
         SettingsWindow* mSettingsWindow;
         ConfirmationDialog* mConfirmationDialog;
-        SpellWindow* mSpellWindow;
         LoadingScreen* mLoadingScreen;
         MyGUI::ImageBox* mVideoBackground;
         VideoWidget* mVideoWidget;
@@ -449,7 +353,6 @@ namespace OFGui
         DebugWindow* mDebugWindow;
         PostProcessorHud* mPostProcessorHud;
         ControllerButtonsOverlay* mControllerButtonsOverlay;
-        InventoryTabsOverlay* mInventoryTabsOverlay;
 
         std::vector<std::unique_ptr<WindowBase>> mWindows;
 
@@ -507,19 +410,7 @@ namespace OFGui
         std::string mLuaCursorOverride;
         std::string mMyGuiCursor;
 
-        GuiWindow mShown; // Currently shown windows in inventory mode
-        GuiWindow mForceHidden; // Hidden windows (overrides mShown)
-
-        /* Currently ALLOWED windows in inventory mode. This is used at
-           the start of the game, when windows are enabled one by one
-           through script commands. You can manipulate this through using
-           allow() and disableAll().
-         */
-        GuiWindow mAllowed;
-
         void updateVisible(); // Update visibility of all windows based on mode, shown and allowed settings
-
-        void updateMap();
 
         std::string mVersionDescription;
 
@@ -580,19 +471,12 @@ namespace OFGui
         void createCursors();
         void setMenuTransparency(float value);
 
-        void updatePinnedWindows();
-
         void enableScene(bool enable);
 
         void handleScheduledMessageBoxes();
 
         void setCullMask(uint32_t mask) override;
         uint32_t getCullMask() override;
-
-        void setActiveMap(const OFWorld::Cell& cell);
-        ///< set the indices of the map texture that should be used
-
-        void inventoryUpdated(const OFWorld::Ptr& ptr) const override;
 
         Files::ConfigurationManager& mCfgMgr;
 

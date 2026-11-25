@@ -444,7 +444,6 @@ namespace OFWorld
         OFBase::Environment::get().getMechanicsManager()->drop(cell);
 
         mRendering.removeCell(cell);
-        OFBase::Environment::get().getWindowManager()->removeCell(cell);
 
         OFBase::Environment::get().getFalloutScripts()->cellUnloaded(*cell);
 
@@ -528,7 +527,6 @@ namespace OFWorld
 
         mRendering.addCell(&cell);
 
-        OFBase::Environment::get().getWindowManager()->addCell(&cell);
         float waterLevel = cell.getWaterLevel();
         if (cellVariant.isExterior() && ESM::isEsm4Ext(worldspace))
         {
@@ -764,9 +762,6 @@ namespace OFWorld
 
         navigatorUpdateGuard.reset();
 
-        CellStore& current = mWorld.getWorldModel().getExterior(playerCellIndex);
-        OFBase::Environment::get().getWindowManager()->changeCell(&current);
-
         if (changeEvent)
             mCellChanged = true;
 
@@ -947,7 +942,6 @@ namespace OFWorld
         }
 
         OFBase::Environment::get().getMechanicsManager()->updateCell(old, player);
-        OFBase::Environment::get().getWindowManager()->watchActor(player);
 
         mPhysics->updatePtr(old, player);
 
@@ -1065,8 +1059,6 @@ namespace OFWorld
 
         if (useFading)
             OFBase::Environment::get().getWindowManager()->fadeScreenIn(0.5);
-
-        OFBase::Environment::get().getWindowManager()->changeCell(mCurrentCell);
 
         OFBase::Environment::get().getWorld()->getPostProcessor()->setExteriorFlag(cell.getCell()->isQuasiExterior());
     }

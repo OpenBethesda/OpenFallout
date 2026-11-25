@@ -187,8 +187,6 @@ void OFState::StateManager::newGame(bool bypass)
         // A game that has the quest of character creation of Fallout starts as the games do: the quest, not the
         // character generation of Morrowind, makes the character and takes the player to where the game begins
         const bool falloutStart = !bypass && falloutScripts->newGameQuest() != 0;
-        if (!bypass && !falloutStart)
-            OFBase::Environment::get().getWindowManager()->setNewGame(true);
         OFBase::Environment::get().getWorld()->startNewGame(bypass || falloutStart, !falloutStart);
         if (falloutStart)
             falloutScripts->startNewGame();
@@ -236,8 +234,6 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
     try
     {
         const auto start = std::chrono::steady_clock::now();
-
-        OFBase::Environment::get().getWindowManager()->asyncPrepareSaveMap();
 
         if (!character)
         {
@@ -312,8 +308,7 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
             + OFBase::Environment::get().getWorld()->countSavedGameRecords()
             + OFBase::Environment::get().getFalloutScripts()->countSavedGameRecords()
             + OFBase::Environment::get().getMechanicsManager()->countSavedGameRecords()
-            + OFBase::Environment::get().getInputManager()->countSavedGameRecords()
-            + OFBase::Environment::get().getWindowManager()->countSavedGameRecords();
+            + OFBase::Environment::get().getInputManager()->countSavedGameRecords();
         writer.setRecordCount(static_cast<int>(recordCount));
 
         writer.save(stream);
@@ -336,7 +331,6 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
         OFBase::Environment::get().getFalloutScripts()->write(writer, listener);
         OFBase::Environment::get().getMechanicsManager()->write(writer, listener);
         OFBase::Environment::get().getInputManager()->write(writer, listener);
-        OFBase::Environment::get().getWindowManager()->write(writer, listener);
 
         // Ensure we have written the number of records that was estimated
         if (static_cast<size_t>(writer.getRecordCount()) != recordCount + 1) // 1 extra for TES3 record
@@ -593,19 +587,21 @@ void OFState::StateManager::loadGame(
                 case ESM::REC_KEYS:
                     // The quick keys of Morrowind, which every save of the engine wrote until their menu was removed:
                     // the hot keys of Fallout are in the record of its scripts.
+                case ESM::REC_GMAP:
+                    // The explored part of the world map of Morrowind (an image), which every save of the engine wrote
+                    // until its map window was removed: Fallout keeps its map markers in the record of its scripts
+                    // (FOSV).
+                case ESM::REC_MARK:
+                    // The notes that the player put on the map of Morrowind, which went with that map.
+                case ESM::REC_ASPL:
+                    // The spell that the player had selected in the spell window of Morrowind, which went with that
+                    // window (the selected spell is in the stats of the player).
                     reader.skipRecord();
                     break;
 
                 case ESM::REC_FOSV:
 
                     OFBase::Environment::get().getFalloutScripts()->readRecord(reader, n.toInt());
-                    break;
-
-                case ESM::REC_GMAP:
-                case ESM::REC_ASPL:
-                case ESM::REC_MARK:
-
-                    OFBase::Environment::get().getWindowManager()->readRecord(reader, n.toInt());
                     break;
 
                 case ESM::REC_DCOU:
@@ -643,7 +639,6 @@ void OFState::StateManager::loadGame(
             Settings::saves().mCharacter.set(Files::pathToUnicodeString(character->getPath().filename()));
         mLastSavegame = filepath;
 
-        OFBase::Environment::get().getWindowManager()->setNewGame(false);
         OFBase::Environment::get().getWorld()->saveLoaded(reader);
         actorIdConverter.apply();
         OFBase::Environment::get().getWorld()->setupPlayer();

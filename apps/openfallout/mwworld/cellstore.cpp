@@ -15,7 +15,6 @@
 #include <components/esm3/doorstate.hpp>
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
-#include <components/esm3/fogstate.hpp>
 #include <components/esm3/loadacti.hpp>
 #include <components/esm3/loadalch.hpp>
 #include <components/esm3/loadappa.hpp>
@@ -1072,22 +1071,8 @@ namespace OFWorld
         if (!mCellVariant.isExterior() && mCellVariant.hasWater())
             state.mWaterLevel = mWaterLevel;
         state.mIsInterior = !mCellVariant.isExterior();
-        state.mHasFogOfWar = (mFogState.get() ? 1 : 0);
+        state.mHasFogOfWar = 0;
         state.mLastRespawn = mLastRespawn.toEsm();
-    }
-
-    void CellStore::writeFog(ESM::ESMWriter& writer) const
-    {
-        if (mFogState.get())
-        {
-            mFogState->save(writer, !mCellVariant.isExterior());
-        }
-    }
-
-    void CellStore::readFog(ESM::ESMReader& reader)
-    {
-        mFogState = std::make_unique<ESM::FogState>();
-        mFogState->load(reader);
     }
 
     void CellStore::writeReferences(ESM::ESMWriter& writer) const
@@ -1195,16 +1180,6 @@ namespace OFWorld
         }
 
         requestMergedRefsUpdate();
-    }
-
-    void CellStore::setFog(std::unique_ptr<ESM::FogState>&& fog)
-    {
-        mFogState = std::move(fog);
-    }
-
-    ESM::FogState* CellStore::getFog() const
-    {
-        return mFogState.get();
     }
 
     CellStore* OFWorld::CellStore::getOriginCell(const Ptr& object) const

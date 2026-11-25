@@ -94,11 +94,6 @@ namespace OFInput
         }
     }
 
-    void InputManager::setDragDrop(bool dragDrop)
-    {
-        mBindingsManager->setDragDrop(dragDrop);
-    }
-
     void InputManager::setGamepadGuiCursorEnabled(bool enabled)
     {
         mControllerManager->setGamepadGuiCursorEnabled(enabled);

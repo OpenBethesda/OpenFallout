@@ -1,8 +1,8 @@
 -- The Pip-Boy of the player in Fallout 3 and New Vegas: the tabs STAT (status, S.P.E.C.I.A.L., skills, perks), INV (the
 -- inventory by kind of item) and DATA (the quests and the map), and the screen of a level up. What a character is and
--- carries is the engine's (core.pipboy); this script shows it in the window "Inventory", which it takes over from the
--- one of Morrowind for content that has a Pip-Boy, and gives the choices of the player back. The windows that Morrowind
--- shows beside the inventory are left empty. There is no radio, no repair and no hot keys yet. The pages are drawn from the
+-- carries is the engine's (core.pipboy); this script shows it in the window "Inventory" of the mode Interface, a window
+-- that only a script has (the engine has no window there), and gives the choices of the player back. There is no radio,
+-- no repair and no hot keys yet. The pages are drawn from the
 -- game's own menu files (INV falloutpipboyitems.lua, STAT falloutpipboystats.lua, DATA falloutpipboydata.lua) and the
 -- screen of a level up too (falloutlevelup.lua); the plain widgets below are for an install that lacks a file.
 -- The row of the three pages is the script's: the games have the buttons of the Pip-Boy itself (a model) for it.
@@ -806,11 +806,8 @@ local function hide()
     destroyElement()
 end
 
--- The windows Morrowind shows beside the inventory have nothing to show here
+-- A window that only this script has: ui.lua shows it in the mode Interface
 I.UI.registerWindow('Inventory', show, hide)
-for _, name in ipairs({ 'Stats', 'Magic', 'Map' }) do
-    I.UI.registerWindow(name, function() end, function() end)
-end
 
 local function scroll(by)
     if not visible or view ~= 'pipboy' or itemsPage.isOpen() or statsPage.isOpen() or dataMenu.isOpen() then

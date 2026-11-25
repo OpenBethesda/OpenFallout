@@ -22,12 +22,8 @@ namespace OFGui
 
     WindowSettingValues makeConsoleWindowSettingValues();
     WindowSettingValues makeDebugWindowSettingValues();
-    WindowSettingValues makeInventoryWindowSettingValues();
-    WindowSettingValues makeMapWindowSettingValues();
     WindowSettingValues makePostprocessorWindowSettingValues();
     WindowSettingValues makeSettingsWindowSettingValues();
-    WindowSettingValues makeSpellsWindowSettingValues();
-    WindowSettingValues makeStatsWindowSettingValues();
 }
 
 #endif

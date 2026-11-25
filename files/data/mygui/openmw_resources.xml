@@ -17,28 +17,6 @@
             </Index>
         </Group>
     </Resource>
-    <Resource type="ResourceImageSet" name="DropGroundPointerImage">
-        <Group name="Pointer" texture="textures\cursor_drop_ground.dds">
-            <Index name="Pointer" >
-                <Frame point="0 0"/>
-            </Index>
-        </Group>
-    </Resource>
-
-    <Resource type="ResourceSkin" name="MarkerButton" size="8 8" texture="textures\door_icon.dds">
-        <BasisSkin type="MainSkin" offset="0 0 8 8" align="Stretch">
-            <State name="normal" offset="0 0 8 8"/>
-        </BasisSkin>
-    </Resource>
-
-    <Resource type="ResourceLayout" name="CustomMarkerButton" version="3.2.0">
-        <Widget type="Widget" skin="" position="0 0 16 16" name="Root">
-            <Widget type="ImageBox" skin="ImageBox" position="0 0 16 16" align="Stretch">
-                <Property key="ImageTexture" value="icons\map_marker_red.dds"/>
-                <Property key="NeedMouse" value="false"/>
-            </Widget>
-        </Widget>
-    </Resource>
 
     <Resource type="ResourceLayout" name="TabControl" version="3.2.0">
         <Widget type="Widget" skin="" position="5 5 89 64" name="Root">
@@ -131,74 +109,9 @@
         </Widget>
     </Resource>
 
-    <Resource type="ResourceLayout" name="MW_ItemIcon" version="3.2.0">
-        <Widget type="Widget" skin="" position="0 0 42 42" name="Root">
-            <Widget type="ImageBox" skin="ImageBox" position="0 0 42 42" align="Stretch" name="Frame">
-                <Widget type="TextBox" skin="CountText" position="5 19 32 18" align="Right Bottom" name="Text">
-                    <Property key="TextAlign" value="Right"/>
-                    <Property key="TextShadow" value="true"/>
-                </Widget>
-                <Widget type="ImageBox" skin="ImageBox" position="5 5 32 32" align="Stretch" name="Item"/>
-                <Widget type="ImageBox" skin="ImageBox" position="9 9 32 32" align="Stretch" name="ItemShadow">
-                    <Property key="Colour" value="0 0 0"/>
-                    <Property key="Alpha" value="0.5"/>
-                </Widget>
-            </Widget>
-            <Widget type="ImageBox" skin="ImageBox" position="0 0 42 42" align="Stretch" name="ControllerBorder">
-                <Property key="ImageTexture" value="textures\omw_menu_icon_active.dds"/>
-                <Property key="Visible" value="false"/>
-            </Widget>
-        </Widget>
-    </Resource>
 
-    <Resource type="ResourceLayout" name="MW_ItemIconNoShadow" version="3.2.0">
-        <Widget type="Widget" skin="" position="0 0 42 42" name="Root">
-            <Widget type="ImageBox" skin="ImageBox" position="0 0 42 42" align="Stretch" name="Frame">
-                <Widget type="TextBox" skin="CountText" position="5 19 32 18" align="Right Bottom" name="Text">
-                    <Property key="TextAlign" value="Right"/>
-                    <Property key="TextShadow" value="true"/>
-                </Widget>
-                <Widget type="ImageBox" skin="ImageBox" position="5 5 32 32" align="Stretch" name="Item"/>
-            </Widget>
-        </Widget>
-    </Resource>
 
-    <Resource type="ResourceLayout" name="MW_ItemIconSmall" version="3.2.0">
-        <Widget type="Widget" skin="" position="0 0 32 32" name="Root">
-            <Widget type="ImageBox" skin="ImageBox" position="0 0 32 32" align="Stretch" name="Frame">
-                <Widget type="ImageBox" skin="ImageBox" position="0 0 32 32" align="Stretch" name="Item"/>
-                <Widget type="ImageBox" skin="ImageBox" position="4 4 32 32" align="Stretch" name="ItemShadow">
-                    <Property key="Colour" value="0 0 0"/>
-                    <Property key="Alpha" value="0.5"/>
-                </Widget>
-            </Widget>
-            <Widget type="ImageBox" skin="ImageBox" position="0 0 32 32" align="Stretch" name="ControllerBorder">
-                <Property key="ImageTexture" value="textures\omw_menu_icon_active.dds"/>
-                <Property key="Visible" value="false"/>
-            </Widget>
-        </Widget>
-    </Resource>
 
-    <Resource type="ResourceLayout" name="MW_ItemIconBox" version="3.2.0">
-        <Widget type="Widget" skin="" position="0 0 50 50" name="Root">
-            <Widget type="ImageBox" skin="ImageBox" position="4 4 42 42" align="Center" name="Frame">
-                <Widget type="TextBox" skin="CountText" position="5 19 32 18" align="Right Bottom" name="Text">
-                    <Property key="TextAlign" value="Right"/>
-                    <Property key="TextShadow" value="true"/>
-                </Widget>
-                <Widget type="ImageBox" skin="ImageBox" position="5 5 32 32" align="Center" name="Item"/>
-                <Widget type="ImageBox" skin="ImageBox" position="9 9 32 32" align="Stretch" name="ItemShadow">
-                    <Property key="Colour" value="0 0 0"/>
-                    <Property key="Alpha" value="0.5"/>
-                </Widget>
-            </Widget>
-            <Widget type="ImageBox" skin="ImageBox" position="4 4 42 42" align="Stretch" name="ControllerBorder">
-                <Property key="ImageTexture" value="textures\omw_menu_icon_active.dds"/>
-                <Property key="Visible" value="false"/>
-            </Widget>
-            <Widget type="Widget" skin="MW_Box_Overlay" position="0 0 50 50" align="Stretch"/>
-        </Widget>
-    </Resource>
 
     <!-- Same as MW_Caption, but reserves some free space on the right for the Pin button -
        i.e. not allowing the caption label to stretch there, but still showing the tiling background. -->

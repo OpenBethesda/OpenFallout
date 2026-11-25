@@ -68,7 +68,6 @@ namespace OFBase
 
         virtual void processChangedSettings(const std::set<std::pair<std::string, std::string>>& changed) = 0;
 
-        virtual void setDragDrop(bool dragDrop) = 0;
         virtual bool isGamepadGuiCursorEnabled() = 0;
         virtual void setGamepadGuiCursorEnabled(bool enabled) = 0;
         // A screen of a script holds the pick that the D-pad made: the pad's A acts on it (the script hears it) and is

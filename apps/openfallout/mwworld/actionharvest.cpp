@@ -26,9 +26,6 @@ namespace OFWorld
 
     void ActionHarvest::executeImp(const OFWorld::Ptr& actor)
     {
-        if (!OFBase::Environment::get().getWindowManager()->isAllowed(OFGui::GW_Inventory))
-            return;
-
         OFWorld::Ptr target = getTarget();
         OFWorld::ContainerStore& store = target.getClass().getContainerStore(target);
         store.resolve();
