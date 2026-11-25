@@ -1047,6 +1047,8 @@ namespace OFRender
                 mPlayerNode, mSceneRoot, mResourceSystem, mFirstPersonFieldOfView, this);
         mPlayerBody->setVisible(thirdPerson);
         mPlayerBody->setArmsVisible(wantArms);
+        // The skeleton of the arms goes on moving in the first person without a weapon: the eye follows its Camera1st
+        mPlayerBody->setArmsKept(!thirdPerson);
         const OFWorld::Ptr& player = mPlayerAnimation->getPtr();
         const std::uint64_t revision = scripts->playerBodyRevision();
         // A player who is alive again (revived, or a game loaded) stands: the body that fell is made again
