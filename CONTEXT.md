@@ -83,3 +83,27 @@ _Avoid_: the OpenMW window name (`DialogueWindow`, `TradeWindow`) for a Fallout 
 **Fallout screen**:
 A screen of the game as the player sees it in Fallout 3 or New Vegas, drawn from the game's own `menus/*.xml` file, almost always by a Lua script (`falloutdialogue.lua` draws `DialogMenu`). A window that exists only so Lua can replace it is not kept; Lua can register a window of its own.
 _Avoid_: Morrowind window (the OpenMW window classes in `mwgui`), menu (on its own, ambiguous with the main menu)
+
+**Fallout actor**:
+An actor of the engine that follows the rules of Fallout 3 and New Vegas, in the family Actor → Character → PlayerCharacter, and Actor → Creature. A Character is an NPC_ record or the player; a Creature is a CREA record. Since step 4a the player is the PlayerCharacter of the game's own records: the reference PlayerRef (0x14) of the NPC_ record Player (0x7).
+_Avoid_: NPC (for the player), Morrowind player, CharacterController
+
+**Process tier**:
+How much of an actor the game runs each frame: High, Middle High, Middle Low or Low, from the state of its cell and whether its 3D is loaded (fallout-rules.md part A). An actor whose parent cell is unknown is in the Low tier (FalloutNV.exe 0x4511E0).
+_Avoid_: active actor, processing range (the Morrowind distance rule)
+
+**Character physics**:
+The body of the player as the executables make it: an upright capsule of radius 31 times the actor's size, half height 66.22, walking on slopes up to 47 degrees. Other actors stay kinematic until step 4b.
+_Avoid_: actor collision (ambiguous with the NPCs' kinematic bodies)
+
+**Executable default**:
+The value a game setting has when no plugin carries it, read at start-up from the player's own FalloutNV.exe or Fallout3.exe (texts and numbers). The value of a plugin wins over it. Nothing of it is kept in the repository.
+_Avoid_: GMST fallback, hand-copied default
+
+**Out of health**:
+An actor with less than 1.0 health, which the games treat as dead (or down, for an essential one) after any change of the health (`FalloutScript::outOfHealth`).
+_Avoid_: health 0, zero health
+
+**Player section**:
+The FOSV section `player` of a save: the player's cell, position, rotation, last exterior position, RefNum, run and sneak flags and Lua scripts. An old save's PLAY record is converted to it once and then dropped.
+_Avoid_: PLAY record (only for the old record)

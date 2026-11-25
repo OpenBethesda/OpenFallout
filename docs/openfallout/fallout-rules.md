@@ -2320,6 +2320,23 @@ The owner's decisions (Q9 and Q10) say there is no review stop, and that work st
 - Skills that follow SPECIAL, and a Luck term that rounds up.
 - NPC speed and body size (the NPC part is built in step 4b).
 
+## What step 4a settled
+
+PR "Make the player a Fallout actor with the original games' rules" builds these rules. Where it chose something the page left open, it says so.
+
+- **Player record.** The player is PlayerRef 0x14 of NPC_ 0x7 of the first Fallout plugin. The placeholder records are gone.
+- **Process tiers (A).** An actor whose parent cell is null is in the Low tier (NV 0x4511E0).
+- **Character physics (A.C2).** Capsule radius 31 × size, half height 66.22 (the human skeleton's bound), slope 47 degrees. The step height stays 34 units: neither executable has a step setting. Gravity stays the Havok default of 9.8 m/s² (about 686 units/s²): the executables set none, and the jump of `fJumpHeightMin` 64 then takes about 0.86 s.
+- **Water lines (C.W1).** Wading at 0.01 of the height, swimming at 0.7, head under at 0.875. `fSwimHeightScale` is gone.
+- **Settings (D.S7).** The numeric defaults are read from the player's own executable and put under the plugin values. The 44 hand-copied fallbacks are gone. `fKnockdownCurrentHealthThreshold` runs at the data value 50; `fAVDCarryWeightMult` at the data value 10. A setting that neither has reads 0 and is logged once.
+- **Morrowind settings (D table).** `iActivatePickLength` (150) replaces `iMaxActivateDist`; `sDefaultCellName` replaces `sDefaultCellname`; the six `fAudio*` are gone (a sound of a record uses the record's range; a voice and a sound by file name keep the distances they had); `fStromWindSpeed` and `fStromWalkMult` are gone with the storm push (Fallout weathers are never storms).
+- **Death (D.D1, D.D2).** An actor is out of health below 1.0. The death flow auto-reloads after `fPlayerDeathReloadTime`.
+- **Regeneration (D.R1).** The player heals by heal rate / 3600 each simulated second, and by the sleeping formula while it sleeps. The perk term (entry point 0xC) is not applied.
+- **Stats (E).** Action points, carry weight, critical chance and melee damage use the current attribute. Melee damage is floored. Unarmed damage and the poison and radiation resistances are derived. Half the Luck rounds up in the chargen skills. Not done in 4a: skills that follow SPECIAL after chargen (E.1.9) and the stored player level (E.unclear 3).
+- **NPC speed (B).** A character walks and runs at the speed of the movement rules, the player's own formula. A creature goes at its animation's speed times its SpeedMult and its legs.
+- **Sneak camera.** The games have no sneak eye-height setting (the first-person skeleton has a `Camera1st` node). The eye stays at 124 units while sneaking; the camera drop is a known gap.
+- **Left for 4c.** The get-up health of an essential actor.
+
 ## Sources
 
 - **Exes.** `FalloutNV.exe` (sha256 `89e70204…`) and `Fallout3.exe`, disassembled; names from the exes' own tables and debug strings.
