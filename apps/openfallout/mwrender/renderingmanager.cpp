@@ -86,9 +86,8 @@
 #include "fogmanager.hpp"
 #include "groundcover.hpp"
 #include "navmesh.hpp"
-#include "npcanimation.hpp"
+#include "falloutplayeranimation.hpp"
 #include "objectpaging.hpp"
-#include "pathgrid.hpp"
 #include "postprocessor.hpp"
 #include "recastmesh.hpp"
 #include "screenshotmanager.hpp"
@@ -327,7 +326,6 @@ namespace OFRender
             Settings::navigator().mNavMeshRenderMode);
         mActorsPaths = std::make_unique<ActorsPaths>(mRootNode, Settings::navigator().mEnableAgentsPathsRender);
         mRecastMesh = std::make_unique<RecastMesh>(mRootNode, Settings::navigator().mEnableRecastMeshRender);
-        mPathgrid = std::make_unique<Pathgrid>(mRootNode);
 
         mObjects = std::make_unique<Objects>(mResourceSystem, sceneRoot, unrefQueue);
 
@@ -636,7 +634,6 @@ namespace OFRender
 
     void RenderingManager::addCell(const OFWorld::CellStore* store)
     {
-        mPathgrid->addCell(store);
 
         mWater->changeCell(store);
         // A cell of a Fallout worldspace has water only once its tile is added, so what the cell before it left in the
@@ -651,7 +648,6 @@ namespace OFRender
     }
     void RenderingManager::removeCell(const OFWorld::CellStore* store)
     {
-        mPathgrid->removeCell(store);
         mActorsPaths->removeCell(store);
         mObjects->removeCell(store);
 
@@ -713,8 +709,9 @@ namespace OFRender
 
     bool RenderingManager::toggleRenderMode(RenderMode mode)
     {
+        // (Fallout has no path grids of Morrowind: its actors walk on navigation meshes)
         if (mode == Render_CollisionDebug || mode == Render_Pathgrid)
-            return mPathgrid->toggleRenderMode(mode);
+            return false;
         else if (mode == Render_Wireframe)
         {
             bool wireframe = !mStateUpdater->getWireframe();
@@ -1460,8 +1457,7 @@ namespace OFRender
 
     void RenderingManager::renderPlayer(const OFWorld::Ptr& player)
     {
-        mPlayerAnimation = new NpcAnimation(player, player.getRefData().getBaseNode(), mResourceSystem, 0,
-            NpcAnimation::VM_Normal, mFirstPersonFieldOfView);
+        mPlayerAnimation = new FalloutPlayerAnimation(player, player.getRefData().getBaseNode(), mResourceSystem);
 
         mCamera->setAnimation(mPlayerAnimation.get());
         mCamera->attachTo(player);
@@ -1469,19 +1465,14 @@ namespace OFRender
 
     void RenderingManager::rebuildPtr(const OFWorld::Ptr& ptr)
     {
-        NpcAnimation* anim = nullptr;
-        if (ptr == mPlayerAnimation->getPtr())
-            anim = mPlayerAnimation.get();
-        else
-            anim = dynamic_cast<NpcAnimation*>(mObjects->getAnimation(ptr));
-        if (anim)
+        // Only the player is rebuilt (its body is FalloutPlayerBody's, made again when its look changes): the camera
+        // takes it again
+        if (mPlayerAnimation == nullptr || ptr != mPlayerAnimation->getPtr())
+            return;
+        if (mCamera->getTrackingPtr() == ptr)
         {
-            anim->rebuild();
-            if (mCamera->getTrackingPtr() == ptr)
-            {
-                mCamera->attachTo(ptr);
-                mCamera->setAnimation(anim);
-            }
+            mCamera->attachTo(ptr);
+            mCamera->setAnimation(mPlayerAnimation.get());
         }
     }
 
@@ -1924,13 +1915,6 @@ namespace OFRender
                     * osg::Quat(rotation[1], osg::Vec3(0, -1, 0)) * osg::Quat(rotation[2], osg::Vec3(0, 0, -1)));
             rootNode->setPosition(ptr.getCellRef().getPosition().asVec3());
 
-            osg::ref_ptr<Animation> animation = nullptr;
-
-            if (ptr.getClass().isNpc())
-            {
-                rootNode->setNodeMask(Mask_Actor);
-                animation = new NpcAnimation(ptr, osg::ref_ptr<osg::Group>(rootNode), mResourceSystem);
-            }
         }
 
         SceneUtil::CullSafeBoundsVisitor computeBounds;

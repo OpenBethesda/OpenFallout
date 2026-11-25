@@ -180,7 +180,7 @@ namespace OFMechanics
         const float asked = std::min(velocity.length(), 1.f);
         if (asked > 0.f)
             velocity.normalize();
-        velocity *= asked * getCurrentSpeed();
+        velocity *= asked * mStanceSpeed;
 
         // A jump: the height of the rule, as a speed that takes the player there under gravity (C.J1); the speed the
         // player had is kept. A jump in water is the swim's (the movement solver has no jump there).
@@ -202,6 +202,7 @@ namespace OFMechanics
             velocity.x() *= airSteering;
             velocity.y() *= airSteering;
         }
+        setCurrentSpeed(osg::Vec2f(velocity.x(), velocity.y()).length());
         // The physics takes the jump from the movement (PhysicsSystem's handleJump); a jump that did not start is
         // forgotten
         if (velocity.z() <= 0.f)
@@ -219,11 +220,11 @@ namespace OFMechanics
         OFScript::FalloutScripts* scripts = env.getFalloutScripts();
         if (scripts == nullptr)
         {
-            setCurrentSpeed(0.f);
+            mStanceSpeed = 0.f;
             return;
         }
         const OFWorld::Ptr& ptr = getPtr();
-        setCurrentSpeed(static_cast<float>(scripts->moveSpeed(ptr, running, sneaking, mSwimming)));
+        mStanceSpeed = static_cast<float>(scripts->moveSpeed(ptr, running, sneaking, mSwimming));
 
         // The over-encumbered message shows when the player gets over the carry weight, once (B.M5c; nothing shows
         // when it gets under again)

@@ -276,13 +276,8 @@ bool OF::Engine::frame(unsigned frameNumber, float frametime)
             {
                 mMechanicsManager->update(frametime, paused);
             }
-
-            if (mStateManager->getState() == OFBase::StateManager::State_Running)
-            {
-                OFWorld::Ptr player = mWorld->getPlayerPtr();
-                if (!paused && player.getClass().getCreatureStats(player).isDead())
-                    mStateManager->endGame();
-            }
+            // (the death of the player is the Fallout scripts' own: the save reloads, or the main menu opens, as
+            // files/data/scripts/omw/falloutdeath.lua decides)
         }
 
         // update physics

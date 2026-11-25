@@ -20,7 +20,7 @@
 #include "../mwworld/manualref.hpp"
 
 #include "esm4npcanimation.hpp"
-#include "npcanimation.hpp"
+#include "firstperson.hpp"
 #include "vismask.hpp"
 
 namespace OFRender

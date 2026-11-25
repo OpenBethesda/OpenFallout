@@ -9,6 +9,7 @@
 #include <components/esm3/loadalch.hpp>
 #include <components/esm3/loadnpc.hpp>
 
+#include "../mwworld/action.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/ptr.hpp"
 

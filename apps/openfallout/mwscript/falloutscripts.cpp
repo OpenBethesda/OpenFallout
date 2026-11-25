@@ -88,7 +88,6 @@
 #include "../mwclass/esm4npc.hpp"
 #include "../mwclass/esm4sources.hpp"
 #include "../mwinput/actions.hpp"
-#include "../mwmechanics/creaturestats.hpp"
 #include "../mwmechanics/falloutpackages.hpp"
 #include "../mwrender/animation.hpp"
 #include "../mwrender/falloutactoranimation.hpp"
@@ -1215,9 +1214,7 @@ namespace OFScript
         const auto addBody = [&](const OFWorld::Ptr& ptr, FalloutScript::FormId reference) {
             if (ptr.isEmpty() || !ptr.getRefData().isEnabled() || ptr.mRef->isDeleted())
                 return;
-            // The player is an actor of the engine, whose death the stats tell; the others are told by the host
-            if (mActors.isDead(reference)
-                || (ptr.getClass().isActor() && ptr.getClass().getCreatureStats(ptr).isDead()))
+            if (mActors.isDead(reference))
                 return;
             const ESM::Position& position = ptr.getRefData().getPosition();
             // The characters and creatures of Fallout are solid as the cylinders of their physics bodies (the scale of
@@ -2176,9 +2173,7 @@ namespace OFScript
             // would go on attacking, so taking fighting away puts it away
             if (control == FalloutScript::PlayerControl::Fighting && !enabled && world != nullptr)
             {
-                const OFWorld::Ptr self = world->getPlayerPtr();
-                if (!self.isEmpty())
-                    self.getClass().getCreatureStats(self).setDrawState(OFMechanics::DrawState::Nothing);
+                world->getPlayer().setDrawState(OFMechanics::DrawState::Nothing);
             }
         });
     }
@@ -5998,10 +5993,7 @@ namespace OFScript
         {
             const OFWorld::Ptr actor = findReference(user);
             const bool present = !actor.isEmpty() && actor.getRefData().isEnabled() && !actor.mRef->isDeleted();
-            // The player is an actor of the engine, whose death the stats tell; the others are told by the host
-            const bool dead = present
-                && (mActors.isDead(user)
-                    || (actor.getClass().isActor() && actor.getClass().getCreatureStats(actor).isDead()));
+            const bool dead = present && mActors.isDead(user);
             // The furniture is gone when it is not there, is disabled or deleted
             const OFWorld::Ptr furniture = present ? findReference(use.mFurniture) : OFWorld::Ptr();
             // or has been moved to another place, since the actor was put where the furniture was
@@ -6548,9 +6540,7 @@ namespace OFScript
         const OFWorld::Class& cls = ptr.getClass();
         if (ptr == world->getPlayerPtr())
         {
-            OFMechanics::CreatureStats& stats = cls.getCreatureStats(ptr);
-            stats.land(true);
-            stats.setTeleported(true);
+            // A fall in progress ends where the player arrives (PlayerCharacter::teleported)
             world->getPlayer().setTeleported(true);
             // Inside the cell the player is in, and between the exterior cells of one worldspace, the player is only
             // moved (the world takes it from cell to cell): changing to a cell fades the screen out and in again, which
@@ -6576,12 +6566,6 @@ namespace OFScript
             world->rotateObject(player, where.mAngle);
             OFBase::Environment::get().getLuaManager()->objectTeleported(player);
             return;
-        }
-        if (cls.isActor())
-        {
-            OFMechanics::CreatureStats& stats = cls.getCreatureStats(ptr);
-            stats.land(false);
-            stats.setTeleported(true);
         }
         const OFWorld::Ptr moved = world->moveObject(ptr, destination, where.mPosition);
         world->rotateObject(moved, where.mAngle, OFBase::RotationFlag_none);

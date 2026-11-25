@@ -14,6 +14,7 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
+#include "../mwmechanics/falloutactor.hpp"
 #include "../mwmechanics/movement.hpp"
 #include "../mwworld/cell.hpp"
 #include "../mwworld/cellstore.hpp"
@@ -89,8 +90,9 @@ namespace OFScript
         if (other == mPlayer)
         {
             OFBase::MechanicsManager* mechanics = OFBase::Environment::get().getMechanicsManager();
-            const OFMechanics::Movement& movement = target.getClass().getMovementSettings(target);
-            input.mMoving = movement.mPosition[0] != 0.f || movement.mPosition[1] != 0.f;
+            // Moving: the player's actor went somewhere in the last frame
+            const OFMechanics::Actor* actor = mechanics->getActor(target);
+            input.mMoving = actor != nullptr && actor->getCurrentSpeed() > 0.f;
             input.mRunning = input.mMoving && mechanics->isRunning(target);
             input.mSneaking = mechanics->isSneaking(target);
         }

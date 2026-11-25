@@ -191,7 +191,7 @@ namespace OFClass
                 else
                 {
                     std::unique_ptr<OFWorld::Action> action = std::make_unique<OFWorld::ActionTeleport>(
-                        ptr.getCellRef().getDestCell(), ptr.getCellRef().getDoorDest(), true);
+                        ptr.getCellRef().getDestCell(), ptr.getCellRef().getDoorDest());
                     action->setSound(openSound);
                     return action;
                 }

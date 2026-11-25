@@ -59,7 +59,7 @@
 #include "../mwworld/containerstore.hpp"
 #include "../mwworld/esmstore.hpp"
 
-#include "../mwmechanics/character.hpp" // FIXME: for OFMechanics::Priority
+#include "animationpriority.hpp"
 #include "../mwmechanics/weapontype.hpp"
 
 #include "actorutil.hpp"

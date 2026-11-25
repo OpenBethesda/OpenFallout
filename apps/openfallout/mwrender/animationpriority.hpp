@@ -39,4 +39,29 @@ namespace OFRender
         int mPriority[sNumBlendMasks];
     };
 }
+
+namespace OFMechanics
+{
+    /// The priorities of the animation groups that play at once on one skeleton: a group of a higher priority takes
+    /// the bones it moves from one of a lower. Scripted (PlayGroup, the Lua animation interface) is above all.
+    enum Priority
+    {
+        Priority_Default,
+        Priority_WeaponLowerBody,
+        Priority_SneakIdleLowerBody,
+        Priority_SwimIdle,
+        Priority_Jump,
+        Priority_Movement,
+        Priority_Hit,
+        Priority_Weapon,
+        Priority_Block,
+        Priority_Knockdown,
+        Priority_Torch,
+        Priority_Storm,
+        Priority_Death,
+        Priority_Scripted,
+
+        Num_Priorities
+    };
+}
 #endif

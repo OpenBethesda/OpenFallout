@@ -192,6 +192,9 @@ namespace OFMechanics
         std::optional<float> getFallStart() const { return mFallStart; }
         bool isSwimming() const { return mSwimming; }
         bool isInJump() const { return mInJump; }
+        /// The speed of the stance the player is in (walk, run, sneak or swim, by the rules of part B), in units a
+        /// second: what a full push of the controls moves it at on the ground
+        float getStanceSpeed() const { return mStanceSpeed; }
         /// What the use control asks for (the fire of the weapon)
         AttackType getUse() const { return mUse; }
         /// The player was placed somewhere: a fall in progress does not count
@@ -210,6 +213,7 @@ namespace OFMechanics
         bool mOverEncumbered = false;
         bool mOverEncumberedKnown = false;
         AttackType mUse = AttackType::NoAttack;
+        float mStanceSpeed = 0.f;
     };
 
     /// The actor the world keeps for the reference: the player, or a character or creature of a loaded cell. Null for

@@ -11,19 +11,8 @@ namespace ESM
     struct WeaponType;
 }
 
-namespace OFWorld
-{
-    class Ptr;
-
-    template <class PtrType>
-    class ContainerStoreIteratorBase;
-
-    using ContainerStoreIterator = ContainerStoreIteratorBase<Ptr>;
-}
-
 namespace OFMechanics
 {
-    OFWorld::ContainerStoreIterator getActiveWeapon(const OFWorld::Ptr& actor, ESM::RefId* weaponTypeId);
 
     const ESM::WeaponType* getWeaponType(ESM::RefId weaponTypeId);
 

@@ -22,7 +22,6 @@
 #include "../mwworld/player.hpp"
 
 #include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/npcstats.hpp"
 
 #include "actions.hpp"
 #include "bindingsmanager.hpp"
@@ -117,19 +116,19 @@ namespace OFInput
                 quickLoad();
                 break;
             case A_CycleSpellLeft:
-                if (checkAllowedToUseItems() && windowManager->isAllowed(OFGui::GW_Magic))
+                if (windowManager->isAllowed(OFGui::GW_Magic))
                     OFBase::Environment::get().getWindowManager()->cycleSpell(false);
                 break;
             case A_CycleSpellRight:
-                if (checkAllowedToUseItems() && windowManager->isAllowed(OFGui::GW_Magic))
+                if (windowManager->isAllowed(OFGui::GW_Magic))
                     OFBase::Environment::get().getWindowManager()->cycleSpell(true);
                 break;
             case A_CycleWeaponLeft:
-                if (checkAllowedToUseItems() && windowManager->isAllowed(OFGui::GW_Inventory))
+                if (windowManager->isAllowed(OFGui::GW_Inventory))
                     OFBase::Environment::get().getWindowManager()->cycleWeapon(false);
                 break;
             case A_CycleWeaponRight:
-                if (checkAllowedToUseItems() && windowManager->isAllowed(OFGui::GW_Inventory))
+                if (windowManager->isAllowed(OFGui::GW_Inventory))
                     OFBase::Environment::get().getWindowManager()->cycleWeapon(true);
                 break;
             case A_Inventory:
@@ -137,18 +136,6 @@ namespace OFInput
                 // Handled in Lua
                 break;
         }
-    }
-
-    bool ActionManager::checkAllowedToUseItems() const
-    {
-        OFWorld::Ptr player = OFMechanics::getPlayer();
-        if (player.getClass().getNpcStats(player).isWerewolf())
-        {
-            // Cannot use items or spells while in werewolf form
-            OFBase::Environment::get().getWindowManager()->messageBox("#{sWerewolfRefusal}");
-            return false;
-        }
-        return true;
     }
 
     void ActionManager::screenshot()

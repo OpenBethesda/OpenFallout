@@ -9,10 +9,6 @@ namespace OFWorld
 namespace OFMechanics
 {
     OFWorld::Ptr getPlayer();
-    bool isPlayerInCombat();
-    bool canActorMoveByZAxis(const OFWorld::Ptr& actor);
-    bool hasWaterWalking(const OFWorld::Ptr& actor);
-    bool isTargetMagicallyHidden(const OFWorld::Ptr& actor);
 }
 
 #endif

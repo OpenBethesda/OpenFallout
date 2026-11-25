@@ -13,7 +13,7 @@ set(OPENFALLOUT_HEADERS
 source_group(apps/openfallout FILES main.cpp ${OPENFALLOUT_SOURCES} ${OPENFALLOUT_HEADERS})
 
 add_openfallout_dir (mwrender
-    actors objects renderingmanager animation rotatecontroller sky skyutil skyfallback esm4npcanimation esm4creatureanimation falloutactoranimation falloutanimation falloutface falloutplayerbody falloutplayeranimation vismask
+    actors objects renderingmanager animation rotatecontroller sky skyutil skyfallback esm4npcanimation esm4creatureanimation falloutactoranimation falloutanimation falloutface falloutplayerbody falloutplayeranimation firstperson vismask
     effectmanager util renderinginterface rendermode screenshotmanager
     bulletdebugdraw globalmap characterpreview menuscene facepreview camera localmap water clipcullnode waterframes waterlook terrainstorage ripplesimulation
     renderbin landmanager navmesh actorspaths recastmesh fogmanager objectpaging falloutlod groundcover

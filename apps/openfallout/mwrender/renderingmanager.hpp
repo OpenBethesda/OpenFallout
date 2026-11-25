@@ -97,9 +97,8 @@ namespace OFRender
     class ScreenshotManager;
     class FogManager;
     class SkyManager;
-    class NpcAnimation;
+    class FalloutPlayerAnimation;
     class FalloutPlayerBody;
-    class Pathgrid;
     class Camera;
     class Water;
     struct WaterLook;
@@ -353,7 +352,6 @@ namespace OFRender
         std::size_t mNavMeshNumber = 0;
         std::unique_ptr<ActorsPaths> mActorsPaths;
         std::unique_ptr<RecastMesh> mRecastMesh;
-        std::unique_ptr<Pathgrid> mPathgrid;
         std::unique_ptr<Objects> mObjects;
         std::unique_ptr<Water> mWater;
         /// The height of water the sky, the fog and the post processing were last given from the camera, when the water
@@ -370,7 +368,7 @@ namespace OFRender
         std::unique_ptr<EffectManager> mEffectManager;
         std::unique_ptr<SceneUtil::ShadowManager> mShadowManager;
         osg::ref_ptr<PostProcessor> mPostProcessor;
-        osg::ref_ptr<NpcAnimation> mPlayerAnimation;
+        osg::ref_ptr<FalloutPlayerAnimation> mPlayerAnimation;
         /// What the player looks like in Fallout 3 and New Vegas outside of the player's eyes (the engine's player is a
         /// record of the Morrowind kind with no model of its own)
         std::unique_ptr<FalloutPlayerBody> mPlayerBody;

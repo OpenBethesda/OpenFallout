@@ -8,8 +8,9 @@
 
 #include "../mwbase/environment.hpp"
 
+#include "../mwscript/falloutscripts.hpp"
+
 #include "actorutil.hpp"
-#include "creaturestats.hpp"
 #include "levelledlist.hpp"
 
 namespace OFMechanics
@@ -25,8 +26,11 @@ namespace OFMechanics
             playerLevel = *level;
         else
         {
-            const OFWorld::Ptr& player = getPlayer();
-            playerLevel = player.getClass().getCreatureStats(player).getLevel();
+            // The level of the player is the Fallout scripts' (its progress)
+            playerLevel = 1;
+            if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+                if (const OFScript::FalloutScripts::SavedPlayer saved = scripts->savedPlayer(); saved.mKnown)
+                    playerLevel = saved.mLevel;
             level = playerLevel;
         }
 

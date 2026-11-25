@@ -18,7 +18,9 @@
 
 #include "../mwphysics/raycasting.hpp"
 
-#include "npcanimation.hpp"
+#include "falloutplayeranimation.hpp"
+
+#include "../mwmechanics/falloutactor.hpp"
 
 namespace
 {
@@ -348,7 +350,7 @@ namespace OFRender
         mPosition = mTrackedPosition;
     }
 
-    void Camera::setAnimation(NpcAnimation* anim)
+    void Camera::setAnimation(FalloutPlayerAnimation* anim)
     {
         mAnimation = anim;
         mProcessViewChange = true;
@@ -360,7 +362,7 @@ namespace OFRender
             return;
         if (mMode == Mode::FirstPerson)
         {
-            mAnimation->setViewMode(NpcAnimation::VM_FirstPerson);
+            mAnimation->setViewMode(FalloutPlayerAnimation::VM_FirstPerson);
             mTrackingNode = mAnimation->getNode("Camera");
             if (!mTrackingNode)
                 mTrackingNode = mAnimation->getNode("Head");
@@ -368,7 +370,7 @@ namespace OFRender
         }
         else
         {
-            mAnimation->setViewMode(NpcAnimation::VM_Normal);
+            mAnimation->setViewMode(FalloutPlayerAnimation::VM_Normal);
             SceneUtil::PositionAttitudeTransform* transform = mTrackingPtr.getRefData().getBaseNode();
             mTrackingNode = transform;
             if (transform)
@@ -397,7 +399,10 @@ namespace OFRender
             return;
         }
 
-        auto& movement = mTrackingPtr.getClass().getMovementSettings(mTrackingPtr);
+        OFMechanics::Actor* actor = OFMechanics::findActor(mTrackingPtr);
+        if (actor == nullptr)
+            return;
+        OFMechanics::Movement& movement = actor->getMovement();
         movement.mRotation[0] += rot.x();
         movement.mRotation[1] += rot.y();
         movement.mRotation[2] += rot.z();

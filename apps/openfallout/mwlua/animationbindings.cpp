@@ -8,7 +8,7 @@
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwmechanics/character.hpp"
+#include "../mwrender/animationpriority.hpp"
 
 #include "context.hpp"
 #include "luamanagerimp.hpp"

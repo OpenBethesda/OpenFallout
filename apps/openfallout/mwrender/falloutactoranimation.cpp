@@ -50,7 +50,7 @@
 #include "../mwbase/world.hpp"
 #include "../mwclass/esm4npc.hpp"
 #include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/character.hpp"
+#include "../mwrender/animationpriority.hpp"
 #include "../mwscript/falloutscripts.hpp"
 #include "../mwsound/falloutfootsteps.hpp"
 #include "../mwworld/class.hpp"
