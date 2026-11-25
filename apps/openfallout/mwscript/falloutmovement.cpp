@@ -167,6 +167,22 @@ namespace OFScript
                    : FalloutScript::Movement::walkSpeed(game, settings, mover);
     }
 
+    std::optional<double> FalloutScripts::characterMoveSpeed(const OFWorld::Ptr& ptr, bool running)
+    {
+        const FalloutScript::FormId actor = scriptReferenceOf(ptr);
+        FalloutScript::ActorTraits traits;
+        if (actor == 0 || (traitsOf(actor, traits) && traits.mCreature))
+            return std::nullopt;
+        return moveSpeed(ptr, running, false, false);
+    }
+
+    double FalloutScripts::creatureSpeedShare(const OFWorld::Ptr& ptr)
+    {
+        const FalloutScript::FormId actor = scriptReferenceOf(ptr);
+        const double speedMult = actor != 0 ? mActorValues.current(actor, AV::speedMult) : 100.0;
+        return std::max(speedMult, 0.0) / 100.0 * moveSpeedMultiplier(ptr);
+    }
+
     double FalloutScripts::jumpHeight(const OFWorld::Ptr& ptr, bool swimming)
     {
         return FalloutScript::Movement::jumpHeight(movementSettings(), sizeOf(ptr), swimming);

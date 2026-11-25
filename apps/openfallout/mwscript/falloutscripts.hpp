@@ -2133,6 +2133,12 @@ namespace OFScript
         /// The speed the actor walks, runs or swims at by the rules of its game (units a second; B.M1 to B.M10). A run
         /// asked for while over the carry weight is a walk. Main thread.
         double moveSpeed(const OFWorld::Ptr& ptr, bool running, bool sneaking, bool swimming);
+        /// The speed of a character (an NPC_ or the player) by those rules, the same ones for every character; none for
+        /// a creature, which goes at the speed of its animation by its SpeedMult (creatureSpeedShare). Main thread.
+        std::optional<double> characterMoveSpeed(const OFWorld::Ptr& ptr, bool running);
+        /// What a creature's SpeedMult and its crippled legs leave of the speed of its animation (1 at SpeedMult 100).
+        /// Main thread.
+        double creatureSpeedShare(const OFWorld::Ptr& ptr);
         /// Whether the character carries more than its carry weight (a creature never does)
         bool overEncumbered(const OFWorld::Ptr& ptr);
         /// What the items of the actor weigh, by their cards (Pack Rat and the weight mods of the weapons count)

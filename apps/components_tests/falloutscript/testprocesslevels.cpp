@@ -1,3 +1,4 @@
+#include <components/falloutscript/actorvalues.hpp>
 #include <components/falloutscript/processlevels.hpp>
 
 #include <gtest/gtest.h>
@@ -65,10 +66,10 @@ namespace
 
     TEST(FalloutScriptProcessLevelsTest, an_actor_dies_under_one_point_of_health)
     {
-        EXPECT_TRUE(isFatalHealth(0.99));
-        EXPECT_TRUE(isFatalHealth(0.4));
-        EXPECT_TRUE(isFatalHealth(-3));
-        EXPECT_FALSE(isFatalHealth(1.0));
-        EXPECT_FALSE(isFatalHealth(150));
+        EXPECT_TRUE(outOfHealth(0.99));
+        EXPECT_TRUE(outOfHealth(0.4));
+        EXPECT_TRUE(outOfHealth(-3));
+        EXPECT_FALSE(outOfHealth(1.0));
+        EXPECT_FALSE(outOfHealth(150));
     }
 }

@@ -1445,10 +1445,18 @@ namespace OFMechanics
             // scaled in moveSpeedMultiplier)
             if (frame.mScripts != nullptr)
                 run = (run || frame.mScripts->actorForcesRun(mind.mPtr)) && !frame.mScripts->actorForcesSneak(mind.mPtr);
-            float speed = run && animation->canRun() ? runSpeed(*animation) : walkSpeed(*animation);
-            // A crippled leg slows the walk (fMoveOneCrippledLegSpeedMult, fMoveTwoCrippledLegsSpeedMult)
+            const bool running = run && animation->canRun();
+            float speed = running ? runSpeed(*animation) : walkSpeed(*animation);
+            // A character goes at the speed of the movement rules, the player's own (fMoveBaseSpeed by its SpeedMult,
+            // the legs, the armor, the weapon, a forced sneak); a creature at the speed of its animation by its
+            // SpeedMult and its legs (fallout-rules.md B)
             if (frame.mScripts != nullptr)
-                speed *= static_cast<float>(frame.mScripts->moveSpeedMultiplier(mind.mPtr));
+            {
+                if (const std::optional<double> ruled = frame.mScripts->characterMoveSpeed(mind.mPtr, running))
+                    speed = static_cast<float>(*ruled);
+                else
+                    speed *= static_cast<float>(frame.mScripts->creatureSpeedShare(mind.mPtr));
+            }
             osg::Vec3f place = falloutStepToward(position, next, speed * duration);
             place.z() = groundHeight(frame.mWorld, place);
 

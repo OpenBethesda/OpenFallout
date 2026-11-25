@@ -80,15 +80,6 @@ namespace FalloutScript
         Queued = 5,
         GettingUp = 6,
     };
-
-    /// The health under which an actor dies (FalloutNV.exe 0x89877B: the current health compared with 1.0 after any
-    /// change of it)
-    constexpr double deathHealth = 1.0;
-    /// Whether an actor with this much health is dead by the rule of the games: under one point
-    inline bool isFatalHealth(double health)
-    {
-        return health < deathHealth;
-    }
 }
 
 #endif
