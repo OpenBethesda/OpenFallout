@@ -434,6 +434,18 @@ function handlers.status(args)
 end
 
 -- The camera and the stance of the player in numbers
+-- A talk that a character of the world started with the player (a package that goes and talks: the characters of the loaded
+-- cells run their packages): closed, for a round that walks the player about. The line names the window, not what was said.
+function handlers.closeDialogue(args)
+    local mode = I.UI.getMode()
+    if mode == 'DialogMenu' or mode == 'Dialogue' then
+        I.UI.removeMode(mode)
+        log('dialogue', tostring(args.label or '-'), 'closed', 'ui=' .. tostring(mode))
+        return { closed = true }
+    end
+    return { closed = false }
+end
+
 function handlers.mode(args)
     log('mode', tostring(args.label or '-'), 'camera=' .. tostring(camera.getMode()), 'stance=' .. tostring(Actor.getStance(self)),
         'sneaking=' .. tostring(self.controls.sneak), 'onGround=' .. tostring(Actor.isOnGround(self)),
@@ -958,7 +970,14 @@ function handlers.s4dead(args)
     local okDead, dead = pcall(core.pipboy.playerDead)
     local okSave, save = pcall(core.pipboy.hasRecentSave)
     local box = openBox()
-    local state = string.format('dead=%s box=%s save=%s', tostring(okDead and dead), box and ('buttons=' .. #box.buttons) or 'none', tostring(okSave and save))
+    -- a box of a message record (it has a form, such as a DLC's start message that came late) is not the death box: the
+    -- death box of falloutdeath.lua and the engine's own question have no form
+    local other = nil
+    if box ~= nil and box.form ~= nil then
+        other, box = tostring(box.form), nil
+    end
+    local state = string.format('dead=%s box=%s save=%s%s', tostring(okDead and dead), box and ('buttons=' .. #box.buttons) or 'none',
+        tostring(okSave and save), other and (' message=' .. other) or '')
     if state ~= lastDead then
         lastDead = state
         log('s4dead', tostring(args.label or '-'), state)

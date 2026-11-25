@@ -287,7 +287,8 @@ package.preload['openfallout.core'] = function()
                  playerDead = function() return state.hp < 1 end, hasRecentSave = function() return true end,
                  text = function(name) return name == 'sOverEncumbered' and 'You are overencumbered' or '' end,
              },
-             hud = { takeMessages = function() local m = messages or {}; messages = {}; return m end } }
+             hud = { takeMessages = function() local m = messages or {}; messages = {}; return m end },
+             messageBox = { current = function() return box_now end, press = function() box_now = nil; return true end } }
 end
 package.preload['openfallout.camera'] = function() return {} end
 package.preload['openfallout.debug'] = function() return {} end
@@ -457,6 +458,17 @@ class MeasuringHandlers(unittest.TestCase):
         self.lua.execute("state.hp = 0.5")
         self.ask("s4dead", label="x")
         self.assertIn("dead=true box=none save=true", self.lines("s4dead")[0])
+
+    def test_a_message_records_box_is_not_the_death_box(self):
+        # a DLC's start message can come up just after the death: it has a form, the death box has none
+        self.lua.execute("state.hp = 0")
+        self.lua.execute("box_now = { serial = 3, buttons = { 'OK' }, form = 'FormId:0x90062b2' }")
+        self.ask("s4dead", label="a")
+        self.lua.execute("box_now = { serial = 4, buttons = { 'Reload', 'Main Menu' } }")
+        self.ask("s4dead", label="b")
+        first, second = self.lines("s4dead")
+        self.assertIn("box=none save=true message=FormId:0x90062b2", first)
+        self.assertIn("box=buttons=2 save=true", second)
 
 
 # ---- the scenarios of the rounds, played whole against a stand-in for the engine -----------------------------------------------------

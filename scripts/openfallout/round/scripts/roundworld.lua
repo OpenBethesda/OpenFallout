@@ -441,6 +441,8 @@ function r.crouch(on) return ask('crouch', { on = on }) end
 function r.use(on) return ask('use', { on = on }) end
 function r.status(label) return ask('status', { label = label }) end
 function r.mode(label) return ask('mode', { label = label }) end
+-- Closes a talk that a character started with the player (ROUND dialogue ... closed); nothing when none is open
+function r.closeDialogue(label) return ask('closeDialogue', { label = label }) end
 function r.actorState(label, actor) return ask('actorState', { label = label, actor = actor }) end
 function r.vatsInfo(label, actor) return ask('vatsInfo', { label = label, actor = actor }) end
 function r.messages(label) return ask('messages', { label = label }) end
