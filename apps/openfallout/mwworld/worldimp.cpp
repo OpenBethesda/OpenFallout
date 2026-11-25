@@ -2621,8 +2621,9 @@ namespace OFWorld
             idx++;
         }
 
-        if (const auto v = esmLoader.getMasterFileFormat(); v.has_value() && *v == 0)
-            ensureNeededRecords(); // Insert records that may not be present in all versions of master files.
+        // The clock globals of the engine: no Fallout plugin has them (they came from the placeholder records of
+        // Morrowind before step 4a), and a Morrowind master may lack some
+        ensureNeededRecords();
     }
 
     void World::loadGroundcoverFiles(const Files::Collections& fileCollections,

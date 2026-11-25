@@ -263,8 +263,10 @@ namespace OFGui
         mWindows.push_back(std::move(console));
         trackWindow(mConsole, makeConsoleWindowSettingValues());
 
-        mMessageBoxManager = std::make_unique<MessageBoxManager>(
-            mStore->get<ESM::GameSetting>().find("fMessageTimePerChar")->mValue.getFloat());
+        // The seconds a message box of the engine stays up per letter: the Morrowind setting fMessageTimePerChar, which
+        // no Fallout plugin has, at the value the engine gave it (the HUD messages of Fallout are timed by its scripts)
+        constexpr float messageTimePerChar = 0.1f;
+        mMessageBoxManager = std::make_unique<MessageBoxManager>(messageTimePerChar);
 
         // A conversation of Fallout has no C++ window: falloutdialogue.lua draws DialogMenu (I.UI.registerWindow
         // takes a window that only Lua has)
