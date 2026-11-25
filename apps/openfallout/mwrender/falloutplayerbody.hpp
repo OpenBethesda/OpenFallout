@@ -91,6 +91,12 @@ namespace OFRender
         /// them from there, to find where they should be.
         void placeArms(const osg::Vec3d& cameraPosition, const osg::Quat& cameraOrientation);
 
+        /// How far the eye of the arms (their Camera1st node) has gone down from where it was when they were made: the
+        /// animations of the first person move it, and the games put the camera on it (FalloutNV.exe: "Missing
+        /// 'Camera1st' on '%s'."). The sneak ones lower it by 40 units (Bip01 NonAccum at -40 in
+        /// _1stperson/sneakmtidle.kf). 0 when the arms do not show.
+        float armsEyeDrop() const;
+
         /// The body sits, lies or leans in furniture whose entry is of this kind (0: it does not); said every frame
         void setPose(int entryKind);
 

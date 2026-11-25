@@ -49,6 +49,26 @@ return { limit = 300, delay = 4, run = function(r)
     r.wait(2)
     r.mode('first')
     gaits('first person')
+    -- The eye of the first person while the player sneaks: the games put the camera on the Camera1st node of the skeleton of
+    -- the first person, which its sneak animations lower by 40 units (Bip01 NonAccum at -40 in _1stperson/sneakmtidle.kf)
+    local standing = r.eye('first person, standing')
+    r.crouch(true)
+    r.wait(3)
+    local low = r.eye('first person, sneaking')
+    r.crouch(false)
+    r.wait(3)
+    local again = r.eye('first person, standing again')
+    if standing and low and again and standing.eyeZ and low.eyeZ and again.eyeZ then
+        local drop = (standing.eyeZ - standing.z) - (low.eyeZ - low.z)
+        local back = (again.eyeZ - again.z) - (standing.eyeZ - standing.z)
+        if drop >= 30 and drop <= 50 and math.abs(back) <= 2 then
+            r.log('sneak eye', string.format('drop=%.1f back=%.1f', drop, back), 'ok')
+        else
+            r.error('sneak eye', string.format('drop=%.1f back=%.1f', drop, back), 'the eye does not go down about 40 units and back')
+        end
+    else
+        r.error('sneak eye', 'no eye position')
+    end
     phase('C the doctor\'s house')
     r.teleport{ pos = { HOUSE_FRONT.x, HOUSE_FRONT.y, HOUSE_FRONT.z }, worldspace = mojave, yaw = 0, onGround = true, label = 'house front' }
     r.wait(4)

@@ -251,10 +251,15 @@ namespace OFRender
     {
         if (mArmsRoot == nullptr || !mArmsVisible)
             return;
-        // The skeleton of the first person looks along the same axes as the camera does (ahead along Y, up along Z), with
-        // its Camera1st node as the eye: it is turned as the camera is and put so that the eye is at the camera
+        // The skeleton of the first person looks along the same axes as the camera does (ahead along Y, up along Z),
+        // with its Camera1st node as the eye: it is turned as the camera is and put so that the eye is at the camera
+        // (the eye where the animation has it now: the camera follows it down while the player sneaks, see armsEyeDrop)
+        osg::Vec3f eye = mArmsEye;
+        if (mArms != nullptr)
+            if (const osg::Node* camera = mArms->getNode("Camera1st"))
+                eye = poseInArms(*camera, *mArmsRoot).getTrans();
         const osg::Quat turn = cameraOrientation * mArmsTurn;
-        const osg::Vec3d place = cameraPosition + cameraOrientation * osg::Vec3d(mArmsOffset) - turn * osg::Vec3d(mArmsEye);
+        const osg::Vec3d place = cameraPosition + cameraOrientation * osg::Vec3d(mArmsOffset) - turn * osg::Vec3d(eye);
         mArmsRoot->setMatrix(osg::Matrix::rotate(turn) * osg::Matrix::translate(place));
         ++mArmsFrames;
         // Two looks in the log (a pose that has settled, and a later one) for the first few times the arms are made
@@ -264,6 +269,16 @@ namespace OFRender
             ++logged;
             logArms();
         }
+    }
+
+    float FalloutPlayerBody::armsEyeDrop() const
+    {
+        if (mArms == nullptr || mArmsRoot == nullptr || !mArmsVisible)
+            return 0.f;
+        const osg::Node* camera = mArms->getNode("Camera1st");
+        if (camera == nullptr)
+            return 0.f;
+        return poseInArms(*camera, *mArmsRoot).getTrans().z() - mArmsEye.z();
     }
 
     void FalloutPlayerBody::logArms()

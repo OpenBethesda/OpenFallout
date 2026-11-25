@@ -1074,6 +1074,10 @@ namespace OFRender
             mPlayerBody->attack();
         // The arms hang where the camera is: this frame's place, which the camera has when the scene is drawn
         mPlayerBody->placeArms(mCamera->getPosition(), mCamera->getOrient());
+        // The eye of the first person goes where the animation of the arms takes their Camera1st node: down while the
+        // player sneaks (the camera reads it on the next frame)
+        if (mPlayerAnimation)
+            mPlayerAnimation->setFirstPersonOffset(osg::Vec3f(0.f, 0.f, mPlayerBody->armsEyeDrop()));
     }
 
     void RenderingManager::updatePlayerPtr(const OFWorld::Ptr& ptr)

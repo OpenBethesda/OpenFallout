@@ -131,7 +131,7 @@ function handlers.eye(args)
     log('eye', tostring(args.label or '-'), 'cell=' .. cellText(),
         string.format('pos=%.0f,%.0f,%.0f eye=%.0f,%.0f,%.0f yaw=%.2f pitch=%.2f mode=%s', pos.x, pos.y, pos.z, eye.x, eye.y, eye.z,
             camera.getYaw(), camera.getPitch(), tostring(camera.getMode())))
-    return { x = pos.x, y = pos.y, z = pos.z }
+    return { x = pos.x, y = pos.y, z = pos.z, eyeZ = eye.z }
 end
 
 function handlers.ground(args)

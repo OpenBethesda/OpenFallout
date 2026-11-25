@@ -34,7 +34,8 @@ namespace OFRender
         void setViewMode(ViewMode viewMode) { mViewMode = viewMode; }
         ViewMode getViewMode() const { return mViewMode; }
 
-        /// Moves the eyes from their place (the camera lowers them while the player sneaks)
+        /// Moves the eyes from their place (the drop of the Camera1st node of the arms, which their sneak animations
+        /// lower)
         void setFirstPersonOffset(const osg::Vec3f& offset);
 
         /// The eye height above the feet, in units
