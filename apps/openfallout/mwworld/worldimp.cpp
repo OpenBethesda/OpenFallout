@@ -118,21 +118,18 @@ namespace OFWorld
     {
         std::vector<std::pair<GlobalVariableName, ESM::Variant>> generateDefaultGlobals()
         {
+            // The clock of the engine and the state of the character generation. The clock starts on the first day at
+            // nine o'clock and the games count the days passed from 0 (these were the values of the placeholder records
+            // of Morrowind that the engine made before; the date of the games is in their own globals, GameHour and the
+            // others of the plugins)
             return {
-                // vanilla Morrowind does not define dayspassed.
-                { Globals::sDaysPassed, ESM::Variant(1) }, // but the addons start counting at 1 :(
-                { Globals::sWerewolfClawMult, ESM::Variant(25.f) },
-                { Globals::sPCKnownWerewolf, ESM::Variant(0) },
-                // following should exist in all versions of MW, but not necessarily in TCs
-                { Globals::sGameHour, ESM::Variant(0) },
+                { Globals::sGameHour, ESM::Variant(9.f) },
                 { Globals::sTimeScale, ESM::Variant(30.f) },
+                { Globals::sDaysPassed, ESM::Variant(0) },
                 { Globals::sDay, ESM::Variant(1) },
+                { Globals::sMonth, ESM::Variant(0) },
                 { Globals::sYear, ESM::Variant(1) },
-                { Globals::sPCRace, ESM::Variant(0) },
-                { Globals::sPCHasCrimeGold, ESM::Variant(0) },
-                { Globals::sCrimeGoldDiscount, ESM::Variant(0) },
-                { Globals::sCrimeGoldTurnIn, ESM::Variant(0) },
-                { Globals::sPCHasTurnIn, ESM::Variant(0) },
+                { Globals::sCharGenState, ESM::Variant(0) },
             };
         }
     }

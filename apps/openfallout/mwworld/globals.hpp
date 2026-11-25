@@ -45,14 +45,6 @@ namespace OFWorld
         static constexpr GlobalVariableName sYear{ "year" };
         static constexpr GlobalVariableName sTimeScale{ "timescale" };
         static constexpr GlobalVariableName sCharGenState{ "chargenstate" };
-        static constexpr GlobalVariableName sPCHasCrimeGold{ "pchascrimegold" };
-        static constexpr GlobalVariableName sPCHasGoldDiscount{ "pchasgolddiscount" };
-        static constexpr GlobalVariableName sCrimeGoldDiscount{ "crimegolddiscount" };
-        static constexpr GlobalVariableName sCrimeGoldTurnIn{ "crimegoldturnin" };
-        static constexpr GlobalVariableName sPCHasTurnIn{ "pchasturnin" };
-        static constexpr GlobalVariableName sPCKnownWerewolf{ "pcknownwerewolf" };
-        static constexpr GlobalVariableName sWerewolfClawMult{ "werewolfclawmult" };
-        static constexpr GlobalVariableName sPCRace{ "pcrace" };
 
         const ESM::Variant& operator[](GlobalVariableName name) const;
 
