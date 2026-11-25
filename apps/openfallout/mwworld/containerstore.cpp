@@ -93,28 +93,6 @@ OFWorld::ContainerStoreIterator OFWorld::ContainerStore::getState(
     return it;
 }
 
-void OFWorld::ContainerStore::storeEquipmentState(
-    const OFWorld::LiveCellRefBase& ref, size_t index, ESM::InventoryState& inventory) const
-{
-    if (mSelectedEnchantItem.getType() != -1 && mSelectedEnchantItem->getBase() == &ref)
-        inventory.mSelectedEnchantItem = static_cast<uint32_t>(index);
-}
-
-void OFWorld::ContainerStore::readEquipmentState(
-    const OFWorld::ContainerStoreIterator& iter, size_t index, const ESM::InventoryState& inventory)
-{
-    if (index == inventory.mSelectedEnchantItem)
-        mSelectedEnchantItem = iter;
-}
-
-std::ptrdiff_t OFWorld::ContainerStore::index(const ContainerStoreIterator& iter) const
-{
-    // A count of 0 means the item is being removed/teleported by Lua
-    if (iter.getType() == -1 || !iter->getCellRef().getCount())
-        return -1;
-    return std::distance(cbegin(), ConstContainerStoreIterator(iter));
-}
-
 template <typename T>
 void OFWorld::ContainerStore::storeState(const LiveCellRef<T>& ref, ESM::ObjectState& state) const
 {
@@ -122,8 +100,7 @@ void OFWorld::ContainerStore::storeState(const LiveCellRef<T>& ref, ESM::ObjectS
 }
 
 template <typename T>
-void OFWorld::ContainerStore::storeStates(
-    const CellRefList<T>& collection, ESM::InventoryState& inventory, size_t& index, bool equipable) const
+void OFWorld::ContainerStore::storeStates(const CellRefList<T>& collection, ESM::InventoryState& inventory) const
 {
     for (const LiveCellRef<T>& liveCellRef : collection.mList)
     {
@@ -131,23 +108,16 @@ void OFWorld::ContainerStore::storeStates(
             continue;
         ESM::ObjectState state;
         storeState(liveCellRef, state);
-        if (equipable)
-            storeEquipmentState(liveCellRef, index, inventory);
         inventory.mItems.push_back(std::move(state));
-        ++index;
     }
 }
 
 const ESM::RefId OFWorld::ContainerStore::sGoldId = ESM::RefId::stringRefId("gold_001");
 
-OFWorld::ContainerStore::ContainerStore()
-    : mSelectedEnchantItem(end())
-{
-}
+OFWorld::ContainerStore::ContainerStore() = default;
 
 OFWorld::ContainerStore::ContainerStore(const OFWorld::ContainerStore& store)
     : mListener(store.mListener)
-    , mSelectedEnchantItem(end())
     , mLists(store.mLists)
     , mCachedWeight(store.mCachedWeight)
     , mSeed(store.mSeed)
@@ -157,17 +127,10 @@ OFWorld::ContainerStore::ContainerStore(const OFWorld::ContainerStore& store)
     , mModified(store.mModified)
     , mResolved(store.mResolved)
 {
-    const std::ptrdiff_t distance = store.index(store.mSelectedEnchantItem);
-    if (distance != -1)
-    {
-        mSelectedEnchantItem = begin();
-        std::advance(mSelectedEnchantItem, distance);
-    }
 }
 
 OFWorld::ContainerStore::ContainerStore(OFWorld::ContainerStore&& store)
     : mListener(store.mListener)
-    , mSelectedEnchantItem(end())
     , mCachedWeight(store.mCachedWeight)
     , mSeed(store.mSeed)
     , mPtr(store.mPtr)
@@ -176,13 +139,7 @@ OFWorld::ContainerStore::ContainerStore(OFWorld::ContainerStore&& store)
     , mModified(store.mModified)
     , mResolved(store.mResolved)
 {
-    const std::ptrdiff_t distance = store.index(store.mSelectedEnchantItem);
     mLists = std::move(store.mLists);
-    if (distance != -1)
-    {
-        mSelectedEnchantItem = begin();
-        std::advance(mSelectedEnchantItem, distance);
-    }
 }
 
 OFWorld::ContainerStore& OFWorld::ContainerStore::operator=(const ContainerStore& store)
@@ -198,20 +155,11 @@ OFWorld::ContainerStore& OFWorld::ContainerStore::operator=(const ContainerStore
     mWeightUpToDate = store.mWeightUpToDate;
     mModified = store.mModified;
     mResolved = store.mResolved;
-    const std::ptrdiff_t distance = store.index(store.mSelectedEnchantItem);
-    if (distance != -1)
-    {
-        mSelectedEnchantItem = begin();
-        std::advance(mSelectedEnchantItem, distance);
-    }
-    else
-        mSelectedEnchantItem = end();
     return *this;
 }
 
 OFWorld::ContainerStore& OFWorld::ContainerStore::operator=(ContainerStore&& store)
 {
-    const std::ptrdiff_t distance = store.index(store.mSelectedEnchantItem);
     mListener = store.mListener;
     mLists = std::move(store.mLists);
     mCachedWeight = store.mCachedWeight;
@@ -221,13 +169,6 @@ OFWorld::ContainerStore& OFWorld::ContainerStore::operator=(ContainerStore&& sto
     mWeightUpToDate = store.mWeightUpToDate;
     mModified = store.mModified;
     mResolved = store.mResolved;
-    if (distance != -1)
-    {
-        mSelectedEnchantItem = begin();
-        std::advance(mSelectedEnchantItem, distance);
-    }
-    else
-        mSelectedEnchantItem = end();
     return *this;
 }
 
@@ -535,21 +476,6 @@ OFWorld::ContainerStoreIterator OFWorld::ContainerStore::addNewStack(const Const
     return it;
 }
 
-void OFWorld::ContainerStore::setSelectedEnchantItem(const ContainerStoreIterator& iterator)
-{
-    mSelectedEnchantItem = iterator;
-}
-
-OFWorld::ContainerStoreIterator OFWorld::ContainerStore::getSelectedEnchantItem()
-{
-    return mSelectedEnchantItem;
-}
-
-OFWorld::ConstContainerStoreIterator OFWorld::ContainerStore::getSelectedEnchantItem() const
-{
-    return mSelectedEnchantItem;
-}
-
 int OFWorld::ContainerStore::remove(const ESM::RefId& itemId, int count, bool equipReplacement, bool resolveFirst)
 {
     if (resolveFirst)
@@ -590,9 +516,6 @@ int OFWorld::ContainerStore::remove(const Ptr& item, int count, bool equipReplac
     {
         toRemove -= itemRef.getCount();
         itemRef.setCount(0);
-
-        if (mSelectedEnchantItem != end() && *mSelectedEnchantItem == item)
-            mSelectedEnchantItem = end();
     }
     else
     {
@@ -947,19 +870,18 @@ void OFWorld::ContainerStore::writeState(ESM::InventoryState& state) const
 {
     state.mItems.clear();
 
-    size_t index = 0;
-    storeStates(mLists.mPotions, state, index);
-    storeStates(mLists.mAppas, state, index);
-    storeStates(mLists.mArmors, state, index, true);
-    storeStates(mLists.mBooks, state, index, true); // not equipable as such, but for selectedEnchantItem
-    storeStates(mLists.mClothes, state, index, true);
-    storeStates(mLists.mIngreds, state, index);
-    storeStates(mLists.mLockpicks, state, index, true);
-    storeStates(mLists.mMiscItems, state, index);
-    storeStates(mLists.mProbes, state, index, true);
-    storeStates(mLists.mRepairs, state, index);
-    storeStates(mLists.mWeapons, state, index, true);
-    storeStates(mLists.mLights, state, index, true);
+    storeStates(mLists.mPotions, state);
+    storeStates(mLists.mAppas, state);
+    storeStates(mLists.mArmors, state);
+    storeStates(mLists.mBooks, state);
+    storeStates(mLists.mClothes, state);
+    storeStates(mLists.mIngreds, state);
+    storeStates(mLists.mLockpicks, state);
+    storeStates(mLists.mMiscItems, state);
+    storeStates(mLists.mProbes, state);
+    storeStates(mLists.mRepairs, state);
+    storeStates(mLists.mWeapons, state);
+    storeStates(mLists.mLights, state);
 }
 
 void OFWorld::ContainerStore::readState(const ESM::InventoryState& inventory)
@@ -968,12 +890,9 @@ void OFWorld::ContainerStore::readState(const ESM::InventoryState& inventory)
     mModified = true;
     mResolved = true;
 
-    size_t index = 0;
     for (const ESM::ObjectState& state : inventory.mItems)
     {
         int type = OFBase::Environment::get().getESMStore()->find(state.mRef.mRefID);
-
-        size_t thisIndex = index++;
 
         switch (type)
         {
@@ -984,34 +903,34 @@ void OFWorld::ContainerStore::readState(const ESM::InventoryState& inventory)
                 getState(mLists.mAppas, state);
                 break;
             case ESM::REC_ARMO:
-                readEquipmentState(getState(mLists.mArmors, state), thisIndex, inventory);
+                getState(mLists.mArmors, state);
                 break;
             case ESM::REC_BOOK:
-                readEquipmentState(getState(mLists.mBooks, state), thisIndex, inventory);
-                break; // not equipable as such, but for selectedEnchantItem
+                getState(mLists.mBooks, state);
+                break;
             case ESM::REC_CLOT:
-                readEquipmentState(getState(mLists.mClothes, state), thisIndex, inventory);
+                getState(mLists.mClothes, state);
                 break;
             case ESM::REC_INGR:
                 getState(mLists.mIngreds, state);
                 break;
             case ESM::REC_LOCK:
-                readEquipmentState(getState(mLists.mLockpicks, state), thisIndex, inventory);
+                getState(mLists.mLockpicks, state);
                 break;
             case ESM::REC_MISC:
                 getState(mLists.mMiscItems, state);
                 break;
             case ESM::REC_PROB:
-                readEquipmentState(getState(mLists.mProbes, state), thisIndex, inventory);
+                getState(mLists.mProbes, state);
                 break;
             case ESM::REC_REPA:
                 getState(mLists.mRepairs, state);
                 break;
             case ESM::REC_WEAP:
-                readEquipmentState(getState(mLists.mWeapons, state), thisIndex, inventory);
+                getState(mLists.mWeapons, state);
                 break;
             case ESM::REC_LIGH:
-                readEquipmentState(getState(mLists.mLights, state), thisIndex, inventory);
+                getState(mLists.mLights, state);
                 break;
             case 0:
                 Log(Debug::Warning) << "Dropping inventory reference to " << state.mRef.mRefID

@@ -356,9 +356,6 @@ set(FALLBACK_TEXTURES
     textures/tx_menubook_topics_idle.dds
     textures/tx_menubook_topics_over.dds
     textures/tx_menubook_topics_pressed.dds
-    icons/k/stealth_handtohand.dds
-    icons/k/stealth_sneak.dds
-    icons/tx_goldicon.dds
 )
 
 foreach (f ${FALLBACK_TEXTURES})

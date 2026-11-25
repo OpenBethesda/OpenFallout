@@ -271,9 +271,6 @@ namespace OFWorld
 
         // (item, max charge)
 
-        // selected magic item (for using enchantments of type "Cast once" or "Cast when used")
-        ContainerStoreIterator mSelectedEnchantItem;
-
     private:
         Lists mLists;
 
@@ -287,14 +284,6 @@ namespace OFWorld
         bool mResolved = false;
 
     protected:
-        virtual void storeEquipmentState(
-            const OFWorld::LiveCellRefBase& ref, size_t index, ESM::InventoryState& inventory) const;
-
-        virtual void readEquipmentState(
-            const OFWorld::ContainerStoreIterator& iter, size_t index, const ESM::InventoryState& inventory);
-
-        std::ptrdiff_t index(const ContainerStoreIterator& iter) const;
-
     private:
         ContainerStoreIterator addImp(const ConstPtr& ptr, int count, bool markModified = true);
         void addInitialItem(
@@ -309,8 +298,7 @@ namespace OFWorld
         void storeState(const LiveCellRef<T>& ref, ESM::ObjectState& state) const;
 
         template <typename T>
-        void storeStates(const CellRefList<T>& collection, ESM::InventoryState& inventory, size_t& index,
-            bool equipable = false) const;
+        void storeStates(const CellRefList<T>& collection, ESM::InventoryState& inventory) const;
 
     public:
         ContainerStore();
@@ -367,15 +355,6 @@ namespace OFWorld
         ///< Remove \a count item(s) designated by \a item from this inventory.
         ///
         /// @return the number of items actually removed
-
-        void setSelectedEnchantItem(const ContainerStoreIterator& iterator);
-        ///< set the selected magic item (for using enchantments of type "Cast once" or "Cast when used")
-        /// \note to unset the selected item, call this method with end() iterator
-
-        ContainerStoreIterator getSelectedEnchantItem();
-        ConstContainerStoreIterator getSelectedEnchantItem() const;
-        ///< @return selected magic item (for using enchantments of type "Cast once" or "Cast when used")
-        /// \note if no item selected, return end() iterator
 
         ContainerStoreIterator unstack(const Ptr& ptr, int count = 1);
         ///< Unstack an item in this container. The item's count will be set to count, then a new stack will be added

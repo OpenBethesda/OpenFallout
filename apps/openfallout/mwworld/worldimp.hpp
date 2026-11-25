@@ -172,9 +172,6 @@ namespace OFWorld
             const std::vector<std::string>& groundcoverFiles, ToUTF8::Utf8Encoder* encoder,
             Loading::Listener* listener);
 
-        OFWorld::ConstPtr getClosestMarker(const OFWorld::ConstPtr& ptr, const ESM::RefId& id);
-        OFWorld::ConstPtr getClosestMarkerFromExteriorPosition(const osg::Vec3f& worldPos, const ESM::RefId& id);
-
     public:
         WorldModel& getWorldModel() { return mWorldModel; }
         Scene& getWorldScene() { return *mWorldScene; }

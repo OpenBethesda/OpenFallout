@@ -78,11 +78,14 @@ class GuiTexturesTest(unittest.TestCase):
                                                                    'credits', 'exitgame'):
                 self.assertEqual((image.width, image.height), (192, 64), name)
 
-    def test_the_hud_and_the_screens_have_their_signs(self):
-        # esmfallbacks.lua names the icons of the skills (Sneak, Handtohand) and the picture of gold; the hit flash is the
-        # picture that the interface shows when the game has no bm_player_hit_01
-        for name in ('icons/k/stealth_sneak', 'icons/k/stealth_handtohand', 'icons/tx_goldicon', 'player_hit_01'):
-            self.assertIn(name, self.images)
+    def test_the_hit_flash_is_there(self):
+        # the picture that the interface shows when the game has no bm_player_hit_01
+        self.assertIn('player_hit_01', self.images)
+
+    def test_no_morrowind_skill_or_gold_icon_is_made(self):
+        # esmfallbacks.lua named the icons of the Morrowind skills (Sneak, Handtohand) and of gold; it went in step 4a
+        for name in self.images:
+            self.assertNotIn(name, ('icons/k/stealth_sneak', 'icons/k/stealth_handtohand', 'icons/tx_goldicon'))
 
     def test_text_is_drawn_in_the_letters_that_are_there(self):
         for _, label in make_gui_textures.MENU_BUTTONS:
