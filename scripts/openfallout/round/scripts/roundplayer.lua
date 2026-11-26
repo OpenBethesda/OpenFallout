@@ -151,6 +151,21 @@ function handlers.ground(args)
     return { heights = heights }
 end
 
+-- One ray between two points ({ x, y, z } each) against the kinds of collision named in `types` (World and HeightMap by default:
+-- the walls and the ground, not the characters); gives whether it hit and where
+function handlers.ray(args)
+    local mask = 0
+    for _, name in ipairs(args.types or { 'World', 'HeightMap' }) do mask = mask + nearby.COLLISION_TYPE[name] end
+    local from = util.vector3(args.from[1], args.from[2], args.from[3])
+    local to = util.vector3(args.to[1], args.to[2], args.to[3])
+    local result = nearby.castRay(from, to, { ignore = self, collisionType = mask })
+    local hit = result.hit and result.hitPos or nil
+    log('ray', tostring(args.label or '-'), string.format('from=%.0f,%.0f,%.0f to=%.0f,%.0f,%.0f', from.x, from.y, from.z, to.x, to.y,
+        to.z), hit and string.format('hit=%.1f,%.1f,%.1f', hit.x, hit.y, hit.z) or 'no hit')
+    if hit == nil then return { hit = false } end
+    return { hit = true, x = hit.x, y = hit.y, z = hit.z }
+end
+
 function handlers.actors(args)
     local radius = args.radius or 2000
     local list = {}
