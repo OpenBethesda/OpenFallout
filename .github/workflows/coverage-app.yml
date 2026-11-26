@@ -27,7 +27,7 @@ jobs:
     # pull requests out of the budget.
     - name: Prime ccache
       id: compiler-cache
-      uses: hendrikmuhs/ccache-action@v1.2.25
+      uses: hendrikmuhs/ccache-action@v1.2.26
       with:
         install: 'no'
         key: macos-26-coverage-app

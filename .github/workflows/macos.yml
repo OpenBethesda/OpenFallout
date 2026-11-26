@@ -81,7 +81,7 @@ jobs:
     - name: Prime ccache
       id: compiler-cache
       if: ${{ steps.classify.outputs.code != 'false' }}
-      uses: hendrikmuhs/ccache-action@v1.2.25
+      uses: hendrikmuhs/ccache-action@v1.2.26
       with:
         install: 'no'
         key: macos-26-app-${{ inputs.build-type }}
@@ -309,7 +309,7 @@ jobs:
     - name: Prime ccache
       id: compiler-cache
       if: ${{ steps.classify.outputs.code != 'false' }}
-      uses: hendrikmuhs/ccache-action@v1.2.25
+      uses: hendrikmuhs/ccache-action@v1.2.26
       with:
         install: 'no'
         key: macos-26-coverage
@@ -515,7 +515,7 @@ jobs:
     - name: Prime ccache
       id: compiler-cache
       if: ${{ steps.classify.outputs.code != 'false' }}
-      uses: hendrikmuhs/ccache-action@v1.2.25
+      uses: hendrikmuhs/ccache-action@v1.2.26
       with:
         install: 'no'
         key: macos-26-metal
