@@ -1109,10 +1109,10 @@ namespace OFWorld
         pos.z() = std::max(pos.z(), terrainHeight)
             + 20; // place slightly above terrain. will snap down to ground with code below
 
-        // We still should trace down dead persistent actors - they do not use the "swimdeath" animation.
+        // A dead actor is traced down even in water: it does not swim (no class of Fallout has the persistence of
+        // Morrowind: asking for it threw here, and a new game of Fallout 3 failed)
         OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
-        bool swims = ptr.getClass().isActor() && isSwimming(ptr)
-            && !(ptr.getClass().isPersistent(ptr) && scripts != nullptr && scripts->isDead(ptr));
+        bool swims = ptr.getClass().isActor() && isSwimming(ptr) && !(scripts != nullptr && scripts->isDead(ptr));
         if (force || !ptr.getClass().isActor() || (!isFlying(ptr) && !swims && isActorCollisionEnabled(ptr)))
         {
             float height = static_cast<float>(ESM::getCellSize(ptr.getCell()->getCell()->getWorldSpace()));
