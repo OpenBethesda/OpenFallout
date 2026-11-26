@@ -7,6 +7,7 @@
 #include <components/esm4/loadpack.hpp>
 #include <components/esm4/packageschedule.hpp>
 
+#include "../mwphysics/actor.hpp"
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwworld/customdata.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -17,24 +18,27 @@
 
 namespace OFClass
 {
-    osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature)
+    osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature, float baseScale)
     {
-        // The size of a person's body, for a creature that does not say; and the limits of what the data has meant
-        const osg::Vec3f sUnknown(20.f, 20.f, 64.f);
-        constexpr float sSmallestRadius = 8.f;
-        constexpr float sLargestRadius = 160.f;
+        // The radius of the executables, a person's half height for a creature that does not say, and the limits of
+        // what the data has meant
+        constexpr float sRadius = 31.f;
+        constexpr float sUnknownHalfHeight = 66.22f;
         constexpr float sSmallestHeight = 8.f;
         constexpr float sLargestHeight = 250.f;
+        constexpr float sSmallestScale = 0.1f;
+        constexpr float sLargestScale = 10.f;
 
-        if (!creature.mHasBounds)
-            return sUnknown;
-        const ESM4::ObjectBounds& box = creature.mBounds;
-        const float width = static_cast<float>(std::min(std::abs(box.mX2 - box.mX1), std::abs(box.mY2 - box.mY1)));
-        const float height = static_cast<float>(std::abs(box.mZ2 - box.mZ1));
-        if (width <= 0.f || height <= 0.f)
-            return sUnknown;
-        const float radius = std::clamp(width / 2.f, sSmallestRadius, sLargestRadius);
-        return osg::Vec3f(radius, radius, std::clamp(height / 2.f, sSmallestHeight, sLargestHeight));
+        const float scale
+            = std::isfinite(baseScale) && baseScale > 0.f ? std::clamp(baseScale, sSmallestScale, sLargestScale) : 1.f;
+        float halfHeight = sUnknownHalfHeight;
+        if (creature.mHasBounds)
+        {
+            const float height = static_cast<float>(std::abs(creature.mBounds.mZ2 - creature.mBounds.mZ1));
+            if (height > 0.f)
+                halfHeight = std::clamp(height / 2.f, sSmallestHeight, sLargestHeight);
+        }
+        return osg::Vec3f(sRadius, sRadius, halfHeight) * scale;
     }
 
     class ESM4CreatureCustomData : public OFWorld::TypedCustomData<ESM4CreatureCustomData>
@@ -167,7 +171,12 @@ namespace OFClass
             ESM4Impl::insertObjectPhysics(ptr, model, rotation, physics);
             return;
         }
-        physics.addActorBody(ptr, getBodyHalfExtents(ptr), rotation);
+        // The character controller, as the player's (the process tier says whether it moves the creature)
+        const osg::Vec3f half = getBodyHalfExtents(ptr);
+        OFPhysics::CharacterShape shape;
+        shape.mRadius = half.x();
+        shape.mHalfHeight = half.z();
+        physics.addCharacter(ptr, shape);
     }
 
     osg::Vec3f ESM4Creature::getBodyHalfExtents(const OFWorld::Ptr& ptr)
@@ -178,6 +187,6 @@ namespace OFClass
         const ESM4::Creature* boxOwner = getCustomData(ptr).mModel.mOwner;
         if (boxOwner == nullptr)
             boxOwner = ptr.get<ESM4::Creature>()->mBase;
-        return creatureBodyHalfExtents(*boxOwner);
+        return creatureBodyHalfExtents(*boxOwner, ptr.get<ESM4::Creature>()->mBase->mBaseScale);
     }
 }

@@ -214,7 +214,7 @@ Process vtable (NV; slot numbers match the NVSE `BaseProcess` list):
   The controller is allocated 0x650 bytes (NV 0x931047) and constructed by NV 0xc741e0.
 - **The ragdoll.** The same routine makes a ragdoll controller when the actor is not dead (`IsDead(false)` false): 0x87e130(root, 1, 1, 0) (NV 0x931384). For the player the ragdoll is then switched off (0x87ea60(0), 0x9315a0(1)).
 - **Teardown.** The controller is removed when the process goes below Middle High, the 3D is unloaded, or the actor dies into a state that tears it down (destructor 0xc70c60). Each teardown call was not traced.
-- **Today.** Fallout NPCs have a kinematic body: `PhysicsSystem::addActorBody` (`mwphysics/physicssystem.cpp:449`) from `ESM4Npc::insertObjectPhysics` (`mwclass/esm4npc.cpp:383-387`). There is no controller and no solver. The player has the Morrowind `mwphysics::Actor` with the solver.
+- **Today (since step 4b).** Every Fallout character and creature in the scene has a character body (`OFPhysics::Actor`, the player's kind). `OFMechanics::Actor::updateBody` turns its controller on each frame when the process is Middle High or High, the actor has its 3D, is alive, and is not in furniture or thrown by a blow. Otherwise the body stays where it is put and the solver does not move it.
 - **Round check.** After a cell loads, every ESM4 actor with a 3D in an attached cell has a body (count equals). Every actor beyond has none. Tolerance 0.
 - **Confidence.** Exe-read for the conditions and sizes. Inferred for the meaning of cinfo +0x96.
 
@@ -253,8 +253,8 @@ Process vtable (NV; slot numbers match the NVSE `BaseProcess` list):
 - **Step height.** Not found in the exe as a setting.
 - **Gravity.** From the Havok world. The INI list scanned has no gravity setting.
 - **Today.**
-  - NPC: kinematic `btCylinderShapeZ`, half extents (20, 20, 64) × race height, clamped 0.25 to 4 (`mwclass/esm4npc.cpp:35-41`, `physicssystem.cpp:449-466`). That is a cylinder with radius 20 and height 128.
-  - Creature: from the record's object bounds, radius = min(width)/2 clamped 8 to 160, half height clamped 8 to 250 (`esm4creature.cpp:20-38`).
+  - NPC (since step 4b): a capsule of radius 31 and half height 66.22, times the race height clamped 0.25 to 4 (`npcBodyHalfExtents`), times the reference scale.
+  - Creature (since step 4b): a capsule of radius 31 and half the height of the record's object bounds (clamped 8 to 250; 66.22 without bounds), both times the record's base scale and the reference scale (`creatureBodyHalfExtents`). A capsule lower than it is wide is a ball.
   - Player: Morrowind actor box from the mesh. Step up 34, step down 62, maximum slope 46 degrees (`components/misc/constants.hpp:43-44`, `mwphysics/constants.hpp:6`). Gravity 8.96 m/s² × 69.99 (`components/misc/constants.hpp:10,22`; used in `mwphysics/movementsolver.cpp:432`, and for NPC falls at `mwmechanics/falloutactors.cpp:680`).
   - Match: the slope is 46 against the exe's 47. The NPC cylinder (radius 20) differs from the exe radius 31 × scale.
 - **Round check.**
@@ -273,7 +273,7 @@ Process vtable (NV; slot numbers match the NVSE `BaseProcess` list):
   - The player's jump uses `fJumpAnimDelay` 0.75 and the jump settings of part C: `fJumpHeightMin` 64, `fJumpMoveBase` 0, `fJumpMoveMult` 0.3, `fJumpSwimmingMult` 2.0. (Part A says "in both games" for the move settings; part C says NV does not read them. See [the disagreements](#where-the-spec-parts-disagree).)
   - Push: `fMoveLimitMass` 95 (a body of more mass than 95 is not pushed by the character). `fPerkHeavyArmorSinkGravityMult` 15 (exe default) is the sink rate of a heavily armoured character in water.
 - **Formula.** None known.
-- **Today.** NPCs: `FalloutActors` moves the kinematic body with `moveObject` (`mwmechanics/falloutactors.cpp:727,1476,1794`) at the walk or run speed of the animation (`:496-505`, `:1447`), with ground probes (`groundProbeUp` 48, `groundProbeDown` 160, `:74-75`). Player: Morrowind solver.
+- **Today (since step 4b).** An NPC on its controller is given a velocity along the ground toward its next path point at the speed of the movement rules (`walkTo`); the movement solver moves it, with steps, slopes, walls and gravity. An actor without a controller is still put in place with ground probes. A blow that throws an actor moves it by `thrownStep` with the controller off.
 - **Round check.** On a level walk, the actor's speed equals the animation's `walkVelocity` (the NPC part exists today). For the player, use the movement rules (part B).
 - **Confidence.** Exe-read for the call structure. Inferred for the semantics.
 
@@ -2337,6 +2337,18 @@ PR "Make the player a Fallout actor with the original games' rules" builds these
 - **Sneak camera.** The games have no sneak eye-height setting. The camera of the first person is on the `Camera1st` node of the first-person skeleton (NV: "Missing 'Camera1st' on '%s'."), and the first-person sneak animations lower the whole skeleton: `Bip01 NonAccum` is at z −40 in `_1stperson/sneakmtidle.kf`, 0 in `mtidle.kf`. The port follows that node: the eye (124 units over the feet standing) goes down by as much as the animation of the arms takes `Camera1st` down, about 40 units while sneaking. The skeleton of the arms keeps moving in the first person also with no weapon out (then it is not drawn and makes no sound), so the eye follows it either way. m15-steps checks it with no weapon out.
 - **Jump in water (C.W2).** A swimmer whose head is out of the water jumps twice as high (`jumpHeight` with swimming). The movement solver puts the jump in the inertia, lets it carry the swimmer over the swim line, and gravity brings it back; a swimmer with its head under the water does not jump. A jump from the water has no take-off height for the fall rule.
 - **Left for 4c.** The get-up health of an essential actor.
+
+## What step 4b settled
+
+PR "NPC character physics" builds these rules for the characters and creatures. Where it chose something the page left open, it says so.
+
+- **Character body (A.C1, A.C2).** Every Fallout character and creature in the scene has the player's kind of character body. Its controller is on only in the Middle High and High tiers, with the 3D loaded, alive, not in furniture (the exe makes none for a sitter, NV 0x930d8b) and not thrown by a blow. The old kinematic cylinder (20 × 20 × 64) is gone.
+- **Capsule.** Radius 31 × race height × scale for a character. A creature has radius 31 × its record's base scale × scale. Its half height is chosen as half the height of its record's object bounds (× the same scales), because the exe's capsule height was not decoded (A.unclear 4). The bounds are the nearest thing to the skeleton's `BSBound` that the record holds. The human half height stays 66.22.
+- **Gravity, steps, slope, water.** The same as the player's (step 4a): 9.8 m/s², step 34, slope 47 degrees, the same water lines.
+- **Falls (C.F1, C.F2).** The height lost is the height where the actor left the ground less the height where it lands. A body that was put somewhere (a teleport, a script's MoveTo) starts from there. `FalloutScripts::fell` applies rule F2.
+- **Navigation.** All characters and creatures use the navigation mesh of the player's size, as the game has one mesh, not one per size.
+- **Reach in a fight.** A blow's reach and the distance a character attacks from are counted between the two bodies, not their middles. Two capsules cannot come nearer than 62 units, and the hands attack from 50. The exe's own distance test for a blow was not read; this is the choice.
+- **Ragdoll (A.K3).** Not built. The constraint data (`BGSRagdoll`, `.rdt`), the transitions (A.unclear 7) and the solver's INI defaults are not decoded. A dead body still plays its death pose, and its body no longer stops others or projectiles.
 
 ## Sources
 

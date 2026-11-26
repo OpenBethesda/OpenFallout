@@ -8,6 +8,8 @@
 #include <vector>
 
 #include <components/esm/formid.hpp>
+#include <components/esm/position.hpp>
+#include <components/esm/refid.hpp>
 
 #include "../mwworld/ptr.hpp"
 
@@ -94,6 +96,9 @@ namespace OFBase
         /// Makes the actor follow the target (a character or the player), keeping within `distance` units of it
         virtual void startFalloutFollowing(const OFWorld::Ptr& actor, const OFWorld::Ptr& target, float distance) = 0;
         virtual void stopFalloutFollowing(const OFWorld::Ptr& actor) = 0;
+        /// The player goes through a load door to `destination` in the cell `cell`: the characters and creatures that
+        /// follow the player come through after it
+        virtual void playerUsesDoor(ESM::RefId cell, const ESM::Position& destination) = 0;
         /// The packages of the character are looked at again (EvaluatePackage, AddScriptPackage and the others)
         virtual void evaluateFalloutPackages(const OFWorld::Ptr& actor) = 0;
         /// A blow throws the character back at `velocity`, which falls to nothing over `seconds`

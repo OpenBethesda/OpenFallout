@@ -1229,7 +1229,7 @@ namespace OFScript
             if (mActors.isDead(reference))
                 return;
             const ESM::Position& position = ptr.getRefData().getPosition();
-            // The characters and creatures of Fallout are solid as the cylinders of their physics bodies (the scale of
+            // The characters and creatures of Fallout are solid as the capsules of their character bodies (the scale of
             // the reference on top), which the world does not tell (it gives the bounds of their models); the player is
             // an actor of the engine
             osg::Vec3f half;

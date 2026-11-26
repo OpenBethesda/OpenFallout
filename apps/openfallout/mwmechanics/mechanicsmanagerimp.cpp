@@ -63,11 +63,16 @@ namespace OFMechanics
         mProcessLists.updateLevels();
         if (PlayerCharacter* player = mProcessLists.getPlayer())
         {
-            // The player is on character physics: its physics actor takes part in each step of the simulation (the
-            // characters and creatures stay kinematic, moved by their packages)
+            // The player is on character physics: its physics actor takes part in each step of the simulation
             OFBase::Environment::get().getWorld()->setActorActive(player->getPtr(), true);
             player->update(duration, paused);
         }
+        // The characters and creatures of the High and Middle High tiers are on it too; one that a blow throws is
+        // moved by FalloutActors in the meantime
+        mProcessLists.updateBodies(
+            duration, paused, [this](const OFWorld::Ptr& ptr) { return mFalloutActors.isThrown(ptr); });
+        if (!paused)
+            mFalloutActors.updateArrivals(duration);
         if (!paused && mAI)
             mFalloutActors.update(duration, mProcessLists);
         if (mAI)
@@ -148,6 +153,11 @@ namespace OFMechanics
     void MechanicsManager::startFalloutFollowing(const OFWorld::Ptr& actor, const OFWorld::Ptr& target, float distance)
     {
         mFalloutActors.follow(actor, target, distance);
+    }
+
+    void MechanicsManager::playerUsesDoor(ESM::RefId cell, const ESM::Position& destination)
+    {
+        mFalloutActors.playerUsesDoor(getPlayer(), cell, destination);
     }
 
     void MechanicsManager::stopFalloutFollowing(const OFWorld::Ptr& actor)

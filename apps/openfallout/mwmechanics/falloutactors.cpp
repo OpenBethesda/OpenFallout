@@ -27,6 +27,8 @@
 #include <components/misc/constants.hpp>
 #include <components/settings/values.hpp>
 
+#include <osg/Quat>
+
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwclass/esm4creature.hpp"
@@ -213,6 +215,7 @@ namespace OFMechanics
         bool mSeenAlive = false; // it was alive when it was looked at
         bool mFell = false; // it is dead and its body has fallen
         float mReview = 0.f; // seconds until the packages are looked at again
+        bool mExplain = false; // a script asked for the packages to be looked at again: the next review says why
         float mWait = 0.f; // seconds to stand still before it does anything else
         bool mWalking = false; // it goes to mDestination
         bool mFleeing = false; // mDestination is a place to run to from the target of its fight, not the target
@@ -546,6 +549,36 @@ namespace OFMechanics
             return distance < maxDistance ? from.z() - distance : place.z();
         }
 
+        /// Whether the actor's character controller moves it (Actor::updateBody)
+        bool onController(const OFWorld::Ptr& ptr)
+        {
+            const Actor* actor = findActor(ptr);
+            return actor != nullptr && actor->hasCharacterController();
+        }
+
+        /// The radius of an actor's character body (the scale of the reference in it): the player's from the physics,
+        /// a character's or a creature's from its record
+        float bodyRadius(OFBase::World& world, const OFWorld::Ptr& ptr)
+        {
+            if (ptr == world.getPlayerPtr())
+                return world.getHalfExtents(ptr).x();
+            const float scale = ptr.getCellRef().getScale();
+            if (ptr.getType() == ESM4::Npc::sRecordId)
+                return OFClass::ESM4Npc::getBodyHalfExtents(ptr).x() * scale;
+            if (ptr.getType() == ESM4::Creature::sRecordId)
+                return OFClass::ESM4Creature::getBodyHalfExtents(ptr).x() * scale;
+            return 0.f;
+        }
+
+        /// Gives an actor on its character controller a speed in this frame, in units a second along the ground (the
+        /// solver takes it in the frame of the actor: turned by its heading)
+        void queueVelocity(OFBase::World& world, const OFWorld::Ptr& ptr, osg::Vec3f velocity)
+        {
+            velocity.z() = 0.f;
+            const float heading = ptr.getRefData().getPosition().rot[2];
+            world.queueMovement(ptr, osg::Quat(heading, osg::Vec3f(0.f, 0.f, 1.f)) * velocity);
+        }
+
         const char* behaviourName(ESM4::PackageBehaviour behaviour)
         {
             switch (behaviour)
@@ -581,10 +614,10 @@ namespace OFMechanics
 
     namespace
     {
-        /// The navigator makes a navigation mesh for each size of actor that it has been told of. The bodies of these
-        /// actors are not physics actors (which the scene tells the navigator about), and an interior has the mesh for
-        /// the size of its player only, so the actors tell it themselves. It is the default size for all of them, as
-        /// it is for every actor in an exterior: the game has no mesh for each size of creature.
+        /// The navigator makes a navigation mesh for each size of actor that it has been told of. The scene tells it of
+        /// the character bodies it adds; an actor tells it once more for itself, so that the mesh stays while it walks.
+        /// All of them go by one size (World::getPathfindingAgentBounds): the game has no mesh for each size of
+        /// creature.
         void registerAgent(FalloutActors::Mind& mind)
         {
             OFBase::World& world = *OFBase::Environment::get().getWorld();
@@ -852,6 +885,7 @@ namespace OFMechanics
         }
         found->second->mScripted = scriptPackagesOf(ptr);
         found->second->mReview = 0.f;
+        found->second->mExplain = true;
     }
 
     void FalloutActors::knock(const OFWorld::Ptr& ptr, const osg::Vec3f& velocity, float seconds)
@@ -899,6 +933,73 @@ namespace OFMechanics
             found->second->mChangeTold = false;
         }
         keepState(*found->second);
+    }
+
+    void FalloutActors::playerUsesDoor(const OFWorld::Ptr& player, ESM::RefId cell, const ESM::Position& destination)
+    {
+        if (player.isEmpty() || !player.isInCell())
+            return;
+        const OFWorld::CellStore* from = player.getCell();
+        const osg::Vec3f door = player.getRefData().getPosition().asVec3();
+        OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
+        for (const auto& [key, mind] : mMinds)
+        {
+            const OFWorld::Ptr& ptr = mind->mPtr;
+            if (ptr.getCell() != from || !mind->mFollowing.mPlayer || !(mind->mCommanded || mind->mPackage != nullptr))
+                continue;
+            if (!ptr.getRefData().isEnabled() || (scripts != nullptr && scripts->isDead(ptr)))
+                continue;
+            const ESM::RefNum ref = ptr.getCellRef().getRefNum();
+            if (!ref.isSet())
+                continue;
+            // It walks, or runs when it is far behind, at the speed of the movement rules (a creature at a run)
+            const float away = (ptr.getRefData().getPosition().asVec3() - door).length();
+            const bool running = falloutFollowRuns(away, mind->mFollowing.mDistance);
+            float speed = 300.f;
+            if (scripts != nullptr)
+                if (const std::optional<double> ruled = scripts->characterMoveSpeed(ptr, running))
+                    speed = static_cast<float>(*ruled);
+            const float wait = away / std::max(speed, 1.f);
+            mArrivals.push_back({ ref, cell, destination, wait });
+            Log(Debug::Info) << ptr.getCellRef().getRefId()
+                             << " follows the player through the door: " << static_cast<int>(away)
+                             << " units behind, it comes out in " << wait << " s";
+        }
+    }
+
+    void FalloutActors::updateArrivals(float duration)
+    {
+        if (mArrivals.empty())
+            return;
+        OFBase::World& world = *OFBase::Environment::get().getWorld();
+        OFWorld::WorldModel& model = *OFBase::Environment::get().getWorldModel();
+        OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
+        std::vector<Arrival> due;
+        for (auto it = mArrivals.begin(); it != mArrivals.end();)
+        {
+            it->mWait -= duration;
+            if (it->mWait > 0.f)
+                ++it;
+            else
+            {
+                due.push_back(*it);
+                it = mArrivals.erase(it);
+            }
+        }
+        for (const Arrival& arrival : due)
+        {
+            const OFWorld::Ptr ptr = model.getPtr(arrival.mRef);
+            if (ptr.isEmpty() || !ptr.getRefData().isEnabled() || (scripts != nullptr && scripts->isDead(ptr)))
+                continue;
+            Log(Debug::Info) << ptr.getCellRef().getRefId() << " comes through the door after the player";
+            world.moveObject(ptr, &model.getCell(arrival.mCell), arrival.mPosition.asVec3(), true, true);
+        }
+    }
+
+    bool FalloutActors::isThrown(const OFWorld::Ptr& ptr) const
+    {
+        const auto found = mMinds.find(ptr.mRef);
+        return found != mMinds.end() && found->second->mThrown;
     }
 
     ESM::FormId FalloutActors::currentPackage(const OFWorld::Ptr& ptr) const
@@ -1025,6 +1126,7 @@ namespace OFMechanics
         // The cells are unloaded before this, so there are no minds left to give their agents back
         mMinds.clear();
         mUnminded.clear();
+        mArrivals.clear();
         mCommands.clear();
     }
 
@@ -1457,8 +1559,12 @@ namespace OFMechanics
                 else
                     speed *= static_cast<float>(frame.mScripts->creatureSpeedShare(mind.mPtr));
             }
+            // On the character controller it is given the speed toward the next point (no more than takes it there in
+            // this frame) and the solver moves it, up steps and slopes and against walls; without one it is put there
+            const bool controlled = onController(mind.mPtr);
             osg::Vec3f place = falloutStepToward(position, next, speed * duration);
-            place.z() = groundHeight(frame.mWorld, place);
+            if (!controlled)
+                place.z() = groundHeight(frame.mWorld, place);
 
             faceToward(frame, mind, std::atan2(next.x() - position.x(), next.y() - position.y()), duration);
 
@@ -1482,7 +1588,17 @@ namespace OFMechanics
             if (!isLoaded(frame, mind.mPtr, place))
                 return Walk::Failed;
 
-            frame.mWorld.moveObject(mind.mPtr, place);
+            if (controlled)
+            {
+                // (the speed is along the ground: a slope or a step does not slow it, the solver climbs them)
+                osg::Vec3f way = next - position;
+                way.z() = 0.f;
+                const float length = way.length();
+                const float pace = duration > 0.f ? std::min(speed, length / duration) : 0.f;
+                queueVelocity(frame.mWorld, mind.mPtr, length > 0.f ? way * (pace / length) : osg::Vec3f());
+            }
+            else
+                frame.mWorld.moveObject(mind.mPtr, place);
 
             // Does it get on?
             mind.mCheckpointTime += duration;
@@ -1535,6 +1651,12 @@ namespace OFMechanics
             Choice done; // the first of the others that are done and on
             // Why the package that is followed is not the one to follow, for the log
             std::string followedIs = "on";
+            // What a review that a script asked for found of each package (EvaluatePackage), for the log
+            std::string explained;
+            const auto explain = [&](const ESM4::AIPackage& package, const char* what) {
+                if (mind.mExplain)
+                    explained += (explained.empty() ? "" : "; ") + package.mEditorId + " " + what;
+            };
             const auto consider = [&](const ESM4::AIPackage* package, bool scripted) {
                 if (package == nullptr)
                     return;
@@ -1543,6 +1665,7 @@ namespace OFMechanics
                 {
                     if (followed)
                         followedIs = "behind " + fresh.mPackage->mEditorId;
+                    explain(*package, "comes after");
                     return;
                 }
                 if (scripted)
@@ -1552,6 +1675,7 @@ namespace OFMechanics
                     {
                         if (followed)
                             followedIs = "of a kind that does nothing";
+                        explain(*package, "does nothing");
                         return;
                     }
                 }
@@ -1564,10 +1688,12 @@ namespace OFMechanics
                         skip = ESM4::PackageSkip::None;
                     if (skip != ESM4::PackageSkip::None)
                     {
+                        const char* why = skip == ESM4::PackageSkip::Schedule ? "not for this time"
+                            : skip == ESM4::PackageSkip::Conditions           ? "not on, its conditions do not hold"
+                                                                              : "of a kind that does nothing";
                         if (followed)
-                            followedIs = skip == ESM4::PackageSkip::Schedule ? "not for this time"
-                                : skip == ESM4::PackageSkip::Conditions      ? "not on, its conditions do not hold"
-                                                                             : "of a kind that does nothing";
+                            followedIs = why;
+                        explain(*package, why);
                         return;
                     }
                 }
@@ -1578,8 +1704,10 @@ namespace OFMechanics
                 {
                     if (followed)
                         followedIs = "without a place or a target to go to";
+                    explain(*package, "has no place or target to go to");
                     return;
                 }
+                explain(*package, mind.mDone.count(package) == 0 ? "on" : "on, done");
                 if (mind.mDone.count(package) == 0)
                     fresh = std::move(choice);
                 else if (package == mind.mPackage)
@@ -1600,6 +1728,13 @@ namespace OFMechanics
                 : fresh.mPackage != nullptr   ? fresh
                 : current.mPackage != nullptr ? current
                                               : done;
+            if (mind.mExplain)
+            {
+                mind.mExplain = false;
+                Log(Debug::Info) << "EvaluatePackage of " << mind.mPtr.getCellRef().getRefId() << ": " << explained
+                                 << (seated ? " (it stays in its furniture)" : "") << " -> "
+                                 << (chosen.mPackage != nullptr ? chosen.mPackage->mEditorId : std::string("none"));
+            }
 
             if (chosen.mPackage == mind.mPackage)
             {
@@ -2176,10 +2311,15 @@ namespace OFMechanics
             const osg::Vec3f target = stance.mTarget.getRefData().getPosition().asVec3();
             const float away = distanceByFloor(mind.position(), target);
             const bool visible = canSee(frame.mWorld, mind.position(), target);
-            const float arrival = visible ? static_cast<float>(stance.mEngage) * engageShare : 0.f;
+            // The reach of a blow and the distance it attacks from are counted between the two bodies, not their
+            // middles: two character bodies cannot come nearer than their radii (31 each), more than the 50 units the
+            // hands attack from
+            const float bodies = bodyRadius(frame.mWorld, mind.mPtr) + bodyRadius(frame.mWorld, stance.mTarget);
+            const float between = away < std::numeric_limits<float>::max() ? std::max(0.f, away - bodies) : away;
+            const float arrival = visible ? static_cast<float>(stance.mEngage) * engageShare + bodies : 0.f;
             const float heading = std::atan2(target.x() - mind.position().x(), target.y() - mind.position().y());
             const FalloutScript::FightAI::Move move
-                = FalloutScript::FightAI::decide(away, stance.mEngage, visible, stance.mFlee);
+                = FalloutScript::FightAI::decide(between, stance.mEngage, visible, stance.mFlee);
             std::optional<Walk> walked;
             bool shotMade = false;
             switch (move)

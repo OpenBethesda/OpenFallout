@@ -21,6 +21,7 @@
 #include <components/misc/resourcehelpers.hpp>
 #include <components/misc/strings/algorithm.hpp>
 
+#include "../mwphysics/actor.hpp"
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwworld/customdata.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -39,7 +40,7 @@ namespace OFClass
         constexpr float sLargest = 4.f;
         const float scale
             = std::isfinite(raceHeight) && raceHeight > 0.f ? std::clamp(raceHeight, sSmallest, sLargest) : 1.f;
-        return osg::Vec3f(20.f, 20.f, 64.f) * scale;
+        return osg::Vec3f(31.f, 31.f, 66.22f) * scale;
     }
 
     std::vector<const ESM4::HeadPart*> expandHeadParts(
@@ -383,7 +384,12 @@ namespace OFClass
     void ESM4Npc::insertObjectPhysics(const OFWorld::Ptr& ptr, const std::string& model, const osg::Quat& rotation,
         OFPhysics::PhysicsSystem& physics) const
     {
-        physics.addActorBody(ptr, getBodyHalfExtents(ptr), rotation);
+        // The character controller, as the player's (the process tier says whether it moves the character)
+        const osg::Vec3f half = getBodyHalfExtents(ptr);
+        OFPhysics::CharacterShape shape;
+        shape.mRadius = half.x();
+        shape.mHalfHeight = half.z();
+        physics.addCharacter(ptr, shape);
     }
 
     osg::Vec3f ESM4Npc::getBodyHalfExtents(const OFWorld::Ptr& ptr)

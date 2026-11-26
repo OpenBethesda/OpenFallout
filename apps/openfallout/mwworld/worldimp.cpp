@@ -2840,6 +2840,10 @@ namespace OFWorld
     DetourNavigator::AgentBounds World::getPathfindingAgentBounds(const OFWorld::ConstPtr& actor) const
     {
         const OFPhysics::Actor* physicsActor = mPhysics->getActor(actor);
+        // The games have one navigation mesh for all: the characters and creatures go by the mesh of the player's
+        // size (an interior has that one only), whatever the size of their own character bodies
+        if (physicsActor != nullptr && actor != getPlayerConstPtr())
+            physicsActor = mPhysics->getActor(getPlayerConstPtr());
         if (physicsActor == nullptr || !actor.isInCell() || actor.getCell()->isExterior())
             return DetourNavigator::AgentBounds{ Settings::game().mActorCollisionShapeType,
                 Settings::game().mDefaultActorPathfindHalfExtents };

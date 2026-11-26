@@ -13,7 +13,6 @@
 #include <BulletCollision/CollisionDispatch/btCollisionWorld.h>
 #include <BulletCollision/CollisionDispatch/btDefaultCollisionConfiguration.h>
 #include <BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h>
-#include <BulletCollision/CollisionShapes/btCompoundShape.h>
 #include <BulletCollision/CollisionShapes/btConeShape.h>
 #include <BulletCollision/CollisionShapes/btCylinderShape.h>
 #include <BulletCollision/CollisionShapes/btSphereShape.h>
@@ -425,26 +424,6 @@ namespace OFPhysics
             mAnimatedObjects.emplace(obj.get(), false);
     }
 
-    void PhysicsSystem::addActorBody(const OFWorld::Ptr& ptr, const osg::Vec3f& halfExtents, osg::Quat rotation)
-    {
-        if (ptr.mRef->mData.mPhysicsPostponed || getObject(ptr) != nullptr)
-            return;
-
-        // The cylinder is a child of a compound shape so that it can stand on the position of the object
-        auto shape = std::make_shared<Resource::BulletShape>();
-        auto compound = std::make_unique<btCompoundShape>();
-        btTransform standing;
-        standing.setIdentity();
-        standing.setOrigin(btVector3(0, 0, halfExtents.z()));
-        compound->addChildShape(standing, new btCylinderShapeZ(Misc::Convert::toBullet(halfExtents)));
-        shape->mCollisionShape.reset(compound.release());
-        shape->mCollisionBox = { halfExtents, osg::Vec3f(0, 0, halfExtents.z()) };
-
-        auto obj = std::make_shared<Object>(
-            ptr, Resource::makeInstance(std::move(shape)), rotation, CollisionType_Actor, mTaskScheduler.get());
-        mObjects.emplace(ptr.mRef, obj);
-    }
-
     void PhysicsSystem::remove(const OFWorld::Ptr& ptr)
     {
         if (auto foundObject = mObjects.find(ptr.mRef); foundObject != mObjects.end())
@@ -566,6 +545,8 @@ namespace OFPhysics
 
     void PhysicsSystem::addCharacter(const OFWorld::Ptr& ptr, const CharacterShape& shape)
     {
+        if (ptr.mRef->mData.mPhysicsPostponed || mActors.find(ptr.mRef) != mActors.end())
+            return;
         auto actor = std::make_shared<Actor>(ptr, shape, mTaskScheduler.get());
         mActors.emplace(ptr.mRef, std::move(actor));
     }

@@ -23,10 +23,13 @@ namespace OFClass
 {
     class ESM4CreatureCustomData;
 
-    /// The half extents of the solid body of a creature in game units, from the box of its record: a cylinder as wide
-    /// as the smaller side of the box and as tall as the box, kept within what the data has meant. A creature without a
-    /// box is as big as a person.
-    osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature);
+    /// The half extents of the character body (the capsule of the character controller) of a creature in game units:
+    /// the radius of the executables (31, the default of bhkCharacterControllerCinfo) and half the height of the box of
+    /// its record (kept within what the data has meant; a creature without a box is as tall as a person), both times
+    /// the scale of the creature's record. The executables' capsule height is not known (spec A, unclear 4): the box
+    /// of the record is the nearest thing to the skeleton's bound that the record has. A capsule that is lower than
+    /// it is wide is a ball as wide as it is high (OFPhysics::Actor).
+    osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature, float baseScale);
 
     /// A creature of Fallout 3 or New Vegas (CREA). What it looks like and is called comes from its record and, for
     /// the many that take them from a template, the records of its templates (`ESM4::creatureModel`). The skeleton is
@@ -65,8 +68,8 @@ namespace OFClass
         /// for a package that no file has a record for)
         static const std::vector<const ESM4::AIPackage*>& getPackages(const OFWorld::Ptr& ptr);
 
-        /// The half extents of the body that a creature of Fallout is solid as (the cylinder of its physics body), from
-        /// the box of its record; none (all 0) for a creature of the games before Fallout
+        /// The half extents of the body that a creature of Fallout is solid as (the capsule of its character
+        /// controller: the radius twice, then the half height); none (all 0) for a creature of the games before Fallout
         static osg::Vec3f getBodyHalfExtents(const OFWorld::Ptr& ptr);
 
     private:

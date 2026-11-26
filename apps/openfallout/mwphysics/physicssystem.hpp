@@ -167,14 +167,9 @@ namespace OFPhysics
 
         void addObject(const OFWorld::Ptr& ptr, VFS::Path::NormalizedView mesh, osg::Quat rotation,
             int collisionType = CollisionType_World);
-        /// The player's body on character physics (moved by the movement solver)
+        /// The character body of the player, a character or a creature (the capsule of the character controller, moved
+        /// by the movement solver while the actor is active)
         void addCharacter(const OFWorld::Ptr& ptr, const CharacterShape& shape);
-
-        /// A solid body for a person whose class has no creature stats, so it is not an actor of the physics: an
-        /// upright cylinder that stands on the position of the object (the half extents are those of its box). It
-        /// collides as an actor does, so the player walks around it, can not step onto it and walks out of it when
-        /// they start inside it, and a ray or a projectile that meets it finds the object.
-        void addActorBody(const OFWorld::Ptr& ptr, const osg::Vec3f& halfExtents, osg::Quat rotation);
 
         int addProjectile(
             const OFWorld::Ptr& caster, const osg::Vec3f& position, VFS::Path::NormalizedView mesh, bool computeRadius);

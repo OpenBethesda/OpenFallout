@@ -42,6 +42,7 @@ namespace OFMechanics
 
         void startFalloutFollowing(const OFWorld::Ptr& actor, const OFWorld::Ptr& target, float distance) override;
         void stopFalloutFollowing(const OFWorld::Ptr& actor) override;
+        void playerUsesDoor(ESM::RefId cell, const ESM::Position& destination) override;
         void evaluateFalloutPackages(const OFWorld::Ptr& actor) override;
         void knockFallout(const OFWorld::Ptr& actor, const osg::Vec3f& velocity, float seconds) override;
         ESM::FormId falloutPackageOf(const OFWorld::Ptr& actor) const override;

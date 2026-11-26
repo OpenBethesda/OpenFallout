@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
@@ -49,6 +50,10 @@ namespace OFMechanics
 
         /// Judges the tier of each actor again (A.T2, A.T3)
         void updateLevels();
+
+        /// One frame of the bodies of the characters and creatures (Actor::updateBody): `held` says which ones
+        /// something else moves in this frame
+        void updateBodies(float duration, bool paused, const std::function<bool(const OFWorld::Ptr&)>& held);
 
         /// How many actors have the tier (the player counts: it is High)
         std::size_t count(ProcessLevel level) const;

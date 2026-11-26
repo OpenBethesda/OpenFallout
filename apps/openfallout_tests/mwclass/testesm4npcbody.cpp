@@ -8,18 +8,19 @@ namespace OFClass
 {
     namespace
     {
-        TEST(OFClassNpcBodyTest, aRaceOfTheUsualHeightIsTheBoxOfThePlaceholderPlayer)
+        TEST(OFClassNpcBodyTest, aRaceOfTheUsualHeightHasTheCapsuleOfTheExecutables)
         {
+            // radius 31 (bhkCharacterControllerCinfo), half height 66.22 (the human skeleton's bound)
             const osg::Vec3f extents = npcBodyHalfExtents(1.f);
-            EXPECT_EQ(extents, osg::Vec3f(20.f, 20.f, 64.f));
+            EXPECT_EQ(extents, osg::Vec3f(31.f, 31.f, 66.22f));
         }
 
         TEST(OFClassNpcBodyTest, aTallerRaceHasAWiderAndTallerBody)
         {
             const osg::Vec3f extents = npcBodyHalfExtents(1.25f);
-            EXPECT_FLOAT_EQ(extents.x(), 25.f);
-            EXPECT_FLOAT_EQ(extents.y(), 25.f);
-            EXPECT_FLOAT_EQ(extents.z(), 80.f);
+            EXPECT_FLOAT_EQ(extents.x(), 38.75f);
+            EXPECT_FLOAT_EQ(extents.y(), 38.75f);
+            EXPECT_FLOAT_EQ(extents.z(), 82.775f);
         }
 
         TEST(OFClassNpcBodyTest, aHeightThatIsNoNumberOrNotPositiveCountsAsOne)

@@ -101,6 +101,77 @@ namespace OFMechanics
             process->mKnockState = state;
     }
 
+    bool Actor::hasCharacterController() const
+    {
+        const auto* process = dynamic_cast<const MiddleHighProcess*>(mProcess.get());
+        return process != nullptr && process->mCharacterController;
+    }
+
+    void Actor::setCharacterController(bool on)
+    {
+        if (auto* process = dynamic_cast<MiddleHighProcess*>(mProcess.get()))
+            process->mCharacterController = on;
+    }
+
+    void Actor::updateBody(float duration, bool paused, bool held)
+    {
+        const OFBase::Environment& env = OFBase::Environment::get();
+        OFBase::World& world = *env.getWorld();
+        OFScript::FalloutScripts* scripts = env.getFalloutScripts();
+        const OFWorld::Ptr& ptr = getPtr();
+        const ProcessLevel level = getProcessLevel();
+        // (an actor without a character body, one whose model has no collision, is moved as before: put in place)
+        const bool wanted = (level == ProcessLevel::High || level == ProcessLevel::MiddleHigh) && ptr.isInCell()
+            && ptr.getRefData().getBaseNode() != nullptr && ptr.getRefData().isEnabled() && !held
+            && world.isActorCollisionEnabled(ptr)
+            && !(scripts != nullptr && (scripts->isDead(ptr) || scripts->usesFurniture(ptr)));
+        world.setActorActive(ptr, wanted);
+        const bool had = hasCharacterController();
+        setCharacterController(wanted);
+        if (!wanted)
+        {
+            mBodyFallStart.reset();
+            mBodyKnown = false;
+            return;
+        }
+        // It stands still unless its packages or its fight give it a speed in this frame
+        world.queueMovement(ptr, osg::Vec3f());
+        if (paused || duration <= 0.f)
+            return;
+
+        const osg::Vec3f position = ptr.getRefData().getPosition().asVec3();
+        const bool onGround = world.isOnGround(ptr);
+        // A body that was put somewhere (a teleport, a script's MoveTo, the controller just on) starts from there: no
+        // body moves farther in one frame by itself than a fall far longer than any in the games would take it
+        constexpr float fastestBody = 4000.f;
+        if (!had || !mBodyKnown || (position - mBodyLast).length() > std::max(fastestBody * duration, 100.f))
+        {
+            mBodyFallStart.reset();
+            mBodyLast = position;
+            mBodyWasOnGround = true;
+            mBodyKnown = true;
+        }
+        // Water ends a fall without a landing, as the player's (C.F4)
+        if (world.isSwimming(ptr))
+        {
+            mBodyFallStart.reset();
+            mBodyWasOnGround = onGround;
+            mBodyLast = position;
+            return;
+        }
+        if (!onGround && mBodyWasOnGround && !mBodyFallStart)
+            mBodyFallStart = mBodyLast.z();
+        if (onGround && mBodyFallStart)
+        {
+            const float lost = *mBodyFallStart - position.z();
+            mBodyFallStart.reset();
+            if (scripts != nullptr && lost > 0.f)
+                scripts->fell(ptr, lost);
+        }
+        mBodyWasOnGround = onGround;
+        mBodyLast = position;
+    }
+
     void PlayerCharacter::teleported()
     {
         mFallStart.reset();

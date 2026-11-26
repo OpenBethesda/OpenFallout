@@ -4,6 +4,8 @@
 #include <memory>
 #include <optional>
 
+#include <osg/Vec3f>
+
 #include <components/falloutscript/processlevels.hpp>
 
 #include "../mwworld/ptr.hpp"
@@ -148,13 +150,33 @@ namespace OFMechanics
         KnockState getKnockState() const;
         void setKnockState(KnockState state);
 
+        /// Whether the character controller moves the actor now (only Middle High and High have one: spec A, the
+        /// character controller)
+        bool hasCharacterController() const;
+
+        /// One frame of the body of a character or creature that is not the player (the player's is in
+        /// PlayerCharacter::update). Its character controller is on when the process is Middle High or High and the
+        /// actor has its 3D, is alive and is not in a piece of furniture (the executables make none for an actor that
+        /// sits, FalloutNV.exe 0x930d8b) nor `held` by something that moves it itself (a blow that throws it). With the
+        /// controller on, it stands still unless its packages give it a speed in this frame (FalloutActors), gravity
+        /// takes it down when nothing is under it, and a landing hurts it by the height lost (rule F1: the height
+        /// where it left the ground less the height where it lands; rule F2 in FalloutScripts::fell).
+        void updateBody(float duration, bool paused, bool held);
+
     private:
+        void setCharacterController(bool on);
+
         OFWorld::Ptr mPtr;
         Movement mMovement;
         std::unique_ptr<BaseProcess> mProcess;
         bool mSneaking = false;
         bool mRunning = false;
         float mCurrentSpeed = 0.f;
+        // The fall of a body on the controller (updateBody): where it left the ground, the last place it was at
+        std::optional<float> mBodyFallStart;
+        osg::Vec3f mBodyLast;
+        bool mBodyKnown = false;
+        bool mBodyWasOnGround = true;
     };
 
     /// A character of an NPC_ record: it walks and runs by the formula of the speed (rule B.M1)

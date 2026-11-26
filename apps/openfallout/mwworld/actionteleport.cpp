@@ -4,6 +4,7 @@
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
+#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
 
 #include "../mwscript/falloutscripts.hpp"
@@ -37,6 +38,9 @@ namespace OFWorld
             OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
             if (scripts != nullptr)
                 scripts->playerMoveBegins();
+            // (the followers are told before the cell they are in is left)
+            if (mCellId != world->getPlayerPtr().getCell()->getCell()->getId())
+                OFBase::Environment::get().getMechanicsManager()->playerUsesDoor(mCellId, mPosition);
             world->changeToCell(mCellId, mPosition, true);
             if (scripts != nullptr)
                 scripts->playerMoveEnds();
