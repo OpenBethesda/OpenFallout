@@ -228,6 +228,8 @@ void OFState::StateManager::resumeGame()
 void OFState::StateManager::saveGame(std::string_view description, const Slot* slot)
 {
     OFBase::Environment::get().getLuaManager()->applyDelayedActions();
+    // (a save game does not keep the followers that are on their way through a door: they come out first)
+    OFBase::Environment::get().getMechanicsManager()->finishFollowerArrivals();
 
     OFState::Character* character = getCurrentCharacter();
 

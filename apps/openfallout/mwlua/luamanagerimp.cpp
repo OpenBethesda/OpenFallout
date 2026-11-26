@@ -35,6 +35,7 @@
 #include <components/lua_ui/util.hpp>
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwgui/menuscenes.hpp"
@@ -44,6 +45,7 @@
 #include "../mwrender/bonegroup.hpp"
 #include "../mwrender/postprocessor.hpp"
 
+#include "../mwworld/cellstore.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/datetimemanager.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -621,6 +623,17 @@ namespace OFLua
             {
                 if (!object.getCellRef().getTeleport())
                     scripts->activateDoor(object);
+                // A load door that takes the player to another cell (the door handler of the scripts moves the
+                // player): the followers are told before the cell they are in is left
+                else if (actor == OFBase::Environment::get().getWorld()->getPlayerPtr() && actor.isInCell())
+                {
+                    const OFWorld::CellRef& door = object.getCellRef();
+                    const OFWorld::CellStore* to
+                        = OFBase::Environment::get().getWorldModel()->findCell(door.getDestCell());
+                    if (to != nullptr && to != actor.getCell())
+                        OFBase::Environment::get().getMechanicsManager()->playerUsesDoor(
+                            to->getCell()->getId(), door.getDoorDest());
+                }
             }
             // A container of Fallout, or a character that is dead, opens for the player to take things from
             else if (object.getType() == ESM4::Container::sRecordId || object.getType() == ESM4::Npc::sRecordId

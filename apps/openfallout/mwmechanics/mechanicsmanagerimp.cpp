@@ -160,6 +160,11 @@ namespace OFMechanics
         mFalloutActors.playerUsesDoor(getPlayer(), cell, destination);
     }
 
+    void MechanicsManager::finishFollowerArrivals()
+    {
+        mFalloutActors.finishArrivals();
+    }
+
     void MechanicsManager::stopFalloutFollowing(const OFWorld::Ptr& actor)
     {
         mFalloutActors.stopFollowing(actor);

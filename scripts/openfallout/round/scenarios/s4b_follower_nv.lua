@@ -37,8 +37,10 @@ return { limit = 900, delay = 4, run = function(r)
         tostring(sitting()), tostring(select(2, pcall(h.command, 'GetCurrentPackage', CASS)))))
     h.check('p-cass-in-the-same-cell', cass.cell ~= nil and cass.cell.id == r.player().cell.id, true)
     h.check('p-baseline-teammate-0', h.isTeammate(CASS), false)
-    -- (GetSitting 3: sitting; the stool of her sandbox package)
+    -- (GetSitting 3: sitting; the stool of her sandbox package): she sits before the recruit, so phase U sees her get up
+    r.waitFor(function() return sitting() == 3 end, 20, 'cass sits')
     local satBefore = sitting()
+    h.check('p-cass-sits-before-the-recruit', satBefore, 3)
 
     -------------------------------------------------------------------------------------------------------------- R: recruit
     phase('R recruit')

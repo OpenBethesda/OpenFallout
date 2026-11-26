@@ -104,6 +104,8 @@ namespace OFMechanics
         void playerUsesDoor(const OFWorld::Ptr& player, ESM::RefId cell, const ESM::Position& destination);
         /// The followers that come through a door when their time is up (each frame, whatever the cell they are in)
         void updateArrivals(float duration);
+        /// The followers that are on their way through a door come out now (a save game does not keep the arrivals)
+        void finishArrivals();
 
         /// What the game keeps of one actor
         struct Mind;

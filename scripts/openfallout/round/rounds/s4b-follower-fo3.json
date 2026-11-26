@@ -1,7 +1,7 @@
 {
   "name": "s4b-follower-fo3",
   "game": "fo3",
-  "save": "latest",
+  "start": "Wasteland:0,0",
   "scenario": "../scenarios/s4b_follower_fo3.lua",
   "resolution": [1280, 720],
   "framerate": 30,

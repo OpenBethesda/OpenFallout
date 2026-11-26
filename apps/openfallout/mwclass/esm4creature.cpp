@@ -38,7 +38,10 @@ namespace OFClass
             if (height > 0.f)
                 halfHeight = std::clamp(height / 2.f, sSmallestHeight, sLargestHeight);
         }
-        return osg::Vec3f(sRadius, sRadius, halfHeight) * scale;
+        // (a creature lower than it is wide is a ball as wide as it is high: the body that collides, which the
+        // half extents tell the scripts and V.A.T.S. too)
+        const float radius = std::min(sRadius, halfHeight);
+        return osg::Vec3f(radius, radius, halfHeight) * scale;
     }
 
     class ESM4CreatureCustomData : public OFWorld::TypedCustomData<ESM4CreatureCustomData>

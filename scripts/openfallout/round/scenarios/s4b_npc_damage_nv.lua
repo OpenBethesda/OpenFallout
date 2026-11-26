@@ -119,6 +119,12 @@ return { limit = 600, delay = 4, run = function(r)
     -- (the ghoul comes last: nothing can stop it)
     ---------------------------------------------------------------------------------------------------------------- G: ghoul
     phase('G ghoul')
+    -- away from the gangers' camp, on the open ground of phase M, at full health: the ghoul is the only one to hit
+    r.teleport{ pos = ARENA, worldspace = mojave, yaw = 0, onGround = true, label = 'arena for the ghoul' }
+    r.wait(5)
+    r.settle(3, 30)
+    r.closeDialogue('arena for the ghoul')
+    heal('G')
     -- (a reference that PlaceAtMe makes is not an object of the Lua world: it is driven by its form id; 250 units in front)
     local made = core.spawn.run('PlaceAtMe', PLAYER, { core.getFormId(NV, GHOUL), 1, 250, 0 })
     h.check('g-ghoul-made', made ~= nil and made ~= 0, true)
@@ -129,9 +135,14 @@ return { limit = 600, delay = 4, run = function(r)
     r.log('G ghoul ' .. ghoulId)
     local drops = watch('ghoul', 40, 3)
     h.checkAtLeast('g-ghoul-hits-at-least-1', #drops, 1)
-    -- each blow is the rule's (no armor, Normal difficulty); a critical blow adds its critical damage on top
-    h.checkRange('g-first-blow-by-the-rule', drops[1] or -1, GHOUL_BLOW - 0.25, GHOUL_BLOW + 0.25)
-    for i = 2, #drops do r.log(string.format('G blow %d: %.2f', i, drops[i])) end
+    -- a blow is the rule's (no armor, the Normal difficulty of the round's save); a critical blow adds its critical
+    -- damage on top, so the check takes the blow nearest the rule of the three
+    local nearest
+    for i = 1, #drops do
+        r.log(string.format('G blow %d: %.2f', i, drops[i]))
+        if nearest == nil or math.abs(drops[i] - GHOUL_BLOW) < math.abs(nearest - GHOUL_BLOW) then nearest = drops[i] end
+    end
+    h.checkRange('g-a-blow-by-the-rule', nearest or -1, GHOUL_BLOW - 0.25, GHOUL_BLOW + 0.25)
 
     heal('F end')
     r.god(true)

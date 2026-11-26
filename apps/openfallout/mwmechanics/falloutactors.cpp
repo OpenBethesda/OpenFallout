@@ -942,15 +942,25 @@ namespace OFMechanics
         const OFWorld::CellStore* from = player.getCell();
         const osg::Vec3f door = player.getRefData().getPosition().asVec3();
         OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
+        // A follower that is still on its way through the last door comes out where the player goes now
+        for (Arrival& arrival : mArrivals)
+        {
+            arrival.mCell = cell;
+            arrival.mPosition = destination;
+        }
         for (const auto& [key, mind] : mMinds)
         {
             const OFWorld::Ptr& ptr = mind->mPtr;
-            if (ptr.getCell() != from || !mind->mFollowing.mPlayer || !(mind->mCommanded || mind->mPackage != nullptr))
+            // (a follower: a Follow package after the player, or a commanded follow; an Escort or a Talk package
+            // that has the player for its target leads or waits, and stays)
+            if (ptr.getCell() != from || !mind->mFollowing.mPlayer || !(mind->mCommanded || mind->mPackage != nullptr)
+                || mind->mGoal.mBehaviour != ESM4::PackageBehaviour::Follow)
                 continue;
             if (!ptr.getRefData().isEnabled() || (scripts != nullptr && scripts->isDead(ptr)))
                 continue;
             const ESM::RefNum ref = ptr.getCellRef().getRefNum();
-            if (!ref.isSet())
+            if (!ref.isSet()
+                || std::any_of(mArrivals.begin(), mArrivals.end(), [&](const Arrival& a) { return a.mRef == ref; }))
                 continue;
             // It walks, or runs when it is far behind, at the speed of the movement rules (a creature at a run)
             const float away = (ptr.getRefData().getPosition().asVec3() - door).length();
@@ -994,6 +1004,12 @@ namespace OFMechanics
             Log(Debug::Info) << ptr.getCellRef().getRefId() << " comes through the door after the player";
             world.moveObject(ptr, &model.getCell(arrival.mCell), arrival.mPosition.asVec3(), true, true);
         }
+    }
+
+    void FalloutActors::finishArrivals()
+    {
+        // (the arrivals are not kept in a save: the followers that are on their way come out now)
+        updateArrivals(std::numeric_limits<float>::max());
     }
 
     bool FalloutActors::isThrown(const OFWorld::Ptr& ptr) const

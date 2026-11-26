@@ -99,6 +99,8 @@ namespace OFBase
         /// The player goes through a load door to `destination` in the cell `cell`: the characters and creatures that
         /// follow the player come through after it
         virtual void playerUsesDoor(ESM::RefId cell, const ESM::Position& destination) = 0;
+        /// The followers that are still on their way through a door come out now (before a save game is written)
+        virtual void finishFollowerArrivals() = 0;
         /// The packages of the character are looked at again (EvaluatePackage, AddScriptPackage and the others)
         virtual void evaluateFalloutPackages(const OFWorld::Ptr& actor) = 0;
         /// A blow throws the character back at `velocity`, which falls to nothing over `seconds`

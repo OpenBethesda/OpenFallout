@@ -27,8 +27,8 @@ namespace OFClass
     /// the radius of the executables (31, the default of bhkCharacterControllerCinfo) and half the height of the box of
     /// its record (kept within what the data has meant; a creature without a box is as tall as a person), both times
     /// the scale of the creature's record. The executables' capsule height is not known (spec A, unclear 4): the box
-    /// of the record is the nearest thing to the skeleton's bound that the record has. A capsule that is lower than
-    /// it is wide is a ball as wide as it is high (OFPhysics::Actor).
+    /// of the record is the nearest thing to the skeleton's bound that the record has. A creature that is lower than
+    /// it is wide gets a ball as wide as it is high: the radius is then its half height.
     osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature, float baseScale);
 
     /// A creature of Fallout 3 or New Vegas (CREA). What it looks like and is called comes from its record and, for
