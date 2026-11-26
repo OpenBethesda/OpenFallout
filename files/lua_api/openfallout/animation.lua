@@ -1,7 +1,6 @@
 ---
 -- Defines functions that allow control of character animations.
--- Note that for some methods, such as @{openfallout.animation#playBlended} you should use the associated methods on the 
--- [AnimationController](interface_animation.html) interface rather than invoking this API directly.
+-- The engine animates Fallout characters by the rules of the games; these functions act on top of that.
 -- @context local
 -- @module animation
 -- @usage local anim = require('openfallout.animation')
@@ -48,18 +47,11 @@
 -- @field #number LeftArm "3" All bones from 'Bip01 L Clavicle' and out
 -- @field #number RightArm "4" All bones from 'Bip01 R Clavicle' and out
 
-
 ---
 -- Check if the object has an animation object or not
 -- @function [parent=#animation] hasAnimation
 -- @param openfallout.core#GameObject actor
 -- @return #boolean
-
----
--- Skips animations for one frame, equivalent to mwscript's SkipAnim.
--- Can only be used on self.
--- @function [parent=#animation] skipAnimationThisFrame
--- @param openfallout.core#GameObject actor
 
 ---
 -- Get the absolute position within the animation track of the given text key
@@ -96,7 +88,6 @@
 -- @param openfallout.core#GameObject actor
 -- @param #string groupName
 -- @return #boolean
-
 
 ---
 -- Cancels and removes the animation group from the list of active animations.
@@ -144,42 +135,9 @@
 -- @param #number speed The new animation speed, where speed=1 is normal speed.
 
 ---
--- Clears all animations currently in the animation queue. This affects animations played by mwscript, @{openfallout.animation#playQueued}, and ai packages, but does not affect animations played using @{openfallout.animation#playBlended}.
--- Can only be used on self.
--- @function [parent=#animation] clearAnimationQueue
--- @param openfallout.core#GameObject actor
--- @param #boolean clearScripted whether to keep animation with priority Scripted or not.
-
----
--- Acts as a slightly extended version of MWScript's LoopGroup. Plays this animation exclusively
--- until it ends, or the queue is cleared using #clearAnimationQueue. Use #clearAnimationQueue and the `startkey` option
--- to imitate the behavior of LoopGroup's play modes.
--- Can only be used on self.
--- @function [parent=#animation] playQueued
--- @param openfallout.core#GameObject actor
--- @param #string groupName
--- @param #table options A table of play options.  Can contain:
---
---   * `loops` - a number >= 0, the number of times the animation should loop after the first play (default: infinite).
---   * `speed` - a floating point number >= 0, the speed at which the animation should play (default: 1);
---   * `startKey` - the animation key at which the animation should start (default: "start")
---   * `stopKey` - the animation key at which the animation should end (default: "stop")
---   * `forceLoop` - a boolean, to set if the animation should loop even if it's not a looping animation (default: false)
--- 
--- @usage -- Play death1 without waiting. Equivalent to playgroup, death1, 1
--- anim.clearAnimationQueue(self, false)
--- anim.playQueued(self, 'death1')
--- 
--- @usage -- Play an animation group with custom start/stop keys
--- anim.clearAnimationQueue(self, false)
--- anim.playQueued(self, 'spellcast', { startKey = 'self start', stopKey = 'self stop' })
---
-
----
--- Play an animation directly. You probably want to use the [AnimationController](interface_animation.html) interface, which will trigger relevant handlers, 
--- instead of calling this directly. Note that the still hardcoded character controller may at any time and for any reason alter
--- or cancel currently playing animations, so making your own calls to this function either directly or through the [AnimationController](interface_animation.html)
--- interface may be of limited utility. For now, use openfallout.animation#playQueued to script your own animations.
+-- Play an animation directly. The engine animates Fallout characters by the rules of the games (the Fallout
+-- animation of each actor and the PlayGroup commands of the Fallout scripts), and may at any time alter or cancel an
+-- animation played this way.
 -- Can only be used on self.
 -- @function [parent=#animation] playBlended
 -- @param openfallout.core#GameObject actor
@@ -242,29 +200,25 @@
 --   * `loop` - boolean, if true the effect will loop until removed (default: false).
 --   * `boneName` - name of the bone to attach the vfx to. (default: "")
 --   * `particleTextureOverride` - name of the particle texture to use. (default: "")
---   * `vfxId` - a string ID that can be used to remove the effect later, using #removeVfx, and to avoid duplicate effects. The default value of "" can have duplicates. To avoid interaction with the engine, use unique identifiers unrelated to magic effect IDs. The engine uses this identifier to add and remove magic effects based on what effects are active on the actor. If this is set equal to the @{openfallout.core#MagicEffectId} identifier of the magic effect being added, for example core.magic.EFFECT_TYPE.FireDamage, then the engine will remove it once the fire damage effect on the actor reaches 0. (Default: "").
+--   * `vfxId` - a string ID that can be used to remove the effect later, using #removeVfx, and to avoid duplicate effects. The default value of "" can have duplicates. (Default: "").
 --   * `useAmbientLight` - boolean, vfx get a white ambient light attached in Morrowind. If false don't attach this. (default: true)
 --   * `autoTransform` - boolean, if true, the engine will auto-calculate the transform. (default: true)
 --   * `transform` - relative transform (openfallout.util#Transform) applied to the vfx. If autoTransform is true this will be applied on top of it.
 --
--- @usage local mgef = core.magic.effects.records[myEffectName]
--- anim.addVfx(self, 'VFX_Hands', {boneName = 'Bip01 L Hand', particleTextureOverride = mgef.particle, loop = mgef.continuousVfx, vfxId = mgef.id..'_myuniquenamehere'})
+-- @usage anim.addVfx(self, 'meshes/effects/myeffect.nif', {boneName = 'Bip01 L Hand', loop = true, vfxId = 'myuniquename'})
 -- -- later:
--- anim.removeVfx(self, mgef.id..'_myuniquenamehere')
--- 
+-- anim.removeVfx(self, 'myuniquename')
+--
 -- @usage -- Add vfx to another actor using an event
--- local mgef = core.magic.effects.records[myEffectName]
 -- target:sendEvent('AddVfx', {
---   model = types.Static.record(mgef.hitStatic).model,
+--   model = 'meshes/effects/myeffect.nif',
 --   options = {
---     vfxId = mgef.id,
---     particleTextureOverride = mgef.particle,
+--     vfxId = 'myuniquename',
 --     loop = false,
 --     transform = util.transform.move(100, 0, 0)
 --   }
 -- })
 --
-
 
 ---
 -- Removes a specific VFX.
@@ -278,8 +232,5 @@
 -- Can only be used on self.
 -- @function [parent=#animation] removeAllVfx
 -- @param openfallout.core#GameObject actor
-
-
-
 
 return nil

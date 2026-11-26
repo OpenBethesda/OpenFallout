@@ -1127,7 +1127,8 @@ are silent).
 
 **Reading a skill book** (the use function of the actor, `0x515040`, read in round 12AV S3; `ItemUse` does it): the reader must
 be the player (for anyone else nothing happens); in combat the player is refused with the message `sCanNotReadBook` and the
-book stays; the points are the setting `fBookPerkBonus` changed by the perk entry point 11 and are added to the skill for good;
+book stays; the points are the setting `fBookPerkBonus` (Fallout 3 has no such setting: its book code loads 1.0, Fallout3.exe
+0x4B63C9) changed by the perk entry point 11 and are added to the skill for good;
 the message is `sSkillIncreasedNum` with the name of the skill and the points as a whole number, the sound is
 `UIItemGenericUp`, the Books Read count of the Pip-Boy goes up by one, and the book is removed at once. A book with no skill
 (a plain book) does nothing when it is used, with no message and no count; only the sound of the item plays. A skill of 200

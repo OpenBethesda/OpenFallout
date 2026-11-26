@@ -27,7 +27,7 @@ namespace OFLua
             OFWorld::Ptr ptr = getPtr(event.mObject);
             if (ptr.isEmpty())
                 return;
-            if (ptr.getCellRef().getRefId() == "player")
+            if (ptr.getType() == ESM::REC_INTERNAL_PLAYER)
                 mGlobalScripts.playerAdded(GObject(ptr));
             else
             {
@@ -103,43 +103,6 @@ namespace OFLua
         }
 
         void operator()(const OnNewExterior& event) const { mGlobalScripts.onNewExterior(GCell{ &event.mCell }); }
-
-        void operator()(const OnAnimationTextKey& event) const
-        {
-            OFWorld::Ptr actor = getPtr(event.mActor);
-            if (actor.isEmpty())
-                return;
-            if (auto* scripts = getLocalScripts(actor))
-                scripts->onAnimationTextKey(event.mGroupname, event.mKey);
-        }
-
-        void operator()(const OnAnimationEnded& event) const
-        {
-            OFWorld::Ptr actor = getPtr(event.mActor);
-            if (actor.isEmpty())
-                return;
-            if (auto* scripts = getLocalScripts(actor))
-                scripts->onAnimationEnded(
-                    event.mGroupname, event.mStartKey, event.mStopKey, event.mTime, event.mCompletion);
-        }
-
-        void operator()(const OnSkillUse& event) const
-        {
-            OFWorld::Ptr actor = getPtr(event.mActor);
-            if (actor.isEmpty())
-                return;
-            if (auto* scripts = getLocalScripts(actor))
-                scripts->onSkillUse(event.mSkill, event.useType, event.scale);
-        }
-
-        void operator()(const OnSkillLevelUp& event) const
-        {
-            OFWorld::Ptr actor = getPtr(event.mActor);
-            if (actor.isEmpty())
-                return;
-            if (auto* scripts = getLocalScripts(actor))
-                scripts->onSkillLevelUp(event.mSkill, event.mSource);
-        }
 
     private:
         OFWorld::Ptr getPtr(ESM::RefNum id) const

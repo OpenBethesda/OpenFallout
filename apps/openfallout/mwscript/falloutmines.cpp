@@ -155,7 +155,7 @@ namespace OFScript
         const double damage = laid.mNoDamage ? 0.0 : std::max<double>(data.mDamage, 0.0);
         const double radius = std::max<double>(data.mRadius, 0.0);
         const osg::Vec3f centre(laid.mPosition[0], laid.mPosition[1], laid.mPosition[2]);
-        const double buffer = gameSetting("fExplosionLOSBuffer", 16.0);
+        const double buffer = gameSettingValue("fExplosionLOSBuffer");
         OFBase::World* world = OFBase::Environment::get().getWorld();
         // What stands in the way of the blast keeps it off (a ray from just above the explosion to the middle of the target).
         // The ray of a thing that is not a character ends inside the box of that thing, and what it hits within the length
@@ -243,13 +243,14 @@ namespace OFScript
                     }
                     mDestruction.damage(victim, damage, mActorValues.current(victim, AV::health));
                 }
-                if (damage > 0 && mActorValues.current(victim, AV::health) <= 0 && !fallsInsteadOfDying(victim))
+                if (damage > 0 && FalloutScript::outOfHealth(mActorValues.current(victim, AV::health))
+                    && !fallsInsteadOfDying(victim))
                 {
                     mActors.setDead(victim, true, laid.mOwner, -1, laid.mWeapon);
                     evaluatePackage(victim);
                 }
-                else if (mActorValues.current(victim, AV::health) > 0 && laid.mOwner != 0 && laid.mOwner != victim
-                    && !tolerated)
+                else if (!FalloutScript::outOfHealth(mActorValues.current(victim, AV::health)) && laid.mOwner != 0
+                    && laid.mOwner != victim && !tolerated)
                 {
                     // A character that survives a blast fights the one that laid it, and that one is in the fight too (as
                     // for a blow in strike; one with no package gets the one that is to fight)

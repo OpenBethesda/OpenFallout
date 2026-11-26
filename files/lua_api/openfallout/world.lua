@@ -273,10 +273,9 @@
 --   * `loop` - boolean, if true the effect will loop until removed (default: false).
 --   * `vfxId` - a string ID that can be used to remove the effect later, using @{#VFX.remove}. (Default: "").
 --
--- @usage -- Spawn a sanctuary effect near the player
--- local effect = core.magic.effects.records[core.magic.EFFECT_TYPE.Sanctuary]
+-- @usage -- Spawn an effect near the player
 -- local pos = self.position + util.vector3(0, 100, 0)
--- local model = types.Static.records[effect.castStatic].model
+-- local model = 'meshes/effects/myeffect.nif'
 -- core.sendGlobalEvent('SpawnVfx', {model = model, position = pos, options = { useAmbientLight = false, vfxId = "myVfx" }})
 --
 

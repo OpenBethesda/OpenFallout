@@ -35,6 +35,9 @@ namespace FalloutScript
         constexpr int healRate = 15;
         constexpr int health = 16;
         constexpr int meleeDamage = 17;
+        /// The resistances that the endurance gives (part E.1.7 of fallout-rules.md)
+        constexpr int poisonResist = 19;
+        constexpr int radResist = 20;
         constexpr int speedMult = 21;
         constexpr int fatigue = 22;
         constexpr int karma = 23;
@@ -48,14 +51,29 @@ namespace FalloutScript
         /// The skill that repairs go by (0x27 in the executable): the repair menu, and the cost of a vendor's repair
         constexpr int repair = 39;
         constexpr int sneak = 42;
+        constexpr int unarmed = 45;
         /// Barter first, unarmed last: the 14 skills of the records (the one in the middle of the end is survival in
         /// New Vegas and the unused throwing in Fallout 3)
         constexpr int lastSkill = 45;
+        /// Above 0 the actor cannot move or act (the Paralysis effect raises it; rule E of the docs)
+        constexpr int paralysis = 47;
         /// What hides a character from V.A.T.S. (it halves the chance to hit it): invisibility and chameleon
         constexpr int invisibility = 48;
         constexpr int chameleon = 49;
+        /// What a blow with the hands adds to its damage, from the Unarmed skill (part E.1.6 of fallout-rules.md)
+        constexpr int unarmedDamage = 56;
         /// The numbers from here are not actor values
         constexpr int count = 128;
+    }
+
+    /// The health below which an actor is out of it: the games test "below 1.0" after every change of the health
+    /// (FalloutNV.exe 0x898650; Fallout 3 the same; fallout-rules.md D.D1), so 0.4 health left by a fall kills
+    constexpr double deathHealth = 1.0;
+
+    /// Whether an actor with this much health is out of it: dead, or down if it is one that falls (an essential one)
+    constexpr bool outOfHealth(double health)
+    {
+        return health < deathHealth;
     }
 
     /// What the records of the game say about the actor values of a character or creature before a script changes
@@ -76,10 +94,11 @@ namespace FalloutScript
 
         /// The value that the games work out for the actor from its other actor values (the health from its
         /// endurance and level, the action points from its agility, ...), when the actor value is one of those and the
-        /// host can tell. The function gives the permanent value that the actor has of another actor value (its
-        /// attributes, which a script may have changed).
-        virtual std::optional<double> derivedValue(
-            FormId /*actor*/, int /*value*/, const std::function<double(int)>& /*permanent*/)
+        /// host can tell. `permanent` gives the value of another actor value without its damage (the health goes by it:
+        /// the endurance of the level-up), `current` the value with it (the action points, the carry weight, the
+        /// critical chance, the melee and unarmed damage and the resistances go by it, FalloutNV.exe 0x643CE3).
+        virtual std::optional<double> derivedValue(FormId /*actor*/, int /*value*/,
+            const std::function<double(int)>& /*permanent*/, const std::function<double(int)>& /*current*/)
         {
             return std::nullopt;
         }
@@ -120,8 +139,15 @@ namespace FalloutScript
         double permanent(FormId actor, int value) const;
         /// The permanent value minus the damage
         double current(FormId actor, int value) const;
+        /// The modifier that stays (what ModActorValue, the points of a level-up and the skill books added), not
+        /// clamped
+        double modifier(FormId actor, int value) const;
 
         void setBase(FormId actor, int value, double amount);
+        /// Whether a script or the game set the base (else it is the record's, the derived one or the starting one)
+        bool hasBase(FormId actor, int value) const;
+        /// Forgets the base that was set: the value is the record's, the derived one or the starting one again
+        void resetBase(FormId actor, int value);
         /// Adds to the base (a negative amount takes away), to no less than the minimum; the reading and the writing
         /// are one step, so that changes made at the same time all count
         void addBase(FormId actor, int value, double amount, double minimum);
@@ -149,6 +175,8 @@ namespace FalloutScript
         /// What the actor has of the value until a script sets it: the record's, or the one worked out from other
         /// values, or else the starting value. The caller holds the lock.
         double startOf(FormId actor, int value) const;
+        /// The value with its modifier and damage, as current() gives it (the caller holds mMutex)
+        double currentOf(FormId actor, int value) const;
         /// The base plus the modifier, for a caller that holds the lock
         double permanentOf(FormId actor, int value) const;
         /// An entry with its base filled in, for the actor value of that number

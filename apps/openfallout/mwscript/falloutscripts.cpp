@@ -80,7 +80,6 @@
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/soundmanager.hpp"
-#include "../mwsound/falloutsound.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwclass/esm4base.hpp"
@@ -88,11 +87,11 @@
 #include "../mwclass/esm4npc.hpp"
 #include "../mwclass/esm4sources.hpp"
 #include "../mwinput/actions.hpp"
-#include "../mwmechanics/creaturestats.hpp"
 #include "../mwmechanics/falloutpackages.hpp"
 #include "../mwrender/animation.hpp"
 #include "../mwrender/falloutactoranimation.hpp"
 #include "../mwrender/falloutface.hpp"
+#include "../mwsound/falloutsound.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -553,7 +552,7 @@ namespace OFScript
         FalloutScript::addChallengeConditionFunctions(mConditions, mChallenges);
         // A change of karma is told in the message area, with a picture for the kind of change
         mProgress.setKarmaNotice([this](int amount) {
-            const bool major = std::abs(amount) >= gameSetting("iKarmaChangeThreshold", 250);
+            const bool major = std::abs(amount) >= gameSettingValue("iKarmaChangeThreshold");
             const std::string kind = std::string(major ? "Major" : "Minor") + (amount < 0 ? "Lost" : "Gained");
             // The sound is UIKarmaUp or UIKarmaDown (FalloutNV.exe 0x94FD30)
             mHudMessages.push(gameSettingText("sKarma" + kind), gameSettingText("sKarma" + kind + "Image"),
@@ -726,6 +725,7 @@ namespace OFScript
     void FalloutScripts::reset()
     {
         reportMissingCommands();
+        mConvertOldSkills = false;
         mGlobals.clear();
         mDisabled.clear();
         // A quick save that a script asked for in the game that ends is not made in the next one
@@ -1047,6 +1047,17 @@ namespace OFScript
             if (gain > 0)
                 mActorValues.restore(mPlayer, AV::actionPoints, gain);
         }
+        // The health of the player comes back by its heal rate, a little each simulated second (fallout-rules.md D.R1:
+        // healRate / 3600 per second, FalloutNV.exe 0x88B510; only damage is healed). The perk term of entry point 0xC
+        // (from 0, in points a second) is added by ItemUse::update. The other actors heal in regenerate().
+        if (mPlayer != 0 && !mActors.isDead(mPlayer))
+        {
+            namespace AV = FalloutScript::ActorValue;
+            const double gain
+                = FalloutScript::DerivedStats::regeneration(mActorValues.current(mPlayer, AV::healRate), frametime);
+            if (gain > 0)
+                mActorValues.restore(mPlayer, AV::health, gain);
+        }
         updateBreath(frametime);
         updateMusic(frametime);
         updateAmbient(frametime);
@@ -1215,9 +1226,7 @@ namespace OFScript
         const auto addBody = [&](const OFWorld::Ptr& ptr, FalloutScript::FormId reference) {
             if (ptr.isEmpty() || !ptr.getRefData().isEnabled() || ptr.mRef->isDeleted())
                 return;
-            // The player is an actor of the engine, whose death the stats tell; the others are told by the host
-            if (mActors.isDead(reference)
-                || (ptr.getClass().isActor() && ptr.getClass().getCreatureStats(ptr).isDead()))
+            if (mActors.isDead(reference))
                 return;
             const ESM::Position& position = ptr.getRefData().getPosition();
             // The characters and creatures of Fallout are solid as the cylinders of their physics bodies (the scale of
@@ -2176,9 +2185,7 @@ namespace OFScript
             // would go on attacking, so taking fighting away puts it away
             if (control == FalloutScript::PlayerControl::Fighting && !enabled && world != nullptr)
             {
-                const OFWorld::Ptr self = world->getPlayerPtr();
-                if (!self.isEmpty())
-                    self.getClass().getCreatureStats(self).setDrawState(OFMechanics::DrawState::Nothing);
+                world->getPlayer().setDrawState(OFMechanics::DrawState::Nothing);
             }
         });
     }
@@ -2647,12 +2654,35 @@ namespace OFScript
         return true;
     }
 
-    double FalloutScripts::gameSetting(std::string_view name, double fallback)
+    double FalloutScripts::gameSettingValue(std::string_view name)
+    {
+        const std::lock_guard lock(mDerivedSettingsMutex);
+        const std::map<std::string, double>& settings = gameSettingValues();
+        std::string key = Misc::StringUtils::lowerCase(name);
+        const auto found = settings.find(key);
+        if (found != settings.end())
+            return found->second;
+        if (mMissingSettings.insert(std::move(key)).second)
+            Log(Debug::Error) << "Game setting " << name
+                              << " is in neither the plugins nor the executable of the game: 0 is used";
+        return 0.0;
+    }
+
+    double FalloutScripts::gameSettingOr(std::string_view name, double fallback)
     {
         const std::lock_guard lock(mDerivedSettingsMutex);
         const std::map<std::string, double>& settings = gameSettingValues();
         const auto found = settings.find(Misc::StringUtils::lowerCase(name));
         return found != settings.end() ? found->second : fallback;
+    }
+
+    void FalloutScripts::setExecutableNumbers(std::map<std::string, double> numbers)
+    {
+        const std::lock_guard lock(mDerivedSettingsMutex);
+        mExecutableNumbers = std::move(numbers);
+        // The settings by name are made again with the defaults of the executable under those of the plugins
+        mGameSettingValues.reset();
+        mMissingSettings.clear();
     }
 
     bool FalloutScripts::detects(FalloutScript::FormId viewer, FalloutScript::FormId target)
@@ -2893,8 +2923,8 @@ namespace OFScript
 
     double FalloutScripts::carriedWeight(double unit, bool packRat)
     {
-        if (packRat && unit > 0 && unit <= gameSetting("fPackRatThreshold", 2.0))
-            return unit * gameSetting("fPackRatModifier", 0.5);
+        if (packRat && unit > 0 && unit <= gameSettingValue("fPackRatThreshold"))
+            return unit * gameSettingValue("fPackRatModifier");
         return unit;
     }
 
@@ -2958,7 +2988,7 @@ namespace OFScript
         // A player who is in V.A.T.S. takes only a share of a blow (fVATSPlayerDamageMult: 0.75 in New Vegas, 0.1 in
         // Fallout 3), after the armor and before the part of the body
         if (victim == mPlayer && mVatsOpen)
-            hit.mDamage *= std::max(gameSetting("fVATSPlayerDamageMult", 1.0), 0.0);
+            hit.mDamage *= std::max(gameSettingValue("fVATSPlayerDamageMult"), 0.0);
         // The damage to the health: a blow at a part of the body does more or less than one at the body (a head shot
         // more), after the armor, and only a shot or a throw does (hands and melee weapons, and a blow with no weapon,
         // count the part as 1); a part that does not say anything (0) leaves the damage as it is
@@ -3027,7 +3057,7 @@ namespace OFScript
         // the threshold by what it took of the rest), by less in V.A.T.S. as the blow is
         if (victim == mPlayer)
             wearArmorOfHit(victim, limb, hit.mEntering, defense.mResistance, defense.mThreshold, hit.mAfterThreshold,
-                mVatsOpen ? std::max(gameSetting("fVATSPlayerDamageMult", 1.0), 0.0) : 1.0);
+                mVatsOpen ? std::max(gameSettingValue("fVATSPlayerDamageMult"), 0.0) : 1.0);
         // The blow that hurts the player flashes the screen red, as the fall of the engine does
         if (victim == mPlayer && dealt > 0)
         {
@@ -3052,8 +3082,7 @@ namespace OFScript
             if (victim == mPlayer)
             {
                 // Half of it when the settings say nothing (fCombatPlayerLimbDamageMult of both executables)
-                constexpr double playerLimbDamageMult = 0.5;
-                limbDamage *= gameSetting("fCombatPlayerLimbDamageMult", playerLimbDamageMult);
+                limbDamage *= gameSettingValue("fCombatPlayerLimbDamageMult");
             }
             if (const ESM4::Weapon* record = weapon != 0 ? mStore.get<ESM4::Weapon>().search(refId(weapon)) : nullptr)
                 if (record->mHasGameData && record->mGame.mLimbDamageMultiplier > 0)
@@ -3096,7 +3125,7 @@ namespace OFScript
                         target, away * static_cast<float>(force), static_cast<float>(seconds));
                 });
         }
-        if (mActorValues.current(victim, AV::health) > 0)
+        if (!FalloutScript::outOfHealth(mActorValues.current(victim, AV::health)))
         {
             // A character that is hit reels, when its files have an animation for it
             if (dealt > 0 && victim != mPlayer)
@@ -3227,14 +3256,14 @@ namespace OFScript
             // One that is down or restrained already is not put down again: its health comes back to a share of the
             // most (fEssentialHealthPercentReGain, 0.3 in the executables of both games), whatever it was
             namespace AV = FalloutScript::ActorValue;
-            const double regained = std::clamp(gameSetting("fEssentialHealthPercentReGain", 0.3), 0.0, 1.0);
+            const double regained = std::clamp(gameSettingValue("fEssentialHealthPercentReGain"), 0.0, 1.0);
             mActorValues.heal(victim, AV::health);
             mActorValues.damage(victim, AV::health, mActorValues.permanent(victim, AV::health) * (1.0 - regained));
             return true;
         }
         // How long an essential character lies unconscious before it gets up is fEssentialDeathTime (read from the
         // executables of both games: 10 seconds).
-        mCombat.setUnconscious(victim, true, static_cast<float>(gameSetting("fEssentialDeathTime", 10.0)));
+        mCombat.setUnconscious(victim, true, static_cast<float>(gameSettingValue("fEssentialDeathTime")));
         mCombat.withdraw(victim);
         return true;
     }
@@ -3260,17 +3289,17 @@ namespace OFScript
             {
                 constexpr std::uint8_t giantType = 7;
                 const double giant
-                    = creature->mCreatureType == giantType ? gameSetting("fCombatGiantCreatureReachMult", 2.0) : 1.0;
+                    = creature->mCreatureType == giantType ? gameSettingValue("fCombatGiantCreatureReachMult") : 1.0;
                 return static_cast<double>(creature->mAttackReach) * giant;
             }
-        return gameSetting("fHandReachMult", 0.5) * gameSetting("fCombatDistance", 128.0);
+        return gameSettingValue("fHandReachMult") * gameSettingValue("fCombatDistance");
     }
 
     FalloutScripts::WeaponStats FalloutScripts::weaponStats(FalloutScript::FormId attacker)
     {
         // A blow of a melee weapon reaches its reach times fCombatDistance (128 in both executables); the hands reach
         // as far as the character does (unarmedReach)
-        const double combatDistance = gameSetting("fCombatDistance", 128.0);
+        const double combatDistance = gameSettingValue("fCombatDistance");
         WeaponStats stats;
         stats.mWeapon = attacker != 0 ? mEquipment.weapon(attacker) : 0;
         // A character that a script told to shoot (UseWeapon) holds the weapon the script names and uses no ammunition
@@ -4047,9 +4076,9 @@ namespace OFScript
             for (const FalloutScript::FormId actor : mCombat.takeWoken())
             {
                 namespace AV = FalloutScript::ActorValue;
-                if (mActorValues.current(actor, AV::health) > 0)
+                if (!FalloutScript::outOfHealth(mActorValues.current(actor, AV::health)))
                     continue;
-                const double regained = std::clamp(gameSetting("fEssentialHealthPercentReGain", 0.3), 0.0, 1.0);
+                const double regained = std::clamp(gameSettingValue("fEssentialHealthPercentReGain"), 0.0, 1.0);
                 mActorValues.heal(actor, AV::health);
                 mActorValues.damage(actor, AV::health, mActorValues.permanent(actor, AV::health) * (1.0 - regained));
             }
@@ -4198,6 +4227,9 @@ namespace OFScript
                 if (number)
                     settings[Misc::StringUtils::lowerCase(setting.mEditorId)] = *number;
             }
+            // The settings that the plugins do not carry keep the default of the executable (fallout-rules.md D.S7)
+            for (const auto& [name, number] : mExecutableNumbers)
+                settings.emplace(name, number);
             mGameSettingValues = std::move(settings);
         }
         return *mGameSettingValues;
@@ -4361,31 +4393,38 @@ namespace OFScript
             mEquipment.wear(victim, chosen, points);
     }
 
-    std::optional<double> FalloutScripts::derivedValue(
-        FalloutScript::FormId actor, int value, const std::function<double(int)>& permanent)
+    std::optional<double> FalloutScripts::derivedValue(FalloutScript::FormId actor, int value,
+        const std::function<double(int)>& permanent, const std::function<double(int)>& current)
     {
         namespace AV = FalloutScript::ActorValue;
         namespace Derived = FalloutScript::DerivedStats;
         const FalloutScript::DerivedStatSettings& settings = derivedSettings();
         switch (value)
         {
+            // These go by the current attributes, with what a chem or a crippled limb takes away (fallout-rules.md
+            // E.1.2 to E.1.7; the executables read them with the flag 0 at 0x643CE3)
             case AV::actionPoints:
-                return Derived::actionPoints(settings, permanent(AV::agility));
+                return Derived::actionPoints(settings, current(AV::agility));
             case AV::carryWeight:
-                return Derived::carryWeight(settings, permanent(AV::strength));
+                return Derived::carryWeight(settings, current(AV::strength));
             case AV::criticalChance:
-                return Derived::criticalChance(settings, permanent(AV::luck));
+                return Derived::criticalChance(settings, current(AV::luck));
             case AV::meleeDamage:
-                return Derived::meleeDamage(settings, permanent(AV::strength));
+                return Derived::meleeDamage(settings, current(AV::strength));
+            case AV::unarmedDamage:
+                return Derived::unarmedDamage(settings, current(AV::unarmed));
+            case AV::poisonResist:
+                return Derived::poisonResist(settings, current(AV::endurance));
+            case AV::radResist:
+                return Derived::radResist(settings, current(AV::endurance));
             case AV::healRate:
-                // Only the player's is worked out: the breath lasts by it (the executables work it out for everyone,
-                // but nothing else of the port looks at it)
-                if (actor != mPlayer)
-                    return std::nullopt;
+                // Everyone's, as the executables do: the player's breath lasts by it, and every actor heals by it
                 return Derived::healRate(settings, permanent(AV::endurance));
             case AV::health:
                 break;
             default:
+                if (value >= AV::firstSkill && value <= AV::lastSkill)
+                    return playerSkill(actor, value, current);
                 return std::nullopt;
         }
         // The health starts from the base health of the record, which a record that has a template takes from it. A
@@ -4888,7 +4927,7 @@ namespace OFScript
                     FalloutScript::Hud::Subtitle subtitle;
                     subtitle.mText = line.mText;
                     subtitle.mSeconds
-                        = static_cast<float>(line.mText.size() * gameSetting("fNoticeTextTimePerCharacter", 0.06));
+                        = static_cast<float>(line.mText.size() * gameSettingValue("fNoticeTextTimePerCharacter"));
                     subtitle.mDistance = distance;
                     subtitle.mForced = line.mForceSubtitles;
                     subtitle.mKind = speaker == player ? 0 : 2;
@@ -5326,8 +5365,25 @@ namespace OFScript
 
     bool FalloutScripts::isDead(const OFWorld::Ptr& actor) const
     {
-        const FalloutScript::FormId reference = referenceOf(actor);
+        // (the player by the identity of the scripts: a converted save keeps an old number for its reference)
+        const FalloutScript::FormId reference = scriptReferenceOf(actor);
         return reference != 0 && mActors.isDead(reference);
+    }
+
+    void FalloutScripts::regenerate(const OFWorld::Ptr& actor, double seconds)
+    {
+        // A character or creature near the player heals as the player does: heal rate / 3600 each simulated second
+        // (fallout-rules.md D.R1). FalloutNV.exe 0x8C3C40, the update of an actor with a process, calls 0x88B510 for
+        // any actor whose cached health is below its most (flag 0x20000000); the perk term of 0x88B510 is the player's
+        // only. The player's own share is in update().
+        namespace AV = FalloutScript::ActorValue;
+        const FalloutScript::FormId reference = scriptReferenceOf(actor);
+        if (reference == 0 || reference == mPlayer || mActors.isDead(reference))
+            return;
+        const double gain
+            = FalloutScript::DerivedStats::regeneration(mActorValues.current(reference, AV::healRate), seconds);
+        if (gain > 0)
+            mActorValues.restore(reference, AV::health, gain);
     }
 
     FalloutScript::FormId FalloutScripts::scriptReferenceOf(const OFWorld::Ptr& actor) const
@@ -5998,10 +6054,7 @@ namespace OFScript
         {
             const OFWorld::Ptr actor = findReference(user);
             const bool present = !actor.isEmpty() && actor.getRefData().isEnabled() && !actor.mRef->isDeleted();
-            // The player is an actor of the engine, whose death the stats tell; the others are told by the host
-            const bool dead = present
-                && (mActors.isDead(user)
-                    || (actor.getClass().isActor() && actor.getClass().getCreatureStats(actor).isDead()));
+            const bool dead = present && mActors.isDead(user);
             // The furniture is gone when it is not there, is disabled or deleted
             const OFWorld::Ptr furniture = present ? findReference(use.mFurniture) : OFWorld::Ptr();
             // or has been moved to another place, since the actor was put where the furniture was
@@ -6548,9 +6601,7 @@ namespace OFScript
         const OFWorld::Class& cls = ptr.getClass();
         if (ptr == world->getPlayerPtr())
         {
-            OFMechanics::CreatureStats& stats = cls.getCreatureStats(ptr);
-            stats.land(true);
-            stats.setTeleported(true);
+            // A fall in progress ends where the player arrives (PlayerCharacter::teleported)
             world->getPlayer().setTeleported(true);
             // Inside the cell the player is in, and between the exterior cells of one worldspace, the player is only
             // moved (the world takes it from cell to cell): changing to a cell fades the screen out and in again, which
@@ -6576,12 +6627,6 @@ namespace OFScript
             world->rotateObject(player, where.mAngle);
             OFBase::Environment::get().getLuaManager()->objectTeleported(player);
             return;
-        }
-        if (cls.isActor())
-        {
-            OFMechanics::CreatureStats& stats = cls.getCreatureStats(ptr);
-            stats.land(false);
-            stats.setTeleported(true);
         }
         const OFWorld::Ptr moved = world->moveObject(ptr, destination, where.mPosition);
         world->rotateObject(moved, where.mAngle, OFBase::RotationFlag_none);
@@ -7007,10 +7052,53 @@ namespace OFScript
         mChargen.setAttributes(attributes);
     }
 
+    std::optional<double> FalloutScripts::playerSkill(
+        FalloutScript::FormId actor, int skill, const std::function<double(int)>& current)
+    {
+        // Only the player's: a character's skills are the starting ones (its record's are the base of a sum that is not
+        // known here)
+        if (actor != mPlayer)
+            return std::nullopt;
+        const std::vector<FalloutScript::ChargenSkill>& skills = mChargen.skills();
+        const auto found = std::find_if(skills.begin(), skills.end(),
+            [skill](const FalloutScript::ChargenSkill& candidate) { return candidate.mNumber == skill; });
+        // A skill the game does not work out (Big Guns in New Vegas, Survival in Fallout 3)
+        if (found == skills.end())
+            return std::nullopt;
+        // fallout-rules.md E.1.9: 2 + floor(2 x the attribute) + ceil(Luck / 2) + 15 if tagged, with the attributes of
+        // now (FalloutNV.exe 0x643C20, floor at 0x643C45, ceil at 0x643C6C; the reads with the flag 0 at 0x643CE3)
+        const double governing = current(found->mAttribute);
+        const double luck = current(FalloutScript::ActorValue::luck);
+        return FalloutScript::Chargen::skillBase + std::floor(2.0 * governing) + std::ceil(0.5 * luck)
+            + (mChargen.tagged(skill) ? FalloutScript::Chargen::tagBonus : 0);
+    }
+
     void FalloutScripts::applyChargenSkills()
     {
+        // The skills follow the SPECIAL and the tags from now on (playerSkill): a base that was set before goes
         for (const FalloutScript::ChargenSkill& skill : mChargen.skills())
-            mActorValues.setBase(mPlayer, skill.mNumber, mChargen.skillValue(skill.mNumber));
+            mActorValues.resetBase(mPlayer, skill.mNumber);
+    }
+
+    void FalloutScripts::convertOldPlayerSkills()
+    {
+        // A save of an engine before the skills followed the SPECIAL (actor values section 1) has each skill as a base
+        // that chargen wrote (half the Luck rounded down then) plus the points of the level-ups. The points become the
+        // permanent modifier, as the games keep them, and the base follows the SPECIAL again. The attributes are the
+        // base ones of now: a permanent change of SPECIAL since chargen (a book, an implant) counts as points.
+        for (const FalloutScript::ChargenSkill& skill : mChargen.skills())
+        {
+            if (!mActorValues.hasBase(mPlayer, skill.mNumber))
+                continue;
+            const double governing = mActorValues.base(mPlayer, skill.mAttribute);
+            const double luck = mActorValues.base(mPlayer, FalloutScript::ActorValue::luck);
+            const double chargen = FalloutScript::Chargen::skillBase + 2.0 * governing + std::floor(luck / 2.0)
+                + (mChargen.tagged(skill.mNumber) ? FalloutScript::Chargen::tagBonus : 0);
+            const double points = mActorValues.base(mPlayer, skill.mNumber) - chargen;
+            mActorValues.resetBase(mPlayer, skill.mNumber);
+            if (points != 0)
+                mActorValues.modify(mPlayer, skill.mNumber, points);
+        }
     }
 
     void FalloutScripts::finishChargenPage()
@@ -7030,18 +7118,9 @@ namespace OFScript
                     applyChargenSkills();
                 break;
             case FalloutScript::ChargenPage::Skills:
+                // The tags count in the skills by themselves (playerSkill), also those of a screen that a perk opens
                 if (!mChargen.lastFinishAdded())
                     applyChargenSkills();
-                else
-                {
-                    // Only the skills the player tagged or let go of change, by the bonus of a tag
-                    for (const int skill : mChargen.lastTagged())
-                        mActorValues.setBase(
-                            mPlayer, skill, mActorValues.base(mPlayer, skill) + FalloutScript::Chargen::tagBonus);
-                    for (const int skill : mChargen.lastUntagged())
-                        mActorValues.setBase(
-                            mPlayer, skill, mActorValues.base(mPlayer, skill) - FalloutScript::Chargen::tagBonus);
-                }
                 break;
             case FalloutScript::ChargenPage::Traits:
             {

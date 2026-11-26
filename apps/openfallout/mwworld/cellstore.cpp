@@ -1,5 +1,4 @@
 #include "cellstore.hpp"
-#include "magiceffects.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -16,7 +15,6 @@
 #include <components/esm3/doorstate.hpp>
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
-#include <components/esm3/fogstate.hpp>
 #include <components/esm3/loadacti.hpp>
 #include <components/esm3/loadalch.hpp>
 #include <components/esm3/loadappa.hpp>
@@ -81,14 +79,9 @@
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwmechanics/creaturestats.hpp"
-#include "../mwmechanics/recharge.hpp"
-#include "../mwmechanics/spellutil.hpp"
-
 #include "class.hpp"
 #include "containerstore.hpp"
 #include "esmstore.hpp"
-#include "inventorystore.hpp"
 #include "ptr.hpp"
 #include "worldmodel.hpp"
 
@@ -241,26 +234,6 @@ namespace
 
         if (state.mVersion <= ESM::MaxOldRestockingFormatVersion)
             fixRestocking(record, state);
-        if (state.mVersion <= ESM::MaxClearModifiersFormatVersion)
-        {
-            if constexpr (std::is_same_v<T, ESM::Creature>)
-                OFWorld::convertMagicEffects(state.mCreatureStats, state.mInventory);
-            else if constexpr (std::is_same_v<T, ESM::NPC>)
-                OFWorld::convertMagicEffects(state.mCreatureStats, state.mInventory, &state.mNpcStats);
-        }
-        else if (state.mVersion <= ESM::MaxOldCreatureStatsFormatVersion)
-        {
-            if constexpr (std::is_same_v<T, ESM::Creature> || std::is_same_v<T, ESM::NPC>)
-            {
-                OFWorld::convertStats(state.mCreatureStats);
-                OFWorld::convertEnchantmentSlots(state.mCreatureStats, state.mInventory);
-            }
-        }
-        else if (state.mVersion <= ESM::MaxActiveSpellSlotIndexFormatVersion)
-        {
-            if constexpr (std::is_same_v<T, ESM::Creature> || std::is_same_v<T, ESM::NPC>)
-                OFWorld::convertEnchantmentSlots(state.mCreatureStats, state.mInventory);
-        }
         if constexpr (std::is_same_v<T, ESM::Creature> || std::is_same_v<T, ESM::NPC>)
         {
             if (reader.mActorIdConverter && state.mHasCustomState)
@@ -587,7 +560,6 @@ namespace OFWorld
 
     void CellStore::requestMergedRefsUpdate()
     {
-        mRechargingItemsUpToDate = false;
         mMergedRefsNeedsUpdate = true;
     }
 
@@ -619,7 +591,6 @@ namespace OFWorld
         , mHasState(false)
         , mLastRespawn(0, 0)
         , mCellStoreImp(std::make_unique<CellStoreImp>())
-        , mRechargingItemsUpToDate(false)
     {
 
         std::apply([this](auto&... x) { (CellStoreImp::assignStoreToIndex(*this, x), ...); }, mCellStoreImp->mRefLists);
@@ -1099,22 +1070,8 @@ namespace OFWorld
         if (!mCellVariant.isExterior() && mCellVariant.hasWater())
             state.mWaterLevel = mWaterLevel;
         state.mIsInterior = !mCellVariant.isExterior();
-        state.mHasFogOfWar = (mFogState.get() ? 1 : 0);
+        state.mHasFogOfWar = 0;
         state.mLastRespawn = mLastRespawn.toEsm();
-    }
-
-    void CellStore::writeFog(ESM::ESMWriter& writer) const
-    {
-        if (mFogState.get())
-        {
-            mFogState->save(writer, !mCellVariant.isExterior());
-        }
-    }
-
-    void CellStore::readFog(ESM::ESMReader& reader)
-    {
-        mFogState = std::make_unique<ESM::FogState>();
-        mFogState->load(reader);
     }
 
     void CellStore::writeReferences(ESM::ESMWriter& writer) const
@@ -1222,217 +1179,6 @@ namespace OFWorld
         }
 
         requestMergedRefsUpdate();
-    }
-
-    void CellStore::setFog(std::unique_ptr<ESM::FogState>&& fog)
-    {
-        mFogState = std::move(fog);
-    }
-
-    ESM::FogState* CellStore::getFog() const
-    {
-        return mFogState.get();
-    }
-
-    static void clearCorpse(const OFWorld::Ptr& ptr, const ESMStore& store)
-    {
-        const OFMechanics::CreatureStats& creatureStats = ptr.getClass().getCreatureStats(ptr);
-        static const float fCorpseClearDelay
-            = store.get<ESM::GameSetting>().find("fCorpseClearDelay")->mValue.getFloat();
-        if (creatureStats.isDead() && creatureStats.isDeathAnimationFinished() && !ptr.getClass().isPersistent(ptr)
-            && creatureStats.getTimeOfDeath() + fCorpseClearDelay
-                <= OFBase::Environment::get().getWorld()->getTimeStamp())
-        {
-            OFBase::Environment::get().getWorld()->deleteObject(ptr);
-        }
-    }
-
-    void CellStore::rest(double hours)
-    {
-        if (mState == State_Loaded)
-        {
-            // Refs with no custom data are at default dynamic stats — there is nothing to restore,
-            // and touching them would force-allocate custom data that then bloats the save file.
-            for (OFWorld::LiveCellRef<ESM::Creature>& creature : get<ESM::Creature>().mList)
-            {
-                Ptr ptr = getCurrentPtr(&creature);
-                if (!ptr.isEmpty() && ptr.getCellRef().getCount() > 0 && ptr.getRefData().hasCustomData())
-                {
-                    OFBase::Environment::get().getMechanicsManager()->restoreDynamicStats(ptr, hours, true);
-                }
-            }
-            for (OFWorld::LiveCellRef<ESM::NPC>& npc : get<ESM::NPC>().mList)
-            {
-                Ptr ptr = getCurrentPtr(&npc);
-                if (!ptr.isEmpty() && ptr.getCellRef().getCount() > 0 && ptr.getRefData().hasCustomData())
-                {
-                    OFBase::Environment::get().getMechanicsManager()->restoreDynamicStats(ptr, hours, true);
-                }
-            }
-        }
-    }
-
-    void CellStore::recharge(float duration)
-    {
-        if (duration <= 0)
-            return;
-
-        if (mState == State_Loaded)
-        {
-            // Skip refs that have no custom data — they have no container to recharge,
-            // and getContainerStore() would force-allocate custom data and bloat the save file.
-            for (OFWorld::LiveCellRef<ESM::Creature>& creature : get<ESM::Creature>().mList)
-            {
-                Ptr ptr = getCurrentPtr(&creature);
-                if (!ptr.isEmpty() && ptr.getCellRef().getCount() > 0 && ptr.getRefData().hasCustomData())
-                {
-                    ptr.getClass().getContainerStore(ptr).rechargeItems(duration);
-                }
-            }
-            for (OFWorld::LiveCellRef<ESM::NPC>& npc : get<ESM::NPC>().mList)
-            {
-                Ptr ptr = getCurrentPtr(&npc);
-                if (!ptr.isEmpty() && ptr.getCellRef().getCount() > 0 && ptr.getRefData().hasCustomData())
-                {
-                    ptr.getClass().getContainerStore(ptr).rechargeItems(duration);
-                }
-            }
-            for (OFWorld::LiveCellRef<ESM::Container>& container : get<ESM::Container>().mList)
-            {
-                Ptr ptr = getCurrentPtr(&container);
-                if (!ptr.isEmpty() && ptr.getRefData().hasCustomData() && ptr.getCellRef().getCount() > 0
-                    && ptr.getClass().getContainerStore(ptr).isResolved())
-                {
-                    ptr.getClass().getContainerStore(ptr).rechargeItems(duration);
-                }
-            }
-
-            rechargeItems(duration);
-        }
-    }
-
-    void CellStore::respawn()
-    {
-        if (mState == State_Loaded)
-        {
-            static const int iMonthsToRespawn
-                = mStore.get<ESM::GameSetting>().find("iMonthsToRespawn")->mValue.getInteger();
-            if (OFBase::Environment::get().getWorld()->getTimeStamp() - mLastRespawn > 24 * 30 * iMonthsToRespawn)
-            {
-                mLastRespawn = OFBase::Environment::get().getWorld()->getTimeStamp();
-                for (CellRefList<ESM::Container>::List::iterator it(get<ESM::Container>().mList.begin());
-                     it != get<ESM::Container>().mList.end(); ++it)
-                {
-                    Ptr ptr = getCurrentPtr(&*it);
-                    if (ptr.getRefData().hasCustomData())
-                        ptr.getClass().respawn(ptr);
-                }
-            }
-
-            // Skip refs with no custom data: they cannot have been killed, looted, or had their inventory
-            // generated, so respawn/clearCorpse have no work to do and would only force-allocate custom
-            // data that then bloats the save file. Actors need to respawn here even if they've been moved
-            // to another cell.
-            for (LiveCellRefBase& base : get<ESM::Creature>().mList)
-            {
-                Ptr ptr = getCurrentPtr(&base);
-                if (!ptr.getRefData().hasCustomData())
-                    continue;
-                clearCorpse(ptr, mStore);
-                ptr.getClass().respawn(ptr);
-            }
-            for (LiveCellRefBase& base : get<ESM::NPC>().mList)
-            {
-                Ptr ptr = getCurrentPtr(&base);
-                if (!ptr.getRefData().hasCustomData())
-                    continue;
-                clearCorpse(ptr, mStore);
-                ptr.getClass().respawn(ptr);
-            }
-            for (LiveCellRefBase& base : get<ESM::CreatureLevList>().mList)
-            {
-                Ptr ptr = getCurrentPtr(&base);
-                if (!ptr.mRef->isDeleted() && ptr.getRefData().hasCustomData())
-                    ptr.getClass().respawn(ptr);
-            }
-            for (const auto& [base, _] : mMovedHere)
-            {
-                switch (base->getType())
-                {
-                    case ESM::Creature::sRecordId:
-                    case ESM::NPC::sRecordId:
-                    case ESM::CreatureLevList::sRecordId:
-                    {
-                        OFWorld::Ptr ptr(base, this);
-                        if (ptr.mRef->isDeleted() || !ptr.getRefData().hasCustomData())
-                            continue;
-                        // Remove actors that have been dead a while, but don't belong here and didn't get hit by the
-                        // logic above
-                        if (ptr.getClass().isActor())
-                            clearCorpse(ptr, mStore);
-                        else // Respawn lists in their new position
-                            ptr.getClass().respawn(ptr);
-                        break;
-                    }
-                    default:
-                        break;
-                }
-            }
-        }
-    }
-
-    void OFWorld::CellStore::rechargeItems(float duration)
-    {
-        if (!mRechargingItemsUpToDate)
-        {
-            updateRechargingItems();
-            mRechargingItemsUpToDate = true;
-        }
-        for (const auto& [item, charge] : mRechargingItems)
-        {
-            OFMechanics::rechargeItem(item, charge, duration);
-        }
-    }
-
-    void OFWorld::CellStore::updateRechargingItems()
-    {
-        mRechargingItems.clear();
-
-        const auto update = [this](auto& list) {
-            for (auto& item : list)
-            {
-                Ptr ptr = getCurrentPtr(&item);
-                if (!ptr.isEmpty() && ptr.getCellRef().getCount() > 0)
-                {
-                    checkItem(ptr);
-                }
-            }
-        };
-
-        update(get<ESM::Weapon>().mList);
-        update(get<ESM::Armor>().mList);
-        update(get<ESM::Clothing>().mList);
-        update(get<ESM::Book>().mList);
-    }
-
-    void OFWorld::CellStore::checkItem(const Ptr& ptr)
-    {
-        const ESM::RefId& enchantmentId = ptr.getClass().getEnchantment(ptr);
-        if (enchantmentId.empty())
-            return;
-
-        const ESM::Enchantment* enchantment = mStore.get<ESM::Enchantment>().search(enchantmentId);
-        if (!enchantment)
-        {
-            Log(Debug::Warning) << "Warning: Can't find enchantment " << enchantmentId << " on item "
-                                << ptr.getCellRef().getRefId();
-            return;
-        }
-
-        if (enchantment->mData.mType == ESM::Enchantment::WhenUsed
-            || enchantment->mData.mType == ESM::Enchantment::WhenStrikes)
-            mRechargingItems.emplace_back(
-                ptr.getBase(), static_cast<float>(OFMechanics::getEnchantmentCharge(*enchantment)));
     }
 
     CellStore* OFWorld::CellStore::getOriginCell(const Ptr& object) const

@@ -16,7 +16,6 @@
 #include "../mwworld/doorstate.hpp"
 #include "../mwworld/globalvariablename.hpp"
 #include "../mwworld/ptr.hpp"
-#include "../mwworld/spellcaststate.hpp"
 
 #include "../mwrender/rendermode.hpp"
 
@@ -141,8 +140,6 @@ namespace OFBase
 
         virtual void readRecord(ESM::ESMReader& reader, uint32_t type) = 0;
 
-        virtual void useDeathCamera() = 0;
-
         virtual void setWaterHeight(const float height) = 0;
 
         virtual bool toggleWater() = 0;
@@ -163,6 +160,9 @@ namespace OFBase
         virtual bool isCellQuasiExterior() const = 0;
 
         virtual const std::set<OFWorld::CellStore*, std::less<>>& getActiveCells() const = 0;
+
+        /// The cell is one of the scene's (loaded and attached, as the executables say)
+        virtual bool isCellActive(const OFWorld::CellStore& cell) const = 0;
 
         virtual void getDoorMarkers(OFWorld::CellStore& cell, std::vector<DoorMarker>& out) = 0;
         ///< get a list of teleport door markers for a given cell, to be displayed on the local map
@@ -361,14 +361,12 @@ namespace OFBase
         virtual void processChangedSettings(const std::set<std::pair<std::string, std::string>>& settings) = 0;
 
         virtual bool isFlying(const OFWorld::Ptr& ptr) const = 0;
-        virtual bool isSlowFalling(const OFWorld::Ptr& ptr) const = 0;
         virtual bool isSwimming(const OFWorld::ConstPtr& object) const = 0;
         virtual bool isWading(const OFWorld::ConstPtr& object) const = 0;
         /// Is the head of the creature underwater?
         virtual bool isSubmerged(const OFWorld::ConstPtr& object) const = 0;
         virtual bool isUnderwater(const OFWorld::CellStore* cell, const osg::Vec3f& pos) const = 0;
         virtual bool isUnderwater(const OFWorld::ConstPtr& object, const float heightRatio) const = 0;
-        virtual bool isWaterWalkingCastableOnTarget(const OFWorld::ConstPtr& target) const = 0;
         virtual bool isOnGround(const OFWorld::Ptr& ptr) const = 0;
 
         /// The Havok material of what an actor stands on (the index of the executables' tables of the sounds of steps:
@@ -410,19 +408,8 @@ namespace OFBase
             = 0; ///< @return true if the player is colliding with \a object
         virtual bool getActorCollidingWith(const OFWorld::ConstPtr& object)
             = 0; ///< @return true if any actor is colliding with \a object
-        virtual void hurtStandingActors(const OFWorld::ConstPtr& object, float dmgPerSecond) = 0;
-        ///< Apply a health difference to any actors standing on \a object.
-        /// To hurt actors, healthPerSecond should be a positive value. For a negative value, actors will be healed.
-        virtual void hurtCollidingActors(const OFWorld::ConstPtr& object, float dmgPerSecond) = 0;
-        ///< Apply a health difference to any actors colliding with \a object.
-        /// To hurt actors, healthPerSecond should be a positive value. For a negative value, actors will be healed.
 
         virtual float getWindSpeed() const = 0;
-
-        virtual void getContainersOwnedBy(const OFWorld::ConstPtr& npc, std::vector<OFWorld::Ptr>& out) = 0;
-        ///< get all containers in active cells owned by this Npc
-        virtual void getItemsOwnedBy(const OFWorld::ConstPtr& npc, std::vector<OFWorld::Ptr>& out) = 0;
-        ///< get all items in active cells owned by this Npc
 
         virtual bool getLOS(const OFWorld::ConstPtr& actor, const OFWorld::ConstPtr& targetActor) = 0;
         ///< get Line of Sight (morrowind stupid implementation)
@@ -484,23 +471,8 @@ namespace OFBase
          * @param actor
          * @return Success or the failure condition.
          */
-        virtual OFWorld::SpellCastState startSpellCast(const OFWorld::Ptr& actor) = 0;
-
-        virtual void castSpell(const OFWorld::Ptr& actor, bool scriptedSpell = false) = 0;
-
-        virtual void launchMagicBolt(const ESM::RefId& spellId, const OFWorld::Ptr& caster,
-            const osg::Vec3f& fallbackDirection, ESM::RefNum item)
-            = 0;
-        virtual void launchProjectile(OFWorld::Ptr& actor, OFWorld::Ptr& projectile, const osg::Vec3f& worldPos,
-            const osg::Quat& orient, OFWorld::Ptr& bow, float speed, float attackStrength, float attackWindUp)
-            = 0;
-        virtual void updateProjectilesCasters() = 0;
-
-        virtual void applyLoopingParticles(const OFWorld::Ptr& ptr) const = 0;
 
         virtual const std::vector<std::string>& getContentFiles() const = 0;
-
-        virtual void breakInvisibility(const OFWorld::Ptr& actor) = 0;
 
         // Allow NPCs to use torches?
         virtual bool useTorches() const = 0;
@@ -512,29 +484,6 @@ namespace OFBase
         virtual float getPhysicsFrameRateDt() const = 0;
 
         virtual bool findInteriorPositionInWorldSpace(const OFWorld::CellStore* cell, osg::Vec3f& result) = 0;
-
-        /// Teleports \a ptr to the closest reference of \a id (e.g. DivineMarker, PrisonMarker, TempleMarker)
-        /// @note id must be lower case
-        virtual void teleportToClosestMarker(const OFWorld::Ptr& ptr, const ESM::RefId& id) = 0;
-
-        enum DetectionType
-        {
-            Detect_Enchantment,
-            Detect_Key,
-            Detect_Creature
-        };
-        /// List all references (filtered by \a type) detected by \a ptr. The range
-        /// is determined by the current magnitude of the "Detect X" magic effect belonging to \a type.
-        /// @note This also works for references in containers.
-        virtual void listDetectedReferences(const OFWorld::Ptr& ptr, std::vector<OFWorld::Ptr>& out, DetectionType type)
-            = 0;
-
-        /// Update the value of some globals according to the world state, which may be used by dialogue entries.
-        /// This should be called when initiating a dialogue.
-        virtual void updateDialogueGlobals() = 0;
-
-        /// Spawn a random creature from a levelled list next to the player
-        virtual void spawnRandomCreature(const ESM::RefId& creatureList) = 0;
 
         virtual void spawnEffect(VFS::Path::NormalizedView model, const std::string& textureOverride,
             const osg::Vec3f& worldPos, float scale = 1.f, bool isMagicVFX = true, bool useAmbientLight = true,
@@ -549,18 +498,7 @@ namespace OFBase
         /// @see OFWorld::WeatherManager::getStormDirection
         virtual osg::Vec3f getStormDirection() const = 0;
 
-        /// Resets all actors in the current active cells to their original location within that cell.
-        virtual void resetActors() = 0;
-
         virtual bool isWalkingOnWater(const OFWorld::ConstPtr& actor) const = 0;
-
-        /// Return a vector aiming the actor's weapon towards a target.
-        /// @note The length of the vector is the distance between actor and target.
-        virtual osg::Vec3f aimToTarget(
-            const OFWorld::ConstPtr& actor, const OFWorld::ConstPtr& target, bool isRangedCombat)
-            = 0;
-
-        virtual void rest(double hours) = 0;
 
         virtual void setPlayerTraveling(bool traveling) = 0;
         virtual bool isPlayerTraveling() const = 0;
@@ -577,9 +515,6 @@ namespace OFBase
         /// \param ptr object to export scene graph for (if empty, export entire scene graph)
         virtual std::filesystem::path exportSceneGraph(const OFWorld::Ptr& ptr) = 0;
 
-        /// Preload VFX associated with this effect list
-        virtual void preloadEffects(const ESM::EffectList* effectList) = 0;
-
         virtual DetourNavigator::Navigator* getNavigator() const = 0;
 
         virtual void updateActorPath(const OFWorld::ConstPtr& actor, const std::deque<osg::Vec3f>& path,
@@ -590,9 +525,6 @@ namespace OFBase
         virtual void setNavMeshNumberToRender(const std::size_t value) = 0;
 
         virtual DetourNavigator::AgentBounds getPathfindingAgentBounds(const OFWorld::ConstPtr& actor) const = 0;
-
-        virtual bool hasCollisionWithDoor(
-            const OFWorld::ConstPtr& door, const osg::Vec3f& position, const osg::Vec3f& destination) const = 0;
 
         virtual bool isAreaOccupiedByOtherActor(const OFWorld::ConstPtr& actor, const osg::Vec3f& position) const = 0;
 

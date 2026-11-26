@@ -10,7 +10,6 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwworld/actioneat.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/nullaction.hpp"
@@ -69,17 +68,6 @@ namespace OFClass
         return ref->mBase->mData.mValue;
     }
 
-    std::unique_ptr<OFWorld::Action> Ingredient::use(const OFWorld::Ptr& ptr, bool force) const
-    {
-        if (ptr.get<ESM::Ingredient>()->mBase->mData.mEffectID[0].empty())
-            return std::make_unique<OFWorld::NullAction>();
-        std::unique_ptr<OFWorld::Action> action = std::make_unique<OFWorld::ActionEat>(ptr);
-
-        action->setSound(ESM::RefId::stringRefId("Swallow"));
-
-        return action;
-    }
-
     const ESM::RefId& Ingredient::getUpSoundId(const OFWorld::ConstPtr& ptr) const
     {
         static auto sound = ESM::RefId::stringRefId("Item Ingredient Up");
@@ -119,8 +107,8 @@ namespace OFClass
             info.extra += OFGui::ToolTips::getMiscString(ref->mBase->mScript.getRefIdString(), "Script");
         }
 
-        OFWorld::Ptr player = OFBase::Environment::get().getWorld()->getPlayerPtr();
-        float alchemySkill = player.getClass().getSkill(player, ESM::Skill::Alchemy);
+        // The player of Fallout has no Alchemy skill
+        const float alchemySkill = 0.f;
 
         static const float fWortChanceValue = OFBase::Environment::get()
                                                   .getESMStore()

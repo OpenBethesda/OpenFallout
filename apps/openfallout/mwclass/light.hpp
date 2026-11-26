@@ -38,17 +38,11 @@ namespace OFClass
 
         bool isItem(const OFWorld::ConstPtr&) const override;
 
-        std::string_view getWerewolfRefusalSoundId() const override { return "WolfItem"; }
-
         std::unique_ptr<OFWorld::Action> activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const override;
         ///< Generate action for activation
 
         ESM::RefId getScript(const OFWorld::ConstPtr& ptr) const override;
         ///< Return name of the script attached to ptr
-
-        std::pair<std::vector<int>, bool> getEquipmentSlots(const OFWorld::ConstPtr& ptr) const override;
-        ///< \return first: Return IDs of the slot this object can be equipped in; second: can object
-        /// stay stacked when equipped?
 
         int getValue(const OFWorld::ConstPtr& ptr) const override;
         ///< Return trade value of the object. Throws an exception, if the object can't be traded.
@@ -62,9 +56,6 @@ namespace OFClass
         VFS::Path::NormalizedView getInventoryIcon(const OFWorld::ConstPtr& ptr) const override;
         ///< Return name of inventory icon.
 
-        std::unique_ptr<OFWorld::Action> use(const OFWorld::Ptr& ptr, bool force = false) const override;
-        ///< Generate action for using via inventory menu
-
         void setRemainingUsageTime(const OFWorld::Ptr& ptr, float duration) const override;
         ///< Sets the remaining duration of the object.
 
@@ -76,9 +67,6 @@ namespace OFClass
         float getWeight(const OFWorld::ConstPtr& ptr) const override;
 
         bool canSell(const OFWorld::ConstPtr& item, int npcServices) const override;
-
-        std::pair<int, std::string_view> canBeEquipped(
-            const OFWorld::ConstPtr& ptr, const OFWorld::Ptr& npc) const override;
 
         ESM::RefId getSound(const OFWorld::ConstPtr& ptr) const override;
     };

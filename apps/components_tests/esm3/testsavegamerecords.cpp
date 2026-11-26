@@ -3,11 +3,11 @@
 #include <components/esm/attr.hpp>
 #include <components/esm3/activespells.hpp>
 #include <components/esm3/cellid.hpp>
+#include <components/esm3/cellstate.hpp>
 #include <components/esm3/controlsstate.hpp>
 #include <components/esm3/debugprofile.hpp>
 #include <components/esm3/dialoguestate.hpp>
 #include <components/esm3/fogstate.hpp>
-#include <components/esm3/globalmap.hpp>
 #include <components/esm3/globalscript.hpp>
 #include <components/esm3/journalentry.hpp>
 #include <components/esm3/loadmgef.hpp>
@@ -303,78 +303,6 @@ namespace ESM
 
             EXPECT_EQ(result.mId, record.mId);
             EXPECT_EQ(result.selectedInstances, record.selectedInstances);
-        }
-
-        TEST_P(Esm3SaveGameRecordTest, globalMapKeepsTheImageAndTheMarkers)
-        {
-            GlobalMap record;
-            record.mBounds = { .mMinX = -4, .mMaxX = 6, .mMinY = -2, .mMaxY = 8 };
-            record.mImageData = { 'a', 'b', 'c', '\0', 'd' };
-            record.mMarkers = { { 1, 2 }, { -3, 4 } };
-
-            GlobalMap result;
-            saveAndLoadRecord(record, GetParam(), result);
-
-            EXPECT_EQ(result.mBounds.mMinX, -4);
-            EXPECT_EQ(result.mBounds.mMaxX, 6);
-            EXPECT_EQ(result.mBounds.mMinY, -2);
-            EXPECT_EQ(result.mBounds.mMaxY, 8);
-            EXPECT_EQ(result.mImageData, record.mImageData);
-            EXPECT_EQ(result.mMarkers, record.mMarkers);
-        }
-
-        // The fog of war of an interior cell has its own bounds and centre, and the fog of an exterior cell has none.
-        void saveFog(const FogState& record, bool interior, FormatVersion format, FogState& result)
-        {
-            roundTripWith(
-                format, [&](ESMWriter& writer) { record.save(writer, interior); },
-                [&](ESMReader& reader) { result.load(reader); });
-        }
-
-        TEST_P(Esm3SaveGameRecordTest, fogOfAnInteriorCellKeepsTheBoundsTheCentreAndTheTextures)
-        {
-            FogState record;
-            record.mBounds = { .mMinX = -10.f, .mMinY = -20.f, .mMaxX = 30.f, .mMaxY = 40.f };
-            record.mNorthMarkerAngle = 1.5f;
-            record.mCenterX = 3.f;
-            record.mCenterY = 4.f;
-            record.mFogTextures.push_back({ .mX = 1, .mY = 2, .mImageData = { 'x', 'y', 'z' } });
-            record.mFogTextures.push_back({ .mX = -1, .mY = -2, .mImageData = { 'q' } });
-
-            FogState result;
-            saveFog(record, true, GetParam(), result);
-
-            EXPECT_EQ(result.mBounds.mMinX, -10.f);
-            EXPECT_EQ(result.mBounds.mMinY, -20.f);
-            EXPECT_EQ(result.mBounds.mMaxX, 30.f);
-            EXPECT_EQ(result.mBounds.mMaxY, 40.f);
-            EXPECT_EQ(result.mNorthMarkerAngle, 1.5f);
-            EXPECT_EQ(result.mCenterX, 3.f);
-            EXPECT_EQ(result.mCenterY, 4.f);
-            ASSERT_EQ(result.mFogTextures.size(), 2u);
-            EXPECT_EQ(result.mFogTextures[0].mX, 1);
-            EXPECT_EQ(result.mFogTextures[0].mY, 2);
-            EXPECT_EQ(result.mFogTextures[0].mImageData, (std::vector<char>{ 'x', 'y', 'z' }));
-            EXPECT_EQ(result.mFogTextures[1].mImageData, (std::vector<char>{ 'q' }));
-            // the images of the old saves are TGA files, the images of the new ones are not
-            EXPECT_EQ(result.mFogTextures[0].mLegacyTgaImageData, GetParam() <= MaxOldFogOfWarFormatVersion);
-        }
-
-        TEST_P(Esm3SaveGameRecordTest, fogOfAnExteriorCellHasTexturesOnly)
-        {
-            FogState record;
-            record.mFogTextures.push_back({ .mX = 7, .mY = 8, .mImageData = { 'a' } });
-
-            FogState result;
-            result.mBounds = { .mMinX = 2.f, .mMinY = 4.f, .mMaxX = 6.f, .mMaxY = 8.f };
-            saveFog(record, false, GetParam(), result);
-
-            // without a centre in the record it is the middle of the bounds
-            EXPECT_EQ(result.mCenterX, 4.f);
-            EXPECT_EQ(result.mCenterY, 6.f);
-            ASSERT_EQ(result.mFogTextures.size(), 1u);
-            EXPECT_EQ(result.mFogTextures[0].mX, 7);
-            EXPECT_EQ(result.mFogTextures[0].mY, 8);
         }
 
         TEST_P(Esm3SaveGameRecordTest, savedGameKeepsTheHeaderOfTheSave)
@@ -814,6 +742,181 @@ namespace ESM
             EXPECT_EQ(result.mId, next.mId);
             EXPECT_FALSE(result.mRunning);
             EXPECT_FALSE(reader.hasMoreRecs());
+        }
+
+        // The records that the map window of Morrowind wrote, which the engine no longer writes and skips on load. Each
+        // of them is written here in the layout of the old save, with a record after it that must still load.
+        template <class WriteOldRecord>
+        void loadTheRecordAfterAnOldRecord(
+            FormatVersion format, std::uint32_t oldRecord, WriteOldRecord&& writeOldRecord)
+        {
+            GlobalScript next;
+            next.mId = id("nextscript");
+            next.mRunning = true;
+
+            ESMWriter writer;
+            auto stream = std::make_unique<std::stringstream>();
+            writer.setFormatVersion(format);
+            writer.save(*stream);
+            writer.startRecord(oldRecord);
+            writeOldRecord(writer);
+            writer.endRecord(oldRecord);
+            writer.startRecord(fakeRecordId);
+            next.save(writer);
+            writer.endRecord(fakeRecordId);
+
+            ESMReader reader;
+            reader.open(std::move(stream), "stream");
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), oldRecord);
+            reader.getRecHeader();
+            reader.skipRecord();
+
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), fakeRecordId);
+            reader.getRecHeader();
+            GlobalScript result;
+            result.load(reader);
+            EXPECT_EQ(result.mId, next.mId);
+            EXPECT_TRUE(result.mRunning);
+            EXPECT_FALSE(reader.hasMoreRecs());
+        }
+
+        TEST_P(Esm3SaveGameRecordTest, theGlobalMapRecordOfAnOldSaveIsSkippedAndTheRecordAfterItStillLoads)
+        {
+            // GMAP: the bounds of the explored part of the world map, its image and the cells that it marks
+            loadTheRecordAfterAnOldRecord(GetParam(), static_cast<std::uint32_t>(REC_GMAP), [](ESMWriter& writer) {
+                const std::int32_t bounds[4] = { -4, 6, -2, 8 };
+                writer.writeHNT("BNDS", bounds);
+                const std::string image("abc\0d", 5);
+                writer.startSubRecord("DATA");
+                writer.write(image.data(), image.size());
+                writer.endRecord("DATA");
+                for (const std::pair<std::int32_t, std::int32_t> cell : { std::pair{ 1, 2 }, std::pair{ -3, 4 } })
+                {
+                    writer.startSubRecord("MRK_");
+                    writer.writeT(cell.first);
+                    writer.writeT(cell.second);
+                    writer.endRecord("MRK_");
+                }
+            });
+        }
+
+        TEST_P(Esm3SaveGameRecordTest, aMapMarkerRecordOfAnOldSaveIsSkippedAndTheRecordAfterItStillLoads)
+        {
+            // MARK: a note that the player put on the map, at a place in a cell
+            loadTheRecordAfterAnOldRecord(GetParam(), static_cast<std::uint32_t>(REC_MARK), [](ESMWriter& writer) {
+                writer.writeHNT("POSX", 100.f);
+                writer.writeHNT("POSY", -200.f);
+                writer.writeCellId(RefId::esm3ExteriorCell(2, -3));
+                writer.writeHNString("NOTE", "Water here");
+            });
+        }
+
+        TEST_P(Esm3SaveGameRecordTest, theSelectedSpellRecordOfAnOldSaveIsSkippedAndTheRecordAfterItStillLoads)
+        {
+            // ASPL: the spell that the spell window had selected
+            loadTheRecordAfterAnOldRecord(GetParam(), static_cast<std::uint32_t>(REC_ASPL),
+                [](ESMWriter& writer) { writer.writeHNRefId("ID__", id("fireball")); });
+        }
+
+        // The state of a cell of an old save (CSTA): the id of the cell, its state, the fog of war of the map when the
+        // state says that the cell has one, and then the references of the cell, of which one note stands here.
+        void writeOldCellStateRecord(ESMWriter& writer, bool interior, bool withFog)
+        {
+            CellState state;
+            state.mId = interior ? id("Vault 21") : RefId::esm3ExteriorCell(2, -3);
+            state.mIsInterior = interior;
+            state.mWaterLevel = -12.5f;
+            state.mHasFogOfWar = withFog ? 1 : 0;
+            state.mLastRespawn = { .mHour = 3.f, .mDay = 4 };
+
+            writer.startRecord(REC_CSTA);
+            writer.writeCellId(state.mId);
+            state.save(writer);
+            if (withFog)
+            {
+                if (interior)
+                {
+                    const float bounds[4] = { -10.f, -20.f, 30.f, 40.f };
+                    writer.writeHNT("BOUN", bounds);
+                    writer.writeHNT("ANGL", 1.5f);
+                    writer.startSubRecord("CNTR");
+                    writer.writeT(3.f);
+                    writer.writeT(4.f);
+                    writer.endRecord("CNTR");
+                }
+                for (const std::int32_t x : { 1, -1 })
+                {
+                    writer.startSubRecord("FTEX");
+                    writer.writeT(x);
+                    writer.writeT(x * 2);
+                    writer.write("png", 3);
+                    writer.endRecord("FTEX");
+                }
+            }
+            writer.writeHNString("TEST", "the references of the cell");
+            writer.endRecord(REC_CSTA);
+        }
+
+        void checkTheFogOfACellIsSkipped(FormatVersion format, bool interior, bool withFog)
+        {
+            ESMWriter writer;
+            auto stream = std::make_unique<std::stringstream>();
+            writer.setFormatVersion(format);
+            writer.save(*stream);
+            writeOldCellStateRecord(writer, interior, withFog);
+            writer.startRecord(fakeRecordId);
+            GlobalScript next;
+            next.mId = id("nextscript");
+            next.save(writer);
+            writer.endRecord(fakeRecordId);
+
+            ESMReader reader;
+            reader.open(std::move(stream), "stream");
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), static_cast<std::uint32_t>(REC_CSTA));
+            reader.getRecHeader();
+
+            // as WorldModel::readRecord reads it
+            CellState state;
+            state.mId = reader.getCellId();
+            state.load(reader);
+            EXPECT_EQ(state.mHasFogOfWar, withFog ? 1 : 0);
+            if (state.mHasFogOfWar)
+                skipFogState(reader);
+
+            // the rest of the state of the cell is intact
+            EXPECT_EQ(state.mId, interior ? id("Vault 21") : RefId::esm3ExteriorCell(2, -3));
+            EXPECT_EQ(state.mWaterLevel, interior ? -12.5f : 0.f);
+            EXPECT_EQ(state.mLastRespawn.mHour, 3.f);
+            EXPECT_EQ(state.mLastRespawn.mDay, 4);
+            // ... and so are the references that follow it
+            EXPECT_EQ(reader.getHNString("TEST"), "the references of the cell");
+            reader.skipRecord();
+
+            ASSERT_TRUE(reader.hasMoreRecs());
+            ASSERT_EQ(reader.getRecName().toInt(), fakeRecordId);
+            reader.getRecHeader();
+            GlobalScript result;
+            result.load(reader);
+            EXPECT_EQ(result.mId, next.mId);
+            EXPECT_FALSE(reader.hasMoreRecs());
+        }
+
+        TEST_P(Esm3SaveGameRecordTest, theFogOfWarOfAnInteriorCellOfAnOldSaveIsSkippedAndTheRestOfTheCellStateLoads)
+        {
+            checkTheFogOfACellIsSkipped(GetParam(), true, true);
+        }
+
+        TEST_P(Esm3SaveGameRecordTest, theFogOfWarOfAnExteriorCellOfAnOldSaveIsSkippedAndTheRestOfTheCellStateLoads)
+        {
+            checkTheFogOfACellIsSkipped(GetParam(), false, true);
+        }
+
+        TEST_P(Esm3SaveGameRecordTest, aCellWithoutFogOfWarStillLoadsTheSameWay)
+        {
+            checkTheFogOfACellIsSkipped(GetParam(), false, false);
         }
 
         TEST_P(Esm3SaveGameRecordTest, theQuickKeysRecordOfAnOldSaveIsSkippedAndTheRecordAfterItStillLoads)

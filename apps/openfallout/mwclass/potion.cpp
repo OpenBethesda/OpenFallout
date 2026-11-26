@@ -9,7 +9,7 @@
 #include <components/esm3/loadalch.hpp>
 #include <components/esm3/loadnpc.hpp>
 
-#include "../mwworld/actionapply.hpp"
+#include "../mwworld/action.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/ptr.hpp"
 
@@ -17,9 +17,6 @@
 
 #include "../mwrender/objects.hpp"
 #include "../mwrender/renderinginterface.hpp"
-
-#include "../mwmechanics/alchemy.hpp"
-#include "../mwmechanics/spellutil.hpp"
 
 #include "classmodel.hpp"
 #include "nameorid.hpp"
@@ -64,7 +61,7 @@ namespace OFClass
 
     int Potion::getValue(const OFWorld::ConstPtr& ptr) const
     {
-        return OFMechanics::getPotionValue(*ptr.get<ESM::Potion>()->mBase);
+        return ptr.get<ESM::Potion>()->mBase->mData.mValue;
     }
 
     const ESM::RefId& Potion::getUpSoundId(const OFWorld::ConstPtr& ptr) const
@@ -102,10 +99,7 @@ namespace OFClass
 
         info.effects = OFGui::Widgets::MWEffectList::effectListFromESM(&ref->mBase->mEffects);
 
-        // hide effects the player doesn't know about
-        OFWorld::Ptr player = OFBase::Environment::get().getWorld()->getPlayerPtr();
-        for (size_t i = 0; i < info.effects.size(); ++i)
-            info.effects[i].mKnown = OFMechanics::Alchemy::knownEffect(i, player);
+        // (the player of Fallout knows no Morrowind alchemy: the effects are shown as the record has them)
 
         info.isPotion = true;
 
@@ -118,17 +112,6 @@ namespace OFClass
         info.text = std::move(text);
 
         return info;
-    }
-
-    std::unique_ptr<OFWorld::Action> Potion::use(const OFWorld::Ptr& ptr, bool force) const
-    {
-        OFWorld::LiveCellRef<ESM::Potion>* ref = ptr.get<ESM::Potion>();
-
-        auto action = std::make_unique<OFWorld::ActionApply>(ptr, ref->mBase->mId);
-
-        action->setSound(ESM::RefId::stringRefId("Drink"));
-
-        return action;
     }
 
     OFWorld::Ptr Potion::copyToCellImpl(const OFWorld::ConstPtr& ptr, OFWorld::CellStore& cell) const

@@ -6,8 +6,8 @@
 #include <components/esm4/loadrace.hpp>
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
-#include "../mwmechanics/creaturestats.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/ptr.hpp"
@@ -57,24 +57,8 @@ namespace OFScript
         const FalloutScript::ActorOverride state = mActorStatus.overrideOf(mPlayer);
         if (state.mForceSneak == mPlayerForcesSneak && state.mForceRun == mPlayerForcesRun)
             return;
-        const OFWorld::Ptr player = OFBase::Environment::get().getWorld()->getPlayerPtr();
-        if (player.isEmpty())
-            return;
-        // The stance of the player is read from its stats by the movement and the animation of its body: the flags that
-        // the scripts of Morrowind force are the ones that carry SetForceRun and SetForceSneak
-        try
-        {
-            OFMechanics::CreatureStats& stats = player.getClass().getCreatureStats(player);
-            stats.setMovementFlag(OFMechanics::CreatureStats::Flag_ForceSneak, state.mForceSneak);
-            stats.setMovementFlag(OFMechanics::CreatureStats::Flag_ForceRun, state.mForceRun);
-        }
-        catch (const std::exception& error)
-        {
-            static bool said = false;
-            if (!std::exchange(said, true))
-                Log(Debug::Warning) << "The stance of the player cannot be forced: " << error.what();
-            return;
-        }
+        // The player's actor reads the forced stance itself (PlayerCharacter::update, actorForcesRun and
+        // actorForcesSneak): this only notes the change
         mPlayerForcesSneak = state.mForceSneak;
         mPlayerForcesRun = state.mForceRun;
         Log(Debug::Info) << "The player is forced to " << (state.mForceSneak ? "sneak" : "not sneak") << " and to "
@@ -117,7 +101,8 @@ namespace OFScript
 
     int FalloutScripts::actorsInHigh()
     {
-        return static_cast<int>(mActorStatus.activeCount());
+        // The characters and creatures with a High process (rule A.T2: in a cell of the scene, with their 3D)
+        return OFBase::Environment::get().getMechanicsManager()->countHighActors();
     }
 
     void FalloutScripts::disableAllActors(FalloutScript::FormId except)

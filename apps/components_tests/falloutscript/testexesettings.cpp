@@ -4,8 +4,10 @@
 #include <components/toutf8/toutf8.hpp>
 
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <string>
 
 namespace
@@ -32,8 +34,8 @@ namespace
             put16(0x80 + 20, 0xE0);
             put16(0x80 + 24, 0x10b);
             put32(0x80 + 24 + 28, imageBase);
-            section(0, 0x1000, textFile);
-            section(1, 0x2000, dataFile);
+            section(0, 0x1000, textFile, codeSection);
+            section(1, 0x2000, dataFile, dataSection);
         }
 
         void put16(std::size_t at, std::uint32_t value)
@@ -49,6 +51,43 @@ namespace
         }
 
         void put8(std::size_t at, std::uint32_t value) { mBytes[at] = static_cast<char>(value); }
+
+        /// Bytes of code at an offset of the code section; the offset after them
+        std::size_t code(std::size_t offset, std::initializer_list<std::uint32_t> bytes)
+        {
+            for (const std::uint32_t byte : bytes)
+                put8(textFile + offset++, byte);
+            return offset;
+        }
+
+        /// The 32 bits of a float in the data section; its address in memory
+        std::uint32_t floatAt(std::size_t offset, float value)
+        {
+            std::uint32_t bits = 0;
+            std::memcpy(&bits, &value, sizeof(bits));
+            put32(dataFile + offset, bits);
+            return imageBase + 0x2000 + static_cast<std::uint32_t>(offset);
+        }
+
+        /// push name, mov ecx object, call: the end of the initialiser of a numeric setting, after its value
+        void numberInitialiser(std::size_t offset, std::uint32_t nameAddress)
+        {
+            const std::size_t at = textFile + offset;
+            put8(at, 0x68);
+            put32(at + 1, nameAddress);
+            put8(at + 5, 0xB9);
+            put32(at + 6, imageBase + 0x3000);
+            put8(at + 10, 0xE8);
+        }
+
+        /// a numeric record of the table in the data section: value, name, table of functions (in the data)
+        void numberRecord(std::size_t offset, std::uint32_t bits, std::uint32_t nameAddress)
+        {
+            const std::size_t at = dataFile + offset;
+            put32(at, bits);
+            put32(at + 4, nameAddress);
+            put32(at + 8, imageBase + 0x2000 + 0x3F0);
+        }
 
         /// A zero-ended text in the data section; its address in memory
         std::uint32_t text(std::size_t offset, const std::string& value)
@@ -95,13 +134,18 @@ namespace
         const std::string& bytes() const { return mBytes; }
 
     private:
-        void section(std::size_t index, std::uint32_t address, std::size_t fileOffset)
+        /// The characteristics of the sections of the games' executables: code that runs, data that is read and written
+        static constexpr std::uint32_t codeSection = 0x60000020;
+        static constexpr std::uint32_t dataSection = 0xC0000040;
+
+        void section(std::size_t index, std::uint32_t address, std::size_t fileOffset, std::uint32_t characteristics)
         {
             const std::size_t at = 0x80 + 24 + 0xE0 + index * 40;
             put32(at + 8, 0x400);
             put32(at + 12, address);
             put32(at + 16, 0x400);
             put32(at + 20, static_cast<std::uint32_t>(fileOffset));
+            put32(at + 36, characteristics);
         }
 
         std::string mBytes;
@@ -260,6 +304,115 @@ namespace
         huge.staticInitialiser(0x20, huge.text(0x10, "Text"), huge.text(0x40, "sHuge"));
         // the section is taken as far as the file goes
         EXPECT_EQ(ExeSettings::scan(huge.bytes()).count("shuge"), 1u);
+    }
+
+    // The numeric settings of FalloutNV.exe: code that loads the value, then pushes the name and calls the constructor
+    TEST(FalloutExeSettings, a_float_loaded_from_the_data_is_the_default_of_its_setting)
+    {
+        Executable exe;
+        // push ecx, fld dword [value], fstp dword [esp] (FalloutNV.exe: fPlayerDeathReloadTime)
+        const std::uint32_t value = exe.floatAt(0x300, 5.0f);
+        std::size_t at = exe.code(0x20,
+            { 0x51, 0xD9, 0x05, value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF, value >> 24, 0xD9, 0x1C,
+                0x24 });
+        exe.numberInitialiser(at, exe.text(0x10, "fDeathTime"));
+        // fld dword [value], push ecx, fstp dword [esp] (the order in Fallout3.exe)
+        const std::uint32_t other = exe.floatAt(0x304, -0.25f);
+        at = exe.code(0x60,
+            { 0xD9, 0x05, other & 0xFF, (other >> 8) & 0xFF, (other >> 16) & 0xFF, other >> 24, 0x51, 0xD9, 0x1C,
+                0x24 });
+        exe.numberInitialiser(at, exe.text(0x40, "fOtherThing"));
+        const ExeSettings::Numbers numbers = ExeSettings::scanDefaults(exe.bytes()).mNumbers;
+        EXPECT_EQ(numbers.at("fdeathtime"), 5.0);
+        EXPECT_EQ(numbers.at("fotherthing"), -0.25);
+    }
+
+    TEST(FalloutExeSettings, zero_and_one_are_loaded_by_their_own_instructions)
+    {
+        Executable exe;
+        exe.numberInitialiser(exe.code(0x20, { 0x51, 0xD9, 0xEE, 0xD9, 0x1C, 0x24 }), exe.text(0x10, "fZero"));
+        exe.numberInitialiser(exe.code(0x60, { 0x51, 0xD9, 0xE8, 0xD9, 0x1C, 0x24 }), exe.text(0x40, "fOne"));
+        const ExeSettings::Numbers numbers = ExeSettings::scanDefaults(exe.bytes()).mNumbers;
+        EXPECT_EQ(numbers.at("fzero"), 0.0);
+        EXPECT_EQ(numbers.at("fone"), 1.0);
+    }
+
+    TEST(FalloutExeSettings, an_integer_pushed_before_the_name_is_the_default_of_its_setting)
+    {
+        Executable exe;
+        // push 150 (iActivatePickLength), push -3 with 8 bits, push 1 for a boolean, an unsigned with all bits
+        exe.numberInitialiser(exe.code(0x20, { 0x68, 150, 0, 0, 0 }), exe.text(0x10, "iPickLength"));
+        exe.numberInitialiser(exe.code(0x40, { 0x6A, 0xFD }), exe.text(0x20, "iSmall"));
+        exe.numberInitialiser(exe.code(0x60, { 0x6A, 0x01 }), exe.text(0x30, "bSwitch"));
+        exe.numberInitialiser(exe.code(0x80, { 0x68, 0xFF, 0xFF, 0xFF, 0xFF }), exe.text(0x40, "uMask"));
+        const ExeSettings::Numbers numbers = ExeSettings::scanDefaults(exe.bytes()).mNumbers;
+        EXPECT_EQ(numbers.at("ipicklength"), 150.0);
+        EXPECT_EQ(numbers.at("ismall"), -3.0);
+        EXPECT_EQ(numbers.at("bswitch"), 1.0);
+        EXPECT_EQ(numbers.at("umask"), 4294967295.0);
+    }
+
+    TEST(FalloutExeSettings, a_name_pushed_without_a_known_load_before_it_gives_no_number)
+    {
+        Executable exe;
+        // a float name after an 8-bit push (a float is never pushed that way), a name after nothing that loads
+        exe.numberInitialiser(exe.code(0x20, { 0x6A, 0x05 }), exe.text(0x10, "fNotThis"));
+        exe.numberInitialiser(exe.code(0x40, { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 }), exe.text(0x20, "iNotThis"));
+        // the name of a text setting
+        exe.numberInitialiser(exe.code(0x80, { 0x68, 1, 0, 0, 0 }), exe.text(0x30, "sText"));
+        EXPECT_TRUE(ExeSettings::scanDefaults(exe.bytes()).mNumbers.empty());
+    }
+
+    // The numeric settings of Fallout3.exe: records of the value, the name and the table of functions in the data
+    TEST(FalloutExeSettings, a_numeric_setting_in_a_table_of_records_is_found)
+    {
+        Executable exe;
+        float half = 0.5f;
+        std::uint32_t bits = 0;
+        std::memcpy(&bits, &half, sizeof(bits));
+        exe.numberRecord(0x200, bits, exe.text(0x10, "fHalf"));
+        exe.numberRecord(0x210, 72, exe.text(0x20, "iHoursToRespawn"));
+        const ExeSettings::Numbers numbers = ExeSettings::scanDefaults(exe.bytes()).mNumbers;
+        EXPECT_EQ(numbers.at("fhalf"), 0.5);
+        EXPECT_EQ(numbers.at("ihourstorespawn"), 72.0);
+    }
+
+    TEST(FalloutExeSettings, the_code_takes_the_place_of_the_table_for_a_number_in_both)
+    {
+        Executable exe;
+        const std::uint32_t name = exe.text(0x10, "iBoth");
+        exe.numberInitialiser(exe.code(0x20, { 0x68, 7, 0, 0, 0 }), name);
+        exe.numberRecord(0x200, 9, name);
+        EXPECT_EQ(ExeSettings::scanDefaults(exe.bytes()).mNumbers.at("iboth"), 7.0);
+    }
+
+    TEST(FalloutExeSettings, a_setting_of_the_ini_file_is_found_by_its_name_without_the_section_under_the_game_one)
+    {
+        Executable exe;
+        // fCreatureRadioMax:Audio (FalloutNV.exe), and an INI setting with the name of a setting of the game
+        const std::uint32_t value = exe.floatAt(0x300, 2000.0f);
+        exe.numberInitialiser(exe.code(0x20,
+                                  { 0x51, 0xD9, 0x05, value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF,
+                                      value >> 24, 0xD9, 0x1C, 0x24 }),
+            exe.text(0x10, "fRadioMax:Audio"));
+        exe.numberInitialiser(exe.code(0x60, { 0x68, 5, 0, 0, 0 }), exe.text(0x40, "iShared:Display"));
+        exe.numberInitialiser(exe.code(0x80, { 0x68, 6, 0, 0, 0 }), exe.text(0x60, "iShared"));
+        // a section with a character a name does not have is not a setting's
+        exe.numberInitialiser(exe.code(0xA0, { 0x68, 8, 0, 0, 0 }), exe.text(0x80, "iBad:Sec tion"));
+        const ExeSettings::Numbers numbers = ExeSettings::scanDefaults(exe.bytes()).mNumbers;
+        EXPECT_EQ(numbers.at("fradiomax"), 2000.0);
+        EXPECT_EQ(numbers.at("ishared"), 6.0);
+        EXPECT_EQ(numbers.count("ibad"), 0u);
+    }
+
+    TEST(FalloutExeSettings, the_texts_and_the_numbers_are_read_together)
+    {
+        Executable exe;
+        exe.staticInitialiser(0x20, exe.text(0x10, "A text"), exe.text(0x40, "sWords"));
+        exe.numberInitialiser(exe.code(0x60, { 0x68, 3, 0, 0, 0 }), exe.text(0x60, "iCount"));
+        const ExeSettings::Defaults defaults = ExeSettings::scanDefaults(exe.bytes());
+        EXPECT_EQ(defaults.mTexts.at("swords"), "A text");
+        EXPECT_EQ(defaults.mNumbers.at("icount"), 3.0);
     }
 
     TEST(FalloutExeSettings, the_executable_of_a_game_is_found_next_to_its_data_directory_whatever_its_case)

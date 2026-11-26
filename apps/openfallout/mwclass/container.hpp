@@ -52,8 +52,6 @@ namespace OFClass
         std::string_view getName(const OFWorld::ConstPtr& ptr) const override;
         ///< \return name or ID; can return an empty string.
 
-        std::string_view getWerewolfRefusalSoundId() const override { return "WolfContainer"; }
-
         std::unique_ptr<OFWorld::Action> activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const override;
         ///< Generate action for activation
 
@@ -69,14 +67,6 @@ namespace OFClass
         ESM::RefId getScript(const OFWorld::ConstPtr& ptr) const override;
         ///< Return name of the script attached to ptr
 
-        float getCapacity(const OFWorld::Ptr& ptr) const override;
-        ///< Return total weight that fits into the object. Throws an exception, if the object can't
-        /// hold other objects.
-
-        float getEncumbrance(const OFWorld::Ptr& ptr) const override;
-        ///< Returns total weight of objects inside this object (including modifications from magic
-        /// effects). Throws an exception, if the object can't hold other objects.
-
         bool canLock(const OFWorld::ConstPtr& ptr) const override;
 
         void readAdditionalState(const OFWorld::Ptr& ptr, const ESM::ObjectState& state) const override;
@@ -90,8 +80,6 @@ namespace OFClass
         VFS::Path::NormalizedView getModel(const OFWorld::ConstPtr& ptr) const override;
 
         bool useAnim() const override;
-
-        void modifyBaseInventory(const ESM::RefId& containerId, const ESM::RefId& itemId, int amount) const override;
     };
 }
 

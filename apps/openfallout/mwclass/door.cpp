@@ -13,15 +13,17 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
+#include "../mwmechanics/actorutil.hpp"
+
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwworld/actiondoor.hpp"
 #include "../mwworld/actionteleport.hpp"
-#include "../mwworld/actiontrap.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/containerstore.hpp"
 #include "../mwworld/customdata.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/failedaction.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 #include "../mwworld/worldmodel.hpp"
 
@@ -31,8 +33,6 @@
 #include "../mwrender/objects.hpp"
 #include "../mwrender/renderinginterface.hpp"
 #include "../mwrender/vismask.hpp"
-
-#include "../mwmechanics/actorutil.hpp"
 
 #include "classmodel.hpp"
 #include "nameorid.hpp"
@@ -174,11 +174,8 @@ namespace OFClass
         {
             if (isTrapped)
             {
-                // Trap activation
-                std::unique_ptr<OFWorld::Action> action
-                    = std::make_unique<OFWorld::ActionTrap>(ptr.getCellRef().getTrap(), ptr);
-                action->setSound(ESM::RefId::stringRefId("Disarm Trap Fail"));
-                return action;
+                // The trap of a Morrowind object is a spell, and the magic of Morrowind is gone: it does nothing
+                return std::make_unique<OFWorld::NullAction>();
             }
 
             if (ptr.getCellRef().getTeleport())
@@ -193,7 +190,7 @@ namespace OFClass
                 else
                 {
                     std::unique_ptr<OFWorld::Action> action = std::make_unique<OFWorld::ActionTeleport>(
-                        ptr.getCellRef().getDestCell(), ptr.getCellRef().getDoorDest(), true);
+                        ptr.getCellRef().getDestCell(), ptr.getCellRef().getDoorDest());
                     action->setSound(openSound);
                     return action;
                 }

@@ -1,12 +1,7 @@
 #include "weapontype.hpp"
 
-#include "creaturestats.hpp"
-#include "drawstate.hpp"
-
 #include "../mwbase/environment.hpp"
-#include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
-#include "../mwworld/inventorystore.hpp"
 
 #include <components/esm3/loadweap.hpp>
 
@@ -14,39 +9,6 @@
 
 namespace OFMechanics
 {
-    OFWorld::ContainerStoreIterator getActiveWeapon(const OFWorld::Ptr& actor, ESM::RefId* weaponTypeId)
-    {
-        OFWorld::InventoryStore& inv = actor.getClass().getInventoryStore(actor);
-        CreatureStats& stats = actor.getClass().getCreatureStats(actor);
-        if (stats.getDrawState() == OFMechanics::DrawState::Spell)
-        {
-            *weaponTypeId = ESM::WeaponType::Spell;
-            return inv.end();
-        }
-
-        if (stats.getDrawState() == OFMechanics::DrawState::Weapon)
-        {
-            OFWorld::ContainerStoreIterator weapon = inv.getSlot(OFWorld::InventoryStore::Slot_CarriedRight);
-            if (weapon == inv.end())
-                *weaponTypeId = ESM::WeaponType::HandToHand;
-            else
-            {
-                auto type = weapon->getType();
-                if (type == ESM::Weapon::sRecordId)
-                {
-                    const OFWorld::LiveCellRef<ESM::Weapon>* ref = weapon->get<ESM::Weapon>();
-                    *weaponTypeId = ref->mBase->mData.mType;
-                }
-                else if (type == ESM::Lockpick::sRecordId || type == ESM::Probe::sRecordId)
-                    *weaponTypeId = ESM::WeaponType::PickProbe;
-            }
-
-            return weapon;
-        }
-
-        return inv.getSlot(OFWorld::InventoryStore::Slot_CarriedRight);
-    }
-
     const ESM::WeaponType* getWeaponType(ESM::RefId weaponTypeId)
     {
         const auto& weaponTypes = OFBase::Environment::get().getESMStore()->get<ESM::WeaponType>();

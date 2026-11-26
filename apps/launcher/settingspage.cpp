@@ -347,7 +347,6 @@ bool Launcher::SettingsPage::loadSettings()
         connect(controllerMenusCheckBox, &QCheckBox::toggled, this, &SettingsPage::slotControllerMenusToggled);
         loadSettingBool(Settings::gui().mControllerMenus, *controllerMenusCheckBox);
         loadSettingBool(Settings::gui().mControllerTooltips, *controllerMenuTooltipsCheckBox);
-        loadSettingBool(Settings::map().mAllowZooming, *useZoomOnMapCheckBox);
         loadSettingBool(Settings::game().mGraphicHerbalism, *graphicHerbalismCheckBox);
         scalingSpinBox->setValue(Settings::gui().mScalingFactor);
         fontSizeSpinBox->setValue(Settings::gui().mFontSize);
@@ -621,7 +620,6 @@ void Launcher::SettingsPage::saveSettings()
         saveSettingBool(*stretchBackgroundCheckBox, Settings::gui().mStretchMenuBackground);
         saveSettingBool(*controllerMenusCheckBox, Settings::gui().mControllerMenus);
         saveSettingBool(*controllerMenuTooltipsCheckBox, Settings::gui().mControllerTooltips);
-        saveSettingBool(*useZoomOnMapCheckBox, Settings::map().mAllowZooming);
         saveSettingBool(*graphicHerbalismCheckBox, Settings::game().mGraphicHerbalism);
         Settings::gui().mScalingFactor.set(scalingSpinBox->value());
         Settings::gui().mFontSize.set(fontSizeSpinBox->value());

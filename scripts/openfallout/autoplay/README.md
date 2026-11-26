@@ -84,6 +84,18 @@ openfallout --skip-menu --content Fallout3.esm --data scripts/openfallout/autopl
 python3 scripts/openfallout/savediff.py autoplay_save.omwsave autoplay_again.omwsave
 ```
 
+The digest holds the player as well as the quests (step 4): where it stands (the cell, and the position within 150 units), its level,
+experience, health and maximum health, SPECIAL and how many items it carries, taken in `onSave` and compared on the first frame
+after the load, so that `digest check ok` means the quests **and** the player are those of the save (`AUTOPLAY player saved`,
+`AUTOPLAY player loaded`; a difference is `AUTOPLAY player MISMATCH <fields>`). The calls it reads them with, none of them a Morrowind
+stats function, are in the comment at the top of `autoplayprobe.lua` and in `scripts/openfallout/round/README.md`. A save from before
+that (the old-save round) has no player in its digest: the line says so and only the quests are compared.
+
+The `fixtures` of the `saves` table are saves that the rounds of step 4 start from (only `s4-fixture-nv`): written once, five seconds into a stage past
+the intro (New Vegas `VMQ01` 50), and only while no screen is open (the player script tells the probe every second). Fallout 3 has no such
+moment before the run ends: its stage `MQ01` 40 is a conversation, and a save written then left the game in that mode for good (the run
+stalled until its limit), so its save for the rounds is made outside the tool (see the README of the rounds).
+
 `savediff.py` compares the sections of the state of Fallout in two saved games. A game that is loaded and saved again at once has
 the same bytes in every section except for what really changed in between: the clock and the timers of the quests, and what the
 `OnLoad` blocks of the scripts do when their cells are loaded again (the scripts of the games run those on every load, so a

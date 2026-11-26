@@ -12,7 +12,6 @@ namespace OFWorld
 
 namespace OFGui
 {
-    class DragAndDrop;
 
     size_t wrap(size_t index, size_t max, int delta);
     void setControllerFocus(const std::vector<MyGUI::Button*>& buttons, size_t index, bool selected);
@@ -71,10 +70,6 @@ namespace OFGui
         /// Called when GUI viewport changes size
         virtual void onResChange(int width, int height) {}
 
-        virtual void onDeleteCustomData(const OFWorld::Ptr& ptr) {}
-
-        virtual void onInventoryUpdate(const OFWorld::Ptr& ptr) {}
-
         virtual std::string_view getWindowIdForLua() const { return {}; }
         void setDisabledByLua(bool disabled) { mDisabledByLua = disabled; }
 
@@ -111,23 +106,6 @@ namespace OFGui
         void onOpen() override;
         void onClose() override;
         bool exit() override { return true; }
-    };
-
-    /// A window that cannot be the target of a drag&drop action.
-    /// When hovered with a drag item, the window will become transparent and allow click-through.
-    class NoDrop
-    {
-    public:
-        NoDrop(DragAndDrop* drag, MyGUI::Widget* widget);
-
-        void onFrame(float dt);
-        virtual void setAlpha(float alpha);
-        virtual ~NoDrop() = default;
-
-    private:
-        MyGUI::Widget* mWidget;
-        DragAndDrop* mDrag;
-        bool mTransparent;
     };
 }
 

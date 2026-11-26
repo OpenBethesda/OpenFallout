@@ -186,7 +186,7 @@ namespace
         progress.setRules(rulesOf(Game::NewVegas, { { "iMaxCharacterLevel", 30 } }));
         progress.rewardExperience(1000000);
         EXPECT_EQ(progress.experience(), 66700);
-        EXPECT_EQ(progress.level(), 30);
+        EXPECT_EQ(progress.reachedLevel(), 30);
         EXPECT_EQ(progress.experienceForNextLevel(), 66700);
     }
 
@@ -197,7 +197,7 @@ namespace
         EXPECT_FALSE(progress.awardNextLevel(5).has_value());
 
         progress.rewardExperience(560);
-        EXPECT_EQ(progress.level(), 3);
+        EXPECT_EQ(progress.reachedLevel(), 3);
         const auto second = progress.awardNextLevel(5);
         ASSERT_TRUE(second.has_value());
         EXPECT_EQ(second->mLevel, 2);
@@ -221,7 +221,7 @@ namespace
 
         // one award of three levels: a perk at level 2 and one at level 4, the level of the player being 5
         progress.rewardExperience(1700);
-        ASSERT_EQ(progress.level(), 5);
+        ASSERT_EQ(progress.reachedLevel(), 5);
         while (progress.awardNextLevel(5))
         {
         }
@@ -268,6 +268,25 @@ namespace
         EXPECT_EQ(progress.skillPoints(), 0);
         EXPECT_TRUE(progress.spendPerkPoint());
         EXPECT_FALSE(progress.spendPerkPoint());
+    }
+
+    TEST(FalloutScriptPlayerProgressLevellingTest, refundsOnlyThePointsSpentOnTheSkillOnThisScreen)
+    {
+        PlayerProgress progress;
+        progress.addSkillPoints(10);
+        EXPECT_TRUE(progress.spendSkillPoints(32, 4));
+        EXPECT_TRUE(progress.spendSkillPoints(33, 2));
+        EXPECT_EQ(progress.skillPoints(), 4);
+        // Not more than the skill got, and nothing from a skill that got none
+        EXPECT_EQ(progress.refundSkillPoints(32, 6), 4);
+        EXPECT_EQ(progress.refundSkillPoints(32, 1), 0);
+        EXPECT_EQ(progress.refundSkillPoints(34, 1), 0);
+        EXPECT_EQ(progress.skillPoints(), 8);
+        // A level up that is done keeps its points
+        progress.finishLevel();
+        EXPECT_EQ(progress.refundSkillPoints(33, 2), 0);
+        EXPECT_EQ(progress.skillPoints(), 8);
+        EXPECT_FALSE(progress.spendSkillPoints(33, 9));
     }
 
     TEST(FalloutScriptPlayerProgressLevellingTest, setsTheLevelAtOnceWithoutGivingPoints)

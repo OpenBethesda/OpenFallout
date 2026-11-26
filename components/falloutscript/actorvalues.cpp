@@ -59,9 +59,13 @@ namespace FalloutScript
             case ActorValue::healRate:
             case ActorValue::health:
             case ActorValue::meleeDamage:
+            case ActorValue::poisonResist:
+            case ActorValue::radResist:
+            case ActorValue::unarmedDamage:
                 return true;
             default:
-                return false;
+                // The skills: the player's follow its SPECIAL (E.1.9)
+                return value >= ActorValue::firstSkill && value <= ActorValue::lastSkill;
         }
     }
 
@@ -70,6 +74,15 @@ namespace FalloutScript
         const auto found = mEntries.find({ actor, value });
         return found == mEntries.end() ? startOf(actor, value)
                                        : baseOf(actor, found->second, value) + found->second.mModifier;
+    }
+
+    double ActorValues::currentOf(FormId actor, int value) const
+    {
+        const auto found = mEntries.find({ actor, value });
+        if (found == mEntries.end())
+            return shown(value, startOf(actor, value));
+        const Entry& entry = found->second;
+        return shown(value, baseOf(actor, entry, value) + entry.mModifier - entry.mDamage);
     }
 
     double ActorValues::startOf(FormId actor, int value) const
@@ -99,7 +112,8 @@ namespace FalloutScript
             if (isDerived(value))
             {
                 const std::optional<double> derived = mRecords->derivedValue(
-                    actor, value, [this, actor](int other) { return bounded(permanentOf(actor, other)); });
+                    actor, value, [this, actor](int other) { return bounded(permanentOf(actor, other)); },
+                    [this, actor](int other) { return bounded(currentOf(actor, other)); });
                 if (derived)
                     return bounded(*derived);
             }
@@ -132,14 +146,17 @@ namespace FalloutScript
         return shown(value, permanentOf(actor, value));
     }
 
-    double ActorValues::current(FormId actor, int value) const
+    double ActorValues::modifier(FormId actor, int value) const
     {
         const std::lock_guard lock(mMutex);
         const auto found = mEntries.find({ actor, value });
-        if (found == mEntries.end())
-            return shown(value, startOf(actor, value));
-        const Entry& entry = found->second;
-        return shown(value, baseOf(actor, entry, value) + entry.mModifier - entry.mDamage);
+        return found == mEntries.end() ? 0.0 : found->second.mModifier;
+    }
+
+    double ActorValues::current(FormId actor, int value) const
+    {
+        const std::lock_guard lock(mMutex);
+        return currentOf(actor, value);
     }
 
     void ActorValues::setBase(FormId actor, int value, double amount)
@@ -148,6 +165,21 @@ namespace FalloutScript
             return;
         const std::lock_guard lock(mMutex);
         mEntries[{ actor, value }].mBase = bounded(amount);
+    }
+
+    bool ActorValues::hasBase(FormId actor, int value) const
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = mEntries.find({ actor, value });
+        return found != mEntries.end() && found->second.mBase.has_value();
+    }
+
+    void ActorValues::resetBase(FormId actor, int value)
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = mEntries.find({ actor, value });
+        if (found != mEntries.end())
+            found->second.mBase.reset();
     }
 
     void ActorValues::addBase(FormId actor, int value, double amount, double minimum)
@@ -253,6 +285,13 @@ namespace FalloutScript
         const auto healthGuard = [&actors](int value) {
             return value == ActorValue::health ? actors.holdTransitions() : std::unique_lock<std::recursive_mutex>();
         };
+        // A health that a command sets below a point kills as damage does (rule D1: the executables kill below 1.0,
+        // whatever lowered it), unless the character is one that falls (an essential one)
+        const auto healthChanged = [&values, &actors](CallContext& call, int value) {
+            if (value == ActorValue::health && !actors.isDead(call.mReference)
+                && outOfHealth(values.current(call.mReference, value)) && !actors.falls(call.mReference))
+                actors.setDead(call.mReference, true);
+        };
 
         interpreter.setHandler("GetActorValue", [currentOf](CallContext& call) {
             const int value = intArgument(call, 0);
@@ -274,7 +313,7 @@ namespace FalloutScript
                                                       : values.permanent(call.mReference, value);
             });
         interpreter.setHandler("SetActorValue",
-            [&values, isPlayersProgress, progressValue, rewardProgress, healthGuard](CallContext& call) {
+            [&values, isPlayersProgress, progressValue, rewardProgress, healthGuard, healthChanged](CallContext& call) {
                 const int value = intArgument(call, 0);
                 if (call.mReference == 0 || !ActorValues::isValid(value))
                     return 0.0;
@@ -283,10 +322,11 @@ namespace FalloutScript
                     rewardProgress(value, whole(argument(call, 1) - progressValue(value)));
                 else
                     values.setBase(call.mReference, value, argument(call, 1));
+                healthChanged(call, value);
                 return 0.0;
             });
-        interpreter.setHandler(
-            "ModActorValue", [&values, isPlayersProgress, rewardProgress, healthGuard](CallContext& call) {
+        interpreter.setHandler("ModActorValue",
+            [&values, isPlayersProgress, rewardProgress, healthGuard, healthChanged](CallContext& call) {
                 const int value = intArgument(call, 0);
                 if (call.mReference == 0 || !ActorValues::isValid(value))
                     return 0.0;
@@ -295,10 +335,11 @@ namespace FalloutScript
                     rewardProgress(value, whole(argument(call, 1)));
                 else
                     values.modify(call.mReference, value, argument(call, 1));
+                healthChanged(call, value);
                 return 0.0;
             });
         interpreter.setHandler("ForceActorValue",
-            [&values, isPlayersProgress, progressValue, rewardProgress, healthGuard](CallContext& call) {
+            [&values, isPlayersProgress, progressValue, rewardProgress, healthGuard, healthChanged](CallContext& call) {
                 const int value = intArgument(call, 0);
                 if (call.mReference == 0 || !ActorValues::isValid(value))
                     return 0.0;
@@ -307,6 +348,7 @@ namespace FalloutScript
                     rewardProgress(value, whole(argument(call, 1) - progressValue(value)));
                 else
                     values.setCurrent(call.mReference, value, argument(call, 1));
+                healthChanged(call, value);
                 return 0.0;
             });
         interpreter.setHandler(
@@ -328,7 +370,7 @@ namespace FalloutScript
                 const auto transitions = actors.holdTransitions();
                 values.damage(call.mReference, value, argument(call, 1));
                 // A character with no health left is dead, unless it is one that falls (an essential one)
-                if (values.current(call.mReference, value) <= 0 && !actors.falls(call.mReference))
+                if (outOfHealth(values.current(call.mReference, value)) && !actors.falls(call.mReference))
                     actors.setDead(call.mReference, true);
                 return 0.0;
             });

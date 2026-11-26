@@ -111,7 +111,10 @@ local function updatePOV(dt)
 end
 
 local idleTimer = 0
-local vanityDelay = core.getGMST('fVanityDelay')
+-- Seconds without input before the camera turns around the player. Morrowind's fVanityDelay is gone with its settings.
+-- Both Fallout executables have fVanityModeDelay (0.25), in a unit that was not read, so the camera keeps the 30
+-- seconds it had.
+local vanityDelay = 30
 
 local function updateVanity(dt)
     local vanityAllowed = Player.getControlSwitch(self, Player.CONTROL_SWITCH.VanityMode)
@@ -216,8 +219,7 @@ local function onFrame(dt)
         primaryMode = mode
     end
     if mode ~= MODE.Static then
-        local paralysis = Actor.activeEffects(self):getEffect(core.magic.EFFECT_TYPE.Paralyze)
-        local paralyzed = not debug.isGodMode() and paralysis.magnitude > 0
+        local paralyzed = not debug.isGodMode() and Actor.isParalyzed(self)
         if not next(noModeControl) and not paralyzed then
             updatePOV(dt)
             updateVanity(dt)

@@ -15,7 +15,6 @@ file(GLOB UNITTEST_SRC_FILES
     mwworld/testptr.cpp
     mwworld/testweather.cpp
     mwworld/testpositioncellgrid.cpp
-    mwworld/testplaceholderrecords.cpp
     mwworld/testcelllighting.cpp
     mwworld/testcellclimate.cpp
     mwworld/testcellwater.cpp

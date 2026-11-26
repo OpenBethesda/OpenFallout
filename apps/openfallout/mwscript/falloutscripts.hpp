@@ -24,14 +24,12 @@
 #include <components/esm/refid.hpp>
 #include <components/esm4/effectlist.hpp>
 #include <components/esm4/loadnpc.hpp>
-#include <components/falloutscript/footsteps.hpp>
-#include <components/falloutscript/hitreactions.hpp>
-#include <components/files/gameini.hpp>
 #include <components/falloutscript/actors.hpp>
 #include <components/falloutscript/actorstatus.hpp>
 #include <components/falloutscript/actortraits.hpp>
 #include <components/falloutscript/actorvalues.hpp>
 #include <components/falloutscript/aimemory.hpp>
+#include <components/falloutscript/ambient.hpp>
 #include <components/falloutscript/animationcommands.hpp>
 #include <components/falloutscript/barter.hpp>
 #include <components/falloutscript/blackjack.hpp>
@@ -46,64 +44,67 @@
 #include <components/falloutscript/conditions.hpp>
 #include <components/falloutscript/crafting.hpp>
 #include <components/falloutscript/damage.hpp>
-#include <components/falloutscript/destruction.hpp>
-#include <components/falloutscript/dismember.hpp>
 #include <components/falloutscript/derivedstats.hpp>
+#include <components/falloutscript/destruction.hpp>
 #include <components/falloutscript/detection.hpp>
 #include <components/falloutscript/dialogue.hpp>
+#include <components/falloutscript/dismember.hpp>
 #include <components/falloutscript/enableparents.hpp>
 #include <components/falloutscript/equipment.hpp>
 #include <components/falloutscript/facecontrolfile.hpp>
 #include <components/falloutscript/facelook.hpp>
+#include <components/falloutscript/footsteps.hpp>
 #include <components/falloutscript/formlists.hpp>
 #include <components/falloutscript/furniture.hpp>
 #include <components/falloutscript/hacking.hpp>
 #include <components/falloutscript/hardcore.hpp>
-#include <components/falloutscript/restrictions.hpp>
+#include <components/falloutscript/hitreactions.hpp>
 #include <components/falloutscript/hotkeys.hpp>
 #include <components/falloutscript/hud.hpp>
 #include <components/falloutscript/interpreter.hpp>
-#include <components/falloutscript/levelledlists.hpp>
 #include <components/falloutscript/itemmods.hpp>
 #include <components/falloutscript/itemuse.hpp>
-#include <components/falloutscript/ambient.hpp>
-#include <components/falloutscript/radio.hpp>
+#include <components/falloutscript/levelledlists.hpp>
 #include <components/falloutscript/limbs.hpp>
 #include <components/falloutscript/magic.hpp>
 #include <components/falloutscript/mapmarkers.hpp>
-#include <components/falloutscript/music.hpp>
 #include <components/falloutscript/messagecommands.hpp>
+#include <components/falloutscript/movement.hpp>
+#include <components/falloutscript/music.hpp>
 #include <components/falloutscript/objectcommands.hpp>
 #include <components/falloutscript/objects.hpp>
 #include <components/falloutscript/objectstate.hpp>
 #include <components/falloutscript/packagecommands.hpp>
 #include <components/falloutscript/perks.hpp>
 #include <components/falloutscript/pipboy.hpp>
+#include <components/falloutscript/placedexplosives.hpp>
 #include <components/falloutscript/placementcommands.hpp>
 #include <components/falloutscript/playercontrols.hpp>
 #include <components/falloutscript/playerprogress.hpp>
 #include <components/falloutscript/presentation.hpp>
 #include <components/falloutscript/queries.hpp>
 #include <components/falloutscript/quests.hpp>
+#include <components/falloutscript/radio.hpp>
 #include <components/falloutscript/referencestate.hpp>
-#include <components/falloutscript/respawn.hpp>
 #include <components/falloutscript/regionline.hpp>
-#include <components/falloutscript/spawncommands.hpp>
-#include <components/falloutscript/spawnrules.hpp>
 #include <components/falloutscript/repair.hpp>
 #include <components/falloutscript/reputation.hpp>
+#include <components/falloutscript/respawn.hpp>
+#include <components/falloutscript/restrictions.hpp>
 #include <components/falloutscript/roulette.hpp>
 #include <components/falloutscript/saveaccess.hpp>
 #include <components/falloutscript/slots.hpp>
+#include <components/falloutscript/spawncommands.hpp>
+#include <components/falloutscript/spawnrules.hpp>
 #include <components/falloutscript/switches.hpp>
 #include <components/falloutscript/triggervolumes.hpp>
 #include <components/falloutscript/vanillacommands.hpp>
-#include <components/falloutscript/placedexplosives.hpp>
 #include <components/falloutscript/vats.hpp>
 #include <components/falloutscript/vatsvalue.hpp>
 #include <components/falloutscript/voicefiles.hpp>
 #include <components/falloutscript/wear.hpp>
 #include <components/falloutscript/worldcommands.hpp>
+#include <components/files/gameini.hpp>
 
 // What characters say outside of a conversation, which a saved game keeps
 #include <components/falloutscript/sayings.hpp>
@@ -411,6 +412,14 @@ namespace OFScript
         void finishLevelUp();
         /// The value of a game setting (GMST) by its editor id, none when the files have no such setting
         std::optional<double> gameSetting(std::string_view name) override;
+        /// The number of a game setting: the one of the plugins, else the default of the executable of the game (the
+        /// names are not case sensitive); 0, with an error in the log once, when neither has it (no executable was
+        /// found next to the data)
+        double gameSettingValue(std::string_view name);
+        /// The defaults of the numeric settings that the executables of the games build (fallout-rules.md D.S7), by
+        /// name in lower case; loadExecutableTexts sets them from the player's own copy of the game, a test sets its
+        /// own
+        void setExecutableNumbers(std::map<std::string, double> numbers);
         /// The text of a game setting, empty when the files have none
         std::string gameSettingText(std::string_view name);
         /// What a token `&name;` of a message stands for: the keys and buttons of the controls (`&sUActnVats;` is the
@@ -589,7 +598,8 @@ namespace OFScript
         /// Spends skill points on a skill (the skill stays at most 100); the points spent, 0 when none could be
         int spendSkillPoints(int skill, int points);
         /// Takes skill points back from a skill (the screen of the level up does when the player takes back what it
-        /// gave on that screen); the points given back, 0 when none could be
+        /// gave on that screen); the points given back, 0 when none could be. Only the points spent on that skill since
+        /// the last level up was done come back, whatever the modifier of the skill is
         int refundSkillPoints(int skill, int points);
         /// Spends the perk point on a perk the player is offered; false when it is not
         bool choosePerk(FalloutScript::FormId perk);
@@ -1810,6 +1820,10 @@ namespace OFScript
         /// yet.
         bool isDead(const OFWorld::Ptr& actor) const;
 
+        /// A character or creature near the player heals by its heal rate for that many simulated seconds (the player
+        /// heals in update())
+        void regenerate(const OFWorld::Ptr& actor, double seconds);
+
         /// The actor sits on, lies on or leans against the furniture, which IsCurrentFurnitureRef and
         /// IsCurrentFurnitureObj tell, until it gets up or is moved away from it. With `place` the actor is put on the
         /// entry of the marker of the furniture that it uses, facing as the entry says (the player who activates a
@@ -2009,6 +2023,12 @@ namespace OFScript
         /// commands that script call open them, and the interface (core.chargen) shows the one that is open and tells
         /// when the player is done with it.
         FalloutScript::Chargen& chargen() { return mChargen; }
+        /// The name the player gave its character (empty before the name screen); valid until the next call
+        std::string_view playerName()
+        {
+            mPlayerNameShown = mChargen.name();
+            return mPlayerNameShown;
+        }
         /// The player is done with the screen: what it picked becomes the character (the attributes and skills the
         /// player has, the traits as perks) and the next screen of the menu opens
         void finishChargenPage();
@@ -2111,6 +2131,36 @@ namespace OFScript
         /// What the crippled legs of the character leave of its speed (1 when none is: fMoveOneCrippledLegSpeedMult and
         /// fMoveTwoCrippledLegsSpeedMult of the executables' speed rule, 0x647d10). Any thread.
         double moveSpeedMultiplier(const OFWorld::Ptr& ptr);
+        /// The settings of the speed and the jump of the games (part B and C.J1 of docs/openfallout/fallout-rules.md),
+        /// read once from the loaded game settings (the exe default for one that no plugin has)
+        const FalloutScript::Movement::Settings& movementSettings();
+        /// What the speed rules read of an actor now: its SpeedMult, legs, weight, armor and weapon
+        /// (falloutmovement.cpp)
+        FalloutScript::Movement::Mover moverOf(const OFWorld::Ptr& ptr, bool sneaking);
+        /// The speed the actor walks, runs or swims at by the rules of its game (units a second; B.M1 to B.M10). A run
+        /// asked for while over the carry weight is a walk. Main thread.
+        double moveSpeed(const OFWorld::Ptr& ptr, bool running, bool sneaking, bool swimming);
+        /// The speed of a character (an NPC_ or the player) by those rules, the same ones for every character; none for
+        /// a creature, which goes at the speed of its animation by its SpeedMult (creatureSpeedShare). Main thread.
+        std::optional<double> characterMoveSpeed(const OFWorld::Ptr& ptr, bool running);
+        /// What a creature's SpeedMult and its crippled legs leave of the speed of its animation (1 at SpeedMult 100).
+        /// Main thread.
+        double creatureSpeedShare(const OFWorld::Ptr& ptr);
+        /// Whether the character carries more than its carry weight (a creature never does)
+        bool overEncumbered(const OFWorld::Ptr& ptr);
+        /// What the items of the actor weigh, by their cards (Pack Rat and the weight mods of the weapons count)
+        double carriedWeightOf(FalloutScript::FormId actor);
+        /// The size factor of the executables: the reference scale times the height of the race (or the scale of the
+        /// record of a creature)
+        double sizeOf(const OFWorld::Ptr& ptr);
+        /// The height of a jump of the actor (rule C.J1: fJumpHeightMin times its size, twice that swimming)
+        double jumpHeight(const OFWorld::Ptr& ptr, bool swimming);
+        /// Whether the actor is a teammate of the player (a follower: the third test of the tier rule, A.T2)
+        bool isPlayerTeammate(const OFWorld::Ptr& ptr);
+        /// The Paralysis actor value (47) is above 0: the actor can neither move nor act
+        bool isParalyzed(const OFWorld::Ptr& ptr);
+        /// The form id the Fallout scripts know the reference by (PlayerRef for the player; 0 for none)
+        FalloutScript::FormId formOfReference(const OFWorld::Ptr& ptr) { return scriptReferenceOf(ptr); }
         /// What scripts told the actor to do over what its AI would make it do (falloutactorstatus.cpp): SetActorsAI 0
         /// (it does nothing: no package, no fight), SetForceRun and SetForceSneak (the gait it walks with). Any thread.
         bool actorAiOff(const OFWorld::Ptr& ptr);
@@ -2133,7 +2183,7 @@ namespace OFScript
         /// The pad shakes because the player was hurt, as the games' settings fRumblePainStrength and fRumblePainTime say
         /// The pad of the player shakes for something that happened to it (the INI's `fRumble<Kind>Strength` and
         /// `fRumble<Kind>Time`: Pain, Struck, Hit), unless a menu is open (the executable's own rule at 0x89CEBA)
-        void rumbleFor(const char* strengthSetting, double strengthDefault, const char* timeSetting, double timeDefault);
+        void rumbleFor(const char* strengthSetting, const char* timeSetting);
         void painRumble();
         /// A blow of the weapon hit the character or creature: the impact that the weapon's impact data set has for its
         /// body is shown on the part that was hit (`limb`, the type of the part; -1 for the body, which is the torso).
@@ -2212,8 +2262,7 @@ namespace OFScript
         void disableAllActors(FalloutScript::FormId except) override;
         bool isPlayableRace(FalloutScript::FormId race) override;
         FalloutScript::FormId raceOf(FalloutScript::FormId actor) override;
-        /// The stance that scripts forced on the player is put on its stats, where the movement and the animation of the
-        /// player read it (once a frame)
+        /// Notes a change of the stance that scripts forced on the player (the player's actor reads it each frame)
         void applyPlayerStance();
 
         bool placement(FalloutScript::FormId reference, FalloutScript::Placement& result) override;
@@ -2311,6 +2360,14 @@ namespace OFScript
         void beginChargenPage();
         /// The skills the player has, from the attributes and the tags that the making of the character gave
         void applyChargenSkills();
+        /// The player's skill by the rule (E.1.9), from the attributes of now and the tags; none for anyone else
+        std::optional<double> playerSkill(
+            FalloutScript::FormId actor, int skill, const std::function<double(int)>& current);
+        /// The skills of a save made before they followed the SPECIAL: their points of the level-ups become the
+        /// permanent modifier (called when the section of chargen of such a save is read)
+        void convertOldPlayerSkills();
+        /// Whether the save being read has the skills of the player as bases (actor values section 1)
+        bool mConvertOldSkills = false;
 
         /// The character says a response of the topic outside of a conversation: what the response does is done, and
         /// the lines are told to the player: the voice of the data and, when subtitles are on, the text
@@ -2461,8 +2518,8 @@ namespace OFScript
         bool fallsInsteadOfDying(FalloutScript::FormId victim);
         bool initialValues(FalloutScript::FormId actor, std::vector<std::pair<int, double>>& values) override;
         bool levelOf(FalloutScript::FormId actor, int playerLevel, int& level) override;
-        std::optional<double> derivedValue(
-            FalloutScript::FormId actor, int value, const std::function<double(int)>& permanent) override;
+        std::optional<double> derivedValue(FalloutScript::FormId actor, int value,
+            const std::function<double(int)>& permanent, const std::function<double(int)>& current) override;
         /// The settings of the files for the actor values that are worked out, read when the first is asked for
         const FalloutScript::DerivedStatSettings& derivedSettings();
         /// How the games move a character from the entry of a marker to where it stays on the furniture, from the
@@ -2794,6 +2851,8 @@ namespace OFScript
         void buildNames() const;
 
         const OFWorld::ESMStore& mStore;
+        std::optional<FalloutScript::Movement::Settings> mMovementSettings;
+        std::string mPlayerNameShown;
         FalloutScript::CommandTable mCommands;
         FalloutScript::Interpreter mInterpreter;
         FalloutScript::ConditionEvaluator mConditions;
@@ -3090,14 +3149,21 @@ namespace OFScript
         /// The settings of the files by their names in lower case, read when the first of them is asked for (the
         /// caller holds mDerivedSettingsMutex)
         const std::map<std::string, double>& gameSettingValues();
-        /// The number a game setting has in the files (the names are not case sensitive), else the fallback
-        double gameSetting(std::string_view name, double fallback);
+        /// The number of a game setting (the plugins', else the executable's default), else the default that a rule of
+        /// components/falloutscript gives with its own name for it (the rules there take their settings through a
+        /// function with a default, which their tests use)
+        double gameSettingOr(std::string_view name, double fallback);
+        /// The settings that were asked for and had no value (under mDerivedSettingsMutex)
+        std::set<std::string> mMissingSettings;
         std::optional<std::map<std::string, double>> mGameSettingValues;
         /// The settings that are texts, by name (under mDerivedSettingsMutex as well)
         std::optional<std::map<std::string, std::string>> mGameSettingTexts;
         /// The default texts of the settings that the executables of the games build, by name in lower case (under
         /// mDerivedSettingsMutex as well)
         std::map<std::string, std::string> mExecutableTexts;
+        /// The default values of the numeric settings that the executables of the games build, by name in lower case
+        /// (under mDerivedSettingsMutex as well); those of the plugins win over them
+        std::map<std::string, double> mExecutableNumbers;
         /// What the player has open to take things from, under mLootMutex
         std::mutex mLootMutex;
         std::optional<Loot> mLoot;

@@ -7,7 +7,9 @@ refuses to place the player. This file stands in at those paths from resources/v
 below every archive and data directory: a game that has its own file shadows it. It draws nothing and carries no
 animation, so an actor on it is invisible and does not move its limbs. It does have the bounding box node that the
 physics reads the size of an actor from, a human 40 units wide and 128 tall.
-It is a stop-gap for walking the world, not the Fallout skeleton, which comes with the actor work of a later milestone.
+The engine no longer installs it: since the player is a Fallout actor (step 4a), nothing reads the Morrowind base
+skeleton paths. The synthetic plugin of the tests (synthetic_fallout_plugin.py) still writes it as the skeleton of its
+made-up race and creature.
 
     scripts/openfallout/placeholder_skeleton.py files/data/meshes/placeholder_skeleton.nif
 

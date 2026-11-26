@@ -16,7 +16,6 @@
 #include "livecellref.hpp"
 
 #include <components/esm/refid.hpp>
-#include <components/esm3/fogstate.hpp>
 #include <components/misc/tuplemeta.hpp>
 
 #include "ptr.hpp"
@@ -130,9 +129,6 @@ namespace OFWorld
         /// @return updated OFWorld::Ptr with the new CellStore pointer set.
         OFWorld::Ptr moveTo(const OFWorld::Ptr& object, OFWorld::CellStore* cellToMoveTo);
 
-        void rest(double hours);
-        void recharge(float duration);
-
         /// Make a copy of the given object and insert it into this cell.
         /// @note If you get a linker error here, this means the given type can not be inserted into a cell.
         /// The supported types are defined at the bottom of this file.
@@ -190,11 +186,6 @@ namespace OFWorld
         bool movedHere(const OFWorld::Ptr& ptr) const;
 
         void setWaterLevel(float level);
-
-        void setFog(std::unique_ptr<ESM::FogState>&& fog);
-        ///< \note Takes ownership of the pointer
-
-        ESM::FogState* getFog() const;
 
         std::size_t count() const;
         ///< Return total number of references, including deleted ones.
@@ -315,10 +306,6 @@ namespace OFWorld
 
         void saveState(ESM::CellState& state) const;
 
-        void writeFog(ESM::ESMWriter& writer) const;
-
-        void readFog(ESM::ESMReader& reader);
-
         void writeReferences(ESM::ESMWriter& writer) const;
 
         struct GetCellStoreCallback
@@ -331,9 +318,6 @@ namespace OFWorld
         /// @param callback to use for retrieving of additional CellStore objects by ID (required for resolving moved
         /// references)
         void readReferences(ESM::ESMReader& reader, GetCellStoreCallback* callback);
-
-        void respawn();
-        ///< Check mLastRespawn and respawn references if necessary. This is a no-op if the cell is not loaded.
 
         CellStore* getOriginCell(const Ptr& object) const;
 
@@ -348,7 +332,6 @@ namespace OFWorld
         // Even though fog actually belongs to the player and not cells,
         // it makes sense to store it here since we need it once for each cell.
         // Note this is nullptr until the cell is explored to save some memory
-        std::unique_ptr<ESM::FogState> mFogState;
 
         OFWorld::Cell mCellVariant;
         State mState;
@@ -405,14 +388,6 @@ namespace OFWorld
         void updateMergedRefs(bool includeDeleted = false) const;
 
         // (item, max charge)
-        typedef std::vector<std::pair<LiveCellRefBase*, float>> TRechargingItems;
-        TRechargingItems mRechargingItems;
-
-        bool mRechargingItemsUpToDate;
-
-        void updateRechargingItems();
-        void rechargeItems(float duration);
-        void checkItem(const Ptr& ptr);
 
         /// Run through references and store IDs
         void listRefs(const ESM::Cell& cell);

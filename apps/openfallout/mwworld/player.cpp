@@ -1,131 +1,74 @@
 #include "player.hpp"
 
-#include <stdexcept>
-
 #include <components/debug/debuglog.hpp>
 
 #include <components/esm/defs.hpp>
 #include <components/esm3/actoridconverter.hpp>
 #include <components/esm3/esmreader.hpp>
-#include <components/esm3/esmwriter.hpp>
-#include <components/esm3/loadbsgn.hpp>
-#include <components/esm3/loadmgef.hpp>
 #include <components/esm3/player.hpp>
-#include <components/fallback/fallback.hpp>
-
-#include "../mwworld/esmstore.hpp"
-#include "../mwworld/inventorystore.hpp"
-#include "../mwworld/magiceffects.hpp"
-#include "../mwworld/worldmodel.hpp"
+#include <components/esm4/loadachr.hpp>
+#include <components/falloutscript/playerstate.hpp>
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
-#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
+#include "../mwmechanics/falloutactor.hpp"
 #include "../mwmechanics/movement.hpp"
-#include "../mwmechanics/npcstats.hpp"
-#include "../mwmechanics/spellutil.hpp"
 
-#include "../mwrender/camera.hpp"
-#include "../mwrender/renderingmanager.hpp"
+#include "../mwscript/falloutscripts.hpp"
 
 #include "cellstore.hpp"
 #include "class.hpp"
 #include "ptr.hpp"
+#include "worldmodel.hpp"
 
 namespace OFWorld
 {
     namespace
     {
-        ESM::CellRef makePlayerCellRef()
+        ESM4::ActorCharacter makePlayerReference(const ESM4::Npc* player, ESM::RefNum reference)
         {
-            ESM::CellRef result;
-            result.blank();
-            result.mRefID = ESM::RefId::stringRefId("Player");
+            ESM4::ActorCharacter result{};
+            result.mId = reference;
+            result.mFlags = 0;
+            if (player != nullptr)
+                result.mBaseObj = player->mId;
+            result.mScale = 1.f;
+            for (int i = 0; i < 3; ++i)
+                result.mPos.pos[i] = result.mPos.rot[i] = 0.f;
+            return result;
+        }
+
+        LiveCellRef<ESM4::Npc> makePlayer(const ESM4::Npc* player, ESM::RefNum reference)
+        {
+            LiveCellRef<ESM4::Npc> result(makePlayerReference(player, reference), player);
+            // The player is not a character of a cell: it has its own class (OFClass::FalloutPlayer)
+            result.mClass = &Class::get(ESM::REC_INTERNAL_PLAYER);
+            return result;
+        }
+
+        ESM::Position positionOf(const std::array<float, 3>& position, const std::array<float, 3>& rotation)
+        {
+            ESM::Position result;
+            for (int i = 0; i < 3; ++i)
+            {
+                result.pos[i] = position[i];
+                result.rot[i] = rotation[i];
+            }
             return result;
         }
     }
 
-    Player::Player(const ESM::NPC* player)
-        : mPlayer(makePlayerCellRef(), player)
-        , mCellStore(nullptr)
+    Player::Player(const ESM4::Npc* player, ESM::RefNum reference)
+        : mPlayer(makePlayer(player, reference))
+        , mReference(reference)
         , mLastKnownExteriorPosition(0, 0, 0)
-        , mMarkedPosition(ESM::Position())
-        , mMarkedCell(nullptr)
-        , mTeleported(false)
-        , mCurrentCrimeId(-1)
-        , mPaidCrimeId(-1)
-        , mJumping(false)
     {
-        ESM::Position playerPos = mPlayer.mData.getPosition();
-        playerPos.pos[0] = playerPos.pos[1] = playerPos.pos[2] = 0;
-        mPlayer.mData.setPosition(playerPos);
     }
 
-    void Player::saveStats()
-    {
-        OFMechanics::NpcStats& stats = getPlayer().getClass().getNpcStats(getPlayer());
-
-        for (const auto& [skill, value] : stats.getSkills())
-            mSaveSkills[skill] = value.getModified();
-        for (const auto& [attribute, value] : stats.getAttributes())
-            mSaveAttributes[attribute] = value.getModified();
-    }
-
-    void Player::restoreStats()
-    {
-        const auto& store = OFBase::Environment::get().getESMStore();
-        const OFWorld::Store<ESM::GameSetting>& gmst = store->get<ESM::GameSetting>();
-        OFMechanics::CreatureStats& creatureStats = getPlayer().getClass().getCreatureStats(getPlayer());
-        OFMechanics::NpcStats& npcStats = getPlayer().getClass().getNpcStats(getPlayer());
-        OFMechanics::DynamicStat<float> health = creatureStats.getDynamic(0);
-        creatureStats.setHealth(health.getBase() / gmst.find("fWereWolfHealth")->mValue.getFloat());
-        for (const auto& [id, saved] : mSaveSkills)
-        {
-            auto& skill = npcStats.getSkill(id);
-            skill.restore(skill.getDamage());
-            skill.setModifier(saved - skill.getBase());
-        }
-        for (const auto& [id, saved] : mSaveAttributes)
-        {
-            auto attribute = npcStats.getAttribute(id);
-            attribute.restore(attribute.getDamage());
-            attribute.setModifier(saved - attribute.getBase());
-            npcStats.setAttribute(id, attribute);
-        }
-    }
-
-    void Player::setWerewolfStats()
-    {
-        const auto& store = OFBase::Environment::get().getESMStore();
-        const OFWorld::Store<ESM::GameSetting>& gmst = store->get<ESM::GameSetting>();
-        OFMechanics::CreatureStats& creatureStats = getPlayer().getClass().getCreatureStats(getPlayer());
-        OFMechanics::NpcStats& npcStats = getPlayer().getClass().getNpcStats(getPlayer());
-        OFMechanics::DynamicStat<float> health = creatureStats.getDynamic(0);
-        creatureStats.setHealth(health.getBase() * gmst.find("fWereWolfHealth")->mValue.getFloat());
-        for (const auto& attribute : store->get<ESM::Attribute>())
-        {
-            OFMechanics::AttributeValue value = npcStats.getAttribute(attribute.mId);
-            value.setBase(value.getBase(), true);
-            value.setModifier(attribute.mWerewolfValue - value.getBase());
-            npcStats.setAttribute(attribute.mId, value);
-        }
-
-        for (const auto& skill : store->get<ESM::Skill>())
-        {
-            // Acrobatics is set separately for some reason.
-            if (skill.mId == ESM::Skill::Acrobatics)
-                continue;
-
-            OFMechanics::SkillValue& value = npcStats.getSkill(skill.mId);
-            value.setBase(value.getBase(), true);
-            value.setModifier(skill.mWerewolfValue - value.getBase());
-        }
-    }
-
-    void Player::set(const ESM::NPC* player)
+    void Player::set(const ESM4::Npc* player)
     {
         mPlayer.mBase = player;
     }
@@ -137,52 +80,45 @@ namespace OFWorld
 
     OFWorld::Ptr Player::getPlayer()
     {
-        OFWorld::Ptr ptr(&mPlayer, mCellStore);
-        return ptr;
+        return OFWorld::Ptr(&mPlayer, mCellStore);
     }
 
     OFWorld::ConstPtr Player::getConstPlayer() const
     {
-        OFWorld::ConstPtr ptr(&mPlayer, mCellStore);
-        return ptr;
-    }
-
-    void Player::setBirthSign(const ESM::RefId& sign)
-    {
-        mSign = sign;
-    }
-
-    const ESM::RefId& Player::getBirthSign() const
-    {
-        return mSign;
+        return OFWorld::ConstPtr(&mPlayer, mCellStore);
     }
 
     void Player::setDrawState(OFMechanics::DrawState state)
     {
-        OFWorld::Ptr ptr = getPlayer();
-        ptr.getClass().getNpcStats(ptr).setDrawState(state);
+        if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+            if (const FalloutScript::FormId player = scripts->playerReference(); player != 0)
+                scripts->equipment().setWeaponDrawn(player, state == OFMechanics::DrawState::Weapon);
+    }
+
+    OFMechanics::DrawState Player::getDrawState() const
+    {
+        if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+            if (scripts->isPlayerWeaponDrawn())
+                return OFMechanics::DrawState::Weapon;
+        return OFMechanics::DrawState::Nothing;
     }
 
     void Player::yaw(float yaw)
     {
-        OFWorld::Ptr ptr = getPlayer();
-        ptr.getClass().getMovementSettings(ptr).mRotation[2] += yaw;
-    }
-    void Player::pitch(float pitch)
-    {
-        OFWorld::Ptr ptr = getPlayer();
-        ptr.getClass().getMovementSettings(ptr).mRotation[0] += pitch;
-    }
-    void Player::roll(float roll)
-    {
-        OFWorld::Ptr ptr = getPlayer();
-        ptr.getClass().getMovementSettings(ptr).mRotation[1] += roll;
+        if (OFMechanics::Actor* actor = OFMechanics::findActor(getPlayer()))
+            actor->getMovement().mRotation[2] += yaw;
     }
 
-    OFMechanics::DrawState Player::getDrawState()
+    void Player::pitch(float pitch)
     {
-        OFWorld::Ptr ptr = getPlayer();
-        return ptr.getClass().getNpcStats(ptr).getDrawState();
+        if (OFMechanics::Actor* actor = OFMechanics::findActor(getPlayer()))
+            actor->getMovement().mRotation[0] += pitch;
+    }
+
+    void Player::roll(float roll)
+    {
+        if (OFMechanics::Actor* actor = OFMechanics::findActor(getPlayer()))
+            actor->getMovement().mRotation[1] += roll;
     }
 
     void Player::activate()
@@ -191,9 +127,14 @@ namespace OFWorld
             return;
 
         OFWorld::Ptr player = getPlayer();
-        const OFMechanics::NpcStats& playerStats = player.getClass().getNpcStats(player);
-        if (playerStats.isParalyzed() || playerStats.getKnockedDown() || playerStats.isDead())
-            return;
+        // A dead, paralysed or knocked down player does not activate (the executables' activation checks the life
+        // state and the knock state of the actor)
+        if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+            if (scripts->isDead(player) || scripts->isParalyzed(player))
+                return;
+        if (const OFMechanics::Actor* actor = OFMechanics::findActor(player))
+            if (actor->getKnockState() != FalloutScript::KnockState::Normal)
+                return;
 
         OFWorld::Ptr toActivate = OFBase::Environment::get().getWorld()->getFocusObject();
 
@@ -214,6 +155,9 @@ namespace OFWorld
     void Player::setTeleported(bool teleported)
     {
         mTeleported = teleported;
+        if (teleported)
+            if (OFMechanics::Actor* actor = OFMechanics::findActor(getPlayer()); actor != nullptr && actor->isPlayer())
+                static_cast<OFMechanics::PlayerCharacter*>(actor)->teleported();
     }
 
     void Player::setJumping(bool jumping)
@@ -226,281 +170,112 @@ namespace OFWorld
         return mJumping;
     }
 
-    bool Player::isInCombat()
+    bool Player::isInCombat() const
     {
-        return OFBase::Environment::get().getMechanicsManager()->getActorsFighting(getPlayer()).size() != 0;
-    }
-
-    bool Player::enemiesNearby()
-    {
-        return OFBase::Environment::get().getMechanicsManager()->getEnemiesNearby(getPlayer()).size() != 0;
-    }
-
-    void Player::markPosition(CellStore* markedCell, const ESM::Position& markedPosition)
-    {
-        mMarkedCell = markedCell;
-        mMarkedPosition = markedPosition;
-    }
-
-    void Player::getMarkedPosition(CellStore*& markedCell, ESM::Position& markedPosition) const
-    {
-        markedCell = mMarkedCell;
-        if (mMarkedCell)
-            markedPosition = mMarkedPosition;
+        OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
+        if (scripts == nullptr)
+            return false;
+        const FalloutScript::FormId player = scripts->playerReference();
+        return player != 0 && (scripts->combat().inCombat(player) || scripts->combat().isFought(player));
     }
 
     void Player::clear()
     {
-        ESM::CellRef cellRef;
-        cellRef.blank();
-        cellRef.mRefID = ESM::RefId::stringRefId("Player");
-        cellRef.mRefNum = mPlayer.mRef.getRefNum();
-        mPlayer = LiveCellRef<ESM::NPC>(cellRef, mPlayer.mBase);
+        mPlayer = makePlayer(mPlayer.mBase, mReference);
         mCellStore = nullptr;
-        mSign = ESM::RefId();
-        mMarkedCell = nullptr;
         mTeleported = false;
         mJumping = false;
-        mCurrentCrimeId = -1;
-        mPaidCrimeId = -1;
-        mPreviousItems.clear();
         mLastKnownExteriorPosition = osg::Vec3f(0, 0, 0);
-
-        mSaveSkills.clear();
-        mSaveAttributes.clear();
-
-        mMarkedPosition.pos[0] = 0;
-        mMarkedPosition.pos[1] = 0;
-        mMarkedPosition.pos[2] = 0;
-        mMarkedPosition.rot[0] = 0;
-        mMarkedPosition.rot[1] = 0;
-        mMarkedPosition.rot[2] = 0;
     }
 
-    void Player::write(ESM::ESMWriter& writer, Loading::Listener& progress) const
+    FalloutScript::PlayerState Player::saveState() const
     {
-        ESM::Player player;
-
-        mPlayer.save(player.mObject);
-        player.mCellId = mCellStore->getCell()->getId();
-
-        player.mCurrentCrimeId = mCurrentCrimeId;
-        player.mPaidCrimeId = mPaidCrimeId;
-
-        player.mBirthsign = mSign;
-
-        player.mLastKnownExteriorPosition[0] = mLastKnownExteriorPosition.x();
-        player.mLastKnownExteriorPosition[1] = mLastKnownExteriorPosition.y();
-        player.mLastKnownExteriorPosition[2] = mLastKnownExteriorPosition.z();
-
-        if (mMarkedCell)
+        FalloutScript::PlayerState state;
+        if (mCellStore != nullptr)
+            state.mCell = mCellStore->getCell()->getId().serializeText();
+        const ESM::Position& position = mPlayer.mData.getPosition();
+        for (int i = 0; i < 3; ++i)
         {
-            player.mHasMark = true;
-            player.mMarkedPosition = mMarkedPosition;
-            player.mMarkedCell = mMarkedCell->getCell()->getId();
+            state.mPosition[i] = position.pos[i];
+            state.mRotation[i] = position.rot[i];
         }
-        else
-            player.mHasMark = false;
-
-        player.mSaveAttributes = mSaveAttributes;
-        player.mSaveSkills = mSaveSkills;
-
-        player.mPreviousItems = mPreviousItems;
-
-        writer.startRecord(ESM::REC_PLAY);
-        player.save(writer);
-        writer.endRecord(ESM::REC_PLAY);
+        state.mLastExteriorPosition
+            = { mLastKnownExteriorPosition.x(), mLastKnownExteriorPosition.y(), mLastKnownExteriorPosition.z() };
+        state.mRefNum = mPlayer.mRef.getRefNum();
+        OFWorld::Ptr self(const_cast<LiveCellRef<ESM4::Npc>*>(&mPlayer), mCellStore);
+        if (const OFMechanics::Actor* actor = OFMechanics::findActor(self))
+        {
+            state.mRunning = actor->isRunning();
+            state.mSneaking = actor->isSneaking();
+        }
+        OFBase::Environment::get().getLuaManager()->saveLocalScripts(self, state.mLuaScripts);
+        return state;
     }
 
-    bool Player::readRecord(ESM::ESMReader& reader, uint32_t type)
+    void Player::loadState(const FalloutScript::PlayerState& state)
     {
-        if (type == ESM::REC_PLAY)
+        OFWorld::WorldModel& worldModel = *OFBase::Environment::get().getWorldModel();
+
+        // The reference number is the one the Lua scripts of the save know the player by. For a save of this version
+        // it is PlayerRef, and the Lua data of the save is moved to the plugin's index of this load order
+        // (OFLua::Serializer::adjustRefNum), so it is this run's PlayerRef. An older save has the number the engine
+        // gave the Morrowind character (no content file), which is kept as it is.
+        worldModel.deregisterLiveCellRef(mPlayer);
+        mPlayer.mRef.setRefNum(state.mRefNum.isSet() && !state.mRefNum.hasContentFile() ? state.mRefNum : mReference);
+        const ESM::Position position = positionOf(state.mPosition, state.mRotation);
+        mPlayer.mRef.setPosition(position);
+        mPlayer.mData.setPosition(position);
+        mPlayer.mData.enable();
+        worldModel.registerPtr(getPlayer());
+
+        mCellStore = nullptr;
+        if (!state.mCell.empty())
         {
-            ESM::Player player;
-            player.load(reader);
-
-            if (!mPlayer.checkState(player.mObject))
-            {
-                // this is the one object we can not silently drop.
-                throw std::runtime_error("invalid player state record (object state)");
-            }
-            if (reader.getFormatVersion() <= ESM::MaxClearModifiersFormatVersion)
-                convertMagicEffects(
-                    player.mObject.mCreatureStats, player.mObject.mInventory, &player.mObject.mNpcStats);
-            else if (reader.getFormatVersion() <= ESM::MaxOldCreatureStatsFormatVersion)
-            {
-                convertStats(player.mObject.mCreatureStats);
-                convertEnchantmentSlots(player.mObject.mCreatureStats, player.mObject.mInventory);
-            }
-            else if (reader.getFormatVersion() <= ESM::MaxActiveSpellSlotIndexFormatVersion)
-                convertEnchantmentSlots(player.mObject.mCreatureStats, player.mObject.mInventory);
-
-            if (!player.mObject.mEnabled)
-            {
-                Log(Debug::Warning) << "Warning: Savegame attempted to disable the player.";
-                player.mObject.mEnabled = true;
-            }
-
-            OFBase::Environment::get().getWorldModel()->deregisterLiveCellRef(mPlayer);
-            mPlayer.load(player.mObject);
-            OFBase::Environment::get().getWorldModel()->registerPtr(getPlayer());
-            if (reader.mActorIdConverter)
-                reader.mActorIdConverter->mMappings.emplace(
-                    player.mObject.mCreatureStats.mActorId, mPlayer.mRef.getRefNum());
-
-            mSaveAttributes = player.mSaveAttributes;
-            mSaveSkills = player.mSaveSkills;
-
-            if (player.mObject.mNpcStats.mIsWerewolf)
-            {
-                if (reader.getFormatVersion() <= ESM::MaxOldSkillsAndAttributesFormatVersion)
-                {
-                    setWerewolfStats();
-                    if (player.mSetWerewolfAcrobatics)
-                        OFBase::Environment::get().getMechanicsManager()->applyWerewolfAcrobatics(getPlayer());
-                }
-            }
-
-            getPlayer().getClass().getCreatureStats(getPlayer()).getAiSequence().clear();
-
-            OFBase::World& world = *OFBase::Environment::get().getWorld();
-
-            mCellStore = OFBase::Environment::get().getWorldModel()->findCell(player.mCellId);
+            const ESM::RefId cell = ESM::RefId::deserializeText(state.mCell);
+            mCellStore = worldModel.findCell(cell);
             if (mCellStore == nullptr)
-                Log(Debug::Warning) << "Player cell " << player.mCellId << " no longer exists";
-
-            if (!player.mBirthsign.empty())
-            {
-                const ESM::BirthSign* sign = world.getStore().get<ESM::BirthSign>().search(player.mBirthsign);
-                if (!sign)
-                    throw std::runtime_error("invalid player state record (birthsign does not exist)");
-            }
-
-            mCurrentCrimeId = player.mCurrentCrimeId;
-            mPaidCrimeId = player.mPaidCrimeId;
-
-            mSign = player.mBirthsign;
-
-            mLastKnownExteriorPosition.x() = player.mLastKnownExteriorPosition[0];
-            mLastKnownExteriorPosition.y() = player.mLastKnownExteriorPosition[1];
-            mLastKnownExteriorPosition.z() = player.mLastKnownExteriorPosition[2];
-
-            if (player.mHasMark)
-            {
-                if (!world.getStore().get<ESM::Cell>().search(player.mMarkedCell))
-                    player.mHasMark = false; // drop mark silently
-            }
-
-            if (player.mHasMark)
-            {
-                mMarkedPosition = player.mMarkedPosition;
-                mMarkedCell = &OFBase::Environment::get().getWorldModel()->getCell(player.mMarkedCell);
-            }
-            else
-            {
-                mMarkedCell = nullptr;
-            }
-
-            mTeleported = false;
-
-            mPreviousItems = player.mPreviousItems;
-
-            return true;
+                Log(Debug::Warning) << "Player cell " << cell << " no longer exists";
         }
 
-        return false;
+        mLastKnownExteriorPosition = osg::Vec3f(
+            state.mLastExteriorPosition[0], state.mLastExteriorPosition[1], state.mLastExteriorPosition[2]);
+        mTeleported = false;
+        mJumping = false;
+
+        OFBase::Environment::get().getLuaManager()->loadLocalScripts(getPlayer(), state.mLuaScripts);
+
+        if (OFMechanics::Actor* actor = OFMechanics::findActor(getPlayer()))
+        {
+            actor->setRunning(state.mRunning);
+            actor->setSneaking(state.mSneaking);
+        }
     }
 
-    int Player::getNewCrimeId()
+    bool Player::readRecord(ESM::ESMReader& reader, std::uint32_t type)
     {
-        return ++mCurrentCrimeId;
-    }
+        if (type != ESM::REC_PLAY)
+            return false;
 
-    void Player::recordCrimeId()
-    {
-        mPaidCrimeId = mCurrentCrimeId;
-    }
+        ESM::Player player;
+        player.load(reader);
 
-    int Player::getCrimeId() const
-    {
-        return mPaidCrimeId;
-    }
+        const FalloutScript::ConvertedPlayer converted = FalloutScript::convertOldPlayer(player);
+        loadState(converted.mState);
+        if (reader.mActorIdConverter)
+            reader.mActorIdConverter->mMappings.emplace(
+                player.mObject.mCreatureStats.mActorId, mPlayer.mRef.getRefNum());
 
-    void Player::setPreviousItem(const ESM::RefId& boundItemId, const ESM::RefId& previousItemId)
-    {
-        mPreviousItems[boundItemId] = previousItemId;
-    }
-
-    ESM::RefId Player::getPreviousItem(const ESM::RefId& boundItemId)
-    {
-        return mPreviousItems[boundItemId];
-    }
-
-    void Player::erasePreviousItem(const ESM::RefId& boundItemId)
-    {
-        mPreviousItems.erase(boundItemId);
-    }
-
-    void Player::setSelectedSpell(const ESM::RefId& spellId)
-    {
-        Ptr player = getPlayer();
-        InventoryStore& store = player.getClass().getInventoryStore(player);
-        store.setSelectedEnchantItem(store.end());
-        int castChance = int(OFMechanics::getSpellSuccessChance(spellId, player));
-        OFBase::Environment::get().getWindowManager()->setSelectedSpell(spellId, castChance);
-        OFBase::Environment::get().getWindowManager()->updateSpellWindow();
+        Log(Debug::Info) << "The save was made when the player was a Morrowind character: its place, its Lua scripts "
+                            "and its stance were taken from it (PLAY)";
+        for (const std::string& dropped : converted.mDropped)
+            Log(Debug::Info) << "  not taken: " << dropped;
+        return true;
     }
 
     void Player::update()
     {
-        auto player = getPlayer();
-        const auto world = OFBase::Environment::get().getWorld();
-        const auto rendering = world->getRenderingManager();
-        auto& store = world->getStore();
-        auto& playerClass = player.getClass();
-        const auto windowMgr = OFBase::Environment::get().getWindowManager();
-
-        if (player.getCell()->isExterior())
-        {
-            ESM::Position pos = player.getRefData().getPosition();
-            setLastKnownExteriorPosition(pos.asVec3());
-        }
-
-        bool isWerewolf = playerClass.getNpcStats(player).isWerewolf();
-        bool isFirstPerson = world->isFirstPerson();
-        if (isWerewolf && isFirstPerson)
-        {
-            float werewolfFov = Fallback::Map::getFloat("General_Werewolf_FOV");
-            if (werewolfFov != 0)
-                rendering->overrideFieldOfView(werewolfFov);
-            windowMgr->setWerewolfOverlay(true);
-        }
-        else
-        {
-            rendering->resetFieldOfView();
-            windowMgr->setWerewolfOverlay(false);
-        }
-
-        // Sink the camera while sneaking
-        bool sneaking = playerClass.getCreatureStats(player).getStance(OFMechanics::CreatureStats::Stance_Sneak);
-        bool swimming = world->isSwimming(player);
-        bool flying = world->isFlying(player);
-
-        static const float i1stPersonSneakDelta
-            = store.get<ESM::GameSetting>().find("i1stPersonSneakDelta")->mValue.getFloat();
-        if (sneaking && !swimming && !flying)
-            rendering->getCamera()->setSneakOffset(i1stPersonSneakDelta);
-        else
-            rendering->getCamera()->setSneakOffset(0.f);
-
-        int blind = 0;
-        const auto& magicEffects = playerClass.getCreatureStats(player).getMagicEffects();
-        if (!world->getGodModeState())
-            blind = static_cast<int>(magicEffects.getOrDefault(ESM::MagicEffect::Blind).getModifier());
-        windowMgr->setBlindness(std::clamp(blind, 0, 100));
-
-        int nightEye = static_cast<int>(magicEffects.getOrDefault(ESM::MagicEffect::NightEye).getMagnitude());
-        rendering->setNightEyeFactor(std::min(1.f, (nightEye / 100.f)));
+        OFWorld::Ptr player = getPlayer();
+        if (player.getCell() != nullptr && player.getCell()->isExterior())
+            setLastKnownExteriorPosition(player.getRefData().getPosition().asVec3());
     }
-
 }

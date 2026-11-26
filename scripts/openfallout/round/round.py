@@ -401,10 +401,29 @@ def resolve_save(config, profile):
             sys.exit(f"the profile has no `saves` folder for {config['game']}")
         content = ((profile.get("games") or {}).get(config["game"]) or {}).get("content", [])
         return newest_save(folder, lambda path: save_is_for(path, config["game"], content))
-    path = Path(save).expanduser()
+    # A save kept outside the repository (an old save that is a test fixture) is named by an environment variable: `"save":
+    # "${OPENFALLOUT_ROUND_OLDSAVE_NV}"`, so that the round file names no file of one computer
+    expanded = expand_save_variables(str(save))
+    path = Path(expanded).expanduser()
     if not path.exists():
         sys.exit(f"no save {path}")
     return path
+
+
+SAVE_VARIABLE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def expand_save_variables(text, environ=None):
+    """`${NAME}` in the `save` of a round file is the environment variable NAME; a name that is not set stops the round with
+    a message that says which one to set."""
+    environ = os.environ if environ is None else environ
+
+    def value(match):
+        name = match.group(1)
+        if not environ.get(name):
+            sys.exit(f"the save of the round is `{text}`: set the environment variable {name} to the file")
+        return environ[name]
+    return SAVE_VARIABLE.sub(value, text)
 
 
 def engine_command(profile, config, run_dir, save, extra=()):
@@ -766,12 +785,50 @@ def expectations(text, status, timed_out, expect):
         found = sum(1 for line in text.splitlines() if re.search(pattern, line))
         if found != int(wanted):
             failed.append(f"`{pattern}` matches {found} log line(s), expected {wanted}")
+    for gap in expect.get("expect_gap") or []:
+        failed.extend(gap_failures(text, gap))
     return failed
+
+
+LOG_TIME = re.compile(r"^\[(\d\d):(\d\d):(\d\d)\.(\d\d\d) ")
+
+
+def log_seconds(line):
+    """The time stamp of a line of the engine's log (`[23:26:18.030 I] ...`) in seconds of the day, None for a line with none."""
+    match = LOG_TIME.match(line)
+    if match is None:
+        return None
+    hours, minutes, seconds, millis = (int(part) for part in match.groups())
+    return hours * 3600 + minutes * 60 + seconds + millis / 1000
+
+
+def gap_failures(text, gap):
+    """`expect_gap` {"from": regex, "to": regex, "min": seconds, "max": seconds}: the first line that matches `to` after the
+    first one that matches `from` comes `min` to `max` seconds later (by the time stamps of the engine's log, which pass midnight
+    correctly). A line of either kind that is missing, or a gap outside the limits, is one failure that says the gap measured."""
+    label = f"`{gap['from']}` to `{gap['to']}`"
+    start = None
+    for line in text.splitlines():
+        stamp = log_seconds(line)
+        if stamp is None:
+            continue
+        if start is None:
+            if re.search(gap["from"], line):
+                start = stamp
+        elif re.search(gap["to"], line):
+            seconds = (stamp - start) % 86400
+            low, high = float(gap.get("min", 0)), float(gap.get("max", 1e9))
+            if low <= seconds <= high:
+                return []
+            return [f"the gap from {label} is {seconds:.2f} s, expected {low:g} to {high:g} s"]
+    if start is None:
+        return [f"no log line matches `{gap['from']}`, the start of the gap {label}"]
+    return [f"no log line matches `{gap['to']}` after the start of the gap {label}"]
 
 
 def outcome_expectations(config, variant):
     """The expectations of the round file with the variant's over them."""
-    return {key: variant.get(key, config.get(key)) for key in ("expect_exit", "expect_log", "forbid_log", "expect_count")
+    return {key: variant.get(key, config.get(key)) for key in ("expect_exit", "expect_log", "forbid_log", "expect_count", "expect_gap")
             if variant.get(key, config.get(key)) is not None}
 
 

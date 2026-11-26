@@ -14,7 +14,6 @@
         <List file="openmw_hud_box.skin.xml"/>
         <List file="openmw_mainmenu.skin.xml"/>
         <List file="openmw_console.skin.xml"/>
-        <List file="openmw_map_window.skin.xml"/>
         <List file="openmw_scroll.skin.xml"/>
         <List file="openmw_debug_window.skin.xml" />
         <List file="openmw_postprocessor_hud.skin.xml" />

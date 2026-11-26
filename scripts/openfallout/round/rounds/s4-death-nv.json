@@ -1,0 +1,36 @@
+{
+  "name": "s4-death-nv",
+  "game": "nv",
+  "save": "${OPENFALLOUT_ROUND_SAVE_NV}",
+  "scenario": "../scenarios/s4_death_nv.lua",
+  "resolution": [
+    1280,
+    720
+  ],
+  "framerate": 30,
+  "limit": 400,
+  "settings": {
+    "Sound": {
+      "master volume": "0"
+    }
+  },
+  "env": {
+    "OPENFALLOUT_HEADLESS_SOUND": "1"
+  },
+  "expect_gap": [
+    {
+      "from": "falloutdeath\\.lua\\]:\\tthe player is dead",
+      "to": "falloutdeath\\.lua\\]:\\tthe death timer is over",
+      "min": 4.4,
+      "max": 5.6
+    }
+  ],
+  "variants": [
+    {
+      "name": "plain"
+    }
+  ],
+  "expect_log": [
+    "(?s)the death timer is over.*Loading saved game 's4-death'"
+  ]
+}

@@ -19,6 +19,8 @@ namespace OFWorld
 
 namespace OFMechanics
 {
+    class ProcessLists;
+
     /// What the characters and creatures of Fallout 3 and New Vegas do while they are in the world: each follows the AI
     /// package of its list that its schedule says is on at the time of the game (ESM4::choosePackage) and goes where
     /// the package sends it. The game has no mechanics for them yet, so this moves them itself: it asks the navigator
@@ -75,7 +77,9 @@ namespace OFMechanics
         /// (0 for no limit), counted from now; nothing happens for an actor that follows none
         void setPackageDuration(const OFWorld::Ptr& ptr, double hundredths);
 
-        void update(float duration);
+        /// One frame of the actors whose tier is High or Middle High (rule A.T4: the tiers below keep only what an
+        /// actor that is not near needs, and are not moved)
+        void update(float duration, const ProcessLists& tiers);
         /// The character that the player talks with turns to the player (the minds are not updated while a
         /// conversation pauses the world, so this is done for that one in each frame, paused or not)
         void faceSpeaker(float duration);

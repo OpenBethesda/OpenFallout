@@ -31,11 +31,6 @@ namespace Loading
     class Listener;
 }
 
-namespace OFMechanics
-{
-    class SpellList;
-}
-
 namespace ESM
 {
     class ReadersCache;
@@ -243,8 +238,6 @@ namespace OFWorld
 
         uint64_t mDynamicCount;
 
-        mutable std::unordered_map<ESM::RefId, std::weak_ptr<OFMechanics::SpellList>> mSpellListCache;
-
         /// Validate entries in store after setup
         void validate();
 
@@ -283,8 +276,6 @@ namespace OFWorld
         void clearDynamic();
         void rebuildIdsIndex();
         ESM::RefId generateId() { return ESM::RefId::generated(mDynamicCount++); }
-
-        void movePlayerRecord();
 
         /// Validate entries in store after loading a save
         void validateDynamic();
@@ -368,17 +359,12 @@ namespace OFWorld
         ///< \return Known type?
 
         // To be called when we are done with dynamic record loading
-        void checkPlayer();
 
         /// @return The number of instances defined in the base files. Excludes changes from the save file.
         int getRefCount(const ESM::RefId& id) const;
 
         /// @return Cells defining the ref, exteriors first.
         std::span<const ESM::Cell* const> getRefCells(const ESM::RefId& id) const;
-
-        /// Actors with the same ID share spells, abilities, etc.
-        /// @return The shared spell list to use for this actor and whether or not it has already been initialized.
-        std::pair<std::shared_ptr<OFMechanics::SpellList>, bool> getSpellList(ESM::RefId id, bool autoCalc) const;
     };
     template <>
     const ESM::Cell* ESMStore::insert<ESM::Cell>(const ESM::Cell& cell);

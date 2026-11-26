@@ -84,12 +84,22 @@ namespace OFRender
         /// weapon in the hands. They are made the first time they are wanted.
         void setArmsVisible(bool visible);
         bool isArmsVisible() const { return mArmsVisible; }
+        /// Keeps the skeleton of the first person moving while the camera is in the player's eyes, also when the arms
+        /// do not show (no weapon in the hands): the games put the camera on its Camera1st node either way, and the
+        /// sneak animations lower it (see armsEyeDrop). Kept arms that do not show are not drawn and make no sound.
+        void setArmsKept(bool kept);
 
         /// Puts the arms where the camera is, said every frame while they show: the point of their skeleton where the
         /// games have the eye is the place of the camera, and they turn with it. The environment variable
         /// `OPENFALLOUT_FIRSTPERSON_ARMS` ("x y z yaw pitch roll": units and degrees, in the frame of the camera) moves
         /// them from there, to find where they should be.
         void placeArms(const osg::Vec3d& cameraPosition, const osg::Quat& cameraOrientation);
+
+        /// How far the eye of the arms (their Camera1st node) has gone down from where it was when they were made: the
+        /// animations of the first person move it, and the games put the camera on it (FalloutNV.exe: "Missing
+        /// 'Camera1st' on '%s'."). The sneak ones lower it by 40 units (Bip01 NonAccum at -40 in
+        /// _1stperson/sneakmtidle.kf). 0 when the arms are neither shown nor kept.
+        float armsEyeDrop() const;
 
         /// The body sits, lies or leans in furniture whose entry is of this kind (0: it does not); said every frame
         void setPose(int entryKind);
@@ -121,6 +131,8 @@ namespace OFRender
         /// there is no record, or when they could not be made from it)
         void buildBody();
         void buildArms();
+        /// What the node of the arms is drawn and updated by: drawn when they show, only updated when they are kept
+        unsigned armsMask() const;
         /// Takes the body, or the arms, out of the scene
         void dropBody();
         void dropArms();
@@ -163,6 +175,7 @@ namespace OFRender
         osg::ref_ptr<osg::MatrixTransform> mArmsRoot;
         osg::ref_ptr<ESM4NpcAnimation> mArms;
         bool mArmsVisible = false;
+        bool mArmsKept = false;
         osg::Vec3f mArmsEye;
         unsigned mArmsFrames = 0;
         /// How the arms are moved from the camera (see placeArms): a place and a turn, in the frame of the camera

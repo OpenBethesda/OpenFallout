@@ -31,9 +31,11 @@
 #include <components/esm4/loadcell.hpp>
 #include <components/esm4/loaddoor.hpp>
 #include <components/esm4/loadltex.hpp>
+#include <components/esm4/loadnpc.hpp>
 #include <components/esm4/loadstat.hpp>
 #include <components/esm4/loadwrld.hpp>
 #include <components/falloutscript/footsteps.hpp>
+#include <components/falloutscript/movement.hpp>
 
 #include <components/misc/constants.hpp>
 #include <components/misc/convert.hpp>
@@ -76,18 +78,14 @@
 #include "../mwbase/windowmanager.hpp"
 
 #include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/aiavoiddoor.hpp" //Used to tell actors to avoid doors
-#include "../mwmechanics/combat.hpp"
-#include "../mwmechanics/creaturestats.hpp"
+#include "../mwmechanics/falloutactor.hpp"
+#include "../mwmechanics/falloutpackages.hpp"
 #include "../mwmechanics/levelledlist.hpp"
-#include "../mwmechanics/npcstats.hpp"
-#include "../mwmechanics/spellcasting.hpp"
-#include "../mwmechanics/spellutil.hpp"
-#include "../mwmechanics/summoning.hpp"
+
+#include "../mwscript/falloutscripts.hpp"
 
 #include "../mwrender/animation.hpp"
 #include "../mwrender/camera.hpp"
-#include "../mwrender/npcanimation.hpp"
 #include "../mwrender/postprocessor.hpp"
 #include "../mwrender/renderingmanager.hpp"
 #include "../mwrender/vismask.hpp"
@@ -106,11 +104,8 @@
 #include "cellstore.hpp"
 #include "containerstore.hpp"
 #include "datetimemanager.hpp"
-#include "inventorystore.hpp"
 #include "manualref.hpp"
-#include "placeholderrecords.hpp"
 #include "player.hpp"
-#include "projectilemanager.hpp"
 #include "weather.hpp"
 #include "worldspacestart.hpp"
 
@@ -123,21 +118,18 @@ namespace OFWorld
     {
         std::vector<std::pair<GlobalVariableName, ESM::Variant>> generateDefaultGlobals()
         {
+            // The clock of the engine and the state of the character generation. The clock starts on the first day at
+            // nine o'clock and the games count the days passed from 0 (these were the values of the placeholder records
+            // of Morrowind that the engine made before; the date of the games is in their own globals, GameHour and the
+            // others of the plugins)
             return {
-                // vanilla Morrowind does not define dayspassed.
-                { Globals::sDaysPassed, ESM::Variant(1) }, // but the addons start counting at 1 :(
-                { Globals::sWerewolfClawMult, ESM::Variant(25.f) },
-                { Globals::sPCKnownWerewolf, ESM::Variant(0) },
-                // following should exist in all versions of MW, but not necessarily in TCs
-                { Globals::sGameHour, ESM::Variant(0) },
+                { Globals::sGameHour, ESM::Variant(9.f) },
                 { Globals::sTimeScale, ESM::Variant(30.f) },
+                { Globals::sDaysPassed, ESM::Variant(0) },
                 { Globals::sDay, ESM::Variant(1) },
+                { Globals::sMonth, ESM::Variant(0) },
                 { Globals::sYear, ESM::Variant(1) },
-                { Globals::sPCRace, ESM::Variant(0) },
-                { Globals::sPCHasCrimeGold, ESM::Variant(0) },
-                { Globals::sCrimeGoldDiscount, ESM::Variant(0) },
-                { Globals::sCrimeGoldTurnIn, ESM::Variant(0) },
-                { Globals::sPCHasTurnIn, ESM::Variant(0) },
+                { Globals::sCharGenState, ESM::Variant(0) },
             };
         }
     }
@@ -208,12 +200,10 @@ namespace OFWorld
         , mUserDataPath(userDataPath)
         , mActivationDistanceOverride(activationDistanceOverride)
         , mStartCell(startCell)
-        , mSwimHeightScale(0.f)
         , mDistanceToFocusObject(-1.f)
         , mTeleportEnabled(true)
         , mLevitationEnabled(true)
         , mPlayerTraveling(false)
-        , mSpellPreloadTimer(0.f)
     {
     }
 
@@ -226,18 +216,12 @@ namespace OFWorld
         loadContentFiles(fileCollections, contentFiles, encoder, listener);
         loadGroundcoverFiles(fileCollections, groundcoverFiles, encoder, listener);
 
-        // A content list made only of Fallout plugins has no player, race, class, skills or settings in the record
-        // format of the engine. The Lua scripts that run when content is loaded rely on them.
-        if (lacksPlayerRecord(mStore))
-            insertPlaceholderRecords(mStore);
-
         OFBase::Environment::get().getLuaManager()->contentFilesLoaded();
 
         fillGlobalVariables();
 
         mStore.setUp();
         mStore.validateRecords(mReaders);
-        mStore.movePlayerRecord();
 
         // The trees of Fallout are SpeedTree files, which are not read: each is drawn from its record. The scene manager
         // is asked for the model by its path in the archives, which is the one of the record under meshes/.
@@ -248,8 +232,6 @@ namespace OFWorld
                     Misc::ResourceHelpers::correctMeshPath(tree.mModel.getNormalized()),
                     Resource::SpeedTreeStandIn{ tree.mLeafTexture, tree.mBillboardWidth, tree.mBillboardHeight });
         }
-
-        mSwimHeightScale = mStore.get<ESM::GameSetting>().find("fSwimHeightScale")->mValue.getFloat();
     }
 
     void World::init(Debug::Level maxRecastLogLevel, osgViewer::Viewer* viewer, osg::ref_ptr<osg::Group> rootNode,
@@ -260,7 +242,7 @@ namespace OFWorld
         if (Settings::navigator().mEnable)
         {
             auto navigatorSettings = DetourNavigator::makeSettingsFromSettingsManager(maxRecastLogLevel);
-            navigatorSettings.mRecast.mSwimHeightScale = mSwimHeightScale;
+            navigatorSettings.mRecast.mSwimHeightScale = static_cast<float>(FalloutScript::Movement::swimmingLine);
             mNavigator = DetourNavigator::makeNavigator(navigatorSettings, mUserDataPath);
         }
         else
@@ -270,8 +252,6 @@ namespace OFWorld
 
         mRendering = std::make_unique<OFRender::RenderingManager>(
             viewer, rootNode, mResourceSystem, workQueue, *mNavigator, mGroundcoverStore, unrefQueue);
-        mProjectileManager = std::make_unique<ProjectileManager>(
-            mRendering->getLightRoot()->asGroup(), mResourceSystem, mRendering.get(), mPhysics.get());
         mRendering->preloadCommonAssets();
 
         mWeatherStore = std::make_unique<OFWorld::WeatherStore>();
@@ -376,7 +356,6 @@ namespace OFWorld
     {
         mWeatherManager->clear();
         mRendering->clear();
-        mProjectileManager->clear();
         mWorldScene->clear();
         mWorldModel.clear();
 
@@ -385,7 +364,7 @@ namespace OFWorld
         if (mPlayer)
         {
             mPlayer->clear();
-            mPlayer->set(mStore.get<ESM::NPC>().find(ESM::RefId::stringRefId("Player")));
+            mPlayer->set(findPlayerRecord().first);
         }
 
         mDoorStates.clear();
@@ -402,9 +381,7 @@ namespace OFWorld
     size_t World::countSavedGameRecords() const
     {
         return mWorldModel.countSavedGameRecords() + mStore.countSavedGameRecords()
-            + mGlobalVariables.countSavedGameRecords() + mProjectileManager->countSavedGameRecords()
-            + 1 // player record
-            + 1 // weather record
+            + mGlobalVariables.countSavedGameRecords() + 1 // weather record
             + 1 // levitation/teleport enabled state
             + 1 // camera
             + 1; // random state.
@@ -421,19 +398,13 @@ namespace OFWorld
         writer.writeHNOString("RAND", Misc::Rng::serialize(mPrng));
         writer.endRecord(ESM::REC_RAND);
 
-        // Active cells could have a dirty fog of war, sync it to the CellStore first
-        for (CellStore* cellstore : mWorldScene->getActiveCells())
-        {
-            OFBase::Environment::get().getWindowManager()->writeFog(cellstore);
-        }
-
         mStore.write(writer, progress); // dynamic Store must be written (and read) before Cells, so that
                                         // references to custom made records will be recognized
-        mWorldModel.write(writer, progress); // the player's cell needs to be loaded before the player
-        mPlayer->write(writer, progress);
+        // (the player's place and Lua scripts are in the "player" section of the record of the Fallout scripts, which
+        // comes after the cells)
+        mWorldModel.write(writer, progress);
         mGlobalVariables.write(writer, progress);
         mWeatherManager->write(writer, progress);
-        mProjectileManager->write(writer, progress);
 
         writer.startRecord(ESM::REC_ENAB);
         writer.writeHNT("TELE", mTeleportEnabled);
@@ -463,13 +434,12 @@ namespace OFWorld
             }
             break;
             case ESM::REC_PLAY:
-                if (reader.getFormatVersion() <= ESM::MaxPlayerBeforeCellDataFormatVersion && !mIdsRebuilt)
+                // A save made when the player was a Morrowind character: converted once (Player::readRecord)
+                if (!mIdsRebuilt)
                 {
                     mStore.rebuildIdsIndex();
                     mIdsRebuilt = true;
                 }
-
-                mStore.checkPlayer();
                 mPlayer->readRecord(reader, type);
                 break;
             case ESM::REC_CSTA:
@@ -484,7 +454,7 @@ namespace OFWorld
                 break;
             default:
                 if (!mStore.readRecord(reader, type) && !mGlobalVariables.readRecord(reader, type)
-                    && !mWeatherManager->readRecord(reader, type) && !mProjectileManager->readRecord(reader, type))
+                    && !mWeatherManager->readRecord(reader, type))
                 {
                     throw std::runtime_error("unknown record in saved game");
                 }
@@ -509,10 +479,6 @@ namespace OFWorld
 
     World::~World()
     {
-        // Must be cleared before mRendering is destroyed
-        if (mProjectileManager)
-            mProjectileManager->clear();
-
         if (Settings::navigator().mWaitForAllJobsOnExit && mNavigator != nullptr)
         {
             Log(Debug::Verbose) << "Waiting for all navmesh jobs to be done...";
@@ -523,11 +489,6 @@ namespace OFWorld
     void World::setRandomSeed(uint32_t seed)
     {
         mRandomSeed = seed;
-    }
-
-    void World::useDeathCamera()
-    {
-        mRendering->getCamera()->setMode(OFRender::Camera::Mode::ThirdPerson);
     }
 
     OFWorld::Player& World::getPlayer()
@@ -602,14 +563,18 @@ namespace OFWorld
                     return worldspace->mFullName;
         }
 
-        return mStore.get<ESM::GameSetting>().find("sDefaultCellname")->mValue.getString();
+        // An exterior cell with no name of its own (NV 0x551740)
+        if (mDefaultCellName.empty())
+            if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+                mDefaultCellName = scripts->gameSettingText("sDefaultCellName");
+        return mDefaultCellName;
     }
 
     Ptr World::searchPtr(const ESM::RefId& name, bool activeOnly, bool searchInContainers)
     {
         Ptr ret;
         // the player is always in an active cell.
-        if (name == "Player")
+        if (name == mPlayer->getPlayer().getCellRef().getRefId())
         {
             return mPlayer->getPlayer();
         }
@@ -762,25 +727,12 @@ namespace OFWorld
 
     void World::advanceTime(double hours, bool incremental)
     {
-        if (!incremental)
-        {
-            // When we fast-forward time, we should recharge magic items
-            // in all loaded cells, using game world time
-            float duration = static_cast<float>(hours * 3600);
-            const float timeScaleFactor = mTimeManager->getGameTimeScale();
-            if (timeScaleFactor != 0.0f)
-                duration /= timeScaleFactor;
-
-            rechargeItems(duration, false);
-        }
-
         mWeatherManager->advanceTime(hours, incremental);
         mTimeManager->advanceTime(hours, mGlobalVariables);
 
         if (!incremental)
         {
             mRendering->notifyWorldSpaceChanged();
-            mProjectileManager->clear();
             mDiscardMovements = true;
         }
     }
@@ -826,7 +778,6 @@ namespace OFWorld
         if (changeEvent && mCurrentWorldSpace != cellName)
         {
             // changed worldspace
-            mProjectileManager->clear();
             mRendering->notifyWorldSpaceChanged();
 
             mCurrentWorldSpace = cellName;
@@ -847,7 +798,6 @@ namespace OFWorld
         if (changeEvent && mCurrentWorldSpace != destinationCell->getNameId())
         {
             // changed worldspace
-            mProjectileManager->clear();
             mRendering->notifyWorldSpaceChanged();
             mCurrentWorldSpace = destinationCell->getNameId();
         }
@@ -862,9 +812,11 @@ namespace OFWorld
         if (mActivationDistanceOverride >= 0)
             return static_cast<float>(mActivationDistanceOverride);
 
-        static const int iMaxActivateDist
-            = mStore.get<ESM::GameSetting>().find("iMaxActivateDist")->mValue.getInteger();
-        return static_cast<float>(iMaxActivateDist);
+        // The length of the pick ray of activation, from the camera (rule D.A1): iActivatePickLength, 150 in both
+        // executables, which a plugin can change
+        if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+            return static_cast<float>(scripts->gameSettingValue("iActivatePickLength"));
+        return 0.f;
     }
 
     OFWorld::Ptr World::getFocusObject()
@@ -872,33 +824,11 @@ namespace OFWorld
         if (OFBase::Environment::get().getStateManager()->getState() == OFBase::StateManager::State_NoGame)
             return {};
 
-        float maxDistance;
-        const bool inGui = OFBase::Environment::get().getWindowManager()->isGuiMode();
-        if (inGui)
-        {
-            if (OFBase::Environment::get().getWindowManager()->isConsoleMode())
-                return getFocusObject(getMaxActivationDistance() * 50, false);
-            static const int iMaxInfoDist = mStore.get<ESM::GameSetting>().find("iMaxInfoDist")->mValue.getInteger();
-            maxDistance = static_cast<float>(iMaxInfoDist);
-        }
-        else
-            maxDistance = getMaxActivationDistance();
-
-        const OFWorld::Ptr player = mPlayer->getPlayer();
-        const float telekinesisMagnitude = player.getClass()
-                                               .getCreatureStats(player)
-                                               .getMagicEffects()
-                                               .getOrDefault(ESM::MagicEffect::Telekinesis)
-                                               .getMagnitude();
-        OFWorld::Ptr focusObject = getFocusObject(maxDistance + feetToGameUnits(telekinesisMagnitude), true);
-
-        if (!focusObject.isEmpty() && mDistanceToFocusObject > maxDistance
-            && !focusObject.getClass().allowTelekinesis(focusObject) && !inGui)
-        {
-            mFocusRay.mHitObject = OFWorld::Ptr();
-            return {};
-        }
-        return focusObject;
+        // The console picks far; otherwise the pick ray of activation (the games have no other distance for what the
+        // crosshair names, and no telekinesis)
+        if (OFBase::Environment::get().getWindowManager()->isConsoleMode())
+            return getFocusObject(getMaxActivationDistance() * 50, false);
+        return getFocusObject(getMaxActivationDistance(), true);
     }
 
     float World::getDistanceToFocusObject()
@@ -1180,8 +1110,9 @@ namespace OFWorld
             + 20; // place slightly above terrain. will snap down to ground with code below
 
         // We still should trace down dead persistent actors - they do not use the "swimdeath" animation.
+        OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
         bool swims = ptr.getClass().isActor() && isSwimming(ptr)
-            && !(ptr.getClass().isPersistent(ptr) && ptr.getClass().getCreatureStats(ptr).isDeathAnimationFinished());
+            && !(ptr.getClass().isPersistent(ptr) && scripts != nullptr && scripts->isDead(ptr));
         if (force || !ptr.getClass().isActor() || (!isFlying(ptr) && !swims && isActorCollisionEnabled(ptr)))
         {
             float height = static_cast<float>(ESM::getCellSize(ptr.getCell()->getCell()->getWorldSpace()));
@@ -1229,7 +1160,7 @@ namespace OFWorld
             esmPos.pos[1] = traced.y();
             esmPos.pos[2] = traced.z();
             ESM::RefId cell = actor.getCell()->getCell()->getId();
-            OFWorld::ActionTeleport(cell, esmPos, false).execute(actor);
+            OFWorld::ActionTeleport(cell, esmPos).execute(actor);
         }
     }
 
@@ -1321,9 +1252,7 @@ namespace OFWorld
     void World::doPhysics(float duration, osg::Timer_t frameStart, unsigned int frameNumber, osg::Stats& stats)
     {
         processDoors(duration);
-        mProjectileManager->update(duration);
         mPhysics->stepSimulation(duration, mDiscardMovements, frameStart, frameNumber, stats);
-        mProjectileManager->processHits();
         mDiscardMovements = false;
         mPhysics->moveActors();
     }
@@ -1397,14 +1326,6 @@ namespace OFWorld
                     continue;
 
                 collisionWithActor = true;
-
-                // Collided with actor, ask actor to try to avoid door
-                if (ptr != getPlayerPtr())
-                {
-                    OFMechanics::AiSequence& seq = ptr.getClass().getCreatureStats(ptr).getAiSequence();
-                    if (seq.getTypeId() != OFMechanics::AiPackageTypeId::AvoidDoor) // Only add it once
-                        seq.stack(OFMechanics::AiAvoidDoor(door), ptr);
-                }
 
                 // we need to undo the rotation
                 reached = false;
@@ -1523,13 +1444,6 @@ namespace OFWorld
 
         updateSoundListener();
 
-        mSpellPreloadTimer -= duration;
-        if (mSpellPreloadTimer <= 0.f)
-        {
-            mSpellPreloadTimer = 0.1f;
-            preloadSpells();
-        }
-
         if (mWorldScene->hasCellLoaded())
         {
             mNavigator->wait(DetourNavigator::WaitConditionType::requiredTilesPresent,
@@ -1551,40 +1465,6 @@ namespace OFWorld
             stats.setAttribute(frameNumber, "physicsworker_time_begin", 0);
             stats.setAttribute(frameNumber, "physicsworker_time_taken", 0);
             stats.setAttribute(frameNumber, "physicsworker_time_end", 0);
-        }
-    }
-
-    void World::preloadSpells()
-    {
-        const ESM::RefId& selectedSpell = OFBase::Environment::get().getWindowManager()->getSelectedSpell();
-        if (!selectedSpell.empty())
-        {
-            const ESM::Spell* spell = mStore.get<ESM::Spell>().search(selectedSpell);
-            if (spell)
-                preloadEffects(&spell->mEffects);
-        }
-        const OFWorld::Ptr& selectedEnchantItem
-            = OFBase::Environment::get().getWindowManager()->getSelectedEnchantItem();
-        if (!selectedEnchantItem.isEmpty())
-        {
-            const ESM::RefId& enchantId = selectedEnchantItem.getClass().getEnchantment(selectedEnchantItem);
-            if (!enchantId.empty())
-            {
-                const ESM::Enchantment* ench = mStore.get<ESM::Enchantment>().search(enchantId);
-                if (ench)
-                    preloadEffects(&ench->mEffects);
-            }
-        }
-        const OFWorld::Ptr& selectedWeapon = OFBase::Environment::get().getWindowManager()->getSelectedWeapon();
-        if (!selectedWeapon.isEmpty())
-        {
-            const ESM::RefId& enchantId = selectedWeapon.getClass().getEnchantment(selectedWeapon);
-            if (!enchantId.empty())
-            {
-                const ESM::Enchantment* ench = mStore.get<ESM::Enchantment>().search(enchantId);
-                if (ench && ench->mData.mType == ESM::Enchantment::WhenStrikes)
-                    preloadEffects(&ench->mEffects);
-            }
         }
     }
 
@@ -1712,6 +1592,12 @@ namespace OFWorld
     const std::set<CellStore*, std::less<>>& World::getActiveCells() const
     {
         return mWorldScene->getActiveCells();
+    }
+
+    bool World::isCellActive(const CellStore& cell) const
+    {
+        const auto& active = mWorldScene->getActiveCells();
+        return active.find(const_cast<CellStore*>(&cell)) != active.end();
     }
 
     ESM::RefId World::getCurrentWorldspace() const
@@ -1998,22 +1884,11 @@ namespace OFWorld
         if (!ptr.getClass().isActor())
             return false;
 
-        const OFMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
-
-        if (stats.isDead())
-            return false;
-
-        const bool isPlayer = ptr == getPlayerConstPtr();
-        if (!(isPlayer && mGodMode)
-            && stats.getMagicEffects().getOrDefault(ESM::MagicEffect::Paralyze).getModifier() > 0)
-            return false;
-
-        if (ptr.getClass().canFly(ptr))
-            return true;
-
-        if (stats.getMagicEffects().getOrDefault(ESM::MagicEffect::Levitate).getMagnitude() > 0
-            && isLevitationEnabled())
-            return true;
+        // An actor flies only without collision (the console's ToggleCollision): Fallout has no levitation, and the
+        // creatures that hover are moved by their packages, not as fliers
+        if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+            if (scripts->isDead(ptr))
+                return false;
 
         const OFPhysics::Actor* actor = mPhysics->getActor(ptr);
         if (!actor)
@@ -2022,32 +1897,22 @@ namespace OFWorld
         return false;
     }
 
-    bool World::isSlowFalling(const OFWorld::Ptr& ptr) const
-    {
-        if (!ptr.getClass().isActor())
-            return false;
-
-        const OFMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
-        if (stats.getMagicEffects().getOrDefault(ESM::MagicEffect::SlowFall).getMagnitude() > 0)
-            return true;
-
-        return false;
-    }
+    // The lines of the share of the body under water of the executables (FalloutNV.exe 0x889917, 0x889946,
+    // 0x889975): the head is under at 0.875, the actor swims from 0.7, and wades from 0.01
 
     bool World::isSubmerged(const OFWorld::ConstPtr& object) const
     {
-        return isUnderwater(object, 1.0f / mSwimHeightScale);
+        return isUnderwater(object, static_cast<float>(FalloutScript::Movement::headUnderLine));
     }
 
     bool World::isSwimming(const OFWorld::ConstPtr& object) const
     {
-        return isUnderwater(object, mSwimHeightScale);
+        return isUnderwater(object, static_cast<float>(FalloutScript::Movement::swimmingLine));
     }
 
     bool World::isWading(const OFWorld::ConstPtr& object) const
     {
-        const float kneeDeep = 0.25f;
-        return isUnderwater(object, kneeDeep);
+        return isUnderwater(object, static_cast<float>(FalloutScript::Movement::wadingLine));
     }
 
     bool World::isUnderwater(const OFWorld::ConstPtr& object, const float heightRatio) const
@@ -2073,26 +1938,6 @@ namespace OFWorld
             return false;
         }
         return pos.z() < cell->getWaterLevel();
-    }
-
-    bool World::isWaterWalkingCastableOnTarget(const OFWorld::ConstPtr& target) const
-    {
-        const OFWorld::CellStore* cell = target.getCell();
-        if (!cell->getCell()->hasWater())
-            return true;
-
-        float waterlevel = cell->getWaterLevel();
-
-        // SwimHeightScale affects the upper z position an actor can swim to
-        // while in water. Based on observation from the original engine,
-        // the upper z position you get with a +1 SwimHeightScale is the depth
-        // limit for being able to cast water walking on an underwater target.
-        if (isUnderwater(target, mSwimHeightScale + 1)
-            || (isUnderwater(cell, target.getRefData().getPosition().asVec3())
-                && !mPhysics->canMoveToWaterSurface(target, waterlevel)))
-            return false; // not castable if too deep or if not enough room to move actor to surface
-        else
-            return true;
     }
 
     int World::getFloorMaterial(const OFWorld::ConstPtr& actor, bool& stairs) const
@@ -2271,17 +2116,31 @@ namespace OFWorld
         mStore.rebuildIdsIndex();
         mStore.validateDynamic();
         mTimeManager->setup(mGlobalVariables);
-        mProjectileManager->saveLoaded(reader);
+    }
+
+    std::pair<const ESM4::Npc*, ESM::RefNum> World::findPlayerRecord() const
+    {
+        // The player of the games: the reference PlayerRef (form 0x14) of the NPC_ record 0x7, both of the first
+        // Fallout plugin (Fallout3.esm, FalloutNV.esm or the master of Tale of Two Wastelands)
+        const int plugin = std::max(0, OFMechanics::falloutFirstPlugin(mContentFiles));
+        const ESM::FormId record{ 0x7, plugin };
+        const ESM4::Npc* player = mStore.get<ESM4::Npc>().search(record);
+        if (player == nullptr)
+            throw std::runtime_error("The content has no player: the NPC_ record 0x7 of the first Fallout plugin ("
+                + (static_cast<std::size_t>(plugin) < mContentFiles.size() ? mContentFiles[plugin]
+                                                                           : std::string("none"))
+                + ") is missing");
+        return { player, ESM::RefNum{ 0x14, plugin } };
     }
 
     void World::setupPlayer()
     {
-        const ESM::NPC* player = mStore.get<ESM::NPC>().find(ESM::RefId::stringRefId("Player"));
+        const auto [player, reference] = findPlayerRecord();
         if (!mPlayer)
-            mPlayer = std::make_unique<OFWorld::Player>(player);
+            mPlayer = std::make_unique<OFWorld::Player>(player, reference);
         else
         {
-            // Remove the old CharacterController
+            // Remove the old actor of the player
             OFBase::Environment::get().getMechanicsManager()->remove(getPlayerPtr(), true);
             mNavigator->removeAgent(getPathfindingAgentBounds(getPlayerConstPtr()));
             mPhysics->remove(getPlayerPtr());
@@ -2303,20 +2162,14 @@ namespace OFWorld
         OFWorld::Ptr player = getPlayerPtr();
 
         mRendering->renderPlayer(player);
-        OFRender::NpcAnimation* anim = static_cast<OFRender::NpcAnimation*>(mRendering->getAnimation(player));
-        player.getClass().getInventoryStore(player).setInvListener(anim);
-        player.getClass().getInventoryStore(player).setContListener(anim);
 
         scaleObject(player, player.getCellRef().getScale(), true); // apply race height
         rotateObject(player, osg::Vec3f(), OFBase::RotationFlag_inverseOrder | OFBase::RotationFlag_adjust);
 
         OFBase::Environment::get().getMechanicsManager()->add(getPlayerPtr());
-        OFBase::Environment::get().getWindowManager()->watchActor(getPlayerPtr());
 
         mPhysics->remove(getPlayerPtr());
-        mPhysics->addActor(getPlayerPtr(), getPlayerPtr().getClass().getCorrectedModel(getPlayerPtr()));
-
-        applyLoopingParticles(player);
+        getPlayerPtr().getClass().insertObjectPhysics(getPlayerPtr(), {}, osg::Quat(), *mPhysics);
 
         const DetourNavigator::AgentBounds agentBounds = getPathfindingAgentBounds(getPlayerConstPtr());
         if (!mNavigator->addAgent(agentBounds))
@@ -2339,16 +2192,18 @@ namespace OFWorld
         if (isUnderwater(currentCell, playerPos) || isWalkingOnWater(player))
             result |= Rest_PlayerIsUnderwater;
 
-        float fallHeight = player.getClass().getCreatureStats(player).getFallHeight();
-        float epsilon = 1e-4f;
-        if ((actor->getCollisionMode() && (!mPhysics->isOnSolidGround(player) || fallHeight >= epsilon))
-            || isFlying(player))
+        // In the air: off solid ground, or a fall has begun (the player's actor marks where it left the ground)
+        bool falling = false;
+        if (const OFMechanics::Actor* character = OFMechanics::findActor(player);
+            character != nullptr && character->isPlayer())
+            falling = static_cast<const OFMechanics::PlayerCharacter*>(character)->getFallStart().has_value();
+        if ((actor->getCollisionMode() && (!mPhysics->isOnSolidGround(player) || falling)) || isFlying(player))
             result |= Rest_PlayerIsInAir;
 
         if (mPlayer->enemiesNearby())
             result |= Rest_EnemiesAreNearby;
 
-        if (!currentCell->getCell()->noSleep() && !player.getClass().getNpcStats(player).isWerewolf())
+        if (!currentCell->getCell()->noSleep())
             result |= Rest_CanSleep;
 
         return result;
@@ -2439,74 +2294,6 @@ namespace OFWorld
         return mPhysics->isObjectCollidingWith(object, OFPhysics::ScriptedCollisionType_Actor);
     }
 
-    void World::hurtStandingActors(const ConstPtr& object, float healthPerSecond)
-    {
-        if (OFBase::Environment::get().getWindowManager()->isGuiMode())
-            return;
-
-        std::vector<OFWorld::Ptr> actors;
-        mPhysics->getActorsStandingOn(object, actors);
-        for (const Ptr& actor : actors)
-        {
-            OFMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
-            if (stats.isDead())
-                continue;
-
-            mPhysics->markAsNonSolid(object);
-
-            if (actor == getPlayerPtr() && mGodMode)
-                continue;
-
-            OFMechanics::DynamicStat<float> health = stats.getHealth();
-            health.setCurrent(health.getCurrent() - healthPerSecond * OFBase::Environment::get().getFrameDuration());
-            stats.setHealth(health);
-
-            if (healthPerSecond > 0.0f)
-            {
-                if (actor == getPlayerPtr())
-                    OFBase::Environment::get().getWindowManager()->activateHitOverlay(false);
-
-                auto healthDamage = ESM::RefId::stringRefId("Health Damage");
-                if (!OFBase::Environment::get().getSoundManager()->getSoundPlaying(actor, healthDamage))
-                    OFBase::Environment::get().getSoundManager()->playSound3D(actor, healthDamage, 1.0f, 1.0f);
-            }
-        }
-    }
-
-    void World::hurtCollidingActors(const ConstPtr& object, float healthPerSecond)
-    {
-        if (OFBase::Environment::get().getWindowManager()->isGuiMode())
-            return;
-
-        std::vector<Ptr> actors;
-        mPhysics->getActorsCollidingWith(object, actors);
-        for (const Ptr& actor : actors)
-        {
-            OFMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
-            if (stats.isDead())
-                continue;
-
-            mPhysics->markAsNonSolid(object);
-
-            if (actor == getPlayerPtr() && mGodMode)
-                continue;
-
-            OFMechanics::DynamicStat<float> health = stats.getHealth();
-            health.setCurrent(health.getCurrent() - healthPerSecond * OFBase::Environment::get().getFrameDuration());
-            stats.setHealth(health);
-
-            if (healthPerSecond > 0.0f)
-            {
-                if (actor == getPlayerPtr())
-                    OFBase::Environment::get().getWindowManager()->activateHitOverlay(false);
-
-                auto healthDamage = ESM::RefId::stringRefId("Health Damage");
-                if (!OFBase::Environment::get().getSoundManager()->getSoundPlaying(actor, healthDamage))
-                    OFBase::Environment::get().getSoundManager()->playSound3D(actor, healthDamage, 1.0f, 1.0f);
-            }
-        }
-    }
-
     float World::getWindSpeed() const
     {
         if (isCellExterior() || isCellQuasiExterior())
@@ -2529,54 +2316,6 @@ namespace OFWorld
             return mWeatherManager->getStormDirection();
         else
             return osg::Vec3f(0, 1, 0);
-    }
-
-    struct GetContainersOwnedByVisitor
-    {
-        GetContainersOwnedByVisitor(const OFWorld::ConstPtr& owner, std::vector<OFWorld::Ptr>& out)
-            : mOwner(owner)
-            , mOut(out)
-        {
-        }
-
-        OFWorld::ConstPtr mOwner;
-        std::vector<OFWorld::Ptr>& mOut;
-
-        bool operator()(const OFWorld::Ptr& ptr)
-        {
-            if (ptr.mRef->isDeleted())
-                return true;
-
-            // vanilla Morrowind does not allow to sell items from containers with zero capacity
-            if (ptr.getClass().getCapacity(ptr) <= 0.f)
-                return true;
-
-            if (ptr.getCellRef().getOwner() == mOwner.getCellRef().getRefId())
-                mOut.push_back(ptr);
-
-            return true;
-        }
-    };
-
-    void World::getContainersOwnedBy(const OFWorld::ConstPtr& owner, std::vector<OFWorld::Ptr>& out)
-    {
-        for (CellStore* cellstore : mWorldScene->getActiveCells())
-        {
-            GetContainersOwnedByVisitor visitor(owner, out);
-            cellstore->forEachType<ESM::Container>(visitor);
-        }
-    }
-
-    void World::getItemsOwnedBy(const OFWorld::ConstPtr& npc, std::vector<OFWorld::Ptr>& out)
-    {
-        for (CellStore* cellstore : mWorldScene->getActiveCells())
-        {
-            cellstore->forEach([&](const auto& ptr) {
-                if (ptr.getRefData().getBaseNode() && ptr.getCellRef().getOwner() == npc.getCellRef().getRefId())
-                    out.push_back(ptr);
-                return true;
-            });
-        }
     }
 
     bool World::getLOS(const OFWorld::ConstPtr& actor, const OFWorld::ConstPtr& targetActor)
@@ -2882,8 +2621,9 @@ namespace OFWorld
             idx++;
         }
 
-        if (const auto v = esmLoader.getMasterFileFormat(); v.has_value() && *v == 0)
-            ensureNeededRecords(); // Insert records that may not be present in all versions of master files.
+        // The clock globals of the engine: no Fallout plugin has them (they came from the placeholder records of
+        // Morrowind before step 4a), and a Morrowind master may lack some
+        ensureNeededRecords();
     }
 
     void World::loadGroundcoverFiles(const Files::Collections& fileCollections,
@@ -2897,241 +2637,9 @@ namespace OFWorld
         mGroundcoverStore.init(mStore.get<ESM::Static>(), fileCollections, groundcoverFiles, encoder, listener);
     }
 
-    OFWorld::SpellCastState World::startSpellCast(const Ptr& actor)
-    {
-        OFMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
-
-        std::string_view message;
-        OFWorld::SpellCastState result = OFWorld::SpellCastState::Success;
-        bool isPlayer = (actor == getPlayerPtr());
-
-        const ESM::RefId& selectedSpell = stats.getSpells().getSelectedSpell();
-
-        if (!selectedSpell.empty())
-        {
-            const ESM::Spell* spell = mStore.get<ESM::Spell>().find(selectedSpell);
-            int spellCost = OFMechanics::calcSpellCost(*spell);
-
-            // Check mana
-            bool godmode = (isPlayer && mGodMode);
-            OFMechanics::DynamicStat<float> magicka = stats.getMagicka();
-            if (spellCost > 0 && magicka.getCurrent() < spellCost && !godmode)
-            {
-                message = "#{sMagicInsufficientSP}";
-                result = OFWorld::SpellCastState::InsufficientMagicka;
-            }
-
-            // If this is a power, check if it was already used in the last 24h
-            if (result == OFWorld::SpellCastState::Success && spell->mData.mType == ESM::Spell::ST_Power
-                && !stats.getSpells().canUsePower(spell))
-            {
-                message = "#{sPowerAlreadyUsed}";
-                result = OFWorld::SpellCastState::PowerAlreadyUsed;
-            }
-
-            if (result == OFWorld::SpellCastState::Success && !godmode)
-            {
-                // Reduce mana
-                magicka.setCurrent(magicka.getCurrent() - spellCost);
-                stats.setMagicka(magicka);
-
-                // Reduce fatigue (note that in the vanilla game, both GMSTs are 0, and there's no fatigue loss)
-                static const float fFatigueSpellBase
-                    = mStore.get<ESM::GameSetting>().find("fFatigueSpellBase")->mValue.getFloat();
-                static const float fFatigueSpellMult
-                    = mStore.get<ESM::GameSetting>().find("fFatigueSpellMult")->mValue.getFloat();
-                OFMechanics::DynamicStat<float> fatigue = stats.getFatigue();
-                const float normalizedEncumbrance = actor.getClass().getNormalizedEncumbrance(actor);
-
-                float fatigueLoss = spellCost * (fFatigueSpellBase + normalizedEncumbrance * fFatigueSpellMult);
-                fatigue.setCurrent(fatigue.getCurrent() - fatigueLoss);
-                stats.setFatigue(fatigue);
-            }
-        }
-
-        if (isPlayer && result != OFWorld::SpellCastState::Success)
-            OFBase::Environment::get().getWindowManager()->messageBox(message);
-
-        return result;
-    }
-
-    void World::castSpell(const Ptr& actor, bool scriptedSpell)
-    {
-        OFMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
-
-        const bool casterIsPlayer = actor == OFMechanics::getPlayer();
-        OFWorld::Ptr target;
-        // For scripted spells we should not use hit contact
-        if (scriptedSpell)
-        {
-            if (!casterIsPlayer)
-            {
-                for (const auto& package : stats.getAiSequence())
-                {
-                    if (package->getTypeId() == OFMechanics::AiPackageTypeId::Cast)
-                    {
-                        target = package->getTarget();
-                        break;
-                    }
-                }
-            }
-        }
-        else
-        {
-            if (casterIsPlayer)
-                target = getFocusObject();
-
-            if (target.isEmpty() || !target.getClass().hasToolTip(target))
-            {
-                // For actor targets, we want to use melee hit contact.
-                // This is to give a slight tolerance for errors, especially with creatures like the Skeleton that would
-                // be very hard to aim at otherwise.
-                // For object targets, we want the detailed shapes (rendering raycast).
-                // If we used the bounding boxes for static objects, then we would not be able to target e.g.
-                // objects lying on a shelf.
-                const float fCombatDistance = mStore.get<ESM::GameSetting>().find("fCombatDistance")->mValue.getFloat();
-                target = OFMechanics::getHitContact(actor, fCombatDistance).first;
-
-                if (target.isEmpty())
-                {
-                    // Get the target using the facing direction from Head node
-                    const osg::Vec3f origin = getActorHeadTransform(actor).getTrans();
-                    const osg::Quat orient = osg::Quat(actor.getRefData().getPosition().rot[0], osg::Vec3f(-1, 0, 0))
-                        * osg::Quat(actor.getRefData().getPosition().rot[2], osg::Vec3f(0, 0, -1));
-                    const osg::Vec3f direction = orient * osg::Vec3f(0, 1, 0);
-                    const osg::Vec3f dest = origin + direction * getMaxActivationDistance();
-                    const OFRender::RenderingManager::RayResult result
-                        = mRendering->castRay(origin, dest, true, true, false);
-                    if (result.mHit)
-                        target = result.mHitObject;
-                }
-            }
-        }
-
-        osg::Vec3f hitPosition = actor.getRefData().getPosition().asVec3();
-        if (!target.isEmpty())
-        {
-            // Touch explosion placement doesn't depend on where the target was "touched".
-            // In Morrowind, it's at 0.7 of the actor's AABB height for actors
-            // or at 0.7 of the player's height for non-actors if the player is the caster
-            // This is probably meant to prevent the explosion from being too far above on large objects
-            // but it often puts the explosions way above small objects, so we'll deviate here
-            // and use the object's bounds when reasonable (it's $CURRENT_YEAR, we can afford that)
-            // Note collision object origin is intentionally not used
-            hitPosition = target.getRefData().getPosition().asVec3();
-            constexpr float explosionHeight = 0.7f;
-            float targetHeight = getHalfExtents(target).z() * 2.f;
-            if (!target.getClass().isActor() && casterIsPlayer)
-            {
-                const float playerHeight = getHalfExtents(actor).z() * 2.f;
-                targetHeight = std::min(targetHeight, playerHeight);
-            }
-            hitPosition.z() += targetHeight * explosionHeight;
-        }
-
-        const ESM::RefId& selectedSpell = stats.getSpells().getSelectedSpell();
-
-        OFMechanics::CastSpell cast(actor, target, false, scriptedSpell);
-        cast.mHitPosition = hitPosition;
-
-        if (!selectedSpell.empty())
-        {
-            const ESM::Spell* spell = mStore.get<ESM::Spell>().find(selectedSpell);
-            cast.cast(spell);
-        }
-        else
-        {
-            OFWorld::ContainerStore& inv = actor.getClass().getContainerStore(actor);
-            if (inv.getSelectedEnchantItem() != inv.end())
-            {
-                const auto& itemPtr = *inv.getSelectedEnchantItem();
-                cast.cast(itemPtr);
-            }
-        }
-    }
-
-    void World::launchProjectile(OFWorld::Ptr& actor, OFWorld::Ptr& projectile, const osg::Vec3f& worldPos,
-        const osg::Quat& orient, OFWorld::Ptr& bow, float speed, float attackStrength, float attackWindUp)
-    {
-        // An initial position of projectile can be outside shooter's collision box, so any object between shooter and
-        // launch position will be ignored. To avoid this issue, we should check for impact immediately before launch
-        // the projectile. So we cast a 1-yard-length ray from shooter to launch position and check if there are
-        // collisions in this area.
-        // TODO: as a better solutuon we should handle projectiles during physics update, not during world update.
-        const osg::Vec3f sourcePos = worldPos + orient * osg::Vec3f(0, -1, 0) * 64.f;
-
-        // For AI actors, get combat targets to use in the ray cast. Only those targets will return a positive hit
-        // result.
-        std::vector<OFWorld::Ptr> targetActors;
-        if (!actor.isEmpty() && actor.getClass().isActor() && actor != OFMechanics::getPlayer())
-            actor.getClass().getCreatureStats(actor).getAiSequence().getCombatTargets(targetActors);
-
-        // Check for impact, if yes, handle hit
-        OFPhysics::RayCastingResult result = mPhysics->castRay(
-            sourcePos, worldPos, { actor }, targetActors, 0xff, OFPhysics::CollisionType_Projectile);
-
-        if (result.mHit)
-        {
-            OFMechanics::projectileHit(
-                actor, result.mHitObject, bow, projectile, result.mHitPos, attackStrength, attackWindUp);
-            return;
-        }
-
-        // Bail out if the launch position is underwater
-        if (isUnderwater(OFMechanics::getPlayer().getCell(), worldPos))
-        {
-            OFMechanics::projectileHit(actor, Ptr(), bow, projectile, worldPos, attackStrength, attackWindUp);
-            mRendering->emitWaterRipple(worldPos);
-            return;
-        }
-
-        mProjectileManager->launchProjectile(
-            actor, projectile, worldPos, orient, bow, speed, attackStrength, attackWindUp);
-    }
-
-    void World::launchMagicBolt(
-        const ESM::RefId& spellId, const OFWorld::Ptr& caster, const osg::Vec3f& fallbackDirection, ESM::RefNum item)
-    {
-        mProjectileManager->launchMagicBolt(spellId, caster, fallbackDirection, item);
-    }
-
-    void World::updateProjectilesCasters()
-    {
-        mProjectileManager->updateCasters();
-    }
-
-    void World::applyLoopingParticles(const OFWorld::Ptr& ptr) const
-    {
-        const OFWorld::Class& cls = ptr.getClass();
-        if (cls.isActor())
-        {
-            std::set<ESM::RefId> playing;
-            for (const auto& params : cls.getCreatureStats(ptr).getActiveSpells())
-            {
-                for (const auto& effect : params.getEffects())
-                {
-                    if (playing.insert(effect.mEffectId).second)
-                    {
-                        const auto magicEffect = mStore.get<ESM::MagicEffect>().find(effect.mEffectId);
-                        if (magicEffect->mData.mFlags & ESM::MagicEffect::ContinuousVfx)
-                            OFMechanics::playEffects(ptr, *magicEffect, false);
-                    }
-                }
-            }
-        }
-    }
-
     const std::vector<std::string>& World::getContentFiles() const
     {
         return mContentFiles;
-    }
-
-    void World::breakInvisibility(const Ptr& actor)
-    {
-        actor.getClass().getCreatureStats(actor).getActiveSpells().purgeEffect(actor, ESM::MagicEffect::Invisibility);
-
-        // Normally updated once per frame, but here it is kinda important to do it right away.
-        OFBase::Environment::get().getMechanicsManager()->updateMagicEffects(actor);
     }
 
     bool World::useTorches() const
@@ -3224,169 +2732,6 @@ namespace OFWorld
         return false;
     }
 
-    OFWorld::ConstPtr World::getClosestMarker(const OFWorld::ConstPtr& ptr, const ESM::RefId& id)
-    {
-        if (ptr.getCell()->isExterior())
-        {
-            return getClosestMarkerFromExteriorPosition(mPlayer->getLastKnownExteriorPosition(), id);
-        }
-
-        // Search for a 'nearest' marker, counting each cell between the starting
-        // cell and the exterior as a distance of 1.  If an exterior is found, jump
-        // to the nearest exterior marker, without further interior searching.
-        std::set<ESM::RefId> checkedCells;
-        std::set<ESM::RefId> currentCells;
-        std::set<ESM::RefId> nextCells;
-        OFWorld::ConstPtr closestMarker;
-
-        nextCells.insert(ptr.getCell()->getCell()->getId());
-        while (!nextCells.empty())
-        {
-            currentCells.clear();
-            std::swap(currentCells, nextCells);
-            for (const auto& cell : currentCells)
-            {
-                OFWorld::CellStore* next = mWorldModel.findCell(cell);
-                if (next == nullptr)
-                    continue;
-                checkedCells.insert(cell);
-
-                closestMarker = next->searchConst(id);
-                if (!closestMarker.isEmpty())
-                {
-                    return closestMarker;
-                }
-
-                // Check if any door in the cell leads to an exterior directly
-                for (const OFWorld::LiveCellRef<ESM::Door>& ref : next->getReadOnlyDoors().mList)
-                {
-                    if (!ref.mRef.getTeleport())
-                        continue;
-
-                    if (ref.mRef.getDestCell().is<ESM::ESM3ExteriorCellRefId>())
-                    {
-                        osg::Vec3f worldPos = ref.mRef.getDoorDest().asVec3();
-                        return getClosestMarkerFromExteriorPosition(worldPos, id);
-                    }
-                    else
-                    {
-                        const auto& dest = ref.mRef.getDestCell();
-                        if (!checkedCells.contains(dest) && !currentCells.contains(dest))
-                            nextCells.insert(dest);
-                    }
-                }
-            }
-        }
-        return OFWorld::Ptr();
-    }
-
-    OFWorld::ConstPtr World::getClosestMarkerFromExteriorPosition(const osg::Vec3f& worldPos, const ESM::RefId& id)
-    {
-        const ESM::ExteriorCellLocation posIndex = ESM::positionToExteriorCellLocation(worldPos.x(), worldPos.y());
-
-        // Potential optimization: don't scan the entire world for markers and actually do the Todd spiral
-        std::vector<Ptr> markers;
-        mWorldModel.getExteriorPtrs(id, markers);
-
-        struct MarkerInfo
-        {
-            Ptr mPtr;
-            int mColumn, mRow; // Local coordinates in the valid marker grid
-        };
-        std::vector<MarkerInfo> validMarkers;
-        validMarkers.reserve(markers.size());
-
-        // The idea is to collect all markers that belong to the smallest possible square grid around worldPos
-        // They are grouped with their position on that grid's edge where the origin is the SW corner
-        int minGridSize = std::numeric_limits<int>::max();
-        for (const Ptr& marker : markers)
-        {
-            const osg::Vec3f markerPos = marker.getRefData().getPosition().asVec3();
-            const ESM::ExteriorCellLocation index = ESM::positionToExteriorCellLocation(markerPos.x(), markerPos.y());
-
-            const int deltaX = index.mX - posIndex.mX;
-            const int deltaY = index.mY - posIndex.mY;
-            const int gridSize = std::max(std::abs(deltaX), std::abs(deltaY)) * 2;
-            if (gridSize == 0)
-                return marker;
-
-            if (gridSize <= minGridSize)
-            {
-                if (gridSize < minGridSize)
-                {
-                    validMarkers.clear();
-                    minGridSize = gridSize;
-                }
-                validMarkers.push_back({ marker, gridSize / 2 + deltaX, gridSize / 2 + deltaY });
-            }
-        }
-
-        ConstPtr closestMarker;
-        if (validMarkers.empty())
-            return closestMarker;
-        if (validMarkers.size() == 1)
-            return validMarkers[0].mPtr;
-
-        // All the markers are on the edge of the grid
-        // Break ties by picking the earliest marker on SW -> SE -> NE -> NW -> SW path
-        int earliestDistance = std::numeric_limits<int>::max();
-        for (const MarkerInfo& marker : validMarkers)
-        {
-            int distance = 0;
-            if (marker.mRow == 0) // South edge (plus SW and SE corners)
-                distance = marker.mColumn;
-            else if (marker.mColumn == minGridSize) // East edge and NE corner
-                distance = minGridSize + marker.mRow;
-            else if (marker.mRow == minGridSize) // North edge and NW corner
-                distance = minGridSize * 3 - marker.mColumn;
-            else // West edge
-                distance = minGridSize * 4 - marker.mRow;
-            if (distance < earliestDistance)
-            {
-                closestMarker = marker.mPtr;
-                earliestDistance = distance;
-            }
-        }
-        return closestMarker;
-    }
-
-    void World::rest(double hours)
-    {
-        mWorldModel.forEachLoadedCellStore([hours](CellStore& store) { store.rest(hours); });
-    }
-
-    void World::rechargeItems(float duration, bool activeOnly)
-    {
-        OFWorld::Ptr player = getPlayerPtr();
-        player.getClass().getInventoryStore(player).rechargeItems(duration);
-
-        if (activeOnly)
-        {
-            for (auto& cell : mWorldScene->getActiveCells())
-            {
-                cell->recharge(duration);
-            }
-        }
-        else
-            mWorldModel.forEachLoadedCellStore([duration](CellStore& store) { store.recharge(duration); });
-    }
-
-    void World::teleportToClosestMarker(const OFWorld::Ptr& ptr, const ESM::RefId& id)
-    {
-        OFWorld::ConstPtr closestMarker = getClosestMarker(ptr, id);
-
-        if (closestMarker.isEmpty())
-        {
-            Log(Debug::Warning) << "Failed to teleport: no closest marker found";
-            return;
-        }
-
-        ESM::RefId cellId = closestMarker.mCell->getCell()->getId();
-
-        OFWorld::ActionTeleport action(cellId, closestMarker.getRefData().getPosition(), false);
-        action.execute(ptr);
-    }
-
     void World::updateWeather(float duration, bool paused)
     {
         bool isExterior = isCellExterior() || isCellQuasiExterior();
@@ -3402,128 +2747,6 @@ namespace OFWorld
         mWeatherManager->update(duration, paused, time, isExterior);
     }
 
-    struct AddDetectedReferenceVisitor
-    {
-        std::vector<Ptr>& mOut;
-        Ptr mDetector;
-        float mSquaredDist;
-        World::DetectionType mType;
-        const OFWorld::ESMStore& mStore;
-
-        bool operator()(const OFWorld::Ptr& ptr)
-        {
-            if ((ptr.getRefData().getPosition().asVec3() - mDetector.getRefData().getPosition().asVec3()).length2()
-                >= mSquaredDist)
-                return true;
-
-            if (!ptr.getRefData().isEnabled() || ptr.mRef->isDeleted())
-                return true;
-
-            // Consider references inside containers as well (except if we are looking for a Creature, they cannot be in
-            // containers)
-            bool isContainer = ptr.getClass().getType() == ESM::Container::sRecordId;
-            if (mType != World::Detect_Creature && (ptr.getClass().isActor() || isContainer))
-            {
-                // but ignore containers without resolved content
-                if (isContainer && ptr.getRefData().getCustomData() == nullptr)
-                {
-                    for (const auto& containerItem : ptr.get<ESM::Container>()->mBase->mInventory.mList)
-                    {
-                        if (containerItem.mCount)
-                        {
-                            try
-                            {
-                                ManualRef ref(mStore, containerItem.mItem, containerItem.mCount);
-                                if (needToAdd(ref.getPtr(), mDetector))
-                                {
-                                    mOut.push_back(ptr);
-                                    return true;
-                                }
-                            }
-                            catch (const std::exception& e)
-                            {
-                                Log(Debug::Warning)
-                                    << "Failed to process container item " << containerItem.mItem << ": " << e.what();
-                            }
-                        }
-                    }
-                    return true;
-                }
-
-                OFWorld::ContainerStore& store = ptr.getClass().getContainerStore(ptr);
-                {
-                    for (OFWorld::ContainerStoreIterator it = store.begin(); it != store.end(); ++it)
-                    {
-                        if (needToAdd(*it, mDetector))
-                        {
-                            mOut.push_back(ptr);
-                            return true;
-                        }
-                    }
-                }
-            }
-
-            if (needToAdd(ptr, mDetector))
-                mOut.push_back(ptr);
-
-            return true;
-        }
-
-        bool needToAdd(const OFWorld::Ptr& ptr, const OFWorld::Ptr& detector)
-        {
-            if (mType == World::Detect_Creature)
-            {
-                // If in werewolf form, this detects only NPCs, otherwise only creatures
-                if (detector.getClass().isNpc() && detector.getClass().getNpcStats(detector).isWerewolf())
-                {
-                    if (ptr.getClass().getType() != ESM::NPC::sRecordId)
-                        return false;
-                }
-                else if (ptr.getClass().getType() != ESM::Creature::sRecordId)
-                    return false;
-
-                if (ptr.getClass().getCreatureStats(ptr).isDead())
-                    return false;
-            }
-            if (mType == World::Detect_Key && !ptr.getClass().isKey(ptr))
-                return false;
-            if (mType == World::Detect_Enchantment && ptr.getClass().getEnchantment(ptr).empty())
-                return false;
-            return true;
-        }
-    };
-
-    void World::listDetectedReferences(const Ptr& ptr, std::vector<Ptr>& out, DetectionType type)
-    {
-        const OFMechanics::MagicEffects& effects = ptr.getClass().getCreatureStats(ptr).getMagicEffects();
-        float dist = 0;
-        if (type == World::Detect_Creature)
-            dist = effects.getOrDefault(ESM::MagicEffect::DetectAnimal).getMagnitude();
-        else if (type == World::Detect_Key)
-            dist = effects.getOrDefault(ESM::MagicEffect::DetectKey).getMagnitude();
-        else if (type == World::Detect_Enchantment)
-            dist = effects.getOrDefault(ESM::MagicEffect::DetectEnchantment).getMagnitude();
-
-        if (!dist)
-            return;
-
-        dist = feetToGameUnits(dist);
-
-        AddDetectedReferenceVisitor visitor{ out, ptr, dist * dist, type, mStore };
-
-        for (CellStore* cellStore : mWorldScene->getActiveCells())
-        {
-            cellStore->forEach(visitor);
-        }
-    }
-
-    float World::feetToGameUnits(float feet)
-    {
-        // Original engine rounds size upward
-        static const float unitsPerFoot = std::ceil(Constants::UnitsPerFoot);
-        return feet * unitsPerFoot;
-    }
-
     OFWorld::Ptr World::getPlayerPtr()
     {
         return mPlayer->getPlayer();
@@ -3532,35 +2755,6 @@ namespace OFWorld
     OFWorld::ConstPtr World::getPlayerConstPtr() const
     {
         return mPlayer->getConstPlayer();
-    }
-
-    void World::updateDialogueGlobals()
-    {
-        OFWorld::Ptr player = getPlayerPtr();
-        int bounty = player.getClass().getNpcStats(player).getBounty();
-        int playerGold = player.getClass().getContainerStore(player).count(ContainerStore::sGoldId);
-
-        static float fCrimeGoldDiscountMult
-            = mStore.get<ESM::GameSetting>().find("fCrimeGoldDiscountMult")->mValue.getFloat();
-        static float fCrimeGoldTurnInMult
-            = mStore.get<ESM::GameSetting>().find("fCrimeGoldTurnInMult")->mValue.getFloat();
-
-        int discount = static_cast<int>(bounty * fCrimeGoldDiscountMult);
-        int turnIn = static_cast<int>(bounty * fCrimeGoldTurnInMult);
-
-        if (bounty > 0)
-        {
-            discount = std::max(1, discount);
-            turnIn = std::max(1, turnIn);
-        }
-
-        mGlobalVariables[Globals::sPCHasCrimeGold].setInteger((bounty <= playerGold) ? 1 : 0);
-
-        mGlobalVariables[Globals::sPCHasGoldDiscount].setInteger((discount <= playerGold) ? 1 : 0);
-        mGlobalVariables[Globals::sCrimeGoldDiscount].setInteger(discount);
-
-        mGlobalVariables[Globals::sCrimeGoldTurnIn].setInteger(turnIn);
-        mGlobalVariables[Globals::sPCHasTurnIn].setInteger((turnIn <= playerGold) ? 1 : 0);
     }
 
     void World::setPlayerTraveling(bool traveling)
@@ -3602,25 +2796,6 @@ namespace OFWorld
         return file;
     }
 
-    void World::spawnRandomCreature(const ESM::RefId& creatureList)
-    {
-        const ESM::CreatureLevList* list = mStore.get<ESM::CreatureLevList>().find(creatureList);
-
-        static int iNumberCreatures = mStore.get<ESM::GameSetting>().find("iNumberCreatures")->mValue.getInteger();
-        int numCreatures = 1 + Misc::Rng::rollDice(iNumberCreatures, mPrng); // [1, iNumberCreatures]
-
-        for (int i = 0; i < numCreatures; ++i)
-        {
-            const ESM::RefId& selectedCreature = OFMechanics::getLevelledItem(list, true, mPrng);
-            if (selectedCreature.empty())
-                continue;
-
-            OFWorld::ManualRef ref(mStore, selectedCreature, 1);
-
-            safePlaceObject(ref.getPtr(), getPlayerPtr(), getPlayerPtr().getCell(), 0, 220.f);
-        }
-    }
-
     void World::spawnEffect(VFS::Path::NormalizedView model, const std::string& textureOverride,
         const osg::Vec3f& worldPos, float scale, bool isMagicVFX, bool useAmbientLight, std::string_view effectId,
         bool loop)
@@ -3633,92 +2808,12 @@ namespace OFWorld
         mRendering->removeEffect(effectId);
     }
 
-    struct ResetActorsVisitor
-    {
-        World& mWorld;
-
-        bool operator()(const Ptr& ptr)
-        {
-            if (ptr.getClass().isActor() && ptr.getCellRef().hasContentFile())
-            {
-                if (ptr.getCell()->movedHere(ptr))
-                    return true;
-
-                const ESM::Position& origPos = ptr.getCellRef().getPosition();
-                mWorld.moveObject(ptr, origPos.asVec3());
-                mWorld.rotateObject(ptr, origPos.asRotationVec3());
-                ptr.getClass().adjustPosition(ptr, true);
-            }
-            return true;
-        }
-    };
-
-    void World::resetActors()
-    {
-        for (CellStore* cellstore : mWorldScene->getActiveCells())
-        {
-            ResetActorsVisitor visitor{ *this };
-            cellstore->forEach(visitor);
-        }
-    }
-
     bool World::isWalkingOnWater(const ConstPtr& actor) const
     {
         const OFPhysics::Actor* physicActor = mPhysics->getActor(actor);
         if (physicActor && physicActor->isWalkingOnWater())
             return true;
         return false;
-    }
-
-    osg::Vec3f World::aimToTarget(const ConstPtr& actor, const ConstPtr& target, bool isRangedCombat)
-    {
-        osg::Vec3f weaponPos = actor.getRefData().getPosition().asVec3();
-        float heightRatio = isRangedCombat ? 2.f * Constants::TorsoHeight : 1.f;
-        weaponPos.z() += mPhysics->getHalfExtents(actor).z() * heightRatio;
-        osg::Vec3f targetPos = mPhysics->getCollisionObjectPosition(target);
-        return (targetPos - weaponPos);
-    }
-
-    namespace
-    {
-        void preload(OFWorld::Scene* scene, const ESMStore& store, const ESM::RefId& obj)
-        {
-            if (obj.empty())
-                return;
-            try
-            {
-                OFWorld::ManualRef ref(store, obj);
-                std::string model = ref.getPtr().getClass().getCorrectedModel(ref.getPtr());
-                if (!model.empty())
-                    scene->preload(model, ref.getPtr().getClass().useAnim());
-            }
-            catch (const std::exception& e)
-            {
-                Log(Debug::Warning) << "Failed to preload scene object " << obj << ": " << e.what();
-            }
-        }
-    }
-
-    void World::preloadEffects(const ESM::EffectList* effectList)
-    {
-        for (const ESM::IndexedENAMstruct& effectInfo : effectList->mList)
-        {
-            const ESM::MagicEffect* effect = mStore.get<ESM::MagicEffect>().find(effectInfo.mData.mEffectID);
-
-            if (OFMechanics::isSummoningEffect(effectInfo.mData.mEffectID))
-            {
-                preload(mWorldScene.get(), mStore, ESM::RefId::stringRefId("VFX_Summon_Start"));
-                preload(mWorldScene.get(), mStore, OFMechanics::getSummonedCreature(effectInfo.mData.mEffectID));
-            }
-
-            preload(mWorldScene.get(), mStore, effect->mCasting);
-            preload(mWorldScene.get(), mStore, effect->mHit);
-
-            if (effectInfo.mData.mArea > 0)
-                preload(mWorldScene.get(), mStore, effect->mArea);
-            if (effectInfo.mData.mRange == ESM::RT_Target)
-                preload(mWorldScene.get(), mStore, effect->mBolt);
-        }
     }
 
     DetourNavigator::Navigator* World::getNavigator() const
@@ -3751,27 +2846,6 @@ namespace OFWorld
         else
             return DetourNavigator::AgentBounds{ physicsActor->getCollisionShapeType(),
                 physicsActor->getHalfExtents() };
-    }
-
-    bool World::hasCollisionWithDoor(
-        const OFWorld::ConstPtr& door, const osg::Vec3f& position, const osg::Vec3f& destination) const
-    {
-        const auto object = mPhysics->getObject(door);
-
-        if (!object)
-            return false;
-
-        btVector3 aabbMin;
-        btVector3 aabbMax;
-        object->getShapeInstance()->mCollisionShape->getAabb(btTransform::getIdentity(), aabbMin, aabbMax);
-
-        const auto toLocal = object->getTransform().inverse();
-        const auto localFrom = toLocal(Misc::Convert::toBullet(position));
-        const auto localTo = toLocal(Misc::Convert::toBullet(destination));
-
-        btScalar hitDistance = 1;
-        btVector3 hitNormal;
-        return btRayAabb(localFrom, localTo, aabbMin, aabbMax, hitDistance, hitNormal);
     }
 
     bool World::isAreaOccupiedByOtherActor(const OFWorld::ConstPtr& actor, const osg::Vec3f& position) const

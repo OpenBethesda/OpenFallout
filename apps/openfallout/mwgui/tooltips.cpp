@@ -13,22 +13,15 @@
 #include <components/esm/records.hpp>
 #include <components/l10n/manager.hpp>
 #include <components/misc/resourcehelpers.hpp>
+#include <components/resource/resourcesystem.hpp>
 #include <components/settings/values.hpp>
 #include <components/widgets/box.hpp>
 
 #include "../mwbase/environment.hpp"
-#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/spellutil.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
-
-#include "inventorywindow.hpp"
-#include "mapwindow.hpp"
-
-#include "itemmodel.hpp"
 
 namespace OFGui
 {
@@ -173,21 +166,7 @@ namespace OFGui
                     return;
                 }
 
-                // special handling for markers on the local map: the tooltip should only be visible
-                // if the marker is not hidden due to the fog of war.
-                if (type == "MapMarker")
-                {
-                    LocalMapBase::MarkerUserData data = *focus->getUserData<LocalMapBase::MarkerUserData>();
-
-                    if (!data.isPositionExplored())
-                        return;
-
-                    ToolTipInfo info;
-                    info.text = data.caption;
-                    info.notes = data.notes;
-                    tooltipSize = createToolTip(info);
-                }
-                else if (type == "ItemPtr")
+                if (type == "ItemPtr")
                 {
                     mFocusObject = *focus->getUserData<OFWorld::Ptr>();
                     if (mFocusObject.isEmpty())
@@ -195,70 +174,9 @@ namespace OFGui
 
                     tooltipSize = getToolTipViaPtr(mFocusObject.getCellRef().getCount(), false, checkOwned());
                 }
-                else if (type == "ItemModelIndex")
-                {
-                    std::pair<ItemModel::ModelIndex, ItemModel*> pair
-                        = *focus->getUserData<std::pair<ItemModel::ModelIndex, ItemModel*>>();
-                    mFocusObject = pair.second->getItem(pair.first).mBase;
-                    bool isAllowedToUse = pair.second->allowedToUseItems();
-                    tooltipSize = getToolTipViaPtr(
-                        static_cast<int>(pair.second->getItem(pair.first).mCount), false, !isAllowedToUse);
-                }
                 else if (type == "ToolTipInfo")
                 {
                     tooltipSize = createToolTip(*focus->getUserData<OFGui::ToolTipInfo>());
-                }
-                else if (type == "AvatarItemSelection")
-                {
-                    MyGUI::IntCoord avatarPos = focus->getAbsoluteCoord();
-                    MyGUI::IntPoint relMousePos = MyGUI::InputManager::getInstance().getMousePosition()
-                        - MyGUI::IntPoint(avatarPos.left, avatarPos.top);
-                    OFWorld::Ptr item
-                        = winMgr->getInventoryWindow()->getAvatarSelectedItem(relMousePos.left, relMousePos.top);
-
-                    mFocusObject = item;
-                    if (!mFocusObject.isEmpty())
-                        tooltipSize = getToolTipViaPtr(mFocusObject.getCellRef().getCount(), false);
-                }
-                else if (type == "Spell")
-                {
-                    ToolTipInfo info;
-
-                    const auto& store = OFBase::Environment::get().getESMStore();
-                    const ESM::Spell* spell
-                        = store->get<ESM::Spell>().find(ESM::RefId::deserialize(focus->getUserString("Spell")));
-                    info.caption = spell->mName;
-                    Widgets::SpellEffectList effects;
-                    for (const ESM::IndexedENAMstruct& spellEffect : spell->mEffects.mList)
-                    {
-                        Widgets::SpellEffectParams params;
-                        params.mEffectID = spellEffect.mData.mEffectID;
-                        params.mSkill = spellEffect.mData.mSkill;
-                        params.mAttribute = spellEffect.mData.mAttribute;
-                        params.mDuration = spellEffect.mData.mDuration;
-                        params.mMagnMin = spellEffect.mData.mMagnMin;
-                        params.mMagnMax = spellEffect.mData.mMagnMax;
-                        params.mRange = spellEffect.mData.mRange;
-                        params.mArea = spellEffect.mData.mArea;
-                        params.mIsConstant = (spell->mData.mType == ESM::Spell::ST_Ability);
-                        params.mNoTarget = false;
-                        effects.push_back(params);
-                    }
-                    // display school of spells that contribute to skill progress
-                    if (OFMechanics::spellIncreasesSkill(spell))
-                    {
-                        ESM::RefId id = OFMechanics::getSpellSchool(spell, OFMechanics::getPlayer());
-                        if (!id.empty())
-                        {
-                            const auto& school = store->get<ESM::Skill>().find(id)->mSchool;
-                            info.text = "#{sSchool}: " + MyGUI::TextIterator::toTagsString(school->mName).asUTF8();
-                        }
-                    }
-                    if (focus->getUserString("SpellCost") == "true")
-                        info.text
-                            += OFGui::ToolTips::getValueString(OFMechanics::calcSpellCost(*spell), "#{sCastCost}");
-                    info.effects = std::move(effects);
-                    tooltipSize = createToolTip(info);
                 }
                 else if (type == "Layout")
                 {
@@ -389,14 +307,8 @@ namespace OFGui
 
     bool ToolTips::checkOwned()
     {
-        if (mFocusObject.isEmpty())
-            return false;
-
-        OFWorld::Ptr ptr = OFMechanics::getPlayer();
-        OFWorld::Ptr victim;
-
-        OFBase::MechanicsManager* mm = OFBase::Environment::get().getMechanicsManager();
-        return !mm->isAllowedToUse(ptr, mFocusObject, victim);
+        // The Morrowind rule of who may take what is gone with its crimes: the Fallout HUD shows an owned thing
+        return false;
     }
 
     MyGUI::IntSize ToolTips::createToolTip(const OFGui::ToolTipInfo& info, bool isOwned)
@@ -481,27 +393,6 @@ namespace OFGui
                 maximumWidth),
             (!text.empty() ? textSize.height + imageCaptionVPadding : 0) + captionHeight);
 
-        for (const std::string& note : info.notes)
-        {
-            MyGUI::ImageBox* icon = mDynamicToolTipBox->createWidget<MyGUI::ImageBox>("MarkerButton",
-                MyGUI::IntCoord(padding.left, totalSize.height + padding.top, 8, 8), MyGUI::Align::Default);
-            icon->setColour(MyGUI::Colour(1.0f, 0.3f, 0.3f));
-            Gui::EditBox* edit = mDynamicToolTipBox->createWidget<Gui::EditBox>("SandText",
-                MyGUI::IntCoord(padding.left + 8 + 4, totalSize.height + padding.top, 300 - padding.left - 8 - 4,
-                    300 - totalSize.height),
-                MyGUI::Align::Default);
-            constexpr size_t maxLength = 60;
-            std::string shortenedNote = note.substr(0, std::min(maxLength, note.find('\n')));
-            if (shortenedNote.size() < note.size())
-                shortenedNote += " ...";
-            edit->setCaption(shortenedNote);
-            MyGUI::IntSize noteTextSize = edit->getTextSize();
-            edit->setSize(std::max(edit->getWidth(), noteTextSize.width), noteTextSize.height);
-            icon->setPosition(icon->getLeft(), (edit->getTop() + edit->getBottom()) / 2 - icon->getHeight() / 2);
-            totalSize.height += std::max(edit->getHeight(), icon->getHeight());
-            totalSize.width = std::max(totalSize.width, edit->getWidth() + 8 + 4);
-        }
-
         if (!info.effects.empty())
         {
             MyGUI::Widget* effectArea = mDynamicToolTipBox->createWidget<MyGUI::Widget>({},
@@ -546,7 +437,8 @@ namespace OFGui
             if (enchant->mData.mType == ESM::Enchantment::WhenStrikes
                 || enchant->mData.mType == ESM::Enchantment::WhenUsed)
             {
-                const int maxCharge = OFMechanics::getEnchantmentCharge(*enchant);
+                // The charge the record gives (the Morrowind formula of an automatic charge went with its magic)
+                const int maxCharge = enchant->mData.mCharge;
                 int charge = (info.remainingEnchantCharge == -1) ? maxCharge : info.remainingEnchantCharge;
 
                 const int chargeWidth = 204;
@@ -735,17 +627,6 @@ namespace OFGui
             }
         }
 
-        std::vector<std::pair<ESM::RefId, int>> itemOwners
-            = OFBase::Environment::get().getMechanicsManager()->getStolenItemOwners(cellref.getRefId());
-
-        for (std::pair<ESM::RefId, int>& owner : itemOwners)
-        {
-            if (owner.second == std::numeric_limits<int>::max())
-                ret += std::format("\nStolen from {}", owner.first.toDebugString()); // for legacy (ESS) savegames
-            else
-                ret += std::format("\nStolen {} from {}", owner.second, owner.first.toDebugString());
-        }
-
         ret += getMiscString(cellref.getGlobalVariable(), "Global");
         return ret;
     }
@@ -822,81 +703,5 @@ namespace OFGui
     {
         mFocusToolTipX = x;
         mFocusToolTipY = y;
-    }
-
-    void ToolTips::createBirthsignToolTip(MyGUI::Widget* widget, const ESM::RefId& birthsignId)
-    {
-        const OFWorld::ESMStore& store = *OFBase::Environment::get().getESMStore();
-
-        const ESM::BirthSign* sign = store.get<ESM::BirthSign>().find(birthsignId);
-        const VFS::Manager* const vfs = OFBase::Environment::get().getResourceSystem()->getVFS();
-
-        widget->setUserString("ToolTipType", "Layout");
-        widget->setUserString("ToolTipLayout", "BirthSignToolTip");
-        widget->setUserString("ImageTexture_BirthSignImage",
-            Misc::ResourceHelpers::correctTexturePath(sign->mTexture.getNormalized(), *vfs));
-        widget->setUserString("Caption_BirthSignName", sign->mName);
-        widget->setUserString("Caption_BirthSignDescription", sign->mDescription);
-
-        std::vector<const ESM::Spell*> abilities, powers, spells;
-
-        for (const ESM::RefId& spellId : sign->mPowers.mList)
-        {
-            const ESM::Spell* spell = store.get<ESM::Spell>().search(spellId);
-            if (!spell)
-                continue; // Skip spells which cannot be found
-            ESM::Spell::SpellType type = static_cast<ESM::Spell::SpellType>(spell->mData.mType);
-            if (type != ESM::Spell::ST_Spell && type != ESM::Spell::ST_Ability && type != ESM::Spell::ST_Power)
-                continue; // We only want spell, ability and powers.
-
-            if (type == ESM::Spell::ST_Ability)
-                abilities.push_back(spell);
-            else if (type == ESM::Spell::ST_Power)
-                powers.push_back(spell);
-            else if (type == ESM::Spell::ST_Spell)
-                spells.push_back(spell);
-        }
-
-        using Category = std::tuple<const std::vector<const ESM::Spell*>&, std::string_view, std::string_view>;
-        std::initializer_list<Category> categories{ { abilities, "#{sBirthsignmenu1}", "Abilities" },
-            { powers, "#{sPowers}", "Powers" }, { spells, "#{sBirthsignmenu2}", "Spells" } };
-
-        for (const auto& [category, label, widgetName] : categories)
-        {
-            std::string text;
-            if (!category.empty())
-            {
-                text = std::string(label) + "\n#{fontcolourhtml=normal}";
-                for (const ESM::Spell* spell : category)
-                    text += spell->mName + ' ';
-                text.pop_back();
-            }
-            widget->setUserString("Caption_BirthSign" + std::string(widgetName), text);
-        }
-    }
-
-    void ToolTips::createRaceToolTip(MyGUI::Widget* widget, const ESM::Race* playerRace)
-    {
-        widget->setUserString("Caption_CenteredCaption", playerRace->mName);
-        widget->setUserString("Caption_CenteredCaptionText", playerRace->mDescription);
-        widget->setUserString("ToolTipType", "Layout");
-        widget->setUserString("ToolTipLayout", "RaceToolTip");
-    }
-
-    void ToolTips::createClassToolTip(MyGUI::Widget* widget, const ESM::Class& playerClass)
-    {
-        if (playerClass.mName.empty())
-            return;
-
-        int spec = playerClass.mData.mSpecialization;
-        std::string specStr = "#{";
-        specStr += ESM::Class::sGmstSpecializationIds[spec];
-        specStr += '}';
-
-        widget->setUserString("Caption_ClassName", playerClass.mName);
-        widget->setUserString("Caption_ClassDescription", playerClass.mDescription);
-        widget->setUserString("Caption_ClassSpecialisation", "#{sSpecialization}: " + specStr);
-        widget->setUserString("ToolTipType", "Layout");
-        widget->setUserString("ToolTipLayout", "ClassToolTip");
     }
 }

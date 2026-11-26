@@ -14,10 +14,8 @@
 #include "../mwbase/windowmanager.hpp"
 
 #include "../mwphysics/physicssystem.hpp"
-#include "../mwworld/actionequip.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/failedaction.hpp"
-#include "../mwworld/inventorystore.hpp"
 #include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 
@@ -92,9 +90,6 @@ namespace OFClass
 
     std::unique_ptr<OFWorld::Action> Light::activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const
     {
-        if (!OFBase::Environment::get().getWindowManager()->isAllowed(OFGui::GW_Inventory))
-            return std::make_unique<OFWorld::NullAction>();
-
         OFWorld::LiveCellRef<ESM::Light>* ref = ptr.get<ESM::Light>();
         if (!(ref->mBase->mData.mFlags & ESM::Light::Carry))
             return std::make_unique<OFWorld::FailedAction>();
@@ -107,18 +102,6 @@ namespace OFClass
         const OFWorld::LiveCellRef<ESM::Light>* ref = ptr.get<ESM::Light>();
 
         return ref->mBase->mScript;
-    }
-
-    std::pair<std::vector<int>, bool> Light::getEquipmentSlots(const OFWorld::ConstPtr& ptr) const
-    {
-        const OFWorld::LiveCellRef<ESM::Light>* ref = ptr.get<ESM::Light>();
-
-        std::vector<int> slots;
-
-        if (ref->mBase->mData.mFlags & ESM::Light::Carry)
-            slots.push_back(int(OFWorld::InventoryStore::Slot_CarriedLeft));
-
-        return std::make_pair(slots, false);
     }
 
     int Light::getValue(const OFWorld::ConstPtr& ptr) const
@@ -191,15 +174,6 @@ namespace OFClass
         return Class::showsInInventory(ptr);
     }
 
-    std::unique_ptr<OFWorld::Action> Light::use(const OFWorld::Ptr& ptr, bool force) const
-    {
-        std::unique_ptr<OFWorld::Action> action = std::make_unique<OFWorld::ActionEquip>(ptr, force);
-
-        action->setSound(getUpSoundId(ptr));
-
-        return action;
-    }
-
     void Light::setRemainingUsageTime(const OFWorld::Ptr& ptr, float duration) const
     {
         ptr.getCellRef().setChargeFloat(duration);
@@ -230,15 +204,6 @@ namespace OFClass
     {
         const OFWorld::LiveCellRef<ESM::Light>* ref = ptr.get<ESM::Light>();
         return ref->mBase->mData.mWeight;
-    }
-
-    std::pair<int, std::string_view> Light::canBeEquipped(const OFWorld::ConstPtr& ptr, const OFWorld::Ptr& npc) const
-    {
-        const OFWorld::LiveCellRef<ESM::Light>* ref = ptr.get<ESM::Light>();
-        if (!(ref->mBase->mData.mFlags & ESM::Light::Carry))
-            return { 0, {} };
-
-        return { 1, {} };
     }
 
     ESM::RefId Light::getSound(const OFWorld::ConstPtr& ptr) const

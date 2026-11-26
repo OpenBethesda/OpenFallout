@@ -26,6 +26,7 @@
 #include <components/debug/debuglog.hpp>
 #include <components/esm3/loadgmst.hpp>
 #include <components/esm3/loadmgef.hpp>
+#include <components/falloutscript/movement.hpp>
 #include <components/misc/convert.hpp>
 #include <components/misc/resourcehelpers.hpp>
 #include <components/misc/strings/conversion.hpp>
@@ -37,8 +38,9 @@
 #include "../mwbase/world.hpp"
 
 #include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/creaturestats.hpp"
+#include "../mwmechanics/falloutactor.hpp"
 #include "../mwmechanics/movement.hpp"
+#include "../mwscript/falloutscripts.hpp"
 
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -62,36 +64,13 @@
 
 namespace
 {
+    /// The jump the player's actor asked for is taken by the simulation that runs now (the actor started it, with the
+    /// speed of rule C.J1): the request is done
     void handleJump(const OFWorld::Ptr& ptr)
     {
-        if (!ptr.getClass().isActor())
-            return;
-        if (ptr.getClass().getMovementSettings(ptr).mPosition[2] == 0)
-            return;
-        const bool isPlayer = (ptr == OFMechanics::getPlayer());
-        // Advance acrobatics and set flag for GetPCJumping
-        if (isPlayer)
-        {
-            ptr.getClass().skillUsageSucceeded(ptr, ESM::Skill::Acrobatics, ESM::Skill::Acrobatics_Jump);
-            OFBase::Environment::get().getWorld()->getPlayer().setJumping(true);
-        }
-
-        // Decrease fatigue
-        if (!isPlayer || !OFBase::Environment::get().getWorld()->getGodModeState())
-        {
-            const OFWorld::Store<ESM::GameSetting>& gmst
-                = OFBase::Environment::get().getESMStore()->get<ESM::GameSetting>();
-            const float fFatigueJumpBase = gmst.find("fFatigueJumpBase")->mValue.getFloat();
-            const float fFatigueJumpMult = gmst.find("fFatigueJumpMult")->mValue.getFloat();
-            const float normalizedEncumbrance = std::min(1.f, ptr.getClass().getNormalizedEncumbrance(ptr));
-            const float fatigueDecrease = fFatigueJumpBase + normalizedEncumbrance * fFatigueJumpMult;
-            OFMechanics::DynamicStat<float> fatigue = ptr.getClass().getCreatureStats(ptr).getFatigue();
-            fatigue.setCurrent(fatigue.getCurrent() - fatigueDecrease);
-            ptr.getClass().getCreatureStats(ptr).setFatigue(fatigue);
-        }
-        ptr.getClass().getMovementSettings(ptr).mPosition[2] = 0;
+        if (OFMechanics::Actor* actor = OFMechanics::findActor(ptr))
+            actor->getMovement().mPosition[2] = 0;
     }
-
 }
 
 namespace OFPhysics
@@ -585,31 +564,9 @@ namespace OFPhysics
         }
     }
 
-    void PhysicsSystem::addActor(const OFWorld::Ptr& ptr, VFS::Path::NormalizedView mesh)
+    void PhysicsSystem::addCharacter(const OFWorld::Ptr& ptr, const CharacterShape& shape)
     {
-        const VFS::Path::Normalized animationMesh
-            = Misc::ResourceHelpers::correctActorModelPath(mesh, mResourceSystem->getVFS());
-        std::shared_ptr<const Resource::BulletShape> shape = mShapeManager->getShape(animationMesh);
-
-        // Try to get shape from basic model as fallback for creatures
-        if (!ptr.getClass().isNpc() && shape && shape->mCollisionBox.mExtents.length2() == 0)
-        {
-            if (animationMesh != mesh)
-            {
-                shape = mShapeManager->getShape(mesh);
-            }
-        }
-
-        if (!shape)
-            return;
-
-        // check if Actor should spawn above water
-        const OFMechanics::MagicEffects& effects = ptr.getClass().getCreatureStats(ptr).getMagicEffects();
-        const bool canWaterWalk = effects.getOrDefault(ESM::MagicEffect::WaterWalking).getMagnitude() > 0;
-
-        auto actor = std::make_shared<Actor>(
-            ptr, *shape, mTaskScheduler.get(), canWaterWalk, Settings::game().mActorCollisionShapeType);
-
+        auto actor = std::make_shared<Actor>(ptr, shape, mTaskScheduler.get());
         mActors.emplace(ptr.mRef, std::move(actor));
     }
 
@@ -679,31 +636,20 @@ namespace OFPhysics
                 continue;
 
             auto ptr = physicActor->getPtr();
-            if (!ptr.getClass().isMobile(ptr))
-                continue;
 
             const OFWorld::CellStore& cell = *ptr.getCell();
-            const auto& stats = ptr.getClass().getCreatureStats(ptr);
-            const OFMechanics::MagicEffects& effects = stats.getMagicEffects();
 
+            // Nothing of Fallout walks on water or falls slowly
             float waterlevel = -std::numeric_limits<float>::max();
-            bool waterCollision = false;
+            const bool waterCollision = false;
             if (cell.getCell()->hasWater())
-            {
                 waterlevel = cell.getWaterLevel();
-                if (physicActor->getCollisionMode())
-                    waterCollision = effects.getOrDefault(ESM::MagicEffect::WaterWalking).getMagnitude();
-            }
-
             physicActor->setCanWaterWalk(waterCollision);
-
-            // Slow fall reduces fall speed by a factor of (effect magnitude / 200)
-            const float slowFall
-                = 1.f - std::clamp(effects.getOrDefault(ESM::MagicEffect::SlowFall).getMagnitude() * 0.005f, 0.f, 1.f);
+            const float slowFall = 1.f;
             const bool isPlayer = ptr == world->getPlayerConstPtr();
-            const bool godmode = isPlayer && world->getGodModeState();
-            const bool inert = stats.isDead()
-                || (!godmode && stats.getMagicEffects().getOrDefault(ESM::MagicEffect::Paralyze).getModifier() > 0);
+            // A dead actor moves no more by itself (a paralysed one is held by its actor)
+            const OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
+            const bool inert = scripts != nullptr && scripts->isDead(ptr);
 
             simulations.emplace_back(ActorSimulation{
                 physicActor, ActorFrameData{ *physicActor, inert, waterCollision, slowFall, waterlevel, isPlayer } });
@@ -943,13 +889,9 @@ namespace OFPhysics
         , mWalkingOnWater(false)
         , mInert(inert)
         , mCollisionObject(actor.getCollisionObject())
+        // The character swims when the water is above 0.7 of its height (rule C.W1, FalloutNV.exe 0x889946)
         , mSwimLevel(waterlevel
-              - (actor.getRenderingHalfExtents().z() * 2
-                  * OFBase::Environment::get()
-                        .getESMStore()
-                        ->get<ESM::GameSetting>()
-                        .find("fSwimHeightScale")
-                        ->mValue.getFloat()))
+              - (actor.getRenderingHalfExtents().z() * 2 * static_cast<float>(FalloutScript::Movement::swimmingLine)))
         , mSlowFall(slowFall)
         , mRotation()
         , mMovement(actor.velocity())
@@ -959,7 +901,6 @@ namespace OFPhysics
         , mStuckFrames(0)
         , mFlying(OFBase::Environment::get().getWorld()->isFlying(actor.getPtr()))
         , mWasOnGround(actor.getOnGround())
-        , mIsAquatic(actor.getPtr().getClass().isPureWaterCreature(actor.getPtr()))
         , mWaterCollision(waterCollision)
         , mSkipCollisionDetection(!actor.getCollisionMode())
         , mIsPlayer(isPlayer)
@@ -972,12 +913,6 @@ namespace OFPhysics
         , mCaster(projectile.getCasterCollisionObject())
         , mCollisionObject(projectile.getCollisionObject())
         , mProjectile(&projectile)
-    {
-    }
-
-    WorldFrameData::WorldFrameData()
-        : mIsInStorm(OFBase::Environment::get().getWorld()->isInStorm())
-        , mStormDirection(OFBase::Environment::get().getWorld()->getStormDirection())
     {
     }
 

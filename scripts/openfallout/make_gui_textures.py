@@ -5,8 +5,7 @@ The skins and layouts under files/data/mygui were made for Morrowind and look fo
 the mouse pointers and the like in the Morrowind archives. Fallout 3 and New Vegas have none of them, so every frame, button
 and pointer came out as a missing image. The images made here are plain: thin lines in a green that the Pip-Boy of Fallout 3
 uses, on a dark panel; they are the work of this script and of nobody else, so the repository can carry them. They are
-uncompressed 32 bit DDS files without mip maps, written to files/data/textures/ (and files/data/icons/ for the few that
-the interface looks for there).
+uncompressed 32 bit DDS files without mip maps, written to files/data/textures/.
 
     python3 scripts/openfallout/make_gui_textures.py [directory of the data files]
 
@@ -210,15 +209,6 @@ def move_pointer():
     return image
 
 
-def drop_pointer():
-    """The pointer for putting an item down on the ground: an arrow pointing down onto a line."""
-    image = Image(32, 32)
-    image.line(15, 2, 15, 20, with_alpha(ACCENT, 255), 3)
-    image.polygon([(15, 28), (6, 17), (24, 17)], with_alpha(ACCENT, 255))
-    image.line(3, 30, 28, 30, with_alpha(ACCENT, 255), 2)
-    return image
-
-
 def crosshair():
     image = Image(27, 27)
     green = with_alpha(ACCENT, 230)
@@ -228,19 +218,6 @@ def crosshair():
         image.blend(13 - d, 13, green)
         image.blend(13 + d, 13, green)
     image.blend(13, 13, green)
-    return image
-
-
-def compass_image():
-    image = Image(32, 32)
-    for y in range(32):
-        for x in range(32):
-            r = math.hypot(x - 15.5, y - 15.5)
-            if 13.5 <= r <= 15.5:
-                image.set(x, y, with_alpha(ACCENT, 220))
-            elif r < 13.5:
-                image.set(x, y, with_alpha(PANEL, 160))
-    image.polygon([(15.5, 3), (12, 15.5), (19, 15.5)], with_alpha(ACCENT, 255))
     return image
 
 
@@ -334,48 +311,6 @@ def menu_background():
     return image
 
 
-def sneak_icon():
-    """The sign of sneaking in the HUD: an eye, 32 x 32."""
-    image = Image(32, 32)
-    for x in range(2, 30):
-        t = (x - 15.5) / 13.5
-        half = 8.0 * max(0.0, 1.0 - t * t)
-        for y in range(32):
-            if abs(y - 15.5) <= half:
-                edge = half - abs(y - 15.5) < 1.5
-                image.set(x, y, with_alpha(ACCENT, 255) if edge else with_alpha(PANEL, 215))
-    for y in range(32):
-        for x in range(32):
-            r = math.hypot(x - 15.5, y - 15.5)
-            if r <= 4.5:
-                image.set(x, y, with_alpha(ACCENT, 255))
-    return image
-
-
-def fist_icon():
-    """The sign of fighting with the hands, for the HUD and the quick keys: a fist, 32 x 32."""
-    image = Image(32, 32)
-    green = with_alpha(ACCENT, 255)
-    for index in range(4):
-        left = 5 + index * 5
-        image.rect(left, 6, left + 4, 16, green)
-    image.rect(5, 16, 25, 26, green)
-    image.rect(2, 14, 7, 22, green)
-    image.rect(7, 18, 23, 24, with_alpha(PANEL, 255))
-    return image
-
-
-def coin_icon():
-    """A bottle cap for the money: a ring with a dot in it, 16 x 16."""
-    image = Image(16, 16)
-    for y in range(16):
-        for x in range(16):
-            r = math.hypot(x - 7.5, y - 7.5)
-            if r <= 7.5:
-                image.set(x, y, with_alpha(ACCENT, 255) if r > 5.5 or r < 2.5 else with_alpha(DIM, 255))
-    return image
-
-
 def hit_flash():
     """The flash on the screen when the player is hurt: a soft red patch that fades out towards its edge, 128 x 128. The
     interface shows it in the middle of the screen when there is no bm_player_hit_01.dds."""
@@ -432,15 +367,10 @@ def build_all():
             gray.set(x, y, (int(shade), int(shade), int(shade), 255))
     images['menu_bar_gray'] = gray
 
-    # pointers, crosshair, compass, door marker
+    # pointers and crosshair
     images['tx_cursor'] = arrow_pointer()
     images['tx_cursormove'] = move_pointer()
-    images['cursor_drop_ground'] = drop_pointer()
     images['target'] = crosshair()
-    images['compass'] = compass_image()
-    door = Image(8, 8, with_alpha(ACCENT, 255))
-    door.rect(2, 2, 6, 6, with_alpha(PANEL, 255))
-    images['door_icon'] = door
 
     # the pages and scrolls of books and notes
     # the images are stretched to the size of the window, so half the size will do
@@ -470,17 +400,14 @@ def build_all():
         images['menu_%s_over' % name] = menu_button(label, 'over')
         images['menu_%s_pressed' % name] = menu_button(label, 'pressed')
 
-    # the signs of the HUD, the money and the quick keys, which the interface looks for under icons/
-    images['icons/k/stealth_sneak'] = sneak_icon()
-    images['icons/k/stealth_handtohand'] = fist_icon()
-    images['icons/tx_goldicon'] = coin_icon()
+    # the flash of the screen when the player is hurt
     images['player_hit_01'] = hit_flash()
     return images
 
 
 def relative_path(name):
-    """Where the image is below the data files: icons/... stay where they are, the rest is under textures/."""
-    return name + '.dds' if name.startswith('icons/') else 'textures/%s.dds' % name
+    """Where the image is below the data files: under textures/."""
+    return 'textures/%s.dds' % name
 
 
 def main():

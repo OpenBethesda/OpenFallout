@@ -16,14 +16,11 @@
 #include "actiontake.hpp"
 #include "containerstore.hpp"
 #include "failedaction.hpp"
-#include "inventorystore.hpp"
 #include "nullaction.hpp"
 #include "ptr.hpp"
 #include "worldmodel.hpp"
 
 #include "../mwgui/tooltips.hpp"
-
-#include "../mwmechanics/npcstats.hpp"
 
 namespace OFWorld
 {
@@ -48,34 +45,9 @@ namespace OFWorld
     {
     }
 
-    bool Class::consume(const OFWorld::Ptr& consumable, const OFWorld::Ptr& actor) const
-    {
-        return false;
-    }
-
-    void Class::skillUsageSucceeded(const OFWorld::Ptr& ptr, ESM::RefId skill, int usageType, float extraFactor) const
-    {
-        throw std::runtime_error("class does not represent an actor");
-    }
-
     bool Class::canSell(const OFWorld::ConstPtr& item, int npcServices) const
     {
         return false;
-    }
-
-    int Class::getServices(const ConstPtr& actor) const
-    {
-        throw std::runtime_error("class does not have services");
-    }
-
-    OFMechanics::CreatureStats& Class::getCreatureStats(const Ptr& ptr) const
-    {
-        throw std::runtime_error("class does not have creature stats");
-    }
-
-    OFMechanics::NpcStats& Class::getNpcStats(const Ptr& ptr) const
-    {
-        throw std::runtime_error("class does not have NPC stats");
     }
 
     bool Class::hasItemHealth(const ConstPtr& ptr) const
@@ -108,23 +80,6 @@ namespace OFWorld
         throw std::runtime_error("class does not have item health");
     }
 
-    bool Class::evaluateHit(const Ptr& ptr, Ptr& victim, osg::Vec3f& hitPosition) const
-    {
-        throw std::runtime_error("class cannot hit");
-    }
-
-    void Class::hit(const Ptr& ptr, float attackStrength, float attackWindUp, int type, const Ptr& victim,
-        const osg::Vec3f& hitPosition, bool success) const
-    {
-        throw std::runtime_error("class cannot hit");
-    }
-
-    void Class::onHit(const Ptr& ptr, const std::map<std::string, float>& damages, ESM::RefId object,
-        const Ptr& attacker, bool successful, const OFMechanics::DamageSourceType sourceType) const
-    {
-        throw std::runtime_error("class cannot be hit");
-    }
-
     std::unique_ptr<Action> Class::activate(const Ptr& ptr, const Ptr& actor) const
     {
         return std::make_unique<NullAction>();
@@ -138,16 +93,6 @@ namespace OFWorld
     ContainerStore& Class::getContainerStore(const Ptr& ptr) const
     {
         throw std::runtime_error("class does not have a container store");
-    }
-
-    InventoryStore& Class::getInventoryStore(const Ptr& ptr) const
-    {
-        throw std::runtime_error("class does not have an inventory store");
-    }
-
-    bool Class::hasInventoryStore(const ConstPtr& ptr) const
-    {
-        return false;
     }
 
     bool Class::canLock(const ConstPtr& ptr) const
@@ -175,44 +120,9 @@ namespace OFWorld
         return 0;
     }
 
-    float Class::getMaxSpeed(const Ptr& ptr) const
-    {
-        return 0;
-    }
-
-    float Class::getCurrentSpeed(const Ptr& ptr) const
-    {
-        return 0;
-    }
-
-    float Class::getJump(const Ptr& ptr) const
-    {
-        return 0;
-    }
-
     int Class::getEnchantmentPoints(const OFWorld::ConstPtr& ptr) const
     {
         throw std::runtime_error("class does not support enchanting");
-    }
-
-    OFMechanics::Movement& Class::getMovementSettings(const Ptr& ptr) const
-    {
-        throw std::runtime_error("movement settings not supported by class");
-    }
-
-    osg::Vec3f Class::getRotationVector(const Ptr& ptr) const
-    {
-        return osg::Vec3f(0, 0, 0);
-    }
-
-    std::pair<std::vector<int>, bool> Class::getEquipmentSlots(const ConstPtr& ptr) const
-    {
-        return std::make_pair(std::vector<int>(), false);
-    }
-
-    ESM::RefId Class::getEquipmentSkill(const ConstPtr& ptr, bool useLuaInterfaceIfAvailable) const
-    {
-        return {};
     }
 
     int Class::getValue(const ConstPtr& ptr) const
@@ -220,29 +130,9 @@ namespace OFWorld
         throw std::logic_error("value not supported by this class");
     }
 
-    float Class::getCapacity(const OFWorld::Ptr& ptr) const
-    {
-        throw std::runtime_error("capacity not supported by this class");
-    }
-
     float Class::getWeight(const ConstPtr& ptr) const
     {
         throw std::runtime_error("weight not supported by this class");
-    }
-
-    float Class::getEncumbrance(const OFWorld::Ptr& ptr) const
-    {
-        throw std::runtime_error("encumbrance not supported by class");
-    }
-
-    bool Class::isEssential(const OFWorld::ConstPtr& ptr) const
-    {
-        return false;
-    }
-
-    float Class::getArmorRating(const OFWorld::Ptr& ptr, bool useLuaInterfaceIfAvailable) const
-    {
-        throw std::runtime_error("Class does not support armor rating");
     }
 
     const Class& Class::get(unsigned int key)
@@ -274,11 +164,6 @@ namespace OFWorld
     const ESM::RefId& Class::getDownSoundId(const ConstPtr& ptr) const
     {
         throw std::runtime_error("class does not have an down sound");
-    }
-
-    ESM::RefId Class::getSoundIdFromSndGen(const Ptr& ptr, std::string_view type) const
-    {
-        throw std::runtime_error("class does not support soundgen look up");
     }
 
     VFS::Path::NormalizedView Class::getInventoryIcon(const OFWorld::ConstPtr& ptr) const
@@ -342,46 +227,15 @@ namespace OFWorld
         throw std::runtime_error("class can't be enchanted");
     }
 
-    std::pair<int, std::string_view> Class::canBeEquipped(const OFWorld::ConstPtr& ptr, const OFWorld::Ptr& npc) const
-    {
-        return { 1, {} };
-    }
-
     void Class::adjustPosition(const OFWorld::Ptr& ptr, bool force) const {}
 
     std::unique_ptr<Action> Class::defaultItemActivate(const Ptr& ptr, const Ptr& actor) const
     {
-        if (!OFBase::Environment::get().getWindowManager()->isAllowed(OFGui::GW_Inventory))
-            return std::make_unique<NullAction>();
-
-        std::unique_ptr<Action> werewolfAction = getWerewolfRefusalAction(actor);
-        if (werewolfAction)
-            return werewolfAction;
 
         std::unique_ptr<Action> action = std::make_unique<ActionTake>(ptr);
         action->setSound(getUpSoundId(ptr));
 
         return action;
-    }
-
-    std::unique_ptr<Action> Class::getWerewolfRefusalAction(const Ptr& actor) const
-    {
-        std::string_view soundId = getWerewolfRefusalSoundId();
-
-        if (!soundId.empty() && actor.getClass().isNpc() && actor.getClass().getNpcStats(actor).isWerewolf())
-        {
-            const ESMStore& store = *OFBase::Environment::get().getESMStore();
-            auto& prng = OFBase::Environment::get().getWorld()->getPrng();
-            const ESM::Sound* sound = store.get<ESM::Sound>().searchRandom(soundId, prng);
-
-            std::unique_ptr<Action> action = std::make_unique<FailedAction>("#{sWerewolfRefusal}");
-            if (sound)
-                action->setSound(sound->mId);
-
-            return action;
-        }
-
-        return {};
     }
 
     OFWorld::Ptr Class::copyToCellImpl(const ConstPtr& ptr, CellStore& cell) const
@@ -423,64 +277,9 @@ namespace OFWorld
         return newPtr;
     }
 
-    bool Class::isBipedal(const ConstPtr& ptr) const
-    {
-        return false;
-    }
-
-    bool Class::canFly(const ConstPtr& ptr) const
-    {
-        return false;
-    }
-
-    bool Class::canSwim(const ConstPtr& ptr) const
-    {
-        return false;
-    }
-
-    bool Class::canWalk(const ConstPtr& ptr) const
-    {
-        return false;
-    }
-
-    bool Class::isPureWaterCreature(const ConstPtr& ptr) const
-    {
-        return canSwim(ptr) && !isBipedal(ptr) && !canFly(ptr) && !canWalk(ptr);
-    }
-
-    bool Class::isPureFlyingCreature(const ConstPtr& ptr) const
-    {
-        return canFly(ptr) && !isBipedal(ptr) && !canSwim(ptr) && !canWalk(ptr);
-    }
-
-    bool Class::isPureLandCreature(const Ptr& ptr) const
-    {
-        return canWalk(ptr) && !isBipedal(ptr) && !canFly(ptr) && !canSwim(ptr);
-    }
-
-    bool Class::isMobile(const OFWorld::Ptr& ptr) const
-    {
-        return canSwim(ptr) || canWalk(ptr) || canFly(ptr);
-    }
-
-    float Class::getSkill(const OFWorld::Ptr& ptr, ESM::RefId id) const
-    {
-        throw std::runtime_error("class does not support skills");
-    }
-
     void Class::readAdditionalState(const OFWorld::Ptr& ptr, const ESM::ObjectState& state) const {}
 
     void Class::writeAdditionalState(const OFWorld::ConstPtr& ptr, ESM::ObjectState& state) const {}
-
-    int Class::getBaseGold(const OFWorld::ConstPtr& ptr) const
-    {
-        throw std::runtime_error("class does not support base gold");
-    }
-
-    bool Class::isClass(const OFWorld::ConstPtr& ptr, std::string_view className) const
-    {
-        return false;
-    }
 
     OFWorld::DoorState Class::getDoorState(const OFWorld::ConstPtr& ptr) const
     {
@@ -492,48 +291,9 @@ namespace OFWorld
         throw std::runtime_error("this is not a door");
     }
 
-    float Class::getNormalizedEncumbrance(const Ptr& ptr) const
-    {
-        float capacity = getCapacity(ptr);
-        float encumbrance = getEncumbrance(ptr);
-
-        // Intentional deviation: Morrowind doesn't do this
-        // but handling (0 / 0) as 1.0 encumbrance feels like a clear oversight
-        if (encumbrance == 0)
-            return 0.f;
-
-        // Another deviation: handle (non-zero encumbrance / zero capacity) as "overencumbered"
-        // Morrowind uses 1, but this means that for zero capacity,
-        // normalized encumbrance cannot be used to detect overencumbrance
-        if (capacity == 0)
-            return 1.f + 1e-6f;
-
-        return encumbrance / capacity;
-    }
-
     ESM::RefId Class::getSound(const OFWorld::ConstPtr&) const
     {
         return ESM::RefId();
-    }
-
-    int Class::getBaseFightRating(const ConstPtr& ptr) const
-    {
-        throw std::runtime_error("class does not support fight rating");
-    }
-
-    ESM::RefId Class::getPrimaryFaction(const OFWorld::ConstPtr& ptr) const
-    {
-        return ESM::RefId();
-    }
-    int Class::getPrimaryFactionRank(const OFWorld::ConstPtr& ptr) const
-    {
-        return -1;
-    }
-
-    float Class::getSkillAdjustedArmorRating(
-        const ConstPtr& armor, const Ptr& actor, bool useLuaInterfaceIfAvailable) const
-    {
-        throw std::runtime_error("class does not support armor ratings");
     }
 
     osg::Vec4f Class::getEnchantmentColor(const OFWorld::ConstPtr& item) const
@@ -557,30 +317,5 @@ namespace OFWorld
         result.y() = magicEffect->mData.mGreen / 255.f;
         result.z() = magicEffect->mData.mBlue / 255.f;
         return result;
-    }
-
-    void Class::setBaseAISetting(const ESM::RefId&, OFMechanics::AiSetting setting, int value) const
-    {
-        throw std::runtime_error("class does not have creature stats");
-    }
-
-    void Class::modifyBaseInventory(const ESM::RefId& actorId, const ESM::RefId& itemId, int amount) const
-    {
-        throw std::runtime_error("class does not have an inventory store");
-    }
-
-    float Class::getWalkSpeed(const Ptr& /*ptr*/) const
-    {
-        return 0;
-    }
-
-    float Class::getRunSpeed(const Ptr& /*ptr*/) const
-    {
-        return 0;
-    }
-
-    float Class::getSwimSpeed(const Ptr& /*ptr*/) const
-    {
-        return 0;
     }
 }

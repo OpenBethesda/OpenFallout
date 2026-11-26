@@ -66,7 +66,6 @@ add_component_dir (settings
     categories/hud
     categories/input
     categories/lua
-    categories/map
     categories/models
     categories/navigator
     categories/physics
@@ -173,10 +172,10 @@ add_component_dir (esm3
     loadinfo loadingr loadland loadlevlist loadligh loadlock loadprob loadrepa loadltex loadmgef loadmisc
     loadnpc loadpgrd loadrace loadregn loadscpt loadskil loadsndg loadsoun loadspel loadsscr loadstat
     loadweap aipackage effectlist spelllist variant variantimp loadtes3 cellref filter
-    savedgame journalentry queststate locals globalscript player objectstate cellid cellstate globalmap
+    savedgame journalentry queststate locals globalscript player objectstate cellid cellstate
     inventorystate containerstate npcstate creaturestate dialoguestate statstate npcstats creaturestats
     weatherstate fogstate spellstate activespells creaturelevliststate doorstate projectilestate debugprofile
-    aisequence magiceffects custommarkerstate stolenitems transport animationstate controlsstate mappings readerscache
+    aisequence magiceffects stolenitems transport animationstate controlsstate mappings readerscache
     infoorder timestamp formatversion landrecorddata selectiongroup dialoguecondition
     refnum actoridconverter defaultgmsts missingcontent
     )
@@ -356,7 +355,7 @@ add_component_dir (falloutmenu
     )
 
 add_component_dir (falloutscript
-    actors actortraits actorvalues aimemory ambient animationcommands animgroups barter blackjack calendar caravan casino chargen combatcommands combatstate commandtable conditions crafting damage derivedstats destruction dismember detection dialogue enableparents equipment exesettings extendercommands falldamage fightai footsteps formlists furniture hacking hardcore hitreactions hotkeys hud interaction itemuse levelling limbs loadingmenu loadscreens lockpick magic mapmarkers messagecommands perks pipboy messagetext music nearwater objectcommands objects objectstate packagecommands placementcommands playercontrols playerprogress presentation queries referencestate regionline repair radio reputation roulette slots savecharacters savescripts facelook facecontrolfile savestate saveworld sayings script interpreter settingtext sounddata specialscreen switches quests triggervolumes vanillacommands vats voicefiles wear itemmods vatsvalue placedexplosives
+    actors actortraits actorvalues aimemory movement processlevels playerstate ambient animationcommands animgroups barter blackjack calendar caravan casino chargen combatcommands combatstate commandtable conditions crafting damage derivedstats destruction dismember detection dialogue enableparents equipment exesettings extendercommands falldamage fightai footsteps formlists furniture hacking hardcore hitreactions hotkeys hud interaction itemuse levelling limbs loadingmenu loadscreens lockpick magic mapmarkers messagecommands perks pipboy messagetext music nearwater objectcommands objects objectstate packagecommands placementcommands playercontrols playerprogress presentation queries referencestate regionline repair radio reputation roulette slots savecharacters savescripts facelook facecontrolfile savestate saveworld sayings script interpreter settingtext sounddata specialscreen switches quests triggervolumes vanillacommands vats voicefiles wear itemmods vatsvalue placedexplosives
     challenges
     levelledlists respawn spawncommands spawnrules
     worldcommands worldmath worldrules

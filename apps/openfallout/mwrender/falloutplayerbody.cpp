@@ -20,7 +20,7 @@
 #include "../mwworld/manualref.hpp"
 
 #include "esm4npcanimation.hpp"
-#include "npcanimation.hpp"
+#include "firstperson.hpp"
 #include "vismask.hpp"
 
 namespace OFRender
@@ -159,7 +159,7 @@ namespace OFRender
         // The body is made even when it is not drawn (it keeps moving for the sounds of its steps); the arms only when
         // they show
         buildBody();
-        if (mArmsVisible)
+        if (mArmsVisible || mArmsKept)
             buildArms();
         return mAnimation != nullptr || mArms != nullptr;
     }
@@ -203,7 +203,7 @@ namespace OFRender
             // first person, as the arms of the other games of the engine are
             mArmsRoot = new osg::MatrixTransform;
             mArmsRoot->setName("Player Arms");
-            mArmsRoot->setNodeMask(mArmsVisible ? static_cast<unsigned>(Mask_FirstPerson) : 0u);
+            mArmsRoot->setNodeMask(armsMask());
             setFirstPersonRenderBin(*mArmsRoot);
             addFirstPersonFieldOfView(*mArmsRoot, mFirstPersonFieldOfView, mRenderingManager);
             mSceneRoot->addChild(mArmsRoot);
@@ -244,17 +244,39 @@ namespace OFRender
         // The first-person sounds are the arms' (the body keeps its own quiet): they are only silenced when arms play
         FalloutActorAnimation::setFirstPersonArmsShown(visible && mArms != nullptr);
         if (mArmsRoot != nullptr)
-            mArmsRoot->setNodeMask(visible ? static_cast<unsigned>(Mask_FirstPerson) : 0u);
+            mArmsRoot->setNodeMask(armsMask());
+    }
+
+    void FalloutPlayerBody::setArmsKept(bool kept)
+    {
+        mArmsKept = kept;
+        if (kept)
+            buildArms();
+        if (mArmsRoot != nullptr)
+            mArmsRoot->setNodeMask(armsMask());
+    }
+
+    unsigned FalloutPlayerBody::armsMask() const
+    {
+        // Mask_UpdateVisitor: the traversal that updates the animations goes through, the cull and the picking do not
+        if (mArmsVisible)
+            return static_cast<unsigned>(Mask_FirstPerson);
+        return mArmsKept ? static_cast<unsigned>(Mask_UpdateVisitor) : 0u;
     }
 
     void FalloutPlayerBody::placeArms(const osg::Vec3d& cameraPosition, const osg::Quat& cameraOrientation)
     {
         if (mArmsRoot == nullptr || !mArmsVisible)
             return;
-        // The skeleton of the first person looks along the same axes as the camera does (ahead along Y, up along Z), with
-        // its Camera1st node as the eye: it is turned as the camera is and put so that the eye is at the camera
+        // The skeleton of the first person looks along the same axes as the camera does (ahead along Y, up along Z),
+        // with its Camera1st node as the eye: it is turned as the camera is and put so that the eye is at the camera
+        // (the eye where the animation has it now: the camera follows it down while the player sneaks, see armsEyeDrop)
+        osg::Vec3f eye = mArmsEye;
+        if (mArms != nullptr)
+            if (const osg::Node* camera = mArms->getNode("Camera1st"))
+                eye = poseInArms(*camera, *mArmsRoot).getTrans();
         const osg::Quat turn = cameraOrientation * mArmsTurn;
-        const osg::Vec3d place = cameraPosition + cameraOrientation * osg::Vec3d(mArmsOffset) - turn * osg::Vec3d(mArmsEye);
+        const osg::Vec3d place = cameraPosition + cameraOrientation * osg::Vec3d(mArmsOffset) - turn * osg::Vec3d(eye);
         mArmsRoot->setMatrix(osg::Matrix::rotate(turn) * osg::Matrix::translate(place));
         ++mArmsFrames;
         // Two looks in the log (a pose that has settled, and a later one) for the first few times the arms are made
@@ -264,6 +286,16 @@ namespace OFRender
             ++logged;
             logArms();
         }
+    }
+
+    float FalloutPlayerBody::armsEyeDrop() const
+    {
+        if (mArms == nullptr || mArmsRoot == nullptr || !(mArmsVisible || mArmsKept))
+            return 0.f;
+        const osg::Node* camera = mArms->getNode("Camera1st");
+        if (camera == nullptr)
+            return 0.f;
+        return poseInArms(*camera, *mArmsRoot).getTrans().z() - mArmsEye.z();
     }
 
     void FalloutPlayerBody::logArms()

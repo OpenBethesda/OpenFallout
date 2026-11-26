@@ -7,7 +7,6 @@
 #include <components/esm3/creaturelevliststate.hpp>
 #include <components/esm3/creaturestate.hpp>
 #include <components/esm3/creaturestats.hpp>
-#include <components/esm3/custommarkerstate.hpp>
 #include <components/esm3/doorstate.hpp>
 #include <components/esm3/inventorystate.hpp>
 #include <components/esm3/npcstate.hpp>
@@ -571,27 +570,6 @@ namespace ESM
             EXPECT_EQ(state.mTopic, id("vmq01"));
             EXPECT_EQ(state.mState, 40);
             EXPECT_EQ(state.mFinished, 1);
-        }
-
-        TEST(Esm3CustomMarkerTest, keepsThePlaceTheCellAndTheNote)
-        {
-            CustomMarker record;
-            record.mWorldX = 100.f;
-            record.mWorldY = -200.f;
-            record.mCell = RefId::esm3ExteriorCell(2, -3);
-            record.mNote = "Water here";
-
-            const auto markerPtr = roundTrip(record);
-            const CustomMarker& marker = *markerPtr;
-
-            EXPECT_EQ(marker, record);
-
-            record.mNote.clear();
-            record.mCell = id("Vault 21");
-            const auto withoutNotePtr = roundTrip(record);
-            const CustomMarker& withoutNote = *withoutNotePtr;
-            EXPECT_EQ(withoutNote, record);
-            EXPECT_TRUE(withoutNote.mNote.empty());
         }
 
         TEST(Esm3AiSequenceTest, keepsEachKindOfPackageInItsOrder)

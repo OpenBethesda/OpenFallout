@@ -25,9 +25,13 @@ namespace
     using FalloutScript::DerivedStats::meleeDamage;
     using FalloutScript::DerivedStats::npcHealth;
     using FalloutScript::DerivedStats::playerHealth;
+    using FalloutScript::DerivedStats::poisonResist;
+    using FalloutScript::DerivedStats::radResist;
     using FalloutScript::DerivedStats::regeneration;
+    using FalloutScript::DerivedStats::sleepingRegeneration;
     using FalloutScript::DerivedStats::swimBreath;
     using FalloutScript::DerivedStats::swimBreathStep;
+    using FalloutScript::DerivedStats::unarmedDamage;
     namespace ActorValue = FalloutScript::ActorValue;
 
     constexpr FormId player = 0x00000014;
@@ -105,10 +109,38 @@ namespace
         EXPECT_EQ(actionPoints(settingsOf({ { "fAVDActionPointsMult", 2 } }), 5), 75);
         EXPECT_EQ(carryWeight(DerivedStatSettings(), 5), 200);
         EXPECT_EQ(carryWeight(DerivedStatSettings(), 10), 250);
-        EXPECT_EQ(meleeDamage(DerivedStatSettings(), 7), 3.5);
+        // the melee damage is in whole points (FalloutNV.exe 0x643B50 floors it): Strength 5 gives 2, 6 gives 3
+        EXPECT_EQ(meleeDamage(DerivedStatSettings(), 7), 3);
+        EXPECT_EQ(meleeDamage(DerivedStatSettings(), 5), 2);
+        EXPECT_EQ(meleeDamage(DerivedStatSettings(), 6), 3);
         EXPECT_EQ(criticalChance(DerivedStatSettings(), 5), 5);
         EXPECT_EQ(criticalChance(DerivedStatSettings(), 500), 100);
         EXPECT_EQ(criticalChance(DerivedStatSettings(), -3), 0);
+    }
+
+    TEST(FalloutScriptDerivedStatsTest, sleep_heals_by_twice_the_heal_rate_and_two_points_an_hour_more)
+    {
+        // fallout-rules.md D.R1: (healRate * fHealingRateSleepingMult + fHealingRateSleepingBase) / 3600 a second
+        EXPECT_DOUBLE_EQ(sleepingRegeneration(DerivedStatSettings(), 10, 3600), 22);
+        EXPECT_DOUBLE_EQ(sleepingRegeneration(DerivedStatSettings(), 0, 1800), 1);
+        EXPECT_DOUBLE_EQ(sleepingRegeneration(DerivedStatSettings(), 10, -5), 0);
+        const DerivedStatSettings files
+            = settingsOf({ { "fHealingRateSleepingBase", 4 }, { "fHealingRateSleepingMult", 3 } });
+        EXPECT_DOUBLE_EQ(sleepingRegeneration(files, 5, 3600), 19);
+    }
+
+    TEST(FalloutScriptDerivedStatsTest, the_unarmed_damage_and_the_resistances_follow_the_skill_and_the_endurance)
+    {
+        // fallout-rules.md E.1.6 and E.1.7: Unarmed 15 gives 1.25; Endurance 5 gives 20 poison and 8 radiation
+        EXPECT_DOUBLE_EQ(unarmedDamage(DerivedStatSettings(), 15), 1.25);
+        EXPECT_EQ(poisonResist(DerivedStatSettings(), 5), 20);
+        EXPECT_EQ(radResist(DerivedStatSettings(), 5), 8);
+        const DerivedStatSettings files
+            = settingsOf({ { "fAVDUnarmedDamageBase", 2 }, { "fAVDUnarmedDamageMult", 0.15 },
+                { "fAVDPoisonResistEnduranceOffset", 0 }, { "fAVDRadResistEnduranceMult", 3 } });
+        EXPECT_DOUBLE_EQ(unarmedDamage(files, 10), 3.5);
+        EXPECT_EQ(poisonResist(files, 5), 25);
+        EXPECT_EQ(radResist(files, 5), 12);
     }
 
     // Records that work the derived values out the way the host does, from the attributes the actor value store tells
@@ -122,8 +154,8 @@ namespace
             return true;
         }
 
-        std::optional<double> derivedValue(
-            FormId actor, int value, const std::function<double(int)>& permanent) override
+        std::optional<double> derivedValue(FormId actor, int value, const std::function<double(int)>& permanent,
+            const std::function<double(int)>& /*current*/) override
         {
             ++mAsked;
             switch (value)
@@ -135,10 +167,8 @@ namespace
                 case ActorValue::actionPoints:
                     return actionPoints(DerivedStatSettings(), permanent(ActorValue::agility));
                 case ActorValue::healRate:
-                    // Only the player's is worked out
-                    if (actor == player)
-                        return healRate(DerivedStatSettings(), permanent(ActorValue::endurance));
-                    return std::nullopt;
+                    // Everyone's is worked out, as the executables do (every actor heals by it)
+                    return healRate(DerivedStatSettings(), permanent(ActorValue::endurance));
                 default:
                     return std::nullopt;
             }
@@ -175,7 +205,7 @@ namespace
         EXPECT_EQ(values.current(player, ActorValue::health), 100 + 11 * 20 + 2 * 5);
     }
 
-    TEST(FalloutScriptDerivedStatsTest, the_heal_rate_of_the_player_follows_its_endurance)
+    TEST(FalloutScriptDerivedStatsTest, the_heal_rate_of_an_actor_follows_its_endurance)
     {
         DerivingRecords records;
         ActorValues values(&records);
@@ -187,8 +217,8 @@ namespace
         EXPECT_EQ(values.current(player, ActorValue::healRate), 5);
         values.setBase(player, ActorValue::endurance, 9);
         EXPECT_EQ(values.current(player, ActorValue::healRate), 10);
-        // Another character has the value that is set for it, none otherwise
-        EXPECT_EQ(values.current(guard, ActorValue::healRate), 0);
+        // Another character works it out from its own endurance (8), and a value set for it replaces that
+        EXPECT_EQ(values.current(guard, ActorValue::healRate), 5);
         values.setBase(guard, ActorValue::healRate, 3);
         EXPECT_EQ(values.current(guard, ActorValue::healRate), 3);
     }

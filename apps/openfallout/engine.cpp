@@ -1,5 +1,6 @@
 #include "engine.hpp"
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <future>
@@ -15,7 +16,10 @@
 #include <components/debug/debuglog.hpp>
 #include <components/debug/gldebug.hpp>
 
+#include <components/esm3/defaultgmsts.hpp>
+
 #include <components/misc/rng.hpp>
+#include <components/misc/strings/algorithm.hpp>
 #include <components/misc/thread.hpp>
 
 #include <components/vfs/filesystemarchive.hpp>
@@ -264,7 +268,6 @@ bool OF::Engine::frame(unsigned frameNumber, float frametime)
                 {
                     double hours = (frametime * mWorld->getTimeManager()->getGameTimeScale()) / 3600.0;
                     mWorld->advanceTime(hours, true);
-                    mWorld->rechargeItems(frametime, true);
                 }
             }
         }
@@ -277,13 +280,8 @@ bool OF::Engine::frame(unsigned frameNumber, float frametime)
             {
                 mMechanicsManager->update(frametime, paused);
             }
-
-            if (mStateManager->getState() == OFBase::StateManager::State_Running)
-            {
-                OFWorld::Ptr player = mWorld->getPlayerPtr();
-                if (!paused && player.getClass().getCreatureStats(player).isDead())
-                    mStateManager->endGame();
-            }
+            // (the death of the player is the Fallout scripts' own: the save reloads, or the main menu opens, as
+            // files/data/scripts/omw/falloutdeath.lua decides)
         }
 
         // update physics
@@ -886,6 +884,16 @@ void OF::Engine::prepareEngine()
         const ESM::GameSetting* res = gmst->search(gmstName);
         if (res && res->mValue.getType() == ESM::VT_String)
             return &res->mValue.getString();
+        // The words of the Morrowind interface that the menus of the engine still ask for (sYes, sOptions and the
+        // like): the games of Fallout have none of them, and they were empty until 4a took the stand-in records away
+        static const std::string empty;
+        const auto isMorrowindWord = [gmstName](const char* const* names, std::size_t count) {
+            return std::any_of(names, names + count,
+                [gmstName](const char* name) { return Misc::StringUtils::ciEqual(gmstName, name); });
+        };
+        if (isMorrowindWord(ESM::DefaultGmsts::Strings, ESM::DefaultGmsts::StringCount)
+            || isMorrowindWord(ESM::DefaultGmsts::OptionalStrings, ESM::DefaultGmsts::OptionalStringCount))
+            return &empty;
         if (misses.emplace(gmstName).second)
             Log(Debug::Error) << "GMST " << gmstName << " not found";
         return nullptr;

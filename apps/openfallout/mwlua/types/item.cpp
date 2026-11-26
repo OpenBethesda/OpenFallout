@@ -1,6 +1,5 @@
 #include <sol/sol.hpp>
 
-#include "../../mwmechanics/spellutil.hpp"
 #include "../../mwworld/class.hpp"
 
 #include "../itemdata.hpp"

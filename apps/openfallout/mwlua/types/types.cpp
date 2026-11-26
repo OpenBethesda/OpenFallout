@@ -113,9 +113,8 @@ namespace OFLua
     {
         if (ref == nullptr)
             throw std::runtime_error("Can't get type name from an empty object.");
+        // (the player's class answers REC_INTERNAL_PLAYER: OFClass::FalloutPlayer)
         const ESM::RefId& id = ref->mRef.getRefId();
-        if (id == "Player")
-            return ESM::REC_INTERNAL_PLAYER;
         if (Misc::ResourceHelpers::isHiddenMarker(id))
             return ESM::REC_INTERNAL_MARKER;
         return ref->getType();
@@ -210,9 +209,9 @@ namespace OFLua
             addType(ObjectTypeName::Lockable, { ESM::REC_CONT, ESM::REC_DOOR, ESM::REC_CONT4, ESM::REC_DOOR4 }));
 
         addBodyPartBindings(addType(ObjectTypeName::BodyPart, { ESM::REC_BODY }), context);
-        addCreatureBindings(addType(ObjectTypeName::Creature, { ESM::REC_CREA }, ObjectTypeName::Actor), context);
-        addNpcBindings(
-            addType(ObjectTypeName::NPC, { ESM::REC_INTERNAL_PLAYER, ESM::REC_NPC_ }, ObjectTypeName::Actor), context);
+        // (the NPC and Creature types of Morrowind keep only what the actor type has: the player is the one NPC)
+        addType(ObjectTypeName::Creature, { ESM::REC_CREA }, ObjectTypeName::Actor);
+        addType(ObjectTypeName::NPC, { ESM::REC_INTERNAL_PLAYER, ESM::REC_NPC_ }, ObjectTypeName::Actor);
         addPlayerBindings(addType(ObjectTypeName::Player, { ESM::REC_INTERNAL_PLAYER }, ObjectTypeName::NPC), context);
 
         addLevelledCreatureBindings(addType(ObjectTypeName::LevelledCreature, { ESM::REC_LEVC }), context);

@@ -52,15 +52,6 @@ Example:
 
     core.sendGlobalEvent('UseItem', {object = potion, actor = player, force = true})
 
-**ModifyStat**
-
-Modify the corresponding stat.
-
-.. code-block:: Lua
-
-    -- Consume 10 magicka
-    actor:sendEvent('ModifyStat', {stat = 'magicka', amount = -10})
-
 **AddVfx**
 
 Calls the corresponding method in openfallout.animation
@@ -81,45 +72,6 @@ Calls the corresponding function in openw.core on the target. Will use core.soun
 
 .. code-block:: Lua
     actor:sendEvent('PlaySound3d', {sound = 'Open Lock'})
-
-**BreakInvisibility**
-
-Forces the actor to lose all active invisibility effects.
-
-**Unequip**
-
-Any script can send ``Unequip`` events with the argument ``item`` or ``slot`` to any actor, to make that actor unequip an item.
-
-The following two examples are equivalent, except the ``item`` variant is guaranteed to only unequip the specified item and won't unequip a different item if the actor's equipment changed during the same frame:
-
-.. code-block:: Lua
-
-    local item = Actor.getEquipment(actor, Actor.EQUIPMENT_SLOT.CarriedLeft)
-    if item then
-        actor:sendEvent('Unequip', {item = item})
-    end
-
-.. code-block:: Lua
-
-    actor:sendEvent('Unequip', {slot = Actor.EQUIPMENT_SLOT.CarriedLeft})
-
-Item events
------------
-
-**ModifyItemCondition**
-
-Any script can send ``ModifyItemCondition`` events to global to adjust the condition of an item.
-
-Example:
-
-.. code-block:: Lua
-
-    local item = Actor.getEquipment(actor, Actor.EQUIPMENT_SLOT.CarriedLeft)
-    if item then
-        -- Reduce condition by 1
-        -- Note that actor should be included, if applicable, to allow forcibly unequipping items whose condition is reduced to 0
-        core.sendGlobalEvent('ModifyItemCondition', {actor = self, item = item, amount = -1})
-    end
 
 UI events
 ---------

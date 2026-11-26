@@ -37,6 +37,7 @@ local topicWaited, emptyWaited = 0, 0
 -- How often each topic was picked, by the character and the topic
 local picks = {}
 local lastStatus = 0
+local sinceMode = 0
 local lockSerial, lockWaited, lockTries = nil, 0, 0
 local terminalWaited, terminalSteps = 0, 0
 -- How often each line of each menu was picked at the terminal that is open, by the menu (its name and its lines) and the number
@@ -370,6 +371,12 @@ return {
             pickTopic(dt)
             answerScreens(dt)
             shoot(dt)
+            -- the probe writes the fixture saves only while no screen is open (a save while a terminal is open leaves the game in that mode)
+            sinceMode = sinceMode + dt
+            if sinceMode >= 1 then
+                sinceMode = 0
+                core.sendGlobalEvent('AutoplayMode', { open = I.UI.getMode() ~= nil })
+            end
             lastStatus = lastStatus + dt
             if lastStatus >= 5 then
                 lastStatus = 0

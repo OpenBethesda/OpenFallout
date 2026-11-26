@@ -60,6 +60,7 @@ namespace OFPhysics
     class HeightField;
     class Object;
     class Actor;
+    struct CharacterShape;
     class PhysicsTaskScheduler;
     class Projectile;
     enum ScriptedCollisionType : char;
@@ -106,7 +107,6 @@ namespace OFPhysics
         unsigned int mStuckFrames;
         const bool mFlying;
         const bool mWasOnGround;
-        const bool mIsAquatic;
         const bool mWaterCollision;
         const bool mSkipCollisionDetection;
         const bool mIsPlayer;
@@ -120,13 +120,6 @@ namespace OFPhysics
         const btCollisionObject* mCaster;
         const btCollisionObject* mCollisionObject;
         Projectile* mProjectile;
-    };
-
-    struct WorldFrameData
-    {
-        WorldFrameData();
-        bool mIsInStorm;
-        osg::Vec3f mStormDirection;
     };
 
     template <class Ptr, class FrameData>
@@ -174,7 +167,8 @@ namespace OFPhysics
 
         void addObject(const OFWorld::Ptr& ptr, VFS::Path::NormalizedView mesh, osg::Quat rotation,
             int collisionType = CollisionType_World);
-        void addActor(const OFWorld::Ptr& ptr, VFS::Path::NormalizedView mesh);
+        /// The player's body on character physics (moved by the movement solver)
+        void addCharacter(const OFWorld::Ptr& ptr, const CharacterShape& shape);
 
         /// A solid body for a person whose class has no creature stats, so it is not an actor of the physics: an
         /// upright cylinder that stands on the position of the object (the half extents are those of its box). It

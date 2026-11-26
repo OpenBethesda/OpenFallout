@@ -20,7 +20,7 @@ namespace osg
 
 namespace OFRender
 {
-    class NpcAnimation;
+    class FalloutPlayerAnimation;
 
     /// \brief Camera control
     class Camera
@@ -91,7 +91,7 @@ namespace OFRender
         float getCameraDistance() const { return mCameraDistance; }
         void setPreferredCameraDistance(float v) { mPreferredCameraDistance = v; }
 
-        void setAnimation(NpcAnimation* anim);
+        void setAnimation(FalloutPlayerAnimation* anim);
 
         osg::Vec3d getTrackedPosition() const { return mTrackedPosition; }
         const osg::Vec3d& getPosition() const { return mPosition; }
@@ -122,7 +122,7 @@ namespace OFRender
 
         osg::ref_ptr<osg::Camera> mCamera;
 
-        NpcAnimation* mAnimation;
+        FalloutPlayerAnimation* mAnimation;
 
         // Always 'true' if mMode == `FirstPerson`. Also it is 'true' in `Vanity` or `Preview` modes if
         // the camera should return to `FirstPerson` view after it.

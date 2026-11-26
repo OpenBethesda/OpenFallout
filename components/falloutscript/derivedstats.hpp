@@ -27,6 +27,14 @@ namespace FalloutScript
         double mMeleeDamageStrengthOffset = 0; // fAVDMeleeDamageStrengthOffset: added to the strength
         double mCritLuckBase = 0; // fAVDCritLuckBase
         double mCritLuckMult = 1; // fAVDCritLuckMult
+        double mUnarmedDamageBase = 0.5; // fAVDUnarmedDamageBase
+        double mUnarmedDamageMult = 0.05; // fAVDUnarmedDamageMult: what each point of the Unarmed skill adds
+        double mPoisonResistEnduranceOffset = -1; // fAVDPoisonResistEnduranceOffset: added to the endurance
+        double mPoisonResistEnduranceMult = 5; // fAVDPoisonResistEnduranceMult
+        double mRadResistEnduranceOffset = -1; // fAVDRadResistEnduranceOffset: added to the endurance
+        double mRadResistEnduranceMult = 2; // fAVDRadResistEnduranceMult
+        double mHealingRateSleepingBase = 2; // fHealingRateSleepingBase: health an hour of sleep gives on its own
+        double mHealingRateSleepingMult = 2; // fHealingRateSleepingMult: what sleep multiplies the heal rate by
         double mSwimBreathBase = 10; // fActorSwimBreathBase: the seconds that a character holds its breath under water
         double mSwimBreathMult = 0.5; // fActorSwimBreathMult: what each point of the stat adds to them
         double mSwimBreathDamage = 0.2; // fActorSwimBreathDamage: the share of its health that it loses for each second
@@ -51,8 +59,14 @@ namespace FalloutScript
         double npcHealth(const DerivedStatSettings& settings, double baseHealth, double endurance, int level);
         double actionPoints(const DerivedStatSettings& settings, double agility);
         double carryWeight(const DerivedStatSettings& settings, double strength);
-        /// What a hit with a melee weapon (and the hands) adds to its damage
+        /// What a hit with a melee weapon (and the hands) adds to its damage: whole points, none below 0 (FalloutNV.exe
+        /// 0x643B50 floors it)
         double meleeDamage(const DerivedStatSettings& settings, double strength);
+        /// What a blow with the hands adds to its damage, from the Unarmed skill (FalloutNV.exe 0x643ED0)
+        double unarmedDamage(const DerivedStatSettings& settings, double unarmed);
+        /// The resistances in percent that the endurance gives (FalloutNV.exe 0x643E40)
+        double poisonResist(const DerivedStatSettings& settings, double endurance);
+        double radResist(const DerivedStatSettings& settings, double endurance);
         /// The chance of a critical hit in percent
         double criticalChance(const DerivedStatSettings& settings, double luck);
 
@@ -64,6 +78,9 @@ namespace FalloutScript
         /// the heal rate over 3600 for each second of the simulation (FalloutNV.exe 0x648B00 and 0x88B510, item 17 of
         /// m13-exe-reads.md), so a game hour is 3600 over the time scale of those seconds. A negative rate gives none.
         double regeneration(double healRate, double seconds);
+        /// The same while the character sleeps: the heal rate times fHealingRateSleepingMult, plus
+        /// fHealingRateSleepingBase, over 3600 for each second (FalloutNV.exe 0x648B00; fallout-rules.md D.R1)
+        double sleepingRegeneration(const DerivedStatSettings& settings, double healRate, double seconds);
 
         /// How far under water a character has to be for the breath to run out, as a share of its height: the head is
         /// under the water when the point at that share of the height is (FalloutNV.exe 0x889930, Mac rounds 12BI B and

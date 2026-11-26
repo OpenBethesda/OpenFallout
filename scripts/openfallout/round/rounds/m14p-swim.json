@@ -7,6 +7,9 @@
   "framerate": 30,
   "limit": 200,
   "settings": { "Sound": { "master volume": "0" } },
+  "expect_log": [
+    "ROUND\\tnote\\twater jump\\tapex=[0-9.]+\\tok"
+  ],
   "env": { "OPENFALLOUT_HEADLESS_SOUND": "1" },
   "variants": [ { "name": "plain" } ]
 }

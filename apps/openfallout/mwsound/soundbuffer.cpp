@@ -22,23 +22,14 @@ namespace OFSound
         constexpr VFS::Path::NormalizedView soundDir("sound");
         constexpr VFS::Path::ExtensionView mp3("mp3");
 
-        struct AudioParams
-        {
-            float mAudioDefaultMinDistance;
-            float mAudioDefaultMaxDistance;
-            float mAudioMinDistanceMult;
-            float mAudioMaxDistanceMult;
-        };
-
-        AudioParams makeAudioParams(const OFWorld::Store<ESM::GameSetting>& settings)
-        {
-            AudioParams params;
-            params.mAudioDefaultMinDistance = settings.find("fAudioDefaultMinDistance")->mValue.getFloat();
-            params.mAudioDefaultMaxDistance = settings.find("fAudioDefaultMaxDistance")->mValue.getFloat();
-            params.mAudioMinDistanceMult = settings.find("fAudioMinDistanceMult")->mValue.getFloat();
-            params.mAudioMaxDistanceMult = settings.find("fAudioMaxDistanceMult")->mValue.getFloat();
-            return params;
-        }
+        // Fallout has no fAudio* settings: each SOUN record carries its own attenuation, which FalloutSounds applies
+        // when the sound plays (fallout-rules.md D.S4). A sound played by its file name alone, or one of the Morrowind
+        // sound records, has no range of its own. It keeps the distances the engine gave it before the Morrowind
+        // settings went (5 and 40, scaled by 20 and 50: 100 and 2000 units), so nothing that plays changes.
+        constexpr float sDefaultMinDistance = 100.f;
+        constexpr float sDefaultMaxDistance = 2000.f;
+        constexpr float sRecordMinDistanceMult = 20.f;
+        constexpr float sRecordMaxDistanceMult = 50.f;
     }
 
     SoundBufferPool::SoundBufferPool(SoundOutput& output)
@@ -157,15 +148,9 @@ namespace OFSound
 
     SoundBuffer* SoundBufferPool::insertSound(VFS::Path::NormalizedView fileName)
     {
-        static const AudioParams audioParams
-            = makeAudioParams(OFBase::Environment::get().getESMStore()->get<ESM::GameSetting>());
-
-        float volume = 1.f;
-        float min = std::max(audioParams.mAudioDefaultMinDistance * audioParams.mAudioMinDistanceMult, 1.f);
-        float max = std::max(min, audioParams.mAudioDefaultMaxDistance * audioParams.mAudioMaxDistanceMult);
-
-        min = std::max(min, 1.0f);
-        max = std::max(min, max);
+        const float volume = 1.f;
+        const float min = sDefaultMinDistance;
+        const float max = sDefaultMaxDistance;
 
         SoundBuffer& sfx = mSoundBuffers.emplace_back(fileName, volume, min, max);
 
@@ -175,20 +160,19 @@ namespace OFSound
 
     SoundBuffer* SoundBufferPool::insertSound(const ESM::RefId& soundId, const ESM::Sound& sound)
     {
-        static const AudioParams audioParams
-            = makeAudioParams(OFBase::Environment::get().getESMStore()->get<ESM::GameSetting>());
-
         float volume = static_cast<float>(std::pow(10.0, (sound.mData.mVolume / 255.0 * 3348.0 - 3348.0) / 2000.0));
         float min = sound.mData.mMinRange;
         float max = sound.mData.mMaxRange;
         if (min == 0 && max == 0)
         {
-            min = audioParams.mAudioDefaultMinDistance;
-            max = audioParams.mAudioDefaultMaxDistance;
+            min = sDefaultMinDistance;
+            max = sDefaultMaxDistance;
         }
-
-        min *= audioParams.mAudioMinDistanceMult;
-        max *= audioParams.mAudioMaxDistanceMult;
+        else
+        {
+            min *= sRecordMinDistanceMult;
+            max *= sRecordMaxDistanceMult;
+        }
         min = std::max(min, 1.0f);
         max = std::max(min, max);
 

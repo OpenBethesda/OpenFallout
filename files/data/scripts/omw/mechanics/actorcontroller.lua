@@ -1,13 +1,11 @@
 local self = require('openfallout.self')
 local core = require('openfallout.core')
-local types = require('openfallout.types')
-local Actor = types.Actor
+local anim = require('openfallout.animation')
 
 return {
     eventHandlers = {
-        ModifyStat = function(data)
-            local stat = Actor.stats.dynamic[data.stat](self)
-            stat.current = stat.current + data.amount
+        AddVfx = function(data)
+            anim.addVfx(self, data.model, data.options)
         end,
         PlaySound3d = function(data)
             if data.sound then
@@ -15,22 +13,6 @@ return {
             else
                 core.sound.playSoundFile3d(data.file, self, data.options)
             end
-        end,
-        BreakInvisibility = function(data)
-            Actor.activeEffects(self):remove(core.magic.EFFECT_TYPE.Invisibility)
-        end,
-        Unequip = function(data)
-            local equipment = Actor.getEquipment(self)
-            if data.item then
-                for slot, item in pairs(equipment) do
-                    if item == data.item then
-                        equipment[slot] = nil
-                    end
-                end
-            elseif data.slot then
-                equipment[data.slot] = nil
-            end
-            Actor.setEquipment(self, equipment)
         end,
     },
 }

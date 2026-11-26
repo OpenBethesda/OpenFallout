@@ -1,97 +1,47 @@
 #include "actor.hpp"
 
-#include <BulletCollision/CollisionShapes/btCylinderShape.h>
+#include <BulletCollision/CollisionShapes/btCapsuleShape.h>
 
 #include <components/debug/debuglog.hpp>
 #include <components/misc/convert.hpp>
-#include <components/resource/bulletshape.hpp>
 #include <components/sceneutil/positionattitudetransform.hpp>
 
-#include "../mwmechanics/creaturestats.hpp"
 #include "../mwworld/class.hpp"
 
 #include "collisiontype.hpp"
 #include "mtphysics.hpp"
 #include "trace.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace OFPhysics
 {
 
-    Actor::Actor(const OFWorld::Ptr& ptr, const Resource::BulletShape& shape, PhysicsTaskScheduler* scheduler,
-        bool canWaterWalk, DetourNavigator::CollisionShapeType collisionShapeType)
+    Actor::Actor(const OFWorld::Ptr& ptr, const CharacterShape& shape, PhysicsTaskScheduler* scheduler)
         : PtrHolder(ptr, ptr.getRefData().getPosition().asVec3())
         , mStandingOnPtr(nullptr)
-        , mCanWaterWalk(canWaterWalk)
+        , mCanWaterWalk(false)
         , mWalkingOnWater(false)
-        , mMeshTranslation(shape.mCollisionBox.mCenter)
-        , mOriginalHalfExtents(shape.mCollisionBox.mExtents)
+        , mMeshTranslation(0.f, 0.f, shape.mHalfHeight)
+        , mOriginalHalfExtents(shape.mRadius, shape.mRadius, shape.mHalfHeight)
         , mStuckFrames(0)
         , mLastStuckPosition{ 0, 0, 0 }
         , mForce(0.f, 0.f, 0.f)
-        , mOnGround(ptr.getClass().getCreatureStats(ptr).getFallHeight() == 0)
+        , mOnGround(true)
         , mOnSlope(false)
         , mInternalCollisionMode(true)
         , mExternalCollisionMode(true)
         , mActive(false)
         , mTaskScheduler(scheduler)
     {
-        // We can not create actor without collisions - he will fall through the ground.
-        // In this case we should autogenerate collision box based on mesh shape
-        // (NPCs have bodyparts and use a different approach)
-        if (!ptr.getClass().isNpc() && mOriginalHalfExtents.length2() == 0.f)
-        {
-            if (shape.mCollisionShape)
-            {
-                btTransform transform;
-                transform.setIdentity();
-                btVector3 min;
-                btVector3 max;
-
-                shape.mCollisionShape->getAabb(transform, min, max);
-                mOriginalHalfExtents.x() = static_cast<float>((max[0] - min[0]) / 2.f);
-                mOriginalHalfExtents.y() = static_cast<float>((max[1] - min[1]) / 2.f);
-                mOriginalHalfExtents.z() = static_cast<float>((max[2] - min[2]) / 2.f);
-
-                mMeshTranslation = osg::Vec3f(0.f, 0.f, mOriginalHalfExtents.z());
-            }
-
-            if (mOriginalHalfExtents.length2() == 0.f)
-                Log(Debug::Error) << "Error: Failed to calculate bounding box for actor \""
-                                  << ptr.getCellRef().getRefId() << "\".";
-        }
-
-        const btVector3 halfExtents = Misc::Convert::toBullet(mOriginalHalfExtents);
-        float extRatio = 0.f;
-        if (mOriginalHalfExtents.y() != 0.f)
-            extRatio = mOriginalHalfExtents.x() / mOriginalHalfExtents.y();
-
-        if (mMeshTranslation.x() == 0.0 && mMeshTranslation.y() == 0.0 && extRatio >= 1.f / 1.1f && extRatio <= 1.1f)
-        {
-            switch (collisionShapeType)
-            {
-                case DetourNavigator::CollisionShapeType::Aabb:
-                    mShape = std::make_unique<btBoxShape>(halfExtents);
-                    mRotationallyInvariant = true;
-                    break;
-                case DetourNavigator::CollisionShapeType::RotatingBox:
-                    mShape = std::make_unique<btBoxShape>(halfExtents);
-                    mRotationallyInvariant = false;
-                    break;
-                case DetourNavigator::CollisionShapeType::Cylinder:
-                    mShape = std::make_unique<btCylinderShapeZ>(halfExtents);
-                    mRotationallyInvariant = true;
-                    break;
-            }
-            mCollisionShapeType = collisionShapeType;
-        }
-        else
-        {
-            mShape = std::make_unique<btBoxShape>(halfExtents);
-            mRotationallyInvariant = false;
-            mCollisionShapeType = DetourNavigator::CollisionShapeType::RotatingBox;
-        }
+        // The capsule: its cylinder is the height less the two half spheres (a radius larger than the half height
+        // makes a sphere). It turns with nothing, and the navigator takes it for the cylinder of the same size.
+        const float cylinder = std::max(0.f, 2.f * (shape.mHalfHeight - shape.mRadius));
+        const float radius = std::min(shape.mRadius, shape.mHalfHeight);
+        mShape = std::make_unique<btCapsuleShapeZ>(radius, cylinder);
+        mRotationallyInvariant = true;
+        mCollisionShapeType = DetourNavigator::CollisionShapeType::Cylinder;
 
         mConvexShape = static_cast<btConvexShape*>(mShape.get());
         mConvexShape->setMargin(0.001); // make sure bullet isn't using the huge default convex shape margin of 0.04
@@ -164,6 +114,11 @@ namespace OFPhysics
         mPositionOffset = osg::Vec3f();
         mStandingOnPtr = nullptr;
         mSkipSimulation = true;
+        // A placed actor starts its count of stuck frames again. The unstuck step gives up after 10 frames stuck at one
+        // place (MovementSolver::unstuck), and without this a teleport back to that place left the actor stuck for
+        // good.
+        mStuckFrames = 0;
+        mLastStuckPosition = osg::Vec3f();
     }
 
     void Actor::setSimulationPosition(const osg::Vec3f& position)

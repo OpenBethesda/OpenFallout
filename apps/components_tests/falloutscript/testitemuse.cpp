@@ -166,9 +166,9 @@ namespace
         // The same for a skill book, which teaches nothing when it is gone
         f.mState.removeItem(thePlayer, guns, 1);
         f.mRecords.mWhileUsing = [&f] { f.mState.removeItem(thePlayer, guns, 1); };
-        const double skill = f.mValues.base(thePlayer, smallGuns);
+        const double skill = f.mValues.permanent(thePlayer, smallGuns);
         EXPECT_EQ(f.mUse.use(thePlayer, guns).mOutcome, ItemUse::Outcome::Nothing);
-        EXPECT_EQ(f.mValues.base(thePlayer, smallGuns), skill);
+        EXPECT_EQ(f.mValues.permanent(thePlayer, smallGuns), skill);
     }
 
     TEST(FalloutScriptItemUseTest, aPoisonThatTakesAllTheHealthKills)
@@ -641,7 +641,7 @@ namespace
         EXPECT_EQ(result.mOutcome, ItemUse::Outcome::Read);
         EXPECT_EQ(result.mSkill, smallGuns);
         EXPECT_EQ(result.mGained, 1);
-        EXPECT_EQ(f.mValues.base(thePlayer, smallGuns), 41);
+        EXPECT_EQ(f.mValues.permanent(thePlayer, smallGuns), 41);
         EXPECT_EQ(f.mState.itemCount(thePlayer, guns), 1);
         EXPECT_EQ(f.mProgress.miscStat(15), 1);
     }
@@ -653,13 +653,13 @@ namespace
         f.mValues.setBase(thePlayer, smallGuns, 98);
         const ItemUse::Result first = f.mUse.use(thePlayer, guns);
         EXPECT_EQ(first.mGained, 3);
-        EXPECT_EQ(f.mValues.base(thePlayer, smallGuns), 101);
         // The skill is read as 100 at most, so the book that is read now still adds to what is stored
         EXPECT_EQ(f.mValues.current(thePlayer, smallGuns), 100);
         const ItemUse::Result second = f.mUse.use(thePlayer, guns);
         EXPECT_EQ(second.mOutcome, ItemUse::Outcome::Read);
         EXPECT_EQ(second.mGained, 3);
-        EXPECT_EQ(f.mValues.base(thePlayer, smallGuns), 104);
+        // The books are a permanent modifier of 6 on top of the base
+        EXPECT_EQ(f.mValues.modifier(thePlayer, smallGuns), 6);
         EXPECT_EQ(f.mState.itemCount(thePlayer, guns), 0);
     }
 
@@ -683,7 +683,7 @@ namespace
                 reader.join();
 
             ASSERT_EQ(f.mState.itemCount(thePlayer, guns), 0) << "round " << round;
-            ASSERT_EQ(f.mValues.base(thePlayer, smallGuns), 42) << "round " << round;
+            ASSERT_EQ(f.mValues.permanent(thePlayer, smallGuns), 42) << "round " << round;
         }
     }
 
@@ -707,7 +707,7 @@ namespace
         f.mValues.setBase(victim, smallGuns, 40);
         EXPECT_EQ(f.mUse.use(victim, guns).mOutcome, ItemUse::Outcome::Nothing);
         EXPECT_EQ(f.mUse.use(victim, novel).mOutcome, ItemUse::Outcome::Nothing);
-        EXPECT_EQ(f.mValues.base(victim, smallGuns), 40);
+        EXPECT_EQ(f.mValues.permanent(victim, smallGuns), 40);
         EXPECT_EQ(f.mState.itemCount(victim, guns), 1);
         EXPECT_EQ(f.mProgress.miscStat(15), 0);
     }
@@ -721,14 +721,14 @@ namespace
         const ItemUse::Result refused = f.mUse.use(thePlayer, guns);
         EXPECT_EQ(refused.mOutcome, ItemUse::Outcome::Refused);
         EXPECT_EQ(refused.mGained, 0);
-        EXPECT_EQ(f.mValues.base(thePlayer, smallGuns), 40);
+        EXPECT_EQ(f.mValues.permanent(thePlayer, smallGuns), 40);
         EXPECT_EQ(f.mState.itemCount(thePlayer, guns), 2);
         EXPECT_EQ(f.mProgress.miscStat(15), 0);
         // A book with no skill does nothing in a fight as well, with no refusal
         EXPECT_EQ(f.mUse.use(thePlayer, novel).mOutcome, ItemUse::Outcome::Read);
         fighting = false;
         EXPECT_EQ(f.mUse.use(thePlayer, guns).mOutcome, ItemUse::Outcome::Read);
-        EXPECT_EQ(f.mValues.base(thePlayer, smallGuns), 41);
+        EXPECT_EQ(f.mValues.permanent(thePlayer, smallGuns), 41);
         EXPECT_EQ(f.mProgress.miscStat(15), 1);
     }
 

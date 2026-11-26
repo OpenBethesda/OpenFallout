@@ -12,10 +12,8 @@
 #include "../mwworld/ptr.hpp"
 
 #include "animation.hpp"
-#include "creatureanimation.hpp"
 #include "esm4creatureanimation.hpp"
 #include "esm4npcanimation.hpp"
-#include "npcanimation.hpp"
 #include "vismask.hpp"
 
 namespace OFRender
@@ -92,51 +90,14 @@ namespace OFRender
         mObjects.emplace(ptr.mRef, std::move(anim));
     }
 
-    void Objects::insertCreature(const OFWorld::Ptr& ptr, const std::string& mesh, bool weaponsShields)
-    {
-        insertBegin(ptr);
-        ptr.getRefData().getBaseNode()->setNodeMask(Mask_Actor);
-
-        bool animated = true;
-        std::string animationMesh
-            = Misc::ResourceHelpers::correctActorModelPath(VFS::Path::toNormalized(mesh), mResourceSystem->getVFS());
-        if (animationMesh == mesh && Misc::StringUtils::ciEndsWith(animationMesh, ".nif"))
-            animated = false;
-
-        // CreatureAnimation
-        osg::ref_ptr<Animation> anim;
-
-        if (weaponsShields)
-            anim = new CreatureWeaponAnimation(ptr, animationMesh, mResourceSystem, animated);
-        else
-            anim = new CreatureAnimation(ptr, animationMesh, mResourceSystem, animated);
-
-        if (mObjects.emplace(ptr.mRef, anim).second)
-            ptr.getClass().getContainerStore(ptr).setContListener(static_cast<ActorAnimation*>(anim.get()));
-    }
-
     void Objects::insertNPC(const OFWorld::Ptr& ptr)
     {
         insertBegin(ptr);
         ptr.getRefData().getBaseNode()->setNodeMask(Mask_Actor);
 
-        if (ptr.getType() == ESM::REC_NPC_4)
-        {
-            osg::ref_ptr<ESM4NpcAnimation> anim(
-                new ESM4NpcAnimation(ptr, osg::ref_ptr<osg::Group>(ptr.getRefData().getBaseNode()), mResourceSystem));
-            mObjects.emplace(ptr.mRef, anim);
-        }
-        else
-        {
-            osg::ref_ptr<NpcAnimation> anim(
-                new NpcAnimation(ptr, osg::ref_ptr<osg::Group>(ptr.getRefData().getBaseNode()), mResourceSystem));
-
-            if (mObjects.emplace(ptr.mRef, anim).second)
-            {
-                ptr.getClass().getInventoryStore(ptr).setInvListener(anim.get());
-                ptr.getClass().getInventoryStore(ptr).setContListener(anim.get());
-            }
-        }
+        osg::ref_ptr<ESM4NpcAnimation> anim(
+            new ESM4NpcAnimation(ptr, osg::ref_ptr<osg::Group>(ptr.getRefData().getBaseNode()), mResourceSystem));
+        mObjects.emplace(ptr.mRef, anim);
     }
 
     void Objects::insertESM4Creature(const OFWorld::Ptr& ptr)
@@ -161,14 +122,6 @@ namespace OFRender
             mUnrefQueue.push(std::move(iter->second));
             mObjects.erase(iter);
 
-            if (ptr.getClass().isActor())
-            {
-                if (ptr.getClass().hasInventoryStore(ptr))
-                    ptr.getClass().getInventoryStore(ptr).setInvListener(nullptr);
-
-                ptr.getClass().getContainerStore(ptr).setContListener(nullptr);
-            }
-
             ptr.getRefData().getBaseNode()->getParent(0)->removeChild(ptr.getRefData().getBaseNode());
 
             ptr.getRefData().setBaseNode(nullptr);
@@ -184,13 +137,6 @@ namespace OFRender
             OFWorld::Ptr ptr = iter->second->getPtr();
             if (ptr.getCell() == store)
             {
-                if (ptr.getClass().isActor() && ptr.getRefData().getCustomData())
-                {
-                    if (ptr.getClass().hasInventoryStore(ptr))
-                        ptr.getClass().getInventoryStore(ptr).setInvListener(nullptr);
-                    ptr.getClass().getContainerStore(ptr).setContListener(nullptr);
-                }
-
                 iter->second->removeFromScene();
                 mUnrefQueue.push(std::move(iter->second));
                 iter = mObjects.erase(iter);

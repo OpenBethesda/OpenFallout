@@ -168,7 +168,6 @@ namespace OFInput
 
     BindingsManager::BindingsManager(const std::filesystem::path& userFile, bool userFileExists)
         : mUserFile(userFile)
-        , mDragDrop(false)
     {
         const auto file = userFileExists ? userFile : std::filesystem::path();
         mInputBinder = std::make_unique<InputControlSystem>(file);
@@ -198,11 +197,6 @@ namespace OFInput
         {
             mInputBinder->getChannel(i)->addListener(mListener.get());
         }
-    }
-
-    void BindingsManager::setDragDrop(bool dragDrop)
-    {
-        mDragDrop = dragDrop;
     }
 
     BindingsManager::~BindingsManager()
@@ -678,9 +672,6 @@ namespace OFInput
     {
         auto manager = OFBase::Environment::get().getInputManager();
         manager->resetIdleTime();
-
-        if (mDragDrop && action != A_GameMenu && action != A_Inventory)
-            return;
 
         if (manager->joystickLastUsed() && manager->getControlSwitch("playercontrols"))
         {

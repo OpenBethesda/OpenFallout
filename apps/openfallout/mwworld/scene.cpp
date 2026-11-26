@@ -164,9 +164,6 @@ namespace
         if (ptr.getClass().isActor())
             rendering.addWaterRippleEmitter(ptr);
 
-        // Restore effect particles
-        world.applyLoopingParticles(ptr);
-
         if (!model.empty())
             ptr.getClass().insertObject(ptr, model, rotation, physics);
 
@@ -447,7 +444,6 @@ namespace OFWorld
         OFBase::Environment::get().getMechanicsManager()->drop(cell);
 
         mRendering.removeCell(cell);
-        OFBase::Environment::get().getWindowManager()->removeCell(cell);
 
         OFBase::Environment::get().getFalloutScripts()->cellUnloaded(*cell);
 
@@ -526,14 +522,11 @@ namespace OFWorld
                    },
             *cell.getCell());
 
-        if (respawn)
-            cell.respawn();
-
+        // (the respawn of the Fallout references is the Fallout scripts' own: iHoursToRespawnCell, FOSV "spawn")
         insertCell(cell, loadingListener, navigatorUpdateGuard);
 
         mRendering.addCell(&cell);
 
-        OFBase::Environment::get().getWindowManager()->addCell(&cell);
         float waterLevel = cell.getWaterLevel();
         if (cellVariant.isExterior() && ESM::isEsm4Ext(worldspace))
         {
@@ -674,7 +667,7 @@ namespace OFWorld
                 // Only teleport if that teleport point is > the lowest point, rare edge case
                 if (!refId.empty() && newPos.pos[2] >= mLowestPoint - lowestPointAdjustment)
                 {
-                    OFWorld::ActionTeleport(refId, newPos, false).execute(playerPtr);
+                    OFWorld::ActionTeleport(refId, newPos).execute(playerPtr);
                     Log(Debug::Warning) << "Player position has been reset due to falling into the void";
                 }
             }
@@ -768,9 +761,6 @@ namespace OFWorld
         mNavigator.update(pos, navigatorUpdateGuard.get());
 
         navigatorUpdateGuard.reset();
-
-        CellStore& current = mWorld.getWorldModel().getExterior(playerCellIndex);
-        OFBase::Environment::get().getWindowManager()->changeCell(&current);
 
         if (changeEvent)
             mCellChanged = true;
@@ -952,7 +942,6 @@ namespace OFWorld
         }
 
         OFBase::Environment::get().getMechanicsManager()->updateCell(old, player);
-        OFBase::Environment::get().getWindowManager()->watchActor(player);
 
         mPhysics->updatePtr(old, player);
 
@@ -1070,8 +1059,6 @@ namespace OFWorld
 
         if (useFading)
             OFBase::Environment::get().getWindowManager()->fadeScreenIn(0.5);
-
-        OFBase::Environment::get().getWindowManager()->changeCell(mCurrentCell);
 
         OFBase::Environment::get().getWorld()->getPostProcessor()->setExteriorFlag(cell.getCell()->isQuasiExterior());
     }

@@ -1,9 +1,10 @@
--- The death of the player in Fallout 3 and New Vegas, as the games' code does it (Mac round 4A H2, FalloutNV.exe 0x93E840):
--- a few seconds after the player has died (fPlayerDeathReloadTime, 5 in the executables) the game closes what is open and,
--- when there is a save, asks in a message box what it says (sMiscPlayerDeadMessage) with two buttons, Reload
--- (sMiscPlayerDeadLoadOption: the most recent save is loaded) and Main Menu (sMiscPlayerDeadMenuOption); with no save it
--- goes straight to the main menu. The box has no timer and no key of its own. What dead is, is the engine's
--- (core.pipboy.playerDead); the box is the message box of the game's own file (falloutmessage.lua).
+-- The death of the player in Fallout 3 and New Vegas, as the games' code does it (FalloutNV.exe 0x93E840, Fallout3.exe
+-- 0x788350; rule D.D2 of docs/openfallout/fallout-rules.md). While the player is dying or dead a timer runs down from
+-- fPlayerDeathReloadTime (5 in both executables, in neither ESM) in real time; when it is over the most recent save is
+-- loaded, or the main menu opens when there is no save. Only when the setting is 0 or below does the game ask instead, in
+-- a message box that says sMiscPlayerDeadMessage with two buttons, Reload (sMiscPlayerDeadLoadOption) and Main Menu
+-- (sMiscPlayerDeadMenuOption), and waits for the answer. What dead is, is the engine's (core.pipboy.playerDead); the box
+-- is the message box of the game's own file (falloutmessage.lua).
 local core = require('openfallout.core')
 local I = require('openfallout.interfaces')
 
@@ -24,7 +25,20 @@ local function word(name, fallback)
     return fallback
 end
 
-local function show()
+-- The exe's two ends of the timer: the most recent save, or the main menu when there is none
+local function reload()
+    shown = true
+    print(string.format('the death timer is over after %.2f s: %s', deadFor,
+        pipboy.hasRecentSave() and 'the newest save loads' or 'the main menu opens'))
+    if pipboy.hasRecentSave() then
+        pipboy.reloadRecent()
+    else
+        pipboy.openMainMenu()
+    end
+end
+
+-- The branch of a setting of 0 or below: the box with its two buttons (no timer, no key of its own)
+local function ask()
     shown = true
     if not pipboy.hasRecentSave() then
         pipboy.openMainMenu()
@@ -55,10 +69,17 @@ return {
                 deadFor = 0
                 return
             end
+            if shown then return end
+            local reloadTime = pipboy.setting('fPlayerDeathReloadTime') or 5
+            if deadFor == 0 then print(string.format('the player is dead (fPlayerDeathReloadTime %g)', reloadTime)) end
+            if reloadTime <= 0 then
+                ask()
+                return
+            end
             -- The world goes on while the player lies there (the time is the real one: the game may be paused)
             deadFor = deadFor + core.getRealFrameDuration()
-            if not shown and deadFor >= (pipboy.setting('fPlayerDeathReloadTime') or 5) then
-                show()
+            if deadFor >= reloadTime then
+                reload()
             end
         end,
     },

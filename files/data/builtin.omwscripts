@@ -6,17 +6,10 @@ MENU: scripts/omw/settings/menu.lua
 PLAYER: scripts/omw/settings/player.lua
 GLOBAL: scripts/omw/settings/global.lua
 
-# The records of Morrowind that the C++ still reads (attribute and skill names, default GMSTs and the fallback= lines
-# of openfallout.cfg). Step 4 of the removal of the Morrowind code (the Interface windows) removes it.
-LOAD: scripts/omw/esmfallbacks.lua
-
 # Mechanics
 GLOBAL: scripts/omw/activationhandlers.lua
 GLOBAL: scripts/omw/usehandlers.lua
 GLOBAL: scripts/omw/worldeventhandlers.lua
-GLOBAL: scripts/omw/crimes.lua
-CREATURE, NPC, PLAYER: scripts/omw/mechanics/animationcontroller.lua
-PLAYER: scripts/omw/skillhandlers.lua
 PLAYER: scripts/omw/mechanics/playercontroller.lua
 MENU: scripts/omw/camera/settings.lua
 MENU: scripts/omw/input/settings.lua

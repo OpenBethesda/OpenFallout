@@ -14,12 +14,10 @@ namespace Constants
     constexpr float SoundSpeedInAir = 343.3f;
     constexpr float SoundSpeedUnderwater = 1484.0f;
 
-    // Gravity constant in m/sec^2
-    // Note: 8.96 m/sec^2 = 9.8 yards/sec^2
-    // Probably original engine's developers just forgot
-    // that their engine uses yards instead of meters
-    // and used standard gravity value as it is
-    constexpr float GravityConst = 8.96f;
+    // Gravity in m/sec^2: the standard gravity, Havok's default. The executables of Fallout 3 and New Vegas set no
+    // gravity of their own (no setting, no INI line: rule A.C2 of docs/openfallout/fallout-rules.md); times
+    // UnitsPerMeter it is about 686 units/sec^2, under which the jump of fJumpHeightMin (64 units) lasts 0.86 s
+    constexpr float GravityConst = 9.8f;
 
     // Size of one exterior cell in game units
     constexpr int CellSizeInUnits = 8192;
@@ -40,8 +38,11 @@ namespace Constants
     // Percentage height at which projectiles are spawned from an actor
     constexpr float TorsoHeight = 0.75f;
 
+    // The step the character climbs without a jump: the executables have no setting for it (rule A.C2), and the
+    // engine's 34 units is kept (a stair of the games is 16 to 24 units high)
     static constexpr float sStepSizeUp = 34.0f;
-    static constexpr float sMaxSlope = 46.0f;
+    // The steepest ground the character walks on: 47 degrees in both executables (NV [0x11b0148], rule A.C2)
+    static constexpr float sMaxSlope = 47.0f;
 
     // Identifier for main scene camera
     const std::string SceneCamera = "SceneCam";

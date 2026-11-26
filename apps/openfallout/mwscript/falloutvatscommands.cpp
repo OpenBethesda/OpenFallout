@@ -184,7 +184,7 @@ namespace OFScript
                 if (actor.isEmpty() || !actor.isInCell())
                     return 0.0;
                 const osg::Vec3f from = actor.getRefData().getPosition().asVec3()
-                    + osg::Vec3f(0.f, 0.f, static_cast<float>(gameSetting("fVATSSmartCameraCheckHeight", 64.0)));
+                    + osg::Vec3f(0.f, 0.f, static_cast<float>(gameSettingValue("fVATSSmartCameraCheckHeight")));
                 const double heading = actor.getRefData().getPosition().rot[2] + VV::sideAngle(side);
                 const float length = static_cast<float>(VV::areaRayLength);
                 const float reached = rayDistance(from, headingDirection(heading), length);
@@ -196,9 +196,9 @@ namespace OFScript
                 const OFWorld::Ptr target = findReference(FalloutScript::formArgument(call, 0));
                 if (actor.isEmpty() || !actor.isInCell() || target.isEmpty() || !target.isInCell())
                     return 0.0;
-                const double height = gameSetting("fVATSSmartCameraCheckHeight", 64.0);
-                const double stepDistance = gameSetting("fVATSSmartCameraCheckStepDistance", 64.0);
-                const double stepCount = gameSetting("fVATSSmartCameraCheckStepCount", 5.0);
+                const double height = gameSettingValue("fVATSSmartCameraCheckHeight");
+                const double stepDistance = gameSettingValue("fVATSSmartCameraCheckStepDistance");
+                const double stepCount = gameSettingValue("fVATSSmartCameraCheckStepCount");
                 const osg::Vec3f start = actor.getRefData().getPosition().asVec3()
                     + osg::Vec3f(0.f, 0.f, static_cast<float>(height));
                 const osg::Vec3f along = headingDirection(actor.getRefData().getPosition().rot[2] + VV::sideAngle(side));

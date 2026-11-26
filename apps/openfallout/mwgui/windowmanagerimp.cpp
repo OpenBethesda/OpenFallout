@@ -10,6 +10,7 @@
 
 #include <MyGUI_ClipboardManager.h>
 #include <MyGUI_FactoryManager.h>
+#include <MyGUI_ITexture.h>
 #include <MyGUI_InputManager.h>
 #include <MyGUI_LanguageManager.h>
 #include <MyGUI_LayerManager.h>
@@ -75,9 +76,6 @@
 #include "../mwworld/globals.hpp"
 #include "../mwworld/player.hpp"
 
-#include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/npcstats.hpp"
-
 #include "../mwrender/postprocessor.hpp"
 
 #include "../mwscript/falloutscripts.hpp"
@@ -87,17 +85,11 @@
 #include "console.hpp"
 #include "controllerbuttonsoverlay.hpp"
 #include "controllers.hpp"
-#include "countdialog.hpp"
 #include "cursor.hpp"
 #include "debugwindow.hpp"
 #include "exposedwindow.hpp"
 #include "falloutairmeter.hpp"
 #include "hud.hpp"
-#include "inventorytabsoverlay.hpp"
-#include "inventorywindow.hpp"
-#include "itemtransfer.hpp"
-#include "itemview.hpp"
-#include "itemwidget.hpp"
 #include "keyboardnavigation.hpp"
 #include "loadingscreen.hpp"
 #include "mainmenu.hpp"
@@ -106,34 +98,11 @@
 #include "resourceskin.hpp"
 #include "screenfader.hpp"
 #include "settingswindow.hpp"
-#include "spellview.hpp"
-#include "spellwindow.hpp"
-#include "statswindow.hpp"
 #include "videowidget.hpp"
 #include "widgets.hpp"
 
 namespace OFGui
 {
-    namespace
-    {
-        Settings::SettingValue<bool>* findHiddenSetting(GuiWindow window)
-        {
-            switch (window)
-            {
-                case GW_Inventory:
-                    return &Settings::windows().mInventoryHidden;
-                case GW_Map:
-                    return &Settings::windows().mMapHidden;
-                case GW_Magic:
-                    return &Settings::windows().mSpellsHidden;
-                case GW_Stats:
-                    return &Settings::windows().mStatsHidden;
-                default:
-                    return nullptr;
-            }
-        }
-    }
-
     WindowManager::WindowManager(SDL_Window* window, osgViewer::Viewer* viewer, osg::Group* guiRoot,
         Resource::ResourceSystem* resourceSystem, const std::shared_ptr<SceneUtil::WorkQueue>& workQueue,
         const std::filesystem::path& logpath, Translation::Storage& translationDataStorage, ToUTF8::FromType encoding,
@@ -146,14 +115,9 @@ namespace OFGui
         , mViewer(viewer)
         , mCurrentModals()
         , mHud(nullptr)
-        , mMap(nullptr)
-        , mStatsWindow(nullptr)
         , mConsole(nullptr)
-        , mInventoryWindow(nullptr)
-        , mCountDialog(nullptr)
         , mSettingsWindow(nullptr)
         , mConfirmationDialog(nullptr)
-        , mSpellWindow(nullptr)
         , mLoadingScreen(nullptr)
         , mVideoBackground(nullptr)
         , mVideoWidget(nullptr)
@@ -164,18 +128,13 @@ namespace OFGui
         , mDebugWindow(nullptr)
         , mPostProcessorHud(nullptr)
         , mControllerButtonsOverlay(nullptr)
-        , mInventoryTabsOverlay(nullptr)
         , mTranslationDataStorage(translationDataStorage)
         , mInputBlocker(nullptr)
         , mHudEnabled(true)
         , mCursorVisible(true)
         , mCursorActive(true)
         , mCursorInteractionEnabled(false)
-        , mPlayerBounty(-1)
         , mGuiModes()
-        , mShown(GW_ALL)
-        , mForceHidden(GW_None)
-        , mAllowed(GW_ALL)
         , mVersionDescription(versionDescription)
         , mWindowVisible(true)
         , mCfgMgr(cfgMgr)
@@ -216,9 +175,6 @@ namespace OFGui
         MyGUI::FactoryManager::getInstance().registerFactory<MyGUIPlatform::AdditiveLayer>("Layer");
         MyGUI::FactoryManager::getInstance().registerFactory<MyGUIPlatform::ScalingLayer>("Layer");
         PostProcessorHud::registerMyGUIComponents();
-        ItemView::registerComponents();
-        ItemWidget::registerComponents();
-        SpellView::registerComponents();
         Gui::registerAllWidgets();
         LuaUi::registerAllWidgets();
 
@@ -281,8 +237,6 @@ namespace OFGui
         mVideoWrapper->setGammaContrast(Settings::video().mGamma, Settings::video().mContrast);
 
         mGuiPlatform->getRenderManagerPtr()->enableShaders(mResourceSystem->getSceneManager()->getShaderManager());
-
-        mStatsWatcher = std::make_unique<StatsWatcher>();
     }
 
     void WindowManager::initUI()
@@ -293,61 +247,36 @@ namespace OFGui
 
         mTextColours.loadColours();
 
-        mDragAndDrop = std::make_unique<DragAndDrop>();
-        mItemTransfer = std::make_unique<ItemTransfer>(*this);
-
         auto menu = std::make_unique<MainMenu>(w, h, mResourceSystem->getVFS(), mVersionDescription);
         mGuiModeStates[GM_MainMenu] = GuiModeState(menu.get());
         mWindows.push_back(std::move(menu));
 
-        mLocalMapRender = std::make_unique<OFRender::LocalMap>(mViewer->getSceneData()->asGroup());
         mMenuScenes = std::make_unique<MenuScenes>(
             mViewer->getSceneData()->asGroup(), mResourceSystem, mGuiPlatform->getRenderManagerPtr());
-        auto map = std::make_unique<MapWindow>(mCustomMarkers, mDragAndDrop.get(), mLocalMapRender.get(), mWorkQueue);
-        mMap = map.get();
-        mWindows.push_back(std::move(map));
-        mMap->renderGlobalMap();
-        trackWindow(mMap, makeMapWindowSettingValues());
-
-        auto statsWindow = std::make_unique<StatsWindow>(mDragAndDrop.get());
-        mStatsWindow = statsWindow.get();
-        mWindows.push_back(std::move(statsWindow));
-        trackWindow(mStatsWindow, makeStatsWindowSettingValues());
-
-        auto inventoryWindow = std::make_unique<InventoryWindow>(
-            *mDragAndDrop, *mItemTransfer, mViewer->getSceneData()->asGroup(), mResourceSystem);
-        mInventoryWindow = inventoryWindow.get();
-        mWindows.push_back(std::move(inventoryWindow));
-
-        auto spellWindow = std::make_unique<SpellWindow>(mDragAndDrop.get());
-        mSpellWindow = spellWindow.get();
-        mWindows.push_back(std::move(spellWindow));
-        trackWindow(mSpellWindow, makeSpellsWindowSettingValues());
-
-        mGuiModeStates[GM_Inventory] = GuiModeState({ mMap, mInventoryWindow, mSpellWindow, mStatsWindow });
-        mGuiModeStates[GM_None] = GuiModeState({ mMap, mInventoryWindow, mSpellWindow, mStatsWindow });
+        // The windows of Morrowind that sat in Interface mode (the map, the inventory, the spells and the stats) are
+        // gone: the screens of Fallout in this mode are all drawn by Lua (I.UI.registerWindow)
+        mGuiModeStates[GM_Inventory] = GuiModeState();
+        mGuiModeStates[GM_None] = GuiModeState();
 
         auto console = std::make_unique<Console>(w, h, mCfgMgr);
         mConsole = console.get();
         mWindows.push_back(std::move(console));
         trackWindow(mConsole, makeConsoleWindowSettingValues());
 
-        mMessageBoxManager = std::make_unique<MessageBoxManager>(
-            mStore->get<ESM::GameSetting>().find("fMessageTimePerChar")->mValue.getFloat());
+        // The seconds a message box of the engine stays up per letter: the Morrowind setting fMessageTimePerChar, which
+        // no Fallout plugin has, at the value the engine gave it (the HUD messages of Fallout are timed by its scripts)
+        constexpr float messageTimePerChar = 0.1f;
+        mMessageBoxManager = std::make_unique<MessageBoxManager>(messageTimePerChar);
 
         // A conversation of Fallout has no C++ window: falloutdialogue.lua draws DialogMenu (I.UI.registerWindow
         // takes a window that only Lua has)
         mGuiModeStates[GM_DialogMenu] = GuiModeState();
 
-        auto hud = std::make_unique<HUD>(mCustomMarkers, mDragAndDrop.get(), mLocalMapRender.get());
+        auto hud = std::make_unique<HUD>();
         mHud = hud.get();
         mWindows.push_back(std::move(hud));
 
         mToolTips = std::make_unique<ToolTips>();
-
-        auto countDialog = std::make_unique<CountDialog>();
-        mCountDialog = countDialog.get();
-        mWindows.push_back(std::move(countDialog));
 
         auto settingsWindow = std::make_unique<SettingsWindow>(mCfgMgr);
         mSettingsWindow = settingsWindow.get();
@@ -400,25 +329,15 @@ namespace OFGui
         mControllerButtonsOverlay = controllerButtonsOverlay.get();
         mWindows.push_back(std::move(controllerButtonsOverlay));
 
-        auto inventoryTabsOverlay = std::make_unique<InventoryTabsOverlay>();
-        mInventoryTabsOverlay = inventoryTabsOverlay.get();
-        mWindows.push_back(std::move(inventoryTabsOverlay));
-
         mControllerTooltipEnabled = Settings::gui().mControllerTooltips;
-        mActiveControllerWindows[GM_Inventory] = 1; // Start on Inventory page
 
         mInputBlocker = MyGUI::Gui::getInstance().createWidget<MyGUI::Widget>(
             {}, 0, 0, w, h, MyGUI::Align::Stretch, "InputBlocker");
 
         mHud->setVisible(true);
 
-        updatePinnedWindows();
-
         // Set up visibility
         updateVisible();
-
-        mStatsWatcher->addListener(mHud);
-        mStatsWatcher->addListener(mStatsWindow);
 
         for (auto& window : mWindows)
         {
@@ -428,16 +347,6 @@ namespace OFGui
         }
     }
 
-    void WindowManager::setNewGame(bool newgame)
-    {
-        if (newgame)
-            disallowAll();
-        else
-            allow(GW_ALL);
-
-        mStatsWatcher->forceUpdate();
-    }
-
     WindowManager::~WindowManager()
     {
         try
@@ -445,7 +354,6 @@ namespace OFGui
             LuaUi::clearGameInterface();
             LuaUi::clearMenuInterface();
 
-            mStatsWatcher.reset();
             mAirMeter.reset();
 
             MyGUI::LanguageManager::getInstance().eventRequestTag.clear();
@@ -510,7 +418,7 @@ namespace OFGui
 
         enableScene(!loading && !mainmenucover);
 
-        if (!mMap)
+        if (!mHud)
             return; // UI not created yet
 
         mHud->setVisible(mHudEnabled && !loading);
@@ -532,56 +440,15 @@ namespace OFGui
         if (gameMode)
             setKeyFocusWidget(nullptr);
 
-        // Icons of forced hidden windows are displayed
-        setMinimapVisibility((mAllowed & GW_Map) && (!mMap->pinned() || (mForceHidden & GW_Map)));
-        setWeaponVisibility(
-            (mAllowed & GW_Inventory) && (!mInventoryWindow->pinned() || (mForceHidden & GW_Inventory)));
-        setSpellVisibility((mAllowed & GW_Magic) && (!mSpellWindow->pinned() || (mForceHidden & GW_Magic)));
-        setHMSVisibility((mAllowed & GW_Stats) && (!mStatsWindow->pinned() || (mForceHidden & GW_Stats)));
-
-        mInventoryWindow->setGuiMode(getMode());
-
-        // If in game mode (or interactive messagebox), show the pinned windows
         if (mGuiModes.empty())
         {
-            mMap->setVisible(mMap->pinned() && !isConsoleMode() && !(mForceHidden & GW_Map) && (mAllowed & GW_Map));
-            mStatsWindow->setVisible(
-                mStatsWindow->pinned() && !isConsoleMode() && !(mForceHidden & GW_Stats) && (mAllowed & GW_Stats));
-            mInventoryWindow->setVisible(mInventoryWindow->pinned() && !isConsoleMode()
-                && !(mForceHidden & GW_Inventory) && (mAllowed & GW_Inventory));
-            mSpellWindow->setVisible(
-                mSpellWindow->pinned() && !isConsoleMode() && !(mForceHidden & GW_Magic) && (mAllowed & GW_Magic));
-
-            if (Settings::gui().mControllerMenus)
-            {
-                if (mControllerButtonsOverlay)
-                    mControllerButtonsOverlay->setVisible(false);
-                if (mInventoryTabsOverlay)
-                    mInventoryTabsOverlay->setVisible(false);
-            }
+            if (Settings::gui().mControllerMenus && mControllerButtonsOverlay)
+                mControllerButtonsOverlay->setVisible(false);
             return;
         }
-        else if (getMode() != GM_Inventory)
-        {
-            mMap->setVisible(false);
-            mStatsWindow->setVisible(false);
-            mSpellWindow->setVisible(false);
-            mHud->setDrowningBarVisible(false);
-            mInventoryWindow->setVisible(false);
-        }
 
-        if (getMode() == GM_Inventory)
-        {
-            // For the inventory mode, compute the effective set of windows to show.
-            // This is controlled both by what windows the
-            // user has opened/closed (the 'shown' variable) and by what
-            // windows we are allowed to show (the 'allowed' var.)
-            int eff = mShown & mAllowed & ~mForceHidden;
-            mMap->setVisible(eff & GW_Map);
-            mInventoryWindow->setVisible(eff & GW_Inventory);
-            mSpellWindow->setVisible(eff & GW_Magic);
-            mStatsWindow->setVisible(eff & GW_Stats);
-        }
+        if (getMode() != GM_Inventory)
+            mHud->setDrowningBarVisible(false);
 
         updateControllerButtonsOverlay();
     }
@@ -593,12 +460,6 @@ namespace OFGui
 
     void WindowManager::exitCurrentGuiMode()
     {
-        if (mDragAndDrop && mDragAndDrop->mIsOnDragAndDrop)
-        {
-            mDragAndDrop->finish();
-            return;
-        }
-
         if (mGuiModes.empty())
             return;
 
@@ -722,33 +583,6 @@ namespace OFGui
         return defaultValue;
     }
 
-    void WindowManager::updateMap()
-    {
-        if (!mLocalMapRender)
-            return;
-
-        OFWorld::ConstPtr player = OFMechanics::getPlayer();
-
-        osg::Vec3f playerPosition = player.getRefData().getPosition().asVec3();
-        osg::Quat playerOrientation(-player.getRefData().getPosition().rot[2], osg::Vec3(0, 0, 1));
-
-        osg::Vec3f playerdirection;
-        int x, y;
-        float u, v;
-        mLocalMapRender->updatePlayer(playerPosition, playerOrientation, u, v, x, y, playerdirection);
-
-        if (!player.getCell()->isExterior())
-        {
-            setActiveMap(*player.getCell()->getCell());
-        }
-        // else: need to know the current grid center, call setActiveMap from changeCell
-
-        mMap->setPlayerDir(playerdirection.x(), playerdirection.y());
-        mMap->setPlayerPos(x, y, u, v);
-        mHud->setPlayerDir(playerdirection.x(), playerdirection.y());
-        mHud->setPlayerPos(x, y, u, v);
-    }
-
     WindowBase* WindowManager::getActiveControllerWindow()
     {
         if (!mCurrentModals.empty())
@@ -859,21 +693,11 @@ namespace OFGui
         bool gameRunning
             = OFBase::Environment::get().getStateManager()->getState() != OFBase::StateManager::State_NoGame;
 
-        if (gameRunning)
-            updateMap();
-
         if (!mGuiModes.empty())
         {
             GuiModeState& state = mGuiModeStates[mGuiModes.back()];
             for (WindowBase* window : state.mWindows)
                 window->onFrame(frameDuration);
-        }
-        else
-        {
-            // update pinned windows if visible
-            for (WindowBase* window : mGuiModeStates[GM_Inventory].mWindows)
-                if (window->isVisible())
-                    window->onFrame(frameDuration);
         }
 
         // Make sure message boxes are always in front
@@ -904,9 +728,6 @@ namespace OFGui
 
         mToolTips->onFrame(frameDuration);
 
-        if (mLocalMapRender)
-            mLocalMapRender->cleanupCameras();
-
         mDebugWindow->onFrame(frameDuration);
 
         if (isConsoleMode())
@@ -918,110 +739,22 @@ namespace OFGui
         if (mControllerButtonsOverlay && mControllerButtonsOverlay->isVisible())
             mControllerButtonsOverlay->onFrame(frameDuration);
 
-        if (mInventoryTabsOverlay && mInventoryTabsOverlay->isVisible())
-            mInventoryTabsOverlay->onFrame(frameDuration);
-
         updateMouseEmulationCursor();
 
         if (!gameRunning)
             return;
 
-        // We should display message about crime only once per frame, even if there are several crimes.
-        // Otherwise we will get message spam when stealing several items via Take All button.
-        const OFWorld::Ptr player = OFMechanics::getPlayer();
-        const OFWorld::Class& playerCls = player.getClass();
-        int currentBounty = playerCls.getNpcStats(player).getBounty();
-        if (currentBounty != mPlayerBounty)
-        {
-            if (mPlayerBounty >= 0 && currentBounty > mPlayerBounty)
-                messageBox("#{sCrimeMessage}");
-
-            mPlayerBounty = currentBounty;
-        }
-
-        OFBase::LuaManager::ActorControls* playerControls
-            = OFBase::Environment::get().getLuaManager()->getActorControls(player);
-        bool triedToMove = playerControls
-            && (playerControls->mMovement != 0 || playerControls->mSideMovement != 0 || playerControls->mJump);
-        if (mMessageBoxManager && triedToMove && playerCls.getEncumbrance(player) > playerCls.getCapacity(player))
-        {
-            const auto& msgboxs = mMessageBoxManager->getActiveMessageBoxes();
-            auto it
-                = std::find_if(msgboxs.begin(), msgboxs.end(), [](const std::unique_ptr<OFGui::MessageBox>& msgbox) {
-                      return (msgbox->getMessage() == "#{sNotifyMessage59}");
-                  });
-
-            // if an overencumbered messagebox is already present, reset its expiry timer,
-            // otherwise create a new one.
-            if (it != msgboxs.end())
-                (*it)->mCurrentTime = 0;
-            else
-                messageBox("#{sNotifyMessage59}");
-        }
-
-        mDragAndDrop->onFrame();
+        // The bounty and the overencumbered messages of Morrowind are gone with its crimes and its stats: Fallout has
+        // no bounty, and the Fallout scripts tell the player it carries too much
 
         mHud->onFrame(frameDuration);
 
         mPostProcessorHud->onFrame(frameDuration);
-
-        mStatsWatcher->update();
-    }
-
-    void WindowManager::changeCell(const OFWorld::CellStore* cell)
-    {
-        mMap->requestMapRender(cell);
-
-        std::string name{ OFBase::Environment::get().getWorld()->getCellName(cell) };
-
-        mMap->setCellName(name);
-        mHud->setCellName(name);
-        auto cellCommon = cell->getCell();
-
-        if (cellCommon->isExterior())
-        {
-            if (!cellCommon->getNameId().empty())
-                mMap->addVisitedLocation(name, cellCommon->getGridX(), cellCommon->getGridY());
-
-            mMap->cellExplored(cellCommon->getGridX(), cellCommon->getGridY());
-        }
-        else
-        {
-            osg::Vec3f worldPos;
-            if (!OFBase::Environment::get().getWorld()->findInteriorPositionInWorldSpace(cell, worldPos))
-                worldPos = OFBase::Environment::get().getWorld()->getPlayer().getLastKnownExteriorPosition();
-            else
-                OFBase::Environment::get().getWorld()->getPlayer().setLastKnownExteriorPosition(worldPos);
-            mMap->setGlobalMapPlayerPosition(worldPos.x(), worldPos.y());
-        }
-        setActiveMap(*cellCommon);
-    }
-
-    void WindowManager::setActiveMap(const OFWorld::Cell& cell)
-    {
-        mMap->setActiveCell(cell);
-        mHud->setActiveCell(cell);
     }
 
     void WindowManager::setDrowningBarVisibility(bool visible)
     {
         mHud->setDrowningBarVisible(visible);
-    }
-
-    void WindowManager::setHMSVisibility(bool visible)
-    {
-        mHud->setHmsVisible(visible);
-    }
-
-    void WindowManager::setMinimapVisibility(bool visible)
-    {
-        mHud->setMinimapVisible(visible);
-    }
-
-    bool WindowManager::toggleFogOfWar()
-    {
-        mMap->toggleFogOfWar();
-        return mHud->toggleFogOfWar();
     }
 
     void WindowManager::setFocusObject(const OFWorld::Ptr& focus)
@@ -1049,28 +782,6 @@ namespace OFGui
     bool WindowManager::getFullHelp() const
     {
         return mToolTips->getFullHelp();
-    }
-
-    void WindowManager::setWeaponVisibility(bool visible)
-    {
-        mHud->setWeapVisible(visible);
-    }
-
-    void WindowManager::setSpellVisibility(bool visible)
-    {
-        mHud->setSpellVisible(visible);
-        mHud->setEffectVisible(visible);
-    }
-
-    void WindowManager::setSneakVisibility(bool visible)
-    {
-        mHud->setSneakVisible(visible);
-    }
-
-    void WindowManager::setDragDrop(bool dragDrop)
-    {
-        mToolTips->setEnabled(!dragDrop);
-        OFBase::Environment::get().getInputManager()->setDragDrop(dragDrop);
     }
 
     void WindowManager::setCursorVisible(bool visible)
@@ -1323,9 +1034,6 @@ namespace OFGui
 
     void WindowManager::pushGuiMode(GuiMode mode, const OFWorld::Ptr& arg)
     {
-        if (mode == GM_Inventory && mAllowed == GW_None)
-            return;
-
         if (mGuiModes.empty() || mGuiModes.back() != mode)
         {
             // If this mode already exists somewhere in the stack, just bring it to the front.
@@ -1385,11 +1093,6 @@ namespace OFGui
 
     void WindowManager::popGuiMode(bool forceExit)
     {
-        if (mDragAndDrop && mDragAndDrop->mIsOnDragAndDrop)
-        {
-            mDragAndDrop->finish();
-        }
-
         if (!mGuiModes.empty())
         {
             const GuiMode mode = mGuiModes.back();
@@ -1455,70 +1158,6 @@ namespace OFGui
         OFBase::Environment::get().getLuaManager()->uiModeChanged(OFWorld::Ptr());
     }
 
-    void WindowManager::setSelectedSpell(const ESM::RefId& spellId, int successChancePercent)
-    {
-        mSelectedSpell = spellId;
-        mSelectedEnchantItem = OFWorld::Ptr();
-        mHud->setSelectedSpell(spellId, successChancePercent);
-
-        const ESM::Spell* spell = mStore->get<ESM::Spell>().find(spellId);
-
-        mSpellWindow->setTitle(spell->mName);
-    }
-
-    void WindowManager::setSelectedEnchantItem(const OFWorld::Ptr& item)
-    {
-        mSelectedEnchantItem = item;
-        mSelectedSpell = ESM::RefId();
-        const ESM::Enchantment* ench = mStore->get<ESM::Enchantment>().find(item.getClass().getEnchantment(item));
-
-        int chargePercent = static_cast<int>(item.getCellRef().getNormalizedEnchantmentCharge(*ench) * 100);
-        mHud->setSelectedEnchantItem(item, chargePercent);
-        mSpellWindow->setTitle(item.getClass().getName(item));
-    }
-
-    const OFWorld::Ptr& WindowManager::getSelectedEnchantItem() const
-    {
-        return mSelectedEnchantItem;
-    }
-
-    void WindowManager::setSelectedWeapon(const OFWorld::Ptr& item)
-    {
-        mSelectedWeapon = item;
-        int durabilityPercent = 100;
-        if (item.getClass().hasItemHealth(item))
-        {
-            durabilityPercent = static_cast<int>(item.getClass().getItemNormalizedHealth(item) * 100);
-        }
-        mHud->setSelectedWeapon(item, durabilityPercent);
-        mInventoryWindow->setTitle(item.getClass().getName(item));
-    }
-
-    const OFWorld::Ptr& WindowManager::getSelectedWeapon() const
-    {
-        return mSelectedWeapon;
-    }
-
-    void WindowManager::unsetSelectedSpell()
-    {
-        mSelectedSpell = ESM::RefId();
-        mSelectedEnchantItem = OFWorld::Ptr();
-        mHud->unsetSelectedSpell();
-
-        OFWorld::Player* player = &OFBase::Environment::get().getWorld()->getPlayer();
-        if (player->getDrawState() == OFMechanics::DrawState::Spell)
-            player->setDrawState(OFMechanics::DrawState::Nothing);
-
-        mSpellWindow->setTitle("#{Interface:None}");
-    }
-
-    void WindowManager::unsetSelectedWeapon()
-    {
-        mSelectedWeapon = OFWorld::Ptr();
-        mHud->unsetSelectedWeapon();
-        mInventoryWindow->setTitle("#{sSkillHandtohand}");
-    }
-
     void WindowManager::getMousePosition(int& x, int& y)
     {
         const MyGUI::IntPoint& pos = MyGUI::InputManager::getInstance().getMousePosition();
@@ -1546,14 +1185,6 @@ namespace OFGui
         return mScalingFactor;
     }
 
-    OFGui::InventoryWindow* WindowManager::getInventoryWindow()
-    {
-        return mInventoryWindow;
-    }
-    OFGui::CountDialog* WindowManager::getCountDialog()
-    {
-        return mCountDialog;
-    }
     OFGui::ConfirmationDialog* WindowManager::getConfirmationDialog()
     {
         return mConfirmationDialog;
@@ -1565,55 +1196,6 @@ namespace OFGui
     OFGui::PostProcessorHud* WindowManager::getPostProcessorHud()
     {
         return mPostProcessorHud;
-    }
-
-    void WindowManager::useItem(const OFWorld::Ptr& item, bool bypassBeastRestrictions)
-    {
-        if (mInventoryWindow)
-            mInventoryWindow->useItem(item, bypassBeastRestrictions);
-    }
-
-    bool WindowManager::isAllowed(GuiWindow wnd) const
-    {
-        return (mAllowed & wnd) != 0;
-    }
-
-    void WindowManager::allow(GuiWindow wnd)
-    {
-        mAllowed = (GuiWindow)(mAllowed | wnd);
-
-        updateVisible();
-    }
-
-    void WindowManager::disallowAll()
-    {
-        mAllowed = GW_None;
-
-        updateVisible();
-    }
-
-    void WindowManager::toggleVisible(GuiWindow wnd)
-    {
-        if (getMode() != GM_Inventory)
-            return;
-
-        if (Settings::SettingValue<bool>* const hidden = findHiddenSetting(wnd))
-            hidden->set(!hidden->get());
-
-        mShown = (GuiWindow)(mShown ^ wnd);
-        updateVisible();
-    }
-
-    void WindowManager::forceHide(GuiWindow wnd)
-    {
-        mForceHidden = (GuiWindow)(mForceHidden | wnd);
-        updateVisible();
-    }
-
-    void WindowManager::unsetForceHide(GuiWindow wnd)
-    {
-        mForceHidden = (GuiWindow)(mForceHidden & ~wnd);
-        updateVisible();
     }
 
     bool WindowManager::isGuiMode() const
@@ -1691,11 +1273,6 @@ namespace OFGui
         return mHudEnabled;
     }
 
-    void WindowManager::addVisitedLocation(const std::string& name, int x, int y)
-    {
-        mMap->addVisitedLocation(name, x, y);
-    }
-
     const Translation::Storage& WindowManager::getTranslationDataStorage() const
     {
         return mTranslationDataStorage;
@@ -1740,14 +1317,7 @@ namespace OFGui
 
     void WindowManager::updatePlayer()
     {
-        mInventoryWindow->updatePlayer();
-
-        const OFWorld::Ptr player = OFMechanics::getPlayer();
-        if (player.getClass().getNpcStats(player).isWerewolf())
-        {
-            setWerewolfOverlay(true);
-            forceHide((GuiWindow)(OFGui::GW_Inventory | OFGui::GW_Magic));
-        }
+        // The player of Fallout is never a werewolf: nothing of the Morrowind overlay to restore
     }
 
     // Remove this wrapper once onKeyFocusChanged call is rendered unnecessary
@@ -1782,11 +1352,6 @@ namespace OFGui
             SDL_StartTextInput();
         else
             SDL_StopTextInput();
-    }
-
-    void WindowManager::setEnemy(const OFWorld::Ptr& enemy)
-    {
-        mHud->setEnemy(enemy);
     }
 
     std::size_t WindowManager::getMessagesCount() const
@@ -1869,13 +1434,6 @@ namespace OFGui
 
     void WindowManager::onWindowChangeCoord(MyGUI::Window* window)
     {
-        // If using controller menus, don't persist changes to size of the stats or magic
-        // windows.
-        if (Settings::gui().mControllerMenus
-            && (window == mStatsWindow->mMainWidget->castType<MyGUI::Window>()
-                || window == mSpellWindow->mMainWidget->castType<MyGUI::Window>()))
-            return;
-
         const auto it = mTrackedWindows.find(window);
         if (it == mTrackedWindows.end())
             return;
@@ -1895,7 +1453,6 @@ namespace OFGui
 
     void WindowManager::clear()
     {
-        mPlayerBounty = -1;
 
         for (const auto& window : mWindows)
         {
@@ -1903,72 +1460,16 @@ namespace OFGui
             window->setDisabledByLua(false);
         }
 
-        if (mLocalMapRender)
-            mLocalMapRender->clear();
-
         mMessageBoxManager->clear();
-
-        mToolTips->clear();
-
-        mSelectedSpell = ESM::RefId();
-        mCustomMarkers.clear();
 
         // The air meter is not part of the display that the scripts of the game that is left take down with them
         if (mAirMeter)
             mAirMeter->hide();
 
-        mForceHidden = GW_None;
-
         while (!mGuiModes.empty())
             popGuiMode();
 
         updateVisible();
-    }
-
-    void WindowManager::write(ESM::ESMWriter& writer, Loading::Listener& progress)
-    {
-        mMap->write(writer, progress);
-
-        // The quick keys of Morrowind (KEYS) are no longer written: their menu is gone, and an old save's are skipped
-
-        if (!mSelectedSpell.empty())
-        {
-            writer.startRecord(ESM::REC_ASPL);
-            writer.writeHNRefId("ID__", mSelectedSpell);
-            writer.endRecord(ESM::REC_ASPL);
-        }
-
-        for (const auto& [_, marker] : mCustomMarkers)
-        {
-            writer.startRecord(ESM::REC_MARK);
-            marker.save(writer);
-            writer.endRecord(ESM::REC_MARK);
-        }
-    }
-
-    void WindowManager::readRecord(ESM::ESMReader& reader, uint32_t type)
-    {
-        if (type == ESM::REC_GMAP)
-            mMap->readRecord(reader, type);
-        else if (type == ESM::REC_ASPL)
-        {
-            reader.getSubNameIs("ID__");
-            ESM::RefId spell = reader.getRefId();
-            if (mStore->get<ESM::Spell>().search(spell))
-                mSelectedSpell = spell;
-        }
-        else if (type == ESM::REC_MARK)
-        {
-            ESM::CustomMarker marker;
-            marker.load(reader);
-            mCustomMarkers.addMarker(marker, false);
-        }
-    }
-
-    size_t WindowManager::countSavedGameRecords() const
-    {
-        return 1 // Global map
-            + mCustomMarkers.size() + (!mSelectedSpell.empty() ? 1 : 0);
     }
 
     bool WindowManager::isSavingAllowed() const
@@ -2122,58 +1623,6 @@ namespace OFGui
     {
         if (key == MyGUI::KeyCode::Escape)
             mVideoWidget->stop();
-    }
-
-    void WindowManager::updatePinnedWindows()
-    {
-        if (Settings::gui().mControllerMenus)
-        {
-            // In controller mode, don't hide any menus and only allow pinning the map.
-            mInventoryWindow->setPinned(false);
-            mMap->setPinned(Settings::windows().mMapPin);
-            mSpellWindow->setPinned(false);
-            mStatsWindow->setPinned(false);
-            return;
-        }
-
-        mInventoryWindow->setPinned(Settings::windows().mInventoryPin);
-        if (Settings::windows().mInventoryHidden)
-            mShown = (GuiWindow)(mShown ^ GW_Inventory);
-
-        mMap->setPinned(Settings::windows().mMapPin);
-        if (Settings::windows().mMapHidden)
-            mShown = (GuiWindow)(mShown ^ GW_Map);
-
-        mSpellWindow->setPinned(Settings::windows().mSpellsPin);
-        if (Settings::windows().mSpellsHidden)
-            mShown = (GuiWindow)(mShown ^ GW_Magic);
-
-        mStatsWindow->setPinned(Settings::windows().mStatsPin);
-        if (Settings::windows().mStatsHidden)
-            mShown = (GuiWindow)(mShown ^ GW_Stats);
-    }
-
-    void WindowManager::pinWindow(GuiWindow window)
-    {
-        switch (window)
-        {
-            case GW_Inventory:
-                mInventoryWindow->setPinned(true);
-                break;
-            case GW_Map:
-                mMap->setPinned(true);
-                break;
-            case GW_Magic:
-                mSpellWindow->setPinned(true);
-                break;
-            case GW_Stats:
-                mStatsWindow->setPinned(true);
-                break;
-            default:
-                break;
-        }
-
-        updateVisible();
     }
 
     void WindowManager::fadeScreenIn(const float time, bool clearQueue, float delay)
@@ -2363,18 +1812,6 @@ namespace OFGui
         return isMainMenuDrawnByLua() && mMainMenuEscape.load();
     }
 
-    void WindowManager::cycleSpell(bool next)
-    {
-        if (!isGuiMode())
-            mSpellWindow->cycle(next);
-    }
-
-    void WindowManager::cycleWeapon(bool next)
-    {
-        if (!isGuiMode())
-            mInventoryWindow->cycle(next);
-    }
-
     void WindowManager::playSound(const ESM::RefId& soundId, float volume, float pitch)
     {
         if (soundId.empty())
@@ -2382,12 +1819,6 @@ namespace OFGui
 
         OFBase::Environment::get().getSoundManager()->playSound(
             soundId, volume, pitch, OFSound::Type::Sfx, OFSound::PlayMode::NoEnvNoScaling);
-    }
-
-    void WindowManager::updateSpellWindow()
-    {
-        if (mSpellWindow)
-            mSpellWindow->updateSpells();
     }
 
     void WindowManager::setConsoleSelectedObject(const OFWorld::Ptr& object)
@@ -2502,21 +1933,6 @@ namespace OFGui
         tex->unlock();
     }
 
-    void WindowManager::addCell(OFWorld::CellStore* cell)
-    {
-        mLocalMapRender->addCell(cell);
-    }
-
-    void WindowManager::removeCell(OFWorld::CellStore* cell)
-    {
-        mLocalMapRender->removeCell(cell);
-    }
-
-    void WindowManager::writeFog(OFWorld::CellStore* cell)
-    {
-        mLocalMapRender->saveFogOfWar(cell);
-    }
-
     const OFGui::TextColours& WindowManager::getTextColours()
     {
         return mTextColours;
@@ -2571,16 +1987,6 @@ namespace OFGui
             window->setVisible(visible);
     }
 
-    void WindowManager::watchActor(const OFWorld::Ptr& ptr)
-    {
-        mStatsWatcher->watchActor(ptr);
-    }
-
-    OFWorld::Ptr WindowManager::getWatchedActor() const
-    {
-        return mStatsWatcher->getWatchedActor();
-    }
-
     const std::string& WindowManager::getVersionDescription() const
     {
         return mVersionDescription;
@@ -2592,17 +1998,6 @@ namespace OFGui
         for (const ScheduledMessageBox& v : *scheduledMessageBoxes)
             messageBox(v.mMessage, v.mShowInDialogueMode);
         scheduledMessageBoxes->clear();
-    }
-
-    void WindowManager::onDeleteCustomData(const OFWorld::Ptr& ptr)
-    {
-        for (const auto& window : mWindows)
-            window->onDeleteCustomData(ptr);
-    }
-
-    void WindowManager::asyncPrepareSaveMap()
-    {
-        mMap->asyncPrepareSaveMap();
     }
 
     void WindowManager::setDisabledByLua(std::string_view windowId, bool disabled)
@@ -2640,18 +2035,6 @@ namespace OFGui
     std::vector<std::string_view> WindowManager::getAllowedWindowIds(GuiMode mode) const
     {
         std::vector<std::string_view> res;
-        if (mode == GM_Inventory)
-        {
-            if (mAllowed & GW_Map)
-                res.push_back(mMap->getWindowIdForLua());
-            if (mAllowed & GW_Inventory)
-                res.push_back(mInventoryWindow->getWindowIdForLua());
-            if (mAllowed & GW_Magic)
-                res.push_back(mSpellWindow->getWindowIdForLua());
-            if (mAllowed & GW_Stats)
-                res.push_back(mStatsWindow->getWindowIdForLua());
-        }
-        else
         {
             auto it = mGuiModeStates.find(mode);
             if (it != mGuiModeStates.end())
@@ -2669,8 +2052,6 @@ namespace OFGui
         int height = MyGUI::RenderManager::getInstance().getViewSize().height;
         if (mControllerButtonsOverlay != nullptr && mControllerButtonsOverlay->isVisible())
             height -= mControllerButtonsOverlay->getHeight();
-        if (mInventoryTabsOverlay != nullptr && mInventoryTabsOverlay->isVisible())
-            height -= mInventoryTabsOverlay->getHeight();
         return height;
     }
 
@@ -2711,24 +2092,11 @@ namespace OFGui
         if (!topWin || !topWin->isVisible())
         {
             mControllerButtonsOverlay->setVisible(false);
-            mInventoryTabsOverlay->setVisible(false);
             return;
         }
 
         // setButtons will handle setting visibility based on if any buttons are defined.
         mControllerButtonsOverlay->setButtons(topWin->getControllerButtons());
-        if (getMode() == GM_Inventory)
-        {
-            mInventoryTabsOverlay->setVisible(true);
-            mInventoryTabsOverlay->setTab(mActiveControllerWindows[GM_Inventory]);
-        }
-        else
-            mInventoryTabsOverlay->setVisible(false);
     }
 
-    void WindowManager::inventoryUpdated(const OFWorld::Ptr& ptr) const
-    {
-        for (const auto& window : mWindows)
-            window->onInventoryUpdate(ptr);
-    }
 }

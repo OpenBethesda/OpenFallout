@@ -12,6 +12,7 @@
 #include <components/esm3/cellstate.hpp>
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
+#include <components/esm3/fogstate.hpp>
 #include <components/esm3/loadregn.hpp>
 #include <components/esm4/loadwrld.hpp>
 #include <components/loadinglistener/loadinglistener.hpp>
@@ -197,7 +198,6 @@ void OFWorld::WorldModel::writeCell(ESM::ESMWriter& writer, CellStore& cell) con
 
     writer.writeCellId(cellState.mId);
     cellState.save(writer);
-    cell.writeFog(writer);
     cell.writeReferences(writer);
     writer.endRecord(ESM::REC_CSTA);
 }
@@ -317,9 +317,10 @@ namespace OFWorld
         // try named exteriors
         const ESM::Cell* cell = nullptr;
         const Store<ESM::Cell>& cells = mStore.get<ESM::Cell>();
-        const Store<ESM::GameSetting>& gmsts = mStore.get<ESM::GameSetting>();
         const Store<ESM::Region>& regions = mStore.get<ESM::Region>();
-        static const std::string& defaultName = gmsts.find("sDefaultCellname")->mValue.getString();
+        // The named exteriors of Morrowind cells: Fallout has none (its exteriors are ESM4 cells, found by
+        // findInterior and the world spaces), and its data has no sDefaultCellname, so an unnamed one has no name.
+        constexpr std::string_view defaultName;
 
         for (auto it = cells.extBegin(); it != cells.extEnd(); ++it)
         {
@@ -556,8 +557,9 @@ bool OFWorld::WorldModel::readRecord(ESM::ESMReader& reader, uint32_t type)
         state.load(reader);
         cellStore->loadState(state);
 
+        // The fog of war of the map of Morrowind, which every save of the engine wrote until that map was removed
         if (state.mHasFogOfWar)
-            cellStore->readFog(reader);
+            ESM::skipFogState(reader);
 
         if (cellStore->getState() != CellStore::State_Loaded)
             cellStore->load();

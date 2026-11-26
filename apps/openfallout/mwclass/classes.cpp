@@ -31,15 +31,12 @@
 #include "book.hpp"
 #include "clothing.hpp"
 #include "container.hpp"
-#include "creature.hpp"
-#include "creaturelevlist.hpp"
 #include "door.hpp"
 #include "ingredient.hpp"
 #include "itemlevlist.hpp"
 #include "light.hpp"
 #include "lockpick.hpp"
 #include "misc.hpp"
-#include "npc.hpp"
 #include "potion.hpp"
 #include "probe.hpp"
 #include "repair.hpp"
@@ -49,6 +46,7 @@
 #include "esm4base.hpp"
 #include "esm4creature.hpp"
 #include "esm4npc.hpp"
+#include "falloutplayer.hpp"
 #include "light4.hpp"
 
 namespace OFClass
@@ -56,8 +54,6 @@ namespace OFClass
     void registerClasses()
     {
         Activator::registerSelf();
-        Creature::registerSelf();
-        Npc::registerSelf();
         Weapon::registerSelf();
         Armor::registerSelf();
         Potion::registerSelf();
@@ -67,7 +63,6 @@ namespace OFClass
         Container::registerSelf();
         Door::registerSelf();
         Ingredient::registerSelf();
-        CreatureLevList::registerSelf();
         ItemLevList::registerSelf();
         Light::registerSelf();
         Lockpick::registerSelf();
@@ -93,6 +88,7 @@ namespace OFClass
         ESM4Named<ESM4::MiscItem>::registerSelf();
         ESM4Named<ESM4::MovableStatic>::registerSelf();
         ESM4Npc::registerSelf();
+        FalloutPlayer::registerSelf();
         ESM4Named<ESM4::Potion>::registerSelf();
         ESM4Static::registerSelf();
         ESM4Named<ESM4::StaticCollection>::registerSelf();

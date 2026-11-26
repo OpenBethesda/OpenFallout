@@ -564,13 +564,6 @@ namespace OFLua
         mMenuScripts.onViewportResized(width, height);
     }
 
-    void LuaManager::actorDied(const OFWorld::Ptr& actor)
-    {
-        if (actor.isEmpty())
-            return;
-        mLuaEvents.addLocalEvent({ getId(actor), "Died", {} });
-    }
-
     void LuaManager::onDialogueResponse(
         const OFWorld::Ptr& actor, const ESM::DialInfo& info, const ESM::Dialogue& record)
     {
@@ -590,57 +583,6 @@ namespace OFLua
             data["infoId"] = info.mId.serializeText();
             data["recordId"] = record.mId.serializeText();
             sendLocalEvent(mPlayer, "DialogueResponse", data);
-        });
-    }
-
-    void LuaManager::applyMagicEffects(ESM::RefId id, const OFWorld::Ptr& caster, ESM::RefNum item,
-        const OFWorld::Ptr& target, const std::vector<int>& effects, bool ignoreReflect, bool ignoreSpellAbsorption,
-        bool stackable, bool isReflect)
-    {
-        if (!target.isEmpty() && !effects.empty())
-        {
-            mLua.protectedCall([&](LuaUtil::LuaView& view) {
-                sol::table luaEffects = view.newTable();
-                for (int i = 1; i <= static_cast<int>(effects.size()); i++)
-                    luaEffects[i] = effects[i - 1];
-                sol::table data = view.newTable();
-                if (!caster.isEmpty())
-                    data["caster"] = LObject(caster);
-                if (!item.isZeroOrUnset())
-                    data["item"] = LObject(item);
-                data["id"] = id.serializeText();
-                data["target"] = LObject(target);
-                data["effects"] = luaEffects;
-                data["ignoreReflect"] = ignoreReflect;
-                data["ignoreSpellAbsorption"] = ignoreSpellAbsorption;
-                data["stackable"] = stackable;
-                data["isReflect"] = isReflect;
-                sendLocalEvent(target, "ApplyMagicEffects", data);
-            });
-        }
-    }
-
-    void LuaManager::magicProjectileHit(ESM::RefId spellId, const OFWorld::Ptr& caster, ESM::RefNum item,
-        const OFWorld::Ptr& victim, const osg::Vec3f& position, const osg::Vec3f& normal)
-    {
-        mLua.protectedCall([&](LuaUtil::LuaView& view) {
-            sol::table projectile = view.newTable();
-            sol::table hitResult = view.newTable();
-            sol::table spellcast = view.newTable();
-            hitResult["hit"] = true;
-            hitResult["hitPos"] = position;
-            hitResult["hitNormal"] = normal;
-            if (!victim.isEmpty())
-                hitResult["hitObject"] = GObject(victim);
-            spellcast["id"] = spellId.serializeText();
-            if (!caster.isEmpty())
-                spellcast["caster"] = GObject(caster);
-            if (item.isSet())
-                spellcast["item"] = GObject(item);
-            projectile["type"] = "Magic";
-            projectile["userData"] = spellcast;
-
-            mGlobalScripts.onProjectileHit(projectile, hitResult);
         });
     }
 
@@ -711,113 +653,6 @@ namespace OFLua
         OFBase::Environment::get().getWorldModel()->registerPtr(object);
         mEngineEvents.addToQueue(
             EngineEvents::OnPlaced{ getId(object), getId(actor), position, LuaUtil::asTransform(rotation) });
-    }
-
-    void LuaManager::animationTextKey(const OFWorld::Ptr& actor, const std::string& key)
-    {
-        auto pos = key.find(": ");
-        if (pos != std::string::npos)
-            mEngineEvents.addToQueue(
-                EngineEvents::OnAnimationTextKey{ getId(actor), key.substr(0, pos), key.substr(pos + 2) });
-    }
-
-    void LuaManager::playAnimation(const OFWorld::Ptr& actor, const std::string& groupname,
-        const OFRender::AnimPriority& priority, int blendMask, bool autodisable, float speedmult,
-        std::string_view start, std::string_view stop, float startpoint, uint32_t loops, bool loopfallback)
-    {
-        mLua.protectedCall([&](LuaUtil::LuaView& view) {
-            sol::table options = view.newTable();
-            options["blendMask"] = blendMask;
-            options["autoDisable"] = autodisable;
-            options["speed"] = speedmult;
-            options["startKey"] = start;
-            options["stopKey"] = stop;
-            options["startPoint"] = startpoint;
-            options["loops"] = loops;
-            options["forceLoop"] = loopfallback;
-
-            bool priorityAsTable = false;
-            for (uint32_t i = 1; i < OFRender::sNumBlendMasks; i++)
-                if (priority[static_cast<OFRender::BoneGroup>(i)] != priority[static_cast<OFRender::BoneGroup>(0)])
-                    priorityAsTable = true;
-            if (priorityAsTable)
-            {
-                sol::table priorityTable = view.newTable();
-                for (uint32_t i = 0; i < OFRender::sNumBlendMasks; i++)
-                    priorityTable[static_cast<OFRender::BoneGroup>(i)] = priority[static_cast<OFRender::BoneGroup>(i)];
-                options["priority"] = priorityTable;
-            }
-            else
-                options["priority"] = priority[OFRender::BoneGroup_LowerBody];
-
-            // mEngineEvents.addToQueue(event);
-            //  Has to be called immediately, otherwise engine details that depend on animations playing immediately
-            //  break.
-            if (auto* scripts = actor.getRefData().getLuaScripts())
-                scripts->onPlayAnimation(groupname, options);
-        });
-    }
-
-    void LuaManager::animationEnded(const OFWorld::Ptr& actor, std::string_view groupname, float time, float completion,
-        std::string_view startKey, std::string_view stopKey)
-    {
-        mEngineEvents.addToQueue(EngineEvents::OnAnimationEnded{
-            getId(actor), std::string(groupname), std::string(startKey), std::string(stopKey), time, completion });
-    }
-
-    void LuaManager::skillUse(const OFWorld::Ptr& actor, ESM::RefId skillId, int useType, float scale)
-    {
-        mEngineEvents.addToQueue(EngineEvents::OnSkillUse{ getId(actor), skillId.serializeText(), useType, scale });
-    }
-
-    void LuaManager::skillLevelUp(const OFWorld::Ptr& actor, ESM::RefId skillId, std::string_view source)
-    {
-        mEngineEvents.addToQueue(
-            EngineEvents::OnSkillLevelUp{ getId(actor), skillId.serializeText(), std::string(source) });
-    }
-
-    void LuaManager::onHit(const OFWorld::Ptr& attacker, const OFWorld::Ptr& victim, const OFWorld::Ptr& weapon,
-        const OFWorld::Ptr& ammo, int attackType, float attackStrength, float attackWindUp, float damage, bool isHealth,
-        const osg::Vec3f& hitPos, bool successful, OFMechanics::DamageSourceType sourceType)
-    {
-        mLua.protectedCall([&](LuaUtil::LuaView& view) {
-            sol::table damageTable = view.newTable();
-            if (isHealth)
-                damageTable["health"] = damage;
-            else
-                damageTable["fatigue"] = damage;
-
-            sol::table data = view.newTable();
-            if (!attacker.isEmpty())
-                data["attacker"] = LObject(attacker);
-            if (!weapon.isEmpty())
-                data["weapon"] = LObject(weapon);
-            if (!ammo.isEmpty())
-                data["ammo"] = ammo.getCellRef().getRefId().serializeText();
-            data["type"] = attackType;
-            data["strength"] = attackStrength;
-            data["windUp"] = attackWindUp;
-            data["damage"] = damageTable;
-            data["hitPos"] = hitPos;
-            data["successful"] = successful;
-            switch (sourceType)
-            {
-                case OFMechanics::DamageSourceType::Unspecified:
-                    data["sourceType"] = "unspecified";
-                    break;
-                case OFMechanics::DamageSourceType::Melee:
-                    data["sourceType"] = "melee";
-                    break;
-                case OFMechanics::DamageSourceType::Ranged:
-                    data["sourceType"] = "ranged";
-                    break;
-                case OFMechanics::DamageSourceType::Magical:
-                    data["sourceType"] = "magic";
-                    break;
-            }
-
-            sendLocalEvent(victim, "Hit", data);
-        });
     }
 
     void LuaManager::objectAddedToScene(const OFWorld::Ptr& ptr)

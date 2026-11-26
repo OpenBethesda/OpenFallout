@@ -39,6 +39,14 @@ namespace FalloutScript
         take(lookup, "fAVDMeleeDamageStrengthOffset", settings.mMeleeDamageStrengthOffset);
         take(lookup, "fAVDCritLuckBase", settings.mCritLuckBase);
         take(lookup, "fAVDCritLuckMult", settings.mCritLuckMult);
+        take(lookup, "fAVDUnarmedDamageBase", settings.mUnarmedDamageBase);
+        take(lookup, "fAVDUnarmedDamageMult", settings.mUnarmedDamageMult);
+        take(lookup, "fAVDPoisonResistEnduranceOffset", settings.mPoisonResistEnduranceOffset);
+        take(lookup, "fAVDPoisonResistEnduranceMult", settings.mPoisonResistEnduranceMult);
+        take(lookup, "fAVDRadResistEnduranceOffset", settings.mRadResistEnduranceOffset);
+        take(lookup, "fAVDRadResistEnduranceMult", settings.mRadResistEnduranceMult);
+        take(lookup, "fHealingRateSleepingBase", settings.mHealingRateSleepingBase);
+        take(lookup, "fHealingRateSleepingMult", settings.mHealingRateSleepingMult);
         take(lookup, "fActorSwimBreathBase", settings.mSwimBreathBase);
         take(lookup, "fActorSwimBreathMult", settings.mSwimBreathMult);
         take(lookup, "fActorSwimBreathDamage", settings.mSwimBreathDamage);
@@ -77,7 +85,23 @@ namespace FalloutScript
 
     double DerivedStats::meleeDamage(const DerivedStatSettings& settings, double strength)
     {
-        return std::max((strength + settings.mMeleeDamageStrengthOffset) * settings.mMeleeDamageStrengthMult, 0.0);
+        return std::max(
+            std::floor((strength + settings.mMeleeDamageStrengthOffset) * settings.mMeleeDamageStrengthMult), 0.0);
+    }
+
+    double DerivedStats::unarmedDamage(const DerivedStatSettings& settings, double unarmed)
+    {
+        return settings.mUnarmedDamageBase + unarmed * settings.mUnarmedDamageMult;
+    }
+
+    double DerivedStats::poisonResist(const DerivedStatSettings& settings, double endurance)
+    {
+        return (endurance + settings.mPoisonResistEnduranceOffset) * settings.mPoisonResistEnduranceMult;
+    }
+
+    double DerivedStats::radResist(const DerivedStatSettings& settings, double endurance)
+    {
+        return (endurance + settings.mRadResistEnduranceOffset) * settings.mRadResistEnduranceMult;
     }
 
     double DerivedStats::criticalChance(const DerivedStatSettings& settings, double luck)
@@ -96,6 +120,14 @@ namespace FalloutScript
     double DerivedStats::regeneration(double healRate, double seconds)
     {
         return std::max(healRate, 0.0) / 3600.0 * std::max(seconds, 0.0);
+    }
+
+    double DerivedStats::sleepingRegeneration(const DerivedStatSettings& settings, double healRate, double seconds)
+    {
+        const double perSecond
+            = (std::max(healRate, 0.0) * settings.mHealingRateSleepingMult + settings.mHealingRateSleepingBase)
+            / 3600.0;
+        return std::max(perSecond, 0.0) * std::max(seconds, 0.0);
     }
 
     double DerivedStats::swimBreath(const DerivedStatSettings& settings, double healRate)

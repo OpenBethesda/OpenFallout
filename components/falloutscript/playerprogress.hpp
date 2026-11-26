@@ -23,8 +23,9 @@ namespace FalloutScript
 
     /// What the story gives the player and the characters that nothing else in the game keeps yet: experience and
     /// karma, the perks of each character and the notes of the Pip-Boy, and what levelling up gives (skill points
-    /// and perks to choose, as LevellingRules says). It can be used from any thread. The level of the player is told
-    /// from the experience; the points of a new level are handed out by awardNextLevel.
+    /// and perks to choose, as LevellingRules says). It can be used from any thread. The experience tells the level
+    /// the player has reached; the points of a new level are handed out by awardNextLevel, and the level the player
+    /// is at goes up when the screen of that level up is done (finishLevel).
     class PlayerProgress
     {
         template <class T>
@@ -49,8 +50,16 @@ namespace FalloutScript
         /// for each next step, which is 150 points longer than the one before (200, 350, 500, ...: levels 2, 3, 4 and
         /// 5 start at 200, 550, 1,050 and 1,700).
         static int levelFor(int experience);
-        /// The level of the player under the rules that are set
+        /// The level the player is at: the stored level of the games, which the scripts, the health and the Pip-Boy go
+        /// by. It goes up by one when the screen of a level up is done (finishLevel), not when the experience gets
+        /// there (FalloutNV.exe: the screen's close at 0x7851F2 calls 0x8D5270, which stores the level plus one and
+        /// looks for another level up). SetLevel and ResetXP set it at once.
         int level() const;
+        /// The level the experience has reached under the rules that are set; a level up is due while it is above
+        /// the levels handed out
+        int reachedLevel() const;
+        /// The screen of the level up that was handed out last is done: the player is at that level now
+        void finishLevel();
         /// Whether the player is at the highest level of the rules (never when they have none)
         bool atHighestLevel() const;
         /// The experience that the next level needs (the same experience when the highest level is reached)
@@ -78,6 +87,13 @@ namespace FalloutScript
         /// Spends points; false when there are not that many
         bool spendSkillPoints(int amount);
         bool spendPerkPoint();
+        /// Spends points on a skill on the screen of a level up; false when there are not that many. The screen keeps
+        /// what each skill got until it is done (finishLevel), so that only those points can be taken back
+        bool spendSkillPoints(int skill, int amount);
+        /// Takes back up to that many points that the skill got on this screen and returns how many were taken back.
+        /// It goes by what was spent, not by the modifier of the skill: an effect or a script can lower the modifier
+        /// below the points spent
+        int refundSkillPoints(int skill, int amount);
         /// The level that the next perk is chosen at: the level that gave the oldest perk point not spent yet (an
         /// award of several levels at once keeps the level of each point), or the level of the player when the points
         /// come from elsewhere
@@ -128,7 +144,11 @@ namespace FalloutScript
         std::function<void(int, int)> mMiscStatListener;
         /// The level up to which the points have been handed out
         int mAwardedLevel = 1;
+        /// The level the player is at (level()); a save keeps none of its own, a loaded game is at the level handed out
+        int mLevel = 1;
         int mSkillPoints = 0;
+        /// The points each skill got on the screen of the level up that is open (spendSkillPoints(skill, amount))
+        std::map<int, int> mSpentOnScreen;
         int mPerkPoints = 0;
         /// The levels that gave the perk points that are not spent yet, oldest first (the points that a script gives
         /// have none)

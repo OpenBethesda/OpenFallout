@@ -8,5 +8,8 @@
   "limit": 300,
   "settings": { "Sound": { "master volume": "0" } },
   "env": { "OPENFALLOUT_HEADLESS_SOUND": "1" },
+  "expect_log": [
+    "ROUND\\tnote\\tsneak eye\\tdrop=[0-9.]+ back=-?[0-9.]+\\tok"
+  ],
   "variants": [ { "name": "plain" } ]
 }

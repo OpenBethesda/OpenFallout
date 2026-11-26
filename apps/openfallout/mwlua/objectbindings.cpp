@@ -19,8 +19,6 @@
 #include "../mwrender/renderingmanager.hpp"
 #include "../mwscript/falloutscripts.hpp"
 
-#include "../mwmechanics/creaturestats.hpp"
-
 #include "../mwbase/environment.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
@@ -97,9 +95,7 @@ namespace OFLua
         {
             OFBase::World* world = OFBase::Environment::get().getWorld();
             OFWorld::Ptr ptr = world->getPlayerPtr();
-            auto& stats = ptr.getClass().getCreatureStats(ptr);
-            stats.land(true);
-            stats.setTeleported(true);
+            // A fall in progress ends where the player arrives (PlayerCharacter::teleported)
             world->getPlayer().setTeleported(true);
             bool differentCell = ptr.getCell() != destCell;
             world->changeToCell(destCell->getCell()->getId(), toPos(pos, rot), false, differentCell);
@@ -117,12 +113,6 @@ namespace OFLua
             OFBase::World* world = OFBase::Environment::get().getWorld();
             OFWorld::WorldModel* wm = OFBase::Environment::get().getWorldModel();
             const OFWorld::Class& cls = ptr.getClass();
-            if (cls.isActor())
-            {
-                auto& stats = cls.getCreatureStats(ptr);
-                stats.land(false);
-                stats.setTeleported(true);
-            }
             const OFWorld::CellStore* srcCell = ptr.getCell();
             OFWorld::Ptr newPtr;
             if (srcCell == &wm->getDraftCell())
@@ -350,7 +340,10 @@ namespace OFLua
                 const OFWorld::Ptr& objPtr = object.ptr();
                 const OFWorld::Ptr& actorPtr = actor.ptr();
                 uint32_t esmRecordType = actorPtr.getType();
-                if (esmRecordType != ESM::REC_CREA && esmRecordType != ESM::REC_NPC_)
+                // (the characters and creatures of Fallout are NPC_ and CREA records of ESM4; the player, NPC_ 0x7, has
+                // a class of its own)
+                if (esmRecordType != ESM::REC_CREA && esmRecordType != ESM::REC_NPC_ && esmRecordType != ESM::REC_NPC_4
+                    && esmRecordType != ESM::REC_CREA4 && esmRecordType != ESM::REC_INTERNAL_PLAYER)
                     throw std::runtime_error(
                         "The argument of `activateBy` must be an actor who activates the object. Got: "
                         + actor.toString());

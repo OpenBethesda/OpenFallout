@@ -20,7 +20,6 @@
 #include <components/settings/values.hpp>
 
 #include "../mwmechanics/actorutil.hpp"
-#include "../mwmechanics/creaturestats.hpp"
 
 #include "../mwrender/bulletdebugdraw.hpp"
 
@@ -126,11 +125,6 @@ namespace OFPhysics
 
 namespace
 {
-    bool isUnderWater(const OFPhysics::ActorFrameData& actorData)
-    {
-        return actorData.mPosition.z() < actorData.mSwimLevel;
-    }
-
     osg::Vec3f interpolateMovements(const OFPhysics::PtrHolder& ptr, float timeAccum, float physicsDt)
     {
         const float interpolationFactor = std::clamp(timeAccum / physicsDt, 0.0f, 1.0f);
@@ -233,10 +227,9 @@ namespace
         {
             const float mPhysicsDt;
             const btCollisionWorld* mCollisionWorld;
-            const OFPhysics::WorldFrameData& mWorldFrameData;
             void operator()(const LockedActorSimulation& sim) const
             {
-                OFPhysics::MovementSolver::move(sim.second, mPhysicsDt, mCollisionWorld, mWorldFrameData);
+                OFPhysics::MovementSolver::move(sim.second, mPhysicsDt, mCollisionWorld);
             }
             void operator()(const LockedProjectileSimulation& sim) const
             {
@@ -258,17 +251,9 @@ namespace
                     return;
                 auto& [actor, frameDataRef] = *locked;
                 auto& frameData = frameDataRef.get();
-                auto ptr = actor->getPtr();
 
-                OFMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
-                const float heightDiff = frameData.mPosition.z() - frameData.mOldHeight;
-                const bool isStillOnGround = (mAdvanceSimulation && frameData.mWasOnGround && frameData.mIsOnGround);
-
-                if (isStillOnGround || frameData.mFlying || isUnderWater(frameData) || frameData.mSlowFall < 1)
-                    stats.land(ptr == OFMechanics::getPlayer() && (frameData.mFlying || isUnderWater(frameData)));
-                else if (heightDiff < 0)
-                    stats.addToFallHeight(-heightDiff);
-
+                // The height of a fall is measured by the player's actor, from where it left the ground to where it
+                // lands (PlayerCharacter::updateFall, rule C.F1)
                 actor->setSimulationPosition(::interpolateMovements(*actor, mTimeAccum, mPhysicsDt));
                 actor->setLastStuckPosition(frameData.mLastStuckPosition);
                 actor->setStuckFrames(frameData.mStuckFrames);
@@ -555,9 +540,6 @@ namespace OFPhysics
         mNextJob.store(0, std::memory_order_release);
 
         if (mAdvanceSimulation)
-            mWorldFrameData = std::make_unique<WorldFrameData>();
-
-        if (mAdvanceSimulation)
             mBudgetCursor += 1;
 
         if (mNumThreads == 0)
@@ -787,7 +769,7 @@ namespace OFPhysics
         {
             mPreStepBarrier->wait([this] { afterPreStep(); });
             int job = 0;
-            const Visitors::Move impl{ mPhysicsDt, mCollisionWorld, *mWorldFrameData };
+            const Visitors::Move impl{ mPhysicsDt, mCollisionWorld };
             const Visitors::WithLockedPtr<Visitors::Move, MaybeLock> vis{ impl, mCollisionWorldMutex, mLockingPolicy };
             while ((job = mNextJob.fetch_add(1, std::memory_order_relaxed)) < mNumJobs)
                 std::visit(vis, (*mSimulations)[job]);

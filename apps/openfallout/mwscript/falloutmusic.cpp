@@ -242,10 +242,8 @@ namespace OFScript
         {
             // The settings are read once, when the files of the game are loaded
             music.mConfigured = true;
-            const FalloutScript::Music::CombatSettings settings
-                = combatSettings([this](const char* name, float fallback) {
-                      return static_cast<float>(gameSetting(name, fallback));
-                  });
+            const FalloutScript::Music::CombatSettings settings = combatSettings(
+                [this](const char* name, float fallback) { return static_cast<float>(gameSettingOr(name, fallback)); });
             music.mNearRange = settings.mNearOuter;
             music.mCombat = FalloutScript::Music::CombatMusic(settings);
         }

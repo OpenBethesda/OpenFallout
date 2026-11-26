@@ -168,6 +168,23 @@ namespace
         int mAsked = 0;
     };
 
+    TEST(FalloutScriptActorValuesTest, a_base_that_is_forgotten_gives_way_to_the_starting_value_and_keeps_the_modifier)
+    {
+        ActorValues values;
+        const FormId player = 0x14;
+        const int sneak = ActorValue::sneak;
+        // The skills are worked out (the player's follow its SPECIAL, fallout-rules.md E.1.9)
+        EXPECT_TRUE(ActorValues::isDerived(sneak));
+        EXPECT_FALSE(values.hasBase(player, sneak));
+        values.setBase(player, sneak, 40);
+        values.modify(player, sneak, 5);
+        EXPECT_TRUE(values.hasBase(player, sneak));
+        EXPECT_EQ(values.current(player, sneak), 45);
+        values.resetBase(player, sneak);
+        EXPECT_FALSE(values.hasBase(player, sneak));
+        EXPECT_EQ(values.current(player, sneak), ActorValues::startingValue(sneak) + 5);
+    }
+
     TEST(FalloutScriptActorValuesTest, an_actor_value_nobody_set_starts_at_what_the_record_says)
     {
         GuardRecords records;
@@ -463,6 +480,41 @@ namespace
         EXPECT_TRUE(setup.mActors.isDead(guard));
     }
 
+    TEST(FalloutScriptActorValueCommandsTest, a_character_with_less_than_a_point_of_health_is_dead)
+    {
+        // The games kill an actor whose health is below 1.0 after a change of it (FalloutNV.exe 0x898650), not at 0
+        Runner setup;
+        ScriptBuilder builder;
+        builder.code(scriptName() + begin(BlockType::OnActivate)
+            + command(OpSetActorValue, valueAndInteger(ActorValue::health, 10))
+            + command(OpDamageActorValue, valueAndFloat(ActorValue::health, 9.5f)) + end());
+
+        setup.run(guard, builder);
+
+        EXPECT_DOUBLE_EQ(setup.mValues.current(guard, ActorValue::health), 0.5);
+        EXPECT_TRUE(setup.mActors.isDead(guard));
+    }
+
+    TEST(FalloutScriptActorValueCommandsTest, a_health_set_below_a_point_by_a_command_kills_as_damage_does)
+    {
+        // Rule D1 holds whatever lowered the health: ForceActorValue, SetActorValue and ModActorValue too
+        for (const std::uint16_t command : { OpForceActorValue, OpSetActorValue, OpModActorValue })
+        {
+            Runner setup;
+            ScriptBuilder builder;
+            builder.code(scriptName() + begin(BlockType::OnActivate)
+                + FalloutScriptTest::command(OpSetActorValue, valueAndInteger(ActorValue::health, 10))
+                + FalloutScriptTest::command(
+                    command, valueAndFloat(ActorValue::health, command == OpModActorValue ? -9.5f : 0.5f))
+                + end());
+
+            setup.run(guard, builder);
+
+            EXPECT_DOUBLE_EQ(setup.mValues.current(guard, ActorValue::health), 0.5) << "command " << command;
+            EXPECT_TRUE(setup.mActors.isDead(guard)) << "command " << command;
+        }
+    }
+
     TEST(FalloutScriptActorValueCommandsTest, a_character_is_alive_again_only_with_its_health_back)
     {
         Runner setup;
@@ -643,10 +695,13 @@ namespace
     }
 
     TEST(FalloutScriptActorValueCommandsTest,
-        the_level_of_the_player_follows_its_experience_and_anyone_elses_is_the_records)
+        the_level_of_the_player_is_its_stored_level_and_anyone_elses_is_the_records)
     {
         Runner setup;
+        // the experience of level 2, and the screen of that level done (the stored level, fallout-rules.md E.unclear 3)
         setup.mProgress.rewardExperience(250);
+        setup.mProgress.awardNextLevel(5);
+        setup.mProgress.finishLevel();
         ScriptBuilder builder;
         builder.code(scriptName() + begin(BlockType::OnActivate)
             + setTo(var('f', 1), callToken(OpGetLevel, arguments(0))) + end());

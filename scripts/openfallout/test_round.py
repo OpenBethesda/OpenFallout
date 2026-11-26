@@ -436,6 +436,18 @@ class AutoplayRounds(unittest.TestCase):
              "AUTOPLAY\tdigest\tloaded\tVCG01=79/r",
              "AUTOPLAY\tdigest\tcheck ok",
              "AUTOPLAY\tsave\tautoplay-again\tok\tdir=Player\tfiles=autoplay_again.omwsave")
+
+    @classmethod
+    def saved(cls, name):
+        """The lines of a save/load round up to the end of the probe: the quests' digest, then the player's digest (step 4: saved and
+        loaded with the same player) and the save that the rounds of step 4 start from (named after the game of the round)."""
+        game = name.split("-")[1]
+        lines = cls.SAVED + ("AUTOPLAY\tplayer\tsaved\tcell=w:0,0 level=1 xp=0",
+                             "AUTOPLAY\tplayer\tloaded\tcell=w:0,0 level=1 xp=0")
+        if game == "nv":     # Fallout 3 has no moment without a screen open to save one at
+            lines += (f"AUTOPLAY\tsave\ts4-fixture-{game}\tok\tdir=Player\tfiles=s4_fixture.omwsave",)
+        return lines
+
     GIVE_UP = ("AUTOPLAY\ttime is up",
                "AUTOPLAY\tlevel stuck",
                "AUTOPLAY\tscreens error\tattempt to index a nil value",
@@ -445,6 +457,8 @@ class AutoplayRounds(unittest.TestCase):
                "AUTOPLAY\tgate\tactivate\tCG04\tstage=21 ref=02B793 try=2\tno such object")
     SAVE_FAULTS = ("AUTOPLAY\tdigest\tcheck MISMATCH",
                    "AUTOPLAY\tload\tautoplay-save\tno slot",
+                   "AUTOPLAY\tplayer\tMISMATCH\tlevel 1 -> 2; items 7 -> 6",
+                   "AUTOPLAY\tplayer\terror\tload\tno player",
                    "AUTOPLAY\tload\terror\tcannot load",
                    "AUTOPLAY\tsave\tautoplay-again\tdisk full\tdir=Player\tfiles=",
                    "Failed to save game: Write operation failed (file stream): No space left on device")
@@ -468,12 +482,12 @@ class AutoplayRounds(unittest.TestCase):
 
     def test_a_run_that_played_to_the_end_passes(self):
         for name in self.NAMES:
-            lines = self.SAVED + self.PLAYED if name.startswith("saveload") else self.PLAYED
+            lines = self.saved(name) + self.PLAYED if name.startswith("saveload") else self.PLAYED
             self.assertEqual(self.outcome(name, self.log(*lines)), [], name)
 
     def test_a_run_that_did_not_end_by_itself_fails(self):
         for name in self.NAMES:
-            lines = self.SAVED + self.PLAYED[:-1] if name.startswith("saveload") else self.PLAYED[:-1]
+            lines = self.saved(name) + self.PLAYED[:-1] if name.startswith("saveload") else self.PLAYED[:-1]
             failed = self.outcome(name, self.log(*lines), timed_out=True)
             self.assertIn("timed out, expected the engine to end with status 0", failed, name)
             self.assertIn("no log line matches `AUTOPLAY\\tintro over\\t`", failed, name)
@@ -481,7 +495,7 @@ class AutoplayRounds(unittest.TestCase):
 
     def test_every_line_by_which_the_tool_gives_up_fails_the_round(self):
         for name in self.NAMES:
-            base = self.SAVED + self.PLAYED if name.startswith("saveload") else self.PLAYED
+            base = self.saved(name) + self.PLAYED if name.startswith("saveload") else self.PLAYED
             faults = self.GIVE_UP + (self.SAVE_FAULTS if name.startswith("saveload") else ())
             for fault in faults:
                 failed = self.outcome(name, self.log(*base, fault))
@@ -489,16 +503,16 @@ class AutoplayRounds(unittest.TestCase):
 
     def test_a_save_that_was_never_checked_or_loaded_twice_fails(self):
         for name in ("saveload-nv", "saveload-fo3"):
-            without_check = tuple(line for line in self.SAVED if "check ok" not in line)
+            without_check = tuple(line for line in self.saved(name) if "check ok" not in line)
             self.assertIn("no log line matches `AUTOPLAY\\tdigest\\tcheck ok`", self.outcome(name, self.log(*without_check, *self.PLAYED)))
             # a check before the load it is about is not the probe's sequence
-            out_of_order = (self.SAVED[0], self.SAVED[2], self.SAVED[4], self.SAVED[1], self.SAVED[3], self.SAVED[5]) + self.PLAYED
+            out_of_order = (self.SAVED[0], self.SAVED[2], self.SAVED[4], self.SAVED[1], self.SAVED[3], self.SAVED[5]) + self.saved(name)[6:] + self.PLAYED
             self.assertTrue(any(line.startswith("no log line matches `(?s)") for line in self.outcome(name, self.log(*out_of_order))))
             # the engine's saveGame catches a failed write and returns, so the probe logs `ok` with no file: that is no save
-            unwritten = self.SAVED[:5] + ("AUTOPLAY\tsave\tautoplay-again\tok\tdir=Player\tfiles=",) + self.PLAYED
+            unwritten = self.SAVED[:5] + ("AUTOPLAY\tsave\tautoplay-again\tok\tdir=Player\tfiles=",) + self.saved(name)[6:] + self.PLAYED
             self.assertIn("no log line matches `AUTOPLAY\\tsave\\tautoplay-again\\tok\\tdir=[^\\t]*\\tfiles=[^\\t\\n]+`",
                           self.outcome(name, self.log(*unwritten)))
-            twice = self.SAVED + self.SAVED[2:] + self.PLAYED
+            twice = self.saved(name) + self.SAVED[2:] + self.PLAYED
             self.assertIn("`AUTOPLAY\\tload\\tautoplay-save\\t` matches 2 log line(s), expected 1", self.outcome(name, self.log(*twice)))
 
 

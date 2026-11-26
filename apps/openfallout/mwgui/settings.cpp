@@ -42,44 +42,6 @@ namespace OFGui
         };
     }
 
-    WindowSettingValues makeInventoryWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mInventoryX,
-                .mY = Settings::windows().mInventoryY,
-                .mW = Settings::windows().mInventoryW,
-                .mH = Settings::windows().mInventoryH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mInventoryMaximizedX,
-                .mY = Settings::windows().mInventoryMaximizedY,
-                .mW = Settings::windows().mInventoryMaximizedW,
-                .mH = Settings::windows().mInventoryMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mInventoryMaximized,
-        };
-    }
-
-    WindowSettingValues makeMapWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mMapX,
-                .mY = Settings::windows().mMapY,
-                .mW = Settings::windows().mMapW,
-                .mH = Settings::windows().mMapH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mMapMaximizedX,
-                .mY = Settings::windows().mMapMaximizedY,
-                .mW = Settings::windows().mMapMaximizedW,
-                .mH = Settings::windows().mMapMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mMapMaximized,
-        };
-    }
-
     WindowSettingValues makePostprocessorWindowSettingValues()
     {
         return WindowSettingValues{
@@ -117,43 +79,4 @@ namespace OFGui
             .mIsMaximized = Settings::windows().mSettingsMaximized,
         };
     }
-
-    WindowSettingValues makeSpellsWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mSpellsX,
-                .mY = Settings::windows().mSpellsY,
-                .mW = Settings::windows().mSpellsW,
-                .mH = Settings::windows().mSpellsH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mSpellsMaximizedX,
-                .mY = Settings::windows().mSpellsMaximizedY,
-                .mW = Settings::windows().mSpellsMaximizedW,
-                .mH = Settings::windows().mSpellsMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mSpellsMaximized,
-        };
-    }
-
-    WindowSettingValues makeStatsWindowSettingValues()
-    {
-        return WindowSettingValues{
-            .mRegular = WindowRectSettingValues {
-                .mX = Settings::windows().mStatsX,
-                .mY = Settings::windows().mStatsY,
-                .mW = Settings::windows().mStatsW,
-                .mH = Settings::windows().mStatsH,
-            },
-            .mMaximized = WindowRectSettingValues {
-                .mX = Settings::windows().mStatsMaximizedX,
-                .mY = Settings::windows().mStatsMaximizedY,
-                .mW = Settings::windows().mStatsMaximizedW,
-                .mH = Settings::windows().mStatsMaximizedH,
-            },
-            .mIsMaximized = Settings::windows().mStatsMaximized,
-        };
-    }
-
 }

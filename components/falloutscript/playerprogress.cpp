@@ -22,7 +22,9 @@ namespace FalloutScript
         mExperience = 0;
         mKarma = 0;
         mAwardedLevel = 1;
+        mLevel = 1;
         mSkillPoints = 0;
+        mSpentOnScreen.clear();
         mPerkPoints = 0;
         mPerkLevels.clear();
         mMiscStats.clear();
@@ -81,7 +83,20 @@ namespace FalloutScript
     int PlayerProgress::level() const
     {
         const std::lock_guard lock(mMutex);
+        return mLevel;
+    }
+
+    int PlayerProgress::reachedLevel() const
+    {
+        const std::lock_guard lock(mMutex);
         return levelUnderLock();
+    }
+
+    void PlayerProgress::finishLevel()
+    {
+        const std::lock_guard lock(mMutex);
+        mLevel = std::min(mLevel + 1, std::max(mAwardedLevel, mLevel));
+        mSpentOnScreen.clear();
     }
 
     bool PlayerProgress::atHighestLevel() const
@@ -104,6 +119,7 @@ namespace FalloutScript
             level = std::min(level, mRules.mMaxLevel);
         mExperience = Levelling::experienceForLevel(mRules, level);
         mAwardedLevel = level;
+        mLevel = level;
     }
 
     void PlayerProgress::resetExperience()
@@ -111,6 +127,7 @@ namespace FalloutScript
         const std::lock_guard lock(mMutex);
         mExperience = 0;
         mAwardedLevel = 1;
+        mLevel = 1;
     }
 
     std::optional<PlayerProgress::LevelUp> PlayerProgress::awardNextLevel(double intelligence)
@@ -151,6 +168,30 @@ namespace FalloutScript
             return false;
         mSkillPoints -= amount;
         return true;
+    }
+
+    bool PlayerProgress::spendSkillPoints(int skill, int amount)
+    {
+        const std::lock_guard lock(mMutex);
+        if (amount < 0 || amount > mSkillPoints)
+            return false;
+        mSkillPoints -= amount;
+        mSpentOnScreen[skill] += amount;
+        return true;
+    }
+
+    int PlayerProgress::refundSkillPoints(int skill, int amount)
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = mSpentOnScreen.find(skill);
+        if (amount <= 0 || found == mSpentOnScreen.end())
+            return 0;
+        amount = std::min(amount, found->second);
+        found->second -= amount;
+        if (found->second <= 0)
+            mSpentOnScreen.erase(found);
+        mSkillPoints += amount;
+        return amount;
     }
 
     bool PlayerProgress::spendPerkPoint()

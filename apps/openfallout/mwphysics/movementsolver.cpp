@@ -4,12 +4,7 @@
 #include <BulletCollision/CollisionDispatch/btCollisionWorld.h>
 #include <BulletCollision/CollisionShapes/btConvexShape.h>
 
-#include <components/esm3/loadgmst.hpp>
 #include <components/misc/convert.hpp>
-
-#include "../mwbase/environment.hpp"
-
-#include "../mwworld/esmstore.hpp"
 
 #include "actor.hpp"
 #include "collisiontype.hpp"
@@ -125,8 +120,7 @@ namespace OFPhysics
         return tracer.mEndPos - offset + osg::Vec3f(0.f, 0.f, sGroundOffset);
     }
 
-    void MovementSolver::move(
-        ActorFrameData& actor, float time, const btCollisionWorld* collisionWorld, const WorldFrameData& worldData)
+    void MovementSolver::move(ActorFrameData& actor, float time, const btCollisionWorld* collisionWorld)
     {
         // Reset per-frame data
         actor.mWalkingOnWater = false;
@@ -148,6 +142,17 @@ namespace OFPhysics
 
         float swimlevel = actor.mSwimLevel + actor.mHalfExtentsZ;
 
+        // A jump while swimming (rule C.W2): the actor asks for it at the swim line or under it. It goes into the
+        // inertia, so gravity takes it and the swimmer may leave the water; the later steps of the frame do not add it
+        // again.
+        if (!actor.mFlying && !actor.mInert && actor.mMovement.z() > 0.f && actor.mPosition.z() < swimlevel + 1.f)
+        {
+            actor.mInertia = osg::Vec3f(0.f, 0.f, actor.mMovement.z());
+            actor.mMovement.z() = 0.f;
+        }
+        // (a swimmer rises out of the water while its inertia goes up)
+        const bool risingFromWater = !actor.mFlying && actor.mInertia.z() > 0.f;
+
         ActorTracer tracer;
 
         osg::Vec3f velocity;
@@ -163,6 +168,8 @@ namespace OFPhysics
             velocity = (osg::Quat(actor.mRotation.x(), osg::Vec3f(-1, 0, 0))
                            * osg::Quat(actor.mRotation.y(), osg::Vec3f(0, 0, -1)))
                 * actor.mMovement;
+            if (risingFromWater)
+                velocity += actor.mInertia;
         }
         else
         {
@@ -170,18 +177,15 @@ namespace OFPhysics
 
             if ((velocity.z() > 0.f && actor.mIsOnGround && !actor.mIsOnSlope)
                 || (velocity.z() > 0.f && velocity.z() + actor.mInertia.z() <= -velocity.z() && actor.mIsOnSlope))
+            {
                 actor.mInertia = velocity;
+                // The jump is in the inertia now: the later steps of this frame must not add its speed again (with two
+                // or more steps in a frame the take-off speed counted twice, and the height of a jump went with the
+                // frame rate: 77 and 113 units for the 64 of rule C.J1)
+                actor.mMovement.z() = 0.f;
+            }
             else if (!actor.mIsOnGround || actor.mIsOnSlope)
                 velocity = velocity + actor.mInertia;
-        }
-
-        // Now that we have the effective movement vector, apply wind forces to it
-        if (worldData.mIsInStorm && velocity.length() > 0)
-        {
-            const OFWorld::ESMStore& store = *OFBase::Environment::get().getESMStore();
-            const float fStromWalkMult = store.get<ESM::GameSetting>().find("fStromWalkMult")->mValue.getFloat();
-            const float angleCos = worldData.mStormDirection * velocity / velocity.length();
-            velocity *= 1.f + fStromWalkMult * angleCos;
         }
 
         Stepper stepper(collisionWorld, actor.mCollisionObject);
@@ -204,8 +208,8 @@ namespace OFPhysics
             osg::Vec3f nextpos = newPosition + velocity * remainingTime;
             bool underwater = newPosition.z() < swimlevel;
 
-            // If not able to fly, don't allow to swim up into the air
-            if (!actor.mFlying && nextpos.z() > swimlevel && underwater)
+            // If not able to fly, don't allow to swim up into the air (but a jump takes the swimmer out)
+            if (!actor.mFlying && !risingFromWater && nextpos.z() > swimlevel && underwater)
             {
                 const osg::Vec3f down(0, 0, -1);
                 velocity = reject(velocity, down);
@@ -242,7 +246,6 @@ namespace OFPhysics
 
             // We hit something. Check if we can step up.
             float hitHeight = tracer.mHitPoint.z() - tracer.mEndPos.z() + actor.mHalfExtentsZ;
-            osg::Vec3f oldPosition = newPosition;
             bool usedStepLogic = false;
             if (!isActor(tracer.mHitObject))
             {
@@ -261,9 +264,7 @@ namespace OFPhysics
             }
             if (usedStepLogic)
             {
-                if (actor.mIsAquatic && newPosition.z() + actor.mHalfExtentsZ > actor.mWaterlevel)
-                    newPosition = oldPosition;
-                else if (!actor.mFlying && actor.mPosition.z() >= swimlevel)
+                if (!actor.mFlying && actor.mPosition.z() >= swimlevel)
                     forceGroundTest = true;
             }
             else
@@ -425,7 +426,7 @@ namespace OFPhysics
             }
         }
 
-        if ((isOnGround && !isOnSlope) || newPosition.z() < swimlevel || actor.mFlying)
+        if ((isOnGround && !isOnSlope) || (newPosition.z() < swimlevel && actor.mInertia.z() <= 0.f) || actor.mFlying)
             actor.mInertia = osg::Vec3f(0.f, 0.f, 0.f);
         else
         {

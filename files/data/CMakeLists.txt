@@ -113,7 +113,6 @@ set(BUILTIN_DATA_FILES
     builtin.omwscripts
 
     scripts/omw/activationhandlers.lua
-    scripts/omw/esmfallbacks.lua
     scripts/omw/camera/camera.lua
     scripts/omw/camera/head_bobbing.lua
     scripts/omw/camera/third_person.lua
@@ -125,7 +124,6 @@ set(BUILTIN_DATA_FILES
     scripts/omw/console/player.lua
     scripts/omw/console/menu.lua
     scripts/omw/mechanics/actorcontroller.lua
-    scripts/omw/mechanics/animationcontroller.lua
     scripts/omw/mechanics/globalcontroller.lua
     scripts/omw/mechanics/playercontroller.lua
     scripts/omw/settings/menu.lua
@@ -140,8 +138,6 @@ set(BUILTIN_DATA_FILES
     scripts/omw/mwui/textEdit.lua
     scripts/omw/mwui/space.lua
     scripts/omw/mwui/init.lua
-    scripts/omw/skillhandlers.lua
-    scripts/omw/crimes.lua
     scripts/omw/falloutbarter.lua
     scripts/omw/falloutrepairservices.lua
     scripts/omw/falloutpipboyrepair.lua
@@ -211,22 +207,17 @@ set(BUILTIN_DATA_FILES
     mygui/openmw_console.layout
     mygui/openmw_console.skin.xml
     mygui/openmw_controllerbuttons.layout
-    mygui/openmw_count_window.layout
     mygui/openmw_edit.skin.xml
     mygui/openmw_hud_box.skin.xml
     mygui/openmw_hud_energybar.skin.xml
     mygui/openmw_hud.layout
     mygui/openmw_interactive_messagebox.layout
     mygui/openmw_interactive_messagebox_notransp.layout
-    mygui/openmw_inventory_tabs.layout
-    mygui/openmw_inventory_window.layout
     mygui/openmw_layers.xml
     mygui/openmw_lua.xml
     mygui/openmw_list.skin.xml
     mygui/openmw_mainmenu.layout
     mygui/openmw_mainmenu.skin.xml
-    mygui/openmw_map_window.layout
-    mygui/openmw_map_window.skin.xml
     mygui/openmw_messagebox.layout
     mygui/openmw_pointer.xml
     mygui/openmw_progress.skin.xml
@@ -234,8 +225,6 @@ set(BUILTIN_DATA_FILES
     mygui/openmw_scroll.skin.xml
     mygui/openmw_settings_window.layout
     mygui/openmw_settings.xml
-    mygui/openmw_spell_window.layout
-    mygui/openmw_stats_window.layout
     mygui/openmw_text.skin.xml
     mygui/openmw_tooltips.layout
     mygui/openmw_windows.skin.xml
@@ -262,9 +251,6 @@ endforeach (f)
 # most of them) shadows the one made here.
 set(FALLBACK_TEXTURES
     textures/_land_default.dds
-    textures/compass.dds
-    textures/cursor_drop_ground.dds
-    textures/door_icon.dds
     textures/menu_bar_gray.dds
     textures/menu_button_frame_bottom.dds
     textures/menu_button_frame_bottom_left_corner.dds
@@ -370,31 +356,8 @@ set(FALLBACK_TEXTURES
     textures/tx_menubook_topics_idle.dds
     textures/tx_menubook_topics_over.dds
     textures/tx_menubook_topics_pressed.dds
-    icons/k/stealth_handtohand.dds
-    icons/k/stealth_sneak.dds
-    icons/tx_goldicon.dds
 )
 
 foreach (f ${FALLBACK_TEXTURES})
     copy_resource_file("${CMAKE_CURRENT_SOURCE_DIR}/${f}" "${OPENFALLOUT_RESOURCES_ROOT}" "resources/vfs-fallback/${f}")
-endforeach (f)
-
-# A skeleton with no body for the actors of a game that supplies none, Fallout 3 and New Vegas among them. It is copied to
-# every path the engine looks for a base skeleton at, into resources/vfs-fallback. The engine adds that directory to the
-# virtual file system before every archive and data directory, so that the base skeleton of a game that has one, in an
-# archive or loose, shadows it. Regenerate the file with scripts/openfallout/placeholder_skeleton.py.
-set(PLACEHOLDER_SKELETON_PATHS
-    meshes/base_anim.nif
-    meshes/base_anim_female.nif
-    meshes/base_anim_female.1st.nif
-    meshes/base_animkna.nif
-    meshes/base_animkna.1st.nif
-    meshes/xbase_anim.nif
-    meshes/xbase_anim.1st.nif
-    meshes/xbase_anim_female.nif
-    meshes/xargonian_swimkna.nif
-)
-
-foreach (f ${PLACEHOLDER_SKELETON_PATHS})
-    copy_resource_file("${CMAKE_CURRENT_SOURCE_DIR}/meshes/placeholder_skeleton.nif" "${OPENFALLOUT_RESOURCES_ROOT}" "resources/vfs-fallback/${f}")
 endforeach (f)

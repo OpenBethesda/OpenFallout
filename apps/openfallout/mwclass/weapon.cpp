@@ -12,10 +12,9 @@
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwworld/actionequip.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
-#include "../mwworld/inventorystore.hpp"
+#include "../mwworld/nullaction.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include "../mwmechanics/weapontype.hpp"
@@ -79,38 +78,6 @@ namespace OFClass
         const OFWorld::LiveCellRef<ESM::Weapon>* ref = ptr.get<ESM::Weapon>();
 
         return ref->mBase->mScript;
-    }
-
-    std::pair<std::vector<int>, bool> Weapon::getEquipmentSlots(const OFWorld::ConstPtr& ptr) const
-    {
-        const OFWorld::LiveCellRef<ESM::Weapon>* ref = ptr.get<ESM::Weapon>();
-        ESM::WeaponType::Class weapClass = OFMechanics::getWeaponType(ref->mBase->mData.mType)->mWeaponClass;
-
-        std::vector<int> slots;
-        bool stack = false;
-
-        if (weapClass == ESM::WeaponType::Ammo)
-        {
-            slots.push_back(int(OFWorld::InventoryStore::Slot_Ammunition));
-            stack = true;
-        }
-        else if (weapClass == ESM::WeaponType::Thrown)
-        {
-            slots.push_back(int(OFWorld::InventoryStore::Slot_CarriedRight));
-            stack = true;
-        }
-        else
-            slots.push_back(int(OFWorld::InventoryStore::Slot_CarriedRight));
-
-        return std::make_pair(slots, stack);
-    }
-
-    ESM::RefId Weapon::getEquipmentSkill(const OFWorld::ConstPtr& ptr, bool useLuaInterfaceIfAvailable) const
-    {
-        const OFWorld::LiveCellRef<ESM::Weapon>* ref = ptr.get<ESM::Weapon>();
-        const ESM::RefId type = ref->mBase->mData.mType;
-
-        return OFMechanics::getWeaponType(type)->mSkill;
     }
 
     int Weapon::getValue(const OFWorld::ConstPtr& ptr) const
@@ -266,53 +233,6 @@ namespace OFClass
         newItem.mData.mFlags |= ESM::Weapon::Magical;
         const ESM::Weapon* record = OFBase::Environment::get().getESMStore()->insert(newItem);
         return record->mId;
-    }
-
-    std::pair<int, std::string_view> Weapon::canBeEquipped(const OFWorld::ConstPtr& ptr, const OFWorld::Ptr& npc) const
-    {
-        const ESM::RefId type = ptr.get<ESM::Weapon>()->mBase->mData.mType;
-
-        // Do not allow equip weapons from inventory during attack
-        if (npc.isInCell() && OFBase::Environment::get().getWindowManager()->isGuiMode()
-            && OFBase::Environment::get().getMechanicsManager()->isAttackingOrSpell(npc))
-        {
-            ESM::RefId activeWeaponTypeId;
-            OFMechanics::getActiveWeapon(npc, &activeWeaponTypeId);
-            if (OFMechanics::isWeaponType(activeWeaponTypeId) || activeWeaponTypeId == ESM::WeaponType::HandToHand)
-            {
-                auto* activeWeaponInfo = OFMechanics::getWeaponType(activeWeaponTypeId);
-                bool isAmmo = OFMechanics::getWeaponType(type)->mWeaponClass == ESM::WeaponType::Class::Ammo;
-                bool activeWeapUsesAmmo = activeWeaponInfo->mWeaponClass == ESM::WeaponType::Class::Ranged;
-                bool sameAmmoType = activeWeaponInfo->mAmmoType == type;
-                // special case for ammo equipping
-                if ((activeWeapUsesAmmo && !sameAmmoType) || !isAmmo)
-                    return { 0, "#{sCantEquipWeapWarning}" };
-            }
-        }
-
-        if (hasItemHealth(ptr) && getItemHealth(ptr) == 0)
-            return { 0, "#{sInventoryMessage1}" };
-
-        std::pair<std::vector<int>, bool> slots = getEquipmentSlots(ptr);
-
-        if (slots.first.empty())
-            return { 0, {} };
-
-        if (OFMechanics::getWeaponType(type)->mFlags & ESM::WeaponType::TwoHanded)
-        {
-            return { 2, {} };
-        }
-
-        return { 1, {} };
-    }
-
-    std::unique_ptr<OFWorld::Action> Weapon::use(const OFWorld::Ptr& ptr, bool force) const
-    {
-        std::unique_ptr<OFWorld::Action> action = std::make_unique<OFWorld::ActionEquip>(ptr, force);
-
-        action->setSound(getUpSoundId(ptr));
-
-        return action;
     }
 
     OFWorld::Ptr Weapon::copyToCellImpl(const OFWorld::ConstPtr& ptr, OFWorld::CellStore& cell) const

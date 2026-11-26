@@ -231,6 +231,8 @@ file(GLOB UNITTEST_SRC_FILES
     falloutscript/testinteraction.cpp
     falloutscript/testderivedstats.cpp
     falloutscript/testfalldamage.cpp
+    falloutscript/testmovement.cpp
+    falloutscript/testprocesslevels.cpp
     falloutscript/testfootsteps.cpp
     falloutscript/testambient.cpp
     falloutscript/testnearwater.cpp
@@ -310,6 +312,7 @@ file(GLOB UNITTEST_SRC_FILES
     esm3/testcells.cpp
     esm3/testdialogue.cpp
     esm3/testmagicfactionscriptplayer.cpp
+    esm3/testoldplayer.cpp
     esm3/testmorrowindrecords.cpp
     esm3/testsavegamegaps.cpp
     esm3/testreaderandland.cpp

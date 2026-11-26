@@ -80,7 +80,6 @@ namespace OFWorld
     class DateTimeManager;
     class WeatherManager;
     class Player;
-    class ProjectileManager;
 
     /// \brief The game world and its visual representation
 
@@ -107,7 +106,6 @@ namespace OFWorld
         std::unique_ptr<OFWorld::WeatherStore> mWeatherStore;
         std::unique_ptr<OFWorld::WeatherManager> mWeatherManager;
         std::unique_ptr<OFWorld::DateTimeManager> mTimeManager;
-        std::unique_ptr<ProjectileManager> mProjectileManager;
 
         bool mSky;
         bool mGodMode;
@@ -120,8 +118,8 @@ namespace OFWorld
         int mActivationDistanceOverride;
 
         std::string mStartCell;
-
-        float mSwimHeightScale;
+        /// sDefaultCellName of the game (an exe default, "Wilderness"), read once the Fallout scripts are there
+        mutable std::string mDefaultCellName;
 
         float mDistanceToFocusObject;
         OFPhysics::RayCastingResult mFocusRay;
@@ -129,8 +127,6 @@ namespace OFWorld
         bool mTeleportEnabled;
         bool mLevitationEnabled;
         bool mPlayerTraveling;
-
-        float mSpellPreloadTimer;
 
         std::map<OFWorld::Ptr, OFWorld::DoorState> mDoorStates;
         ///< only holds doors that are currently moving. 1 = opening, 2 = closing
@@ -149,8 +145,6 @@ namespace OFWorld
         Ptr copyObjectToCell(const ConstPtr& ptr, CellStore* cell, ESM::Position pos, int count, bool adjustPos);
 
         void updateSoundListener();
-
-        void preloadSpells();
 
         OFWorld::Ptr getFocusObject(float maxDistance, bool ignorePlayer = true);
 
@@ -177,11 +171,6 @@ namespace OFWorld
         void loadGroundcoverFiles(const Files::Collections& fileCollections,
             const std::vector<std::string>& groundcoverFiles, ToUTF8::Utf8Encoder* encoder,
             Loading::Listener* listener);
-
-        float feetToGameUnits(float feet);
-
-        OFWorld::ConstPtr getClosestMarker(const OFWorld::ConstPtr& ptr, const ESM::RefId& id);
-        OFWorld::ConstPtr getClosestMarkerFromExteriorPosition(const osg::Vec3f& worldPos, const ESM::RefId& id);
 
     public:
         WorldModel& getWorldModel() { return mWorldModel; }
@@ -214,7 +203,6 @@ namespace OFWorld
         void readRecord(ESM::ESMReader& reader, uint32_t type) override;
 
         // switch to POV before showing player's death animation
-        void useDeathCamera() override;
 
         void setWaterHeight(const float height) override;
 
@@ -241,6 +229,7 @@ namespace OFWorld
         bool isCellQuasiExterior() const override;
 
         const std::set<CellStore*, std::less<>>& getActiveCells() const override;
+        bool isCellActive(const CellStore& cell) const override;
 
         ESM::RefId getCurrentWorldspace() const;
 
@@ -434,14 +423,11 @@ namespace OFWorld
         void processChangedSettings(const Settings::CategorySettingVector& settings) override;
 
         bool isFlying(const OFWorld::Ptr& ptr) const override;
-        bool isSlowFalling(const OFWorld::Ptr& ptr) const override;
-        /// Is the head of the creature underwater?
         bool isSubmerged(const OFWorld::ConstPtr& object) const override;
         bool isSwimming(const OFWorld::ConstPtr& object) const override;
         bool isUnderwater(const OFWorld::CellStore* cell, const osg::Vec3f& pos) const override;
         bool isUnderwater(const OFWorld::ConstPtr& object, const float heightRatio) const override;
         bool isWading(const OFWorld::ConstPtr& object) const override;
-        bool isWaterWalkingCastableOnTarget(const OFWorld::ConstPtr& target) const override;
         bool isOnGround(const OFWorld::Ptr& ptr) const override;
         int getFloorMaterial(const OFWorld::ConstPtr& actor, bool& stairs) const override;
 
@@ -461,6 +447,9 @@ namespace OFWorld
         void disableDeferredPreviewRotation() override;
 
         void saveLoaded(const ESM::ESMReader& reader) override;
+
+        /// NPC_ 0x7 and PlayerRef (0x14) of the first Fallout plugin
+        std::pair<const ESM4::Npc*, ESM::RefNum> findPlayerRecord() const;
 
         void setupPlayer() override;
         void renderPlayer() override;
@@ -483,19 +472,8 @@ namespace OFWorld
             const OFWorld::ConstPtr& object) override; ///< @return true if the player is colliding with \a object
         bool getActorCollidingWith(
             const OFWorld::ConstPtr& object) override; ///< @return true if any actor is colliding with \a object
-        void hurtStandingActors(const OFWorld::ConstPtr& object, float dmgPerSecond) override;
-        ///< Apply a health difference to any actors standing on \a object.
-        /// To hurt actors, healthPerSecond should be a positive value. For a negative value, actors will be healed.
-        void hurtCollidingActors(const OFWorld::ConstPtr& object, float dmgPerSecond) override;
-        ///< Apply a health difference to any actors colliding with \a object.
-        /// To hurt actors, healthPerSecond should be a positive value. For a negative value, actors will be healed.
 
         float getWindSpeed() const override;
-
-        void getContainersOwnedBy(const OFWorld::ConstPtr& npc, std::vector<OFWorld::Ptr>& out) override;
-        ///< get all containers in active cells owned by this Npc
-        void getItemsOwnedBy(const OFWorld::ConstPtr& npc, std::vector<OFWorld::Ptr>& out) override;
-        ///< get all items in active cells owned by this Npc
 
         bool getLOS(const OFWorld::ConstPtr& actor, const OFWorld::ConstPtr& targetActor) override;
         ///< get Line of Sight (morrowind stupid implementation)
@@ -507,9 +485,6 @@ namespace OFWorld
 
         int canRest() const override;
         ///< check if the player is allowed to rest
-
-        void rest(double hours) override;
-        void rechargeItems(float duration, bool activeOnly);
 
         /// \todo Probably shouldn't be here
         OFRender::Animation* getAnimation(const OFWorld::Ptr& ptr) override;
@@ -551,24 +526,13 @@ namespace OFWorld
          * @param actor
          * @return Success or the failure condition.
          */
-        OFWorld::SpellCastState startSpellCast(const OFWorld::Ptr& actor) override;
 
         /**
          * @brief Cast the actual spell, should be called mid-animation
          * @param actor
          */
-        void castSpell(const OFWorld::Ptr& actor, bool manualSpell = false) override;
-
-        void launchMagicBolt(const ESM::RefId& spellId, const OFWorld::Ptr& caster, const osg::Vec3f& fallbackDirection,
-            ESM::RefNum item) override;
-        void launchProjectile(OFWorld::Ptr& actor, OFWorld::Ptr& projectile, const osg::Vec3f& worldPos,
-            const osg::Quat& orient, OFWorld::Ptr& bow, float speed, float attackStrength, float attackWindUp) override;
-        void updateProjectilesCasters() override;
-
-        void applyLoopingParticles(const OFWorld::Ptr& ptr) const override;
 
         const std::vector<std::string>& getContentFiles() const override;
-        void breakInvisibility(const OFWorld::Ptr& actor) override;
 
         // Allow NPCs to use torches?
         bool useTorches() const override;
@@ -580,23 +544,6 @@ namespace OFWorld
         float getPhysicsFrameRateDt() const override;
 
         bool findInteriorPositionInWorldSpace(const OFWorld::CellStore* cell, osg::Vec3f& result) override;
-
-        /// Teleports \a ptr to the closest reference of \a id (e.g. DivineMarker, PrisonMarker, TempleMarker)
-        /// @note id must be lower case
-        void teleportToClosestMarker(const OFWorld::Ptr& ptr, const ESM::RefId& id) override;
-
-        /// List all references (filtered by \a type) detected by \a ptr. The range
-        /// is determined by the current magnitude of the "Detect X" magic effect belonging to \a type.
-        /// @note This also works for references in containers.
-        void listDetectedReferences(
-            const OFWorld::Ptr& ptr, std::vector<OFWorld::Ptr>& out, DetectionType type) override;
-
-        /// Update the value of some globals according to the world state, which may be used by dialogue entries.
-        /// This should be called when initiating a dialogue.
-        void updateDialogueGlobals() override;
-
-        /// Spawn a random creature from a levelled list next to the player
-        void spawnRandomCreature(const ESM::RefId& creatureList) override;
 
         void spawnEffect(VFS::Path::NormalizedView model, const std::string& textureOverride,
             const osg::Vec3f& worldPos, float scale = 1.f, bool isMagicVFX = true, bool useAmbientLight = true,
@@ -610,15 +557,7 @@ namespace OFWorld
         /// @see OFWorld::WeatherManager::getStormDirection
         osg::Vec3f getStormDirection() const override;
 
-        /// Resets all actors in the current active cells to their original location within that cell.
-        void resetActors() override;
-
         bool isWalkingOnWater(const OFWorld::ConstPtr& actor) const override;
-
-        /// Return a vector aiming the actor's weapon towards a target.
-        /// @note The length of the vector is the distance between actor and target.
-        osg::Vec3f aimToTarget(
-            const OFWorld::ConstPtr& actor, const OFWorld::ConstPtr& target, bool isRangedCombat) override;
 
         void setPlayerTraveling(bool traveling) override;
         bool isPlayerTraveling() const override;
@@ -633,9 +572,6 @@ namespace OFWorld
         /// \param ptr object to export scene graph for (if empty, export entire scene graph)
         std::filesystem::path exportSceneGraph(const OFWorld::Ptr& ptr) override;
 
-        /// Preload VFX associated with this effect list
-        void preloadEffects(const ESM::EffectList* effectList) override;
-
         DetourNavigator::Navigator* getNavigator() const override;
 
         void updateActorPath(const OFWorld::ConstPtr& actor, const std::deque<osg::Vec3f>& path,
@@ -647,9 +583,6 @@ namespace OFWorld
         void setNavMeshNumberToRender(const std::size_t value) override;
 
         DetourNavigator::AgentBounds getPathfindingAgentBounds(const OFWorld::ConstPtr& actor) const override;
-
-        bool hasCollisionWithDoor(
-            const OFWorld::ConstPtr& door, const osg::Vec3f& position, const osg::Vec3f& destination) const override;
 
         bool isAreaOccupiedByOtherActor(const OFWorld::ConstPtr& actor, const osg::Vec3f& position) const override;
 

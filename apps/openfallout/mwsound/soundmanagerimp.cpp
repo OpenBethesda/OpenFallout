@@ -268,17 +268,11 @@ namespace OFSound
 
     StreamPtr SoundManager::playVoice(DecoderPtr decoder, const osg::Vec3f& pos, bool playlocal, Type type)
     {
-        OFBase::World* world = OFBase::Environment::get().getWorld();
-        static const float fAudioMinDistanceMult
-            = world->getStore().get<ESM::GameSetting>().find("fAudioMinDistanceMult")->mValue.getFloat();
-        static const float fAudioMaxDistanceMult
-            = world->getStore().get<ESM::GameSetting>().find("fAudioMaxDistanceMult")->mValue.getFloat();
-        static const float fAudioVoiceDefaultMinDistance
-            = world->getStore().get<ESM::GameSetting>().find("fAudioVoiceDefaultMinDistance")->mValue.getFloat();
-        static const float fAudioVoiceDefaultMaxDistance
-            = world->getStore().get<ESM::GameSetting>().find("fAudioVoiceDefaultMaxDistance")->mValue.getFloat();
-        static float minDistance = std::max(fAudioVoiceDefaultMinDistance * fAudioMinDistanceMult, 1.0f);
-        static float maxDistance = std::max(fAudioVoiceDefaultMaxDistance * fAudioMaxDistanceMult, minDistance);
+        // A voice has no sound record: the games play it from the speaker, and Fallout has no fAudio* settings
+        // (fallout-rules.md D.S4). It keeps the range the engine gave voices before the Morrowind settings went (10
+        // and 60, scaled by 20 and 50).
+        constexpr float minDistance = 200.f;
+        constexpr float maxDistance = 3000.f;
 
         bool played;
         float basevol = volumeFromType(type);

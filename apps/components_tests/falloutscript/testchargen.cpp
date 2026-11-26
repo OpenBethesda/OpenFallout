@@ -112,11 +112,12 @@ namespace
         EXPECT_TRUE(chargen.adjustAttribute(strength, -1));
     }
 
-    TEST(FalloutScriptChargenTest, a_skill_is_two_plus_twice_its_attribute_plus_half_the_luck_and_fifteen_when_tagged)
+    TEST(
+        FalloutScriptChargenTest, a_skill_is_two_plus_twice_its_attribute_plus_half_the_luck_up_and_fifteen_when_tagged)
     {
         Chargen chargen;
-        // Barter is governed by charisma: 2 + 2 * 5 + 5 / 2
-        EXPECT_EQ(chargen.skillValue(barter), 14);
+        // Barter is governed by charisma: 2 + 2 * 5 + 5 / 2 rounded up (the games round the half of the luck up)
+        EXPECT_EQ(chargen.skillValue(barter), 15);
         chargen.adjustAttribute(luck, 1);
         EXPECT_EQ(chargen.skillValue(barter), 2 + 10 + 3);
         ASSERT_TRUE(chargen.toggleTag(barter));

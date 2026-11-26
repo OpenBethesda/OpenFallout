@@ -54,34 +54,6 @@ namespace OFLua
         {
             OFWorld::CellStore& mCell;
         };
-        struct OnAnimationTextKey
-        {
-            ESM::RefNum mActor;
-            std::string mGroupname;
-            std::string mKey;
-        };
-        struct OnAnimationEnded
-        {
-            ESM::RefNum mActor;
-            std::string mGroupname;
-            std::string mStartKey;
-            std::string mStopKey;
-            float mTime;
-            float mCompletion;
-        };
-        struct OnSkillUse
-        {
-            ESM::RefNum mActor;
-            std::string mSkill;
-            int useType;
-            float scale;
-        };
-        struct OnSkillLevelUp
-        {
-            ESM::RefNum mActor;
-            std::string mSkill;
-            std::string mSource;
-        };
         struct OnDropped
         {
             ESM::RefNum mObject;
@@ -97,7 +69,7 @@ namespace OFLua
             LuaUtil::TransformQ mRotation;
         };
         using Event = std::variant<OnActive, OnInactive, OnConsume, OnActivate, OnUseItem, OnNewExterior, OnTeleported,
-            OnAnimationTextKey, OnAnimationEnded, OnSkillUse, OnSkillLevelUp, OnDropped, OnPlaced>;
+            OnDropped, OnPlaced>;
 
         void clear() { mQueue.clear(); }
         void addToQueue(Event e) { mQueue.push_back(std::move(e)); }

@@ -9,7 +9,8 @@
   "settings": { "Sound": { "master volume": "0" } },
   "env": { "OPENFALLOUT_HEADLESS_SOUND": "1" },
   "expect_log": [
-    "ROUND\\tnote\\tbook\\tpicked up with no screen"
+    "ROUND\\tnote\\tbook\\tpicked up with no screen",
+    "ROUND\\tnote\\tbook\\tread: Unarmed \\+1"
   ],
   "forbid_log": [
     "unknown GUI (mode|window) '"

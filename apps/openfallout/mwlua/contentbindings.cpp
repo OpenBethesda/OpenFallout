@@ -25,10 +25,8 @@
 #include "classbindings.hpp"
 #include "context.hpp"
 #include "factionbindings.hpp"
-#include "magictypebindings.hpp"
 #include "racebindings.hpp"
 #include "soundbindings.hpp"
-#include "stats.hpp"
 #include "types/modelproperty.hpp"
 #include "types/types.hpp"
 
@@ -286,15 +284,6 @@ namespace OFLua
             return LuaUtil::makeReadOnly(api);
         }
 
-        sol::table initAttributeBindings(sol::state_view& lua, OFWorld::Store<ESM::Attribute>& store)
-        {
-            addRecordStoreBindings<ESM::Attribute>(lua, &OFLua::tableToAttribute);
-            addMutableAttributeType(lua);
-            sol::table api(lua, sol::create);
-            api["records"] = MutableStore<ESM::Attribute>{ store };
-            return LuaUtil::makeReadOnly(api);
-        }
-
         sol::table initBookBindings(sol::state_view& lua, OFWorld::Store<ESM::Book>& store)
         {
             addRecordStoreBindings<ESM::Book>(lua, &OFLua::tableToBook);
@@ -319,23 +308,6 @@ namespace OFLua
             addMutableDoorType(lua);
             sol::table api(lua, sol::create);
             api["records"] = MutableStore<ESM::Door>{ store };
-            return LuaUtil::makeReadOnly(api);
-        }
-
-        sol::table initEnchantmentBindings(sol::state_view& lua, OFWorld::Store<ESM::Enchantment>& store)
-        {
-            addRecordStoreBindings<ESM::Enchantment>(lua, &OFLua::tableToEnchantment);
-            addMutableEnchantmentType(lua);
-            sol::table api(lua, sol::create);
-            api["records"] = MutableStore<ESM::Enchantment>{ store };
-            api["TYPE"]
-                = LuaUtil::makeStrictReadOnly(LuaUtil::tableFromPairs<std::string_view, ESM::Enchantment::Type>(lua,
-                    {
-                        { "CastOnce", ESM::Enchantment::Type::CastOnce },
-                        { "CastOnStrike", ESM::Enchantment::Type::WhenStrikes },
-                        { "CastOnUse", ESM::Enchantment::Type::WhenUsed },
-                        { "ConstantEffect", ESM::Enchantment::Type::ConstantEffect },
-                    }));
             return LuaUtil::makeReadOnly(api);
         }
 
@@ -393,42 +365,12 @@ namespace OFLua
             return LuaUtil::makeReadOnly(api);
         }
 
-        sol::table initMagicEffectBindings(sol::state_view& lua, OFWorld::Store<ESM::MagicEffect>& store)
-        {
-            addRecordStoreBindings<ESM::MagicEffect>(lua, &OFLua::tableToMagicEffect);
-            addMutableMagicEffectType(lua);
-            sol::table api(lua, sol::create);
-            api["records"] = MutableStore<ESM::MagicEffect>{ store };
-            // We can't get rid of the GMST table engine side because mwscript needs it, so intead of copying it into a
-            // Lua file we've got this hidden function to generate it
-            api["_getGMSTs"] = [](sol::this_state state) {
-                sol::table gmsts(state, sol::create);
-                for (int i = 0; i < ESM::MagicEffect::Length; ++i)
-                {
-                    const ESM::RefId effect = ESM::MagicEffect::indexToRefId(i);
-                    const std::string_view gmst = ESM::MagicEffect::refIdToGmstString(effect);
-                    gmsts[effect] = gmst;
-                }
-                return gmsts;
-            };
-            return LuaUtil::makeReadOnly(api);
-        }
-
         sol::table initMiscBindings(sol::state_view& lua, OFWorld::Store<ESM::Miscellaneous>& store)
         {
             addRecordStoreBindings<ESM::Miscellaneous>(lua, &OFLua::tableToMisc);
             addMutableMiscType(lua);
             sol::table api(lua, sol::create);
             api["records"] = MutableStore<ESM::Miscellaneous>{ store };
-            return LuaUtil::makeReadOnly(api);
-        }
-
-        sol::table initPotionBindings(sol::state_view& lua, OFWorld::Store<ESM::Potion>& store)
-        {
-            addRecordStoreBindings<ESM::Potion>(lua, &OFLua::tableToPotion);
-            addMutablePotionType(lua);
-            sol::table api(lua, sol::create);
-            api["records"] = MutableStore<ESM::Potion>{ store };
             return LuaUtil::makeReadOnly(api);
         }
 
@@ -459,34 +401,6 @@ namespace OFLua
             return LuaUtil::makeReadOnly(api);
         }
 
-        sol::table initSkillBindings(sol::state_view& lua, OFWorld::Store<ESM::Skill>& store)
-        {
-            addRecordStoreBindings<ESM::Skill>(lua, &OFLua::tableToSkill);
-            addMutableSkillType(lua);
-            sol::table api(lua, sol::create);
-            api["records"] = MutableStore<ESM::Skill>{ store };
-            return LuaUtil::makeReadOnly(api);
-        }
-
-        sol::table initSpellBindings(sol::state_view& lua, OFWorld::Store<ESM::Spell>& store)
-        {
-            addRecordStoreBindings<ESM::Spell>(lua, &OFLua::tableToSpell);
-            addMutableSpellType(lua);
-            sol::table api(lua, sol::create);
-            api["records"] = MutableStore<ESM::Spell>{ store };
-            api["TYPE"]
-                = LuaUtil::makeStrictReadOnly(LuaUtil::tableFromPairs<std::string_view, ESM::Spell::SpellType>(lua,
-                    {
-                        { "Spell", ESM::Spell::ST_Spell },
-                        { "Ability", ESM::Spell::ST_Ability },
-                        { "Blight", ESM::Spell::ST_Blight },
-                        { "Disease", ESM::Spell::ST_Disease },
-                        { "Curse", ESM::Spell::ST_Curse },
-                        { "Power", ESM::Spell::ST_Power },
-                    }));
-            return LuaUtil::makeReadOnly(api);
-        }
-
         sol::table initStaticBindings(sol::state_view& lua, OFWorld::Store<ESM::Static>& store)
         {
             addRecordStoreBindings<ESM::Static>(lua, &OFLua::tableToStatic);
@@ -513,11 +427,9 @@ namespace OFLua
         OFWorld::ESMStore& esmStore = *OFBase::Environment::get().getESMStore();
         api["activators"] = initActivatorBindings(lua, esmStore.getWritable<ESM::Activator>());
         api["apparatuses"] = initApparatusBindings(lua, esmStore.getWritable<ESM::Apparatus>());
-        api["attributes"] = initAttributeBindings(lua, esmStore.getWritable<ESM::Attribute>());
         api["books"] = initBookBindings(lua, esmStore.getWritable<ESM::Book>());
         api["classes"] = initClassBindings(lua, esmStore.getWritable<ESM::Class>());
         api["doors"] = initDoorBindings(lua, esmStore.getWritable<ESM::Door>());
-        api["enchantments"] = initEnchantmentBindings(lua, esmStore.getWritable<ESM::Enchantment>());
         api["factions"] = initFactionBindings(lua, esmStore.getWritable<ESM::Faction>());
         api["gameSettings"] = initGameSettingBindings(lua, esmStore.getWritable<ESM::GameSetting>());
         api["globals"] = initGlobalVariableBindings(lua, esmStore.getWritable<ESM::Global>());
@@ -526,22 +438,12 @@ namespace OFLua
         api["levelledItems"] = initLevItemBindings(lua, esmStore.getWritable<ESM::ItemLevList>());
         api["lights"] = initLightBindings(lua, esmStore.getWritable<ESM::Light>());
         api["lockpicks"] = initLockpickBindings(lua, esmStore.getWritable<ESM::Lockpick>());
-        api["magicEffects"] = initMagicEffectBindings(lua, esmStore.getWritable<ESM::MagicEffect>());
         api["miscs"] = initMiscBindings(lua, esmStore.getWritable<ESM::Miscellaneous>());
-        api["potions"] = initPotionBindings(lua, esmStore.getWritable<ESM::Potion>());
         api["probes"] = initProbeBindings(lua, esmStore.getWritable<ESM::Probe>());
         api["races"] = initRaceBindings(lua, esmStore.getWritable<ESM::Race>());
         api["repairs"] = initRepairBindings(lua, esmStore.getWritable<ESM::Repair>());
-        api["skills"] = initSkillBindings(lua, esmStore.getWritable<ESM::Skill>());
-        api["spells"] = initSpellBindings(lua, esmStore.getWritable<ESM::Spell>());
         api["statics"] = initStaticBindings(lua, esmStore.getWritable<ESM::Static>());
         api["sounds"] = initSoundBindings(lua, esmStore.getWritable<ESM::Sound>());
-        api["RANGE"] = LuaUtil::makeStrictReadOnly(LuaUtil::tableFromPairs<std::string_view, ESM::RangeType>(lua,
-            {
-                { "Self", ESM::RT_Self },
-                { "Touch", ESM::RT_Touch },
-                { "Target", ESM::RT_Target },
-            }));
         return LuaUtil::makeReadOnly(api);
     }
 }

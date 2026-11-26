@@ -89,22 +89,34 @@ namespace OFScript
         const std::array<std::string_view, 2> executables
             = { newVegas ? "FalloutNV.exe" : "Fallout3.exe", newVegas ? "Fallout3.exe" : "FalloutNV.exe" };
         FalloutScript::ExeSettings::Texts texts;
+        FalloutScript::ExeSettings::Numbers numbers;
         for (const std::string_view executable : executables)
         {
             const std::filesystem::path path = FalloutScript::ExeSettings::find(dataDirs, executable);
             if (path.empty())
                 continue;
-            FalloutScript::ExeSettings::Texts found = FalloutScript::ExeSettings::read(path, encoder);
-            Log(Debug::Info) << "Settings texts: " << found.size() << " read from " << Files::pathToUnicodeString(path);
-            for (auto& [name, text] : found)
+            FalloutScript::ExeSettings::Defaults found = FalloutScript::ExeSettings::readDefaults(path, encoder);
+            Log(Debug::Info) << "Settings defaults: " << found.mTexts.size() << " texts and " << found.mNumbers.size()
+                             << " numbers read from " << Files::pathToUnicodeString(path);
+            for (auto& [name, text] : found.mTexts)
                 texts.emplace(name, std::move(text));
+            for (const auto& [name, number] : found.mNumbers)
+                numbers.emplace(name, number);
         }
         if (texts.empty())
             Log(Debug::Info)
                 << "Settings texts: no executable of the game found next to its data, the port's own words "
                    "are used for the labels";
-        const std::lock_guard lock(mDerivedSettingsMutex);
-        mExecutableTexts = std::move(texts);
+        if (numbers.empty())
+            Log(Debug::Error)
+                << "Settings numbers: no executable of the game found next to its data. The settings that "
+                   "the plugins do not carry (fPlayerDeathReloadTime, iActivatePickLength and many more) "
+                   "have no value, and the rules that use them fall back to the engine's own choices";
+        {
+            const std::lock_guard lock(mDerivedSettingsMutex);
+            mExecutableTexts = std::move(texts);
+        }
+        setExecutableNumbers(std::move(numbers));
     }
 
     std::vector<FalloutScripts::PipboyItem> FalloutScripts::pipboyItems(FalloutScript::FormId holder)
@@ -367,34 +379,7 @@ namespace OFScript
         stats.mActionPoints = mActorValues.current(mPlayer, AV::actionPoints);
         stats.mMaxActionPoints = mActorValues.permanent(mPlayer, AV::actionPoints);
         stats.mNewVegas = mGame == FalloutScript::Game::NewVegas;
-        // What is carried weighs what its cards say (a perk can lighten the small things)
-        std::vector<std::pair<FalloutScript::FormId, int>> held;
-        if (mActors.items(mPlayer, held))
-        {
-            const bool packRat = stats.mNewVegas && mPerks.apply(FalloutScript::EntryPoint::packRat, mPlayer, 0.0) > 0;
-            for (const auto& [item, count] : held)
-            {
-                FalloutScript::ItemInfo info;
-                if (itemInfo(item, info))
-                {
-                    stats.mWeight += carriedWeight(info.mWeight, packRat) * count;
-                    // A mod of the effect 4 makes the weapon it is installed in lighter
-                    if (info.mKind == FalloutScript::ItemKind::Weapon)
-                    {
-                        FalloutScript::ItemMods::Slots slots;
-                        if (modSlotsOf(item, slots))
-                            for (const FalloutScript::ActorState::ConditionStack& stack : mActors.conditions(mPlayer, item))
-                                if (const std::optional<double> less = stack.mMods != 0
-                                        ? FalloutScript::ItemMods::installedValue(
-                                            stack.mMods, slots, FalloutScript::ItemMods::Weight)
-                                        : std::nullopt)
-                                    stats.mWeight -= (carriedWeight(info.mWeight, packRat)
-                                                         - carriedWeight(std::max(info.mWeight - *less, 0.0), packRat))
-                                        * stack.mCount;
-                    }
-                }
-            }
-        }
+        stats.mWeight = carriedWeightOf(mPlayer);
         stats.mMaxWeight = maxCarryWeight(mPlayer);
         stats.mCaps = mActors.itemCount(mPlayer, masterForm(capsNumber));
         stats.mSkillPoints = mProgress.skillPoints();
@@ -543,9 +528,10 @@ namespace OFScript
         // The room is the room under 100 of the value, as on the screen of the level up: a bonus takes room away, a
         // penalty makes some
         points = std::min(points, FalloutScript::Levelling::skillRoom(mActorValues.current(mPlayer, skill)));
-        if (points <= 0 || !mProgress.spendSkillPoints(points))
+        if (points <= 0 || !mProgress.spendSkillPoints(skill, points))
             return 0;
-        mActorValues.setBase(mPlayer, skill, mActorValues.base(mPlayer, skill) + points);
+        // The points sit on top of the skill as a permanent modifier, so the skill still follows the SPECIAL (E.1.9)
+        mActorValues.modify(mPlayer, skill, points);
         return points;
     }
 
@@ -553,12 +539,10 @@ namespace OFScript
     {
         if (skill < AV::firstSkill || skill > AV::lastSkill || points <= 0)
             return 0;
-        const double base = mActorValues.base(mPlayer, skill);
-        points = std::min(points, static_cast<int>(std::floor(std::max(base, 0.0))));
-        if (points <= 0)
-            return 0;
-        mActorValues.setBase(mPlayer, skill, base - points);
-        mProgress.addSkillPoints(points);
+        // Only points that were spent on this screen come back, whatever else has moved the modifier of the skill
+        points = mProgress.refundSkillPoints(skill, points);
+        if (points > 0)
+            mActorValues.modify(mPlayer, skill, -points);
         return points;
     }
 

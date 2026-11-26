@@ -11,9 +11,6 @@
 #include "doorstate.hpp"
 #include "ptr.hpp"
 
-#include "../mwmechanics/aisetting.hpp"
-#include "../mwmechanics/damagesourcetype.hpp"
-
 #include <components/esm/refid.hpp>
 #include <components/vfs/pathutil.hpp>
 
@@ -37,13 +34,6 @@ namespace OFPhysics
     class PhysicsSystem;
 }
 
-namespace OFMechanics
-{
-    class NpcStats;
-    struct Movement;
-    class CreatureStats;
-}
-
 namespace OFGui
 {
     struct ToolTipInfo;
@@ -57,7 +47,6 @@ namespace ESM
 namespace OFWorld
 {
     class ContainerStore;
-    class InventoryStore;
     class CellStore;
     class Action;
 
@@ -101,10 +90,6 @@ namespace OFWorld
         ///< Adjust position to stand on ground. Must be called post model load
         /// @param force do this even if the ptr is flying
 
-        virtual OFMechanics::CreatureStats& getCreatureStats(const Ptr& ptr) const;
-        ///< Return creature stats or throw an exception, if class does not have creature stats
-        /// (default implementation: throw an exception)
-
         virtual bool hasToolTip(const ConstPtr& ptr) const;
         ///< @return true if this object has a tooltip when focused (default implementation: true)
 
@@ -115,10 +100,6 @@ namespace OFWorld
         ///< Return whether ptr shows in inventory views.
         /// Hidden items are not displayed and cannot be (re)moved by the user.
         /// \return True if shown, false if hidden.
-
-        virtual OFMechanics::NpcStats& getNpcStats(const Ptr& ptr) const;
-        ///< Return NPC stats or throw an exception, if class does not have NPC stats
-        /// (default implementation: throw an exception)
 
         virtual bool hasItemHealth(const ConstPtr& ptr) const;
         ///< \return Item health data available? (default implementation: false)
@@ -133,34 +114,6 @@ namespace OFWorld
         ///< Return item max health or throw an exception, if class does not have item health
         /// (default implementation: throw an exception)
 
-        virtual bool evaluateHit(const Ptr& ptr, Ptr& victim, osg::Vec3f& hitPosition) const;
-        ///< Evaluate the victim of a melee hit produced by ptr in the current circumstances and return dice roll
-        ///< success.
-        /// (default implementation: throw an exception)
-
-        virtual void hit(const Ptr& ptr, float attackStrength, float attackWindUp, int type = -1,
-            const Ptr& victim = Ptr(), const osg::Vec3f& hitPosition = osg::Vec3f(), bool success = false) const;
-        ///< Execute a melee hit on the victim at hitPosition, using the current weapon. If the hit was successful,
-        ///< apply damage and process corresponding events.
-        /// \param attackStrength how long the attack was charged for, a value in 0-1 range.
-        /// \param attackWindUp how long the attack was winding up for, a value in 0-1 range.
-        /// \param type - type of attack, one of the OFMechanics::CreatureStats::AttackType
-        ///               enums. ignored for creature attacks.
-        /// (default implementation: throw an exception)
-
-        virtual void onHit(const OFWorld::Ptr& ptr, const std::map<std::string, float>& damages, ESM::RefId object,
-            const OFWorld::Ptr& attacker, bool successful, const OFMechanics::DamageSourceType sourceType) const;
-        ///< Alerts \a ptr that it's being hit for \a damages by \a object (sword, arrow, etc). \a attacker specifies
-        ///< the
-        /// actor responsible for the attack. \a successful specifies if the hit is
-        /// successful or not. \a sourceType classifies the damage source.
-
-        virtual std::string_view getWerewolfRefusalSoundId() const { return {}; }
-        ///< Return the refusal sound to be played when a werewolf activates an object of the class
-
-        std::unique_ptr<Action> getWerewolfRefusalAction(const Ptr& actor) const;
-        ///< Generate werewolf refusal action, if applicable
-
         virtual std::unique_ptr<Action> activate(const Ptr& ptr, const Ptr& actor) const;
         ///< Generate action for activation (default implementation: return a null action).
 
@@ -171,13 +124,6 @@ namespace OFWorld
         virtual ContainerStore& getContainerStore(const Ptr& ptr) const;
         ///< Return container store or throw an exception, if class does not have a
         /// container store (default implementation: throw an exception)
-
-        virtual InventoryStore& getInventoryStore(const Ptr& ptr) const;
-        ///< Return inventory store or throw an exception, if class does not have a
-        /// inventory store (default implementation: throw an exception)
-
-        virtual bool hasInventoryStore(const ConstPtr& ptr) const;
-        ///< Does this object have an inventory store, i.e. equipment slots? (default implementation: false)
 
         virtual bool canLock(const ConstPtr& ptr) const;
 
@@ -197,65 +143,9 @@ namespace OFWorld
         ///< Return the form id (with the index of the plugin in the load order) of the compiled script of Fallout 3 or
         /// New Vegas that the base record of ptr names, 0 for none (default implementation: 0).
 
-        virtual float getWalkSpeed(const Ptr& ptr) const;
-        virtual float getRunSpeed(const Ptr& ptr) const;
-        virtual float getSwimSpeed(const Ptr& ptr) const;
-
-        /// Return maximal movement speed for the current state.
-        virtual float getMaxSpeed(const Ptr& ptr) const;
-
-        /// Return current movement speed.
-        virtual float getCurrentSpeed(const Ptr& ptr) const;
-
-        virtual float getJump(const OFWorld::Ptr& ptr) const;
-        ///< Return jump velocity (not accounting for movement)
-
-        virtual OFMechanics::Movement& getMovementSettings(const Ptr& ptr) const;
-        ///< Return desired movement.
-
-        virtual osg::Vec3f getRotationVector(const Ptr& ptr) const;
-        ///< Return desired rotations, as euler angles. Sets getMovementSettings(ptr).mRotation to zero.
-
-        virtual std::pair<std::vector<int>, bool> getEquipmentSlots(const ConstPtr& ptr) const;
-        ///< \return first: Return IDs of the slot this object can be equipped in; second: can object
-        /// stay stacked when equipped?
-        ///
-        /// Default implementation: return (empty vector, false).
-
-        virtual ESM::RefId getEquipmentSkill(const ConstPtr& ptr, bool useLuaInterfaceIfAvailable = false) const;
-        /// Return the index of the skill this item corresponds to when equipped.
-        /// (default implementation: return empty ref id)
-
         virtual int getValue(const ConstPtr& ptr) const;
         ///< Return trade value of the object. Throws an exception, if the object can't be traded.
         /// (default implementation: throws an exception)
-
-        virtual float getCapacity(const OFWorld::Ptr& ptr) const;
-        ///< Return total weight that fits into the object. Throws an exception, if the object can't
-        /// hold other objects.
-        /// (default implementation: throws an exception)
-
-        virtual float getEncumbrance(const OFWorld::Ptr& ptr) const;
-        ///< Returns total weight of objects inside this object (including modifications from magic
-        /// effects). Throws an exception, if the object can't hold other objects.
-        /// (default implementation: throws an exception)
-
-        virtual float getNormalizedEncumbrance(const OFWorld::Ptr& ptr) const;
-        ///< Returns encumbrance re-scaled to capacity
-
-        virtual bool consume(const OFWorld::Ptr& consumable, const OFWorld::Ptr& actor) const;
-        ///< Consume an item, e. g. a potion.
-
-        virtual void skillUsageSucceeded(
-            const OFWorld::Ptr& ptr, ESM::RefId skill, int usageType, float extraFactor = 1.f) const;
-        ///< Inform actor \a ptr that a skill use has succeeded.
-        ///
-        /// (default implementations: throws an exception)
-
-        virtual bool isEssential(const OFWorld::ConstPtr& ptr) const;
-        ///< Is \a ptr essential? (i.e. may losing \a ptr make the game unwinnable)
-        ///
-        /// (default implementation: return false)
 
         virtual const ESM::RefId& getUpSoundId(const ConstPtr& ptr) const;
         ///< Return the up sound ID of \a ptr or throw an exception, if class does not support ID retrieval
@@ -264,12 +154,6 @@ namespace OFWorld
         virtual const ESM::RefId& getDownSoundId(const ConstPtr& ptr) const;
         ///< Return the down sound ID of \a ptr or throw an exception, if class does not support ID retrieval
         /// (default implementation: throw an exception)
-
-        virtual ESM::RefId getSoundIdFromSndGen(const Ptr& ptr, std::string_view type) const;
-        ///< Returns the sound ID for \a ptr of the given soundgen \a type.
-
-        virtual float getArmorRating(const OFWorld::Ptr& ptr, bool useLuaInterfaceIfAvailable = false) const;
-        ///< @return combined armor rating of this actor
 
         virtual VFS::Path::NormalizedView getInventoryIcon(const OFWorld::ConstPtr& ptr) const;
         ///< Return name of inventory icon.
@@ -287,8 +171,6 @@ namespace OFWorld
         virtual bool canSell(const OFWorld::ConstPtr& item, int npcServices) const;
         ///< Determine whether or not \a item can be sold to an npc with the given \a npcServices
 
-        virtual int getServices(const OFWorld::ConstPtr& actor) const;
-
         virtual VFS::Path::NormalizedView getModel(const OFWorld::ConstPtr& ptr) const;
 
         virtual VFS::Path::Normalized getCorrectedModel(const OFWorld::ConstPtr& ptr) const;
@@ -304,12 +186,6 @@ namespace OFWorld
         virtual const ESM::RefId& applyEnchantment(
             const OFWorld::ConstPtr& ptr, const ESM::RefId& enchId, int enchCharge, const std::string& newName) const;
         ///< Creates a new record using \a ptr as template, with the given name and the given enchantment applied to it.
-
-        virtual std::pair<int, std::string_view> canBeEquipped(
-            const OFWorld::ConstPtr& ptr, const OFWorld::Ptr& npc) const;
-        ///< Return 0 if player cannot equip item. 1 if can equip. 2 if it's twohanded weapon. 3 if twohanded weapon
-        ///< conflicts with that.
-        ///  Second item in the pair specifies the error message
 
         virtual float getWeight(const OFWorld::ConstPtr& ptr) const;
 
@@ -345,17 +221,6 @@ namespace OFWorld
         // True if it is an item that can be picked up.
         virtual bool isItem(const OFWorld::ConstPtr& ptr) const { return false; }
 
-        virtual bool isBipedal(const OFWorld::ConstPtr& ptr) const;
-        virtual bool canFly(const OFWorld::ConstPtr& ptr) const;
-        virtual bool canSwim(const OFWorld::ConstPtr& ptr) const;
-        virtual bool canWalk(const OFWorld::ConstPtr& ptr) const;
-        bool isPureWaterCreature(const OFWorld::ConstPtr& ptr) const;
-        bool isPureFlyingCreature(const OFWorld::ConstPtr& ptr) const;
-        bool isPureLandCreature(const OFWorld::Ptr& ptr) const;
-        bool isMobile(const OFWorld::Ptr& ptr) const;
-
-        virtual float getSkill(const OFWorld::Ptr& ptr, ESM::RefId id) const;
-
         virtual void readAdditionalState(const OFWorld::Ptr& ptr, const ESM::ObjectState& state) const;
         ///< Read additional state from \a state into \a ptr.
 
@@ -367,10 +232,6 @@ namespace OFWorld
 
         static void registerClass(Class& instance);
 
-        virtual int getBaseGold(const OFWorld::ConstPtr& ptr) const;
-
-        virtual bool isClass(const OFWorld::ConstPtr& ptr, std::string_view className) const;
-
         virtual DoorState getDoorState(const OFWorld::ConstPtr& ptr) const;
         /// This does not actually cause the door to move. Use World::activateDoor instead.
         virtual void setDoorState(const OFWorld::Ptr& ptr, DoorState state) const;
@@ -380,20 +241,7 @@ namespace OFWorld
         /// Returns sound id
         virtual ESM::RefId getSound(const OFWorld::ConstPtr& ptr) const;
 
-        virtual int getBaseFightRating(const OFWorld::ConstPtr& ptr) const;
-
-        virtual ESM::RefId getPrimaryFaction(const OFWorld::ConstPtr& ptr) const;
-        virtual int getPrimaryFactionRank(const OFWorld::ConstPtr& ptr) const;
-
-        /// Get the effective armor rating, factoring in the actor's skills, for the given armor.
-        virtual float getSkillAdjustedArmorRating(
-            const OFWorld::ConstPtr& armor, const OFWorld::Ptr& actor, bool useLuaInterfaceIfAvailable = false) const;
-
         virtual osg::Vec4f getEnchantmentColor(const OFWorld::ConstPtr& item) const;
-
-        virtual void setBaseAISetting(const ESM::RefId& id, OFMechanics::AiSetting setting, int value) const;
-
-        virtual void modifyBaseInventory(const ESM::RefId& actorId, const ESM::RefId& itemId, int amount) const;
     };
 }
 

@@ -1,4 +1,5 @@
 #include "falloutactors.hpp"
+#include "processlists.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -1444,10 +1445,18 @@ namespace OFMechanics
             // scaled in moveSpeedMultiplier)
             if (frame.mScripts != nullptr)
                 run = (run || frame.mScripts->actorForcesRun(mind.mPtr)) && !frame.mScripts->actorForcesSneak(mind.mPtr);
-            float speed = run && animation->canRun() ? runSpeed(*animation) : walkSpeed(*animation);
-            // A crippled leg slows the walk (fMoveOneCrippledLegSpeedMult, fMoveTwoCrippledLegsSpeedMult)
+            const bool running = run && animation->canRun();
+            float speed = running ? runSpeed(*animation) : walkSpeed(*animation);
+            // A character goes at the speed of the movement rules, the player's own (fMoveBaseSpeed by its SpeedMult,
+            // the legs, the armor, the weapon, a forced sneak); a creature at the speed of its animation by its
+            // SpeedMult and its legs (fallout-rules.md B)
             if (frame.mScripts != nullptr)
-                speed *= static_cast<float>(frame.mScripts->moveSpeedMultiplier(mind.mPtr));
+            {
+                if (const std::optional<double> ruled = frame.mScripts->characterMoveSpeed(mind.mPtr, running))
+                    speed = static_cast<float>(*ruled);
+                else
+                    speed *= static_cast<float>(frame.mScripts->creatureSpeedShare(mind.mPtr));
+            }
             osg::Vec3f place = falloutStepToward(position, next, speed * duration);
             place.z() = groundHeight(frame.mWorld, place);
 
@@ -2066,8 +2075,7 @@ namespace OFMechanics
                 }
                 // Far from the player it does nothing, and keeps the order (fAIUseWeaponDistance: 5000 in the
                 // executable, 15000 in both master files; FalloutNV.exe 0x8f7776)
-                if (distanceAcross(mind.position(), frame.mPlayer)
-                    > scripts.gameSetting("fAIUseWeaponDistance").value_or(5000.0))
+                if (distanceAcross(mind.position(), frame.mPlayer) > scripts.gameSettingValue("fAIUseWeaponDistance"))
                     return true;
                 // It turns toward the place the order names when there is one, and the shot is still at the target
                 const osg::Vec3f victim = order.mTarget.getRefData().getPosition().asVec3();
@@ -2342,7 +2350,7 @@ namespace OFMechanics
         facesSpeaker(frame, *found->second, speaker, std::min(duration, longestStep));
     }
 
-    void FalloutActors::update(float duration)
+    void FalloutActors::update(float duration, const ProcessLists& tiers)
     {
         if (mMinds.empty())
             return;
@@ -2357,7 +2365,6 @@ namespace OFMechanics
         Frame frame{ world, falloutClock(now.getHour(), now.getDay()), player.getRefData().getPosition().asVec3(),
             Settings::navigator().mEnable, OFBase::Environment::get().getFalloutScripts(), &events, &mMinds };
         duration = std::min(duration, longestStep);
-        const float range = static_cast<float>(Settings::game().mActorsProcessingRange);
 
         // The character that the player talks with
         const OFWorld::Ptr speaker = frame.mScripts != nullptr ? frame.mScripts->conversationSpeaker() : OFWorld::Ptr();
@@ -2374,7 +2381,10 @@ namespace OFMechanics
             if (found == mMinds.end())
                 continue;
             Mind& mind = *found->second;
-            if (distanceAcross(mind.position(), frame.mPlayer) > range)
+            // The tier says whether the actor is near (rule A.T2: its cell is in the scene and its 3D is loaded); a
+            // Middle Low or Low actor keeps where it is and what it does
+            const ProcessLevel level = tiers.levelOf(mind.mPtr);
+            if (level != ProcessLevel::High && level != ProcessLevel::MiddleHigh)
                 continue;
 
             // It is dead (a blow or a script killed it): it does nothing more, and its body falls, at once for one
@@ -2396,6 +2406,9 @@ namespace OFMechanics
                 continue;
             }
             mind.mSeenAlive = true;
+            // It heals by its heal rate, as the player does (fallout-rules.md D.R1)
+            if (frame.mScripts != nullptr)
+                frame.mScripts->regenerate(mind.mPtr, duration);
 
             // A blow threw it back, or it is falling: it does nothing else until it stands
             if (mind.mThrown)
