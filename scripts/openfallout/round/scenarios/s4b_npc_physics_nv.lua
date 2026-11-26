@@ -124,14 +124,18 @@ return { limit = 600, delay = 4, run = function(r)
 
     ---------------------------------------------------------------------------------------------------------------- T: stairs
     phase('T stairs')
-    -- the player at the top of the steps (east), the settler at their foot (west)
-    r.teleport{ pos = { STAIRS.x + 250, STAIRS.y, STAIRS.z + 60 }, worldspace = mojave, yaw = math.pi * 1.5, onGround = true,
-        label = 'stairs top' }
+    -- the player at the top of the steps (east), the settler at their foot (west); the player stands at the foot first, which
+    -- gives its height
+    r.teleport{ pos = { STAIRS.x - 200, STAIRS.y, STAIRS.z }, worldspace = mojave, yaw = math.pi / 2, onGround = true,
+        label = 'stairs foot' }
     r.wait(8)
     r.settle(3, 30)
     r.closeDialogue('stairs')
+    local foot = player.position.z
+    r.teleport{ pos = { STAIRS.x + 250, STAIRS.y, foot + 200 }, worldspace = mojave, yaw = math.pi * 1.5, onGround = true,
+        label = 'stairs top' }
+    r.wait(2)
     r.ai(false)
-    local foot = groundBelow(STAIRS.x - 200, STAIRS.y, STAIRS.z, 'stairs foot') or STAIRS.z
     put(util.vector3(STAIRS.x - 200, STAIRS.y, foot), math.pi / 2, true)
     r.wait(2)
     local z0 = settler.position.z

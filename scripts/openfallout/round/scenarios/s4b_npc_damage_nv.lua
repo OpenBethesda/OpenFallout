@@ -1,13 +1,15 @@
 -- Step 4b, NPC damage (New Vegas): a hostile character's blows lower the player's health by the amount of the rules. God mode is off
 -- and the player wears nothing, so no armor stands between the blow and the health (DT 0, DR 0) and the difficulty is the save's.
---   G  a feral ghoul (CREA 0x167ECC VCrTier1FeralGhoul1A, made by PlaceAtMe): a creature's blow without a weapon is the record's own
---      attack damage, 20 (CREA DATA), and the player at Normal difficulty takes it whole (fDiffMultHPToPCN 1.0)
 --   M  a person who fights with what it carries (GS Settler AAM, ACHR 0x104F03): any blow that lands lowers the health
 --   F  Powder Gangers with guns (the placed ones of round 14A, cell -6,-10): a shot that lands lowers the health
+--   G  a feral ghoul (CREA 0x167ECC VCrTier1FeralGhoul1A, made by PlaceAtMe): its blow is 15.5 by the rule (see GHOUL_BLOW), and the
+--      player at Normal difficulty takes it whole (fDiffMultHPToPCN 1.0)
 -- The player's health is read with GetActorValue 16 ten times a second; every drop is one line (`drop`) and the checks read them.
 local NV = 'FalloutNV.esm'
 local GHOUL = 0x167ECC
-local GHOUL_DAMAGE = 20 -- CREA 0x167ECC DATA damage (spec: describeWeapon takes it for a creature with no weapon)
+-- A blow of the ghoul (fallout-rules.md D and E): the record's damage 20 (CREA DATA) times the skill factor fDamageSkillBase 0.5
+-- + fDamageSkillMult 0.5 x its combat skill 25 / 100, plus its melee damage, strength 7 x 0.5 floored: 12.5 + 3 = 15.5
+local GHOUL_BLOW = 20 * (0.5 + 0.5 * 25 / 100) + math.floor(7 * 0.5)
 local SETTLER = { NV, 0x104F03 }
 local ARENA = { -69660, 1900, 8352 } -- open flat ground east of the doctor's house (round 14A)
 local GANGERS = { x = -21860, y = -38900, z = 8100, ids = { 0x1629A4, 0x1629A3 } } -- cell -6,-10, guns (round 14A)
@@ -72,28 +74,6 @@ return { limit = 600, delay = 4, run = function(r)
     h.check('s-dt-0', value(DT) or -1, 0)
     heal('S')
 
-    ---------------------------------------------------------------------------------------------------------------- G: ghoul
-    phase('G ghoul')
-    -- (a reference that PlaceAtMe makes is not an object of the Lua world: it is driven by its form id; 250 units in front)
-    local made = core.spawn.run('PlaceAtMe', PLAYER, { core.getFormId(NV, GHOUL), 1, 250, 0 })
-    h.check('g-ghoul-made', made ~= nil and made ~= 0, true)
-    local ghoulId = 'FormId:' .. string.format('0x%x', made or 0)
-    r.wait(1)
-    local okFight, fightErr = pcall(core.combat.start, ghoulId, r.form(player))
-    r.log(string.format('G ghoul %s, fight started %s %s, in combat %s', ghoulId, tostring(okFight), tostring(fightErr or ''),
-        tostring(select(2, pcall(core.combat.inCombat, ghoulId)))))
-    local drops = watch('ghoul', 40, 3)
-    r.log(string.format('G ghoul health after %s, distance %s', tostring(select(2, pcall(h.command, 'GetActorValue', ghoulId, HEALTH))),
-        tostring(select(2, pcall(h.command, 'GetDistance', ghoulId, h.player())))))
-    h.checkAtLeast('g-ghoul-hits-at-least-1', #drops, 1)
-    -- each blow is 20 whole (no armor, Normal difficulty); a critical blow adds its critical damage on top
-    h.checkRange('g-first-blow-is-20', drops[1] or -1, GHOUL_DAMAGE - 0.5, GHOUL_DAMAGE + 0.5)
-    for i = 2, #drops do r.log(string.format('G blow %d: %.2f', i, drops[i])) end
-    pcall(core.combat.stop, ghoulId)
-    h.command('KillActor', ghoulId)
-    r.wait(1)
-    heal('G')
-
     ---------------------------------------------------------------------------------------------------------------- M: melee NPC
     phase('M melee')
     local settler = h.object(SETTLER, 'settler')
@@ -136,6 +116,23 @@ return { limit = 600, delay = 4, run = function(r)
     end
     h.checkAtLeast('f-shots-hit-at-least-1', #shots, 1)
     h.checkAtLeast('f-shot-above-0', shots[1] or 0, 0.5)
+    -- (the ghoul comes last: nothing can stop it)
+    ---------------------------------------------------------------------------------------------------------------- G: ghoul
+    phase('G ghoul')
+    -- (a reference that PlaceAtMe makes is not an object of the Lua world: it is driven by its form id; 250 units in front)
+    local made = core.spawn.run('PlaceAtMe', PLAYER, { core.getFormId(NV, GHOUL), 1, 250, 0 })
+    h.check('g-ghoul-made', made ~= nil and made ~= 0, true)
+    local ghoulId = 'FormId:' .. string.format('0x%x', made or 0)
+    r.wait(1)
+    -- (it attacks the player on sight: aggression 2, very aggressive; the script commands cannot name a reference that
+    -- PlaceAtMe made, so the round does not start or stop its fight)
+    r.log('G ghoul ' .. ghoulId)
+    local drops = watch('ghoul', 40, 3)
+    h.checkAtLeast('g-ghoul-hits-at-least-1', #drops, 1)
+    -- each blow is the rule's (no armor, Normal difficulty); a critical blow adds its critical damage on top
+    h.checkRange('g-first-blow-by-the-rule', drops[1] or -1, GHOUL_BLOW - 0.25, GHOUL_BLOW + 0.25)
+    for i = 2, #drops do r.log(string.format('G blow %d: %.2f', i, drops[i])) end
+
     heal('F end')
     r.god(true)
     r.log('npc damage round done')
