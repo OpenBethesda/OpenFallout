@@ -364,6 +364,7 @@ add_component_dir (falloutscript
     restrictions
     characterbody
     ragdollrules
+    navmeshsearch
     )
 
 add_component_dir (misc
