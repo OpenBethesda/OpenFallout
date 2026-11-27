@@ -513,7 +513,8 @@ namespace FalloutScript::PathFollower
                 if (l > 0.f)
                     mPlanned = { mPlanned[0] / l * d, mPlanned[1] / l * d, z };
                 mPlannedLength = std::sqrt(length2Across(mPlanned));
-                out.mMovement = mPlanned; // not turned to the map (0x9E1580), as the game does
+                // (the game also copies this unturned into +0xA0 at 0x9E1602, which nothing reads)
+                out.mMovement = rotate(mPlanned, heading);
             }
         }
         return Result::Moving;

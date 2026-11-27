@@ -111,6 +111,35 @@ namespace FalloutScript::NavMeshSearch
             return dot(minus(x, b), minus(x, b)) <= dot(minus(x, a), minus(x, a)) ? b : a;
         }
 
+        // Where the edge a b and the line p q cross, on the edge in 3D, when they cross strictly (NV 0x6BA100)
+        std::optional<Point> edgeCrossing(const Point& a, const Point& b, const Point& p, const Point& q)
+        {
+            const float sq = cross(q, a, b);
+            const float sp = cross(p, a, b);
+            if (sq * sp > 0.f) // 0x6BA181
+                return std::nullopt;
+            const float sa = cross(a, p, q);
+            const float sb = sa + sp - sq;
+            if (!(sa * sb < 0.f)) // 0x6BA1D9
+                return std::nullopt;
+            return plus(a, times(minus(b, a), sa / (sa - sb)));
+        }
+
+        // The unit normal of a triangle, nothing when it has no area (NV 0x6971E0 with 0x53D1A0)
+        Point normalOf(const Mesh& mesh, std::uint16_t triangle)
+        {
+            const Triangle& t = mesh.mTriangles[triangle];
+            const Point& v0 = mesh.mVertices[t.mVertices[0]];
+            const Point e1 = minus(mesh.mVertices[t.mVertices[1]], v0);
+            const Point e2 = minus(mesh.mVertices[t.mVertices[2]], v0);
+            const Point n{ e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0] };
+            const float l = length(n);
+            if (l <= 1e-6f) // 0x1017CF8
+                return {};
+            return times(n, 1.f / l);
+        }
+
         // An arc of a circle: from one unit normal to another, anticlockwise (0) or clockwise (1) (NV 0x6A05E0)
         struct Arc
         {
@@ -372,6 +401,7 @@ namespace FalloutScript::NavMeshSearch
             void open(int node);
             void fallback(std::vector<int>& path);
             void write(const std::vector<int>& path, bool failed, Smoothed& out) const;
+            void slopes(const Location& from, const Point& to, Smoothed& out) const;
         };
 
         void Smoother::open(int node)
@@ -999,6 +1029,7 @@ namespace FalloutScript::NavMeshSearch
                 }
                 if (mSimple && (i + 1 == path.size() || failed))
                     arrival.mPoint[2] = std::max(arrival.mPoint[2], mLand(arrival.mPlace.mMesh, arrival.mPoint));
+                slopes(departure, arrival.mPoint, out); // 0x6B028B
                 const float rNext = mPovs[node.mPov].mRadius;
                 float thNext = 0.f;
                 if (i + 1 < path.size())
@@ -1020,6 +1051,59 @@ namespace FalloutScript::NavMeshSearch
                     const float l = std::sqrt(length2Across(v));
                     v = { std::sin(mRequest.mHeading) * l, std::cos(mRequest.mHeading) * l, 0.f };
                 }
+            }
+        }
+    }
+
+    namespace
+    {
+        // NV 0x6B05F0: where the leg from `from` to `to` goes over an edge between two triangles that slope apart (the
+        // dot of their normals under 0.9), a point more than 32 from both ends and from the point before, its tangent
+        // the way of the leg by the request's radius; none before the first point
+        void Smoother::slopes(const Location& from, const Point& to, Smoothed& out) const
+        {
+            const Point way = unit(minus(to, from.mPoint));
+            Point ray = from.mPoint;
+            Place at = from.mPlace;
+            int entered = -1;
+            const auto far = [](const Point& a, const Point& b) {
+                return dot(minus(a, b), minus(a, b)) > 1024.f; // 0x101ECB8
+            };
+            for (int pass = 0; pass < 1000; ++pass) // 0x3E8
+            {
+                const Mesh* here = mMeshes(at.mMesh);
+                if (here == nullptr)
+                    return;
+                const int edge = exitEdge(*here, at.mTriangle, entered, ray, to);
+                if (edge < 0)
+                    return;
+                const auto next = across(mMeshes, at, static_cast<unsigned>(edge));
+                if (!next)
+                    return;
+                const Mesh& there = *mMeshes(next->first.mMesh);
+                if (next->first.mMesh != at.mMesh)
+                {
+                    // 0x6B0714 to 0x6B07C5: as the walk, on the edge a hundredth of the way to its middle
+                    const auto [a, b] = edgeEnds(there, next->first.mTriangle, next->second);
+                    const Point middle = times(plus(*a, *b), 0.5f);
+                    ray = lineCrossing(*a, *b, from.mPoint, to);
+                    ray = plus(ray, times(minus(middle, ray), 0.01f));
+                }
+                if (dot(normalOf(*here, at.mTriangle), normalOf(there, next->first.mTriangle)) < 0.9f) // 0x6B0806
+                {
+                    const auto [a, b] = edgeEnds(*here, at.mTriangle, static_cast<unsigned>(edge));
+                    if (const auto x = edgeCrossing(*a, *b, from.mPoint, to); x && far(*x, from.mPoint) && far(*x, to)
+                        && !out.mPoints.empty() && far(*x, out.mPoints.back().mLocation.mPoint))
+                    {
+                        Point point = *x;
+                        // 0x6B0956 to 0x6B09A9: not below the land, by the cell of the point before
+                        if (mSimple)
+                            point[2] = std::max(point[2], mLand(out.mPoints.back().mLocation.mPlace.mMesh, point));
+                        out.mPoints.push_back({ Location{ at, -1, point }, times(way, mRequest.mRadius) });
+                    }
+                }
+                at = next->first;
+                entered = next->second;
             }
         }
     }

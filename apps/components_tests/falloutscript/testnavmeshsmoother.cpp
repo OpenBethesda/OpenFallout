@@ -125,6 +125,30 @@ namespace
         }
     }
 
+    TEST(FalloutScriptNavMeshSmootherTest, a_leg_over_a_ridge_has_a_point_where_the_floor_bends)
+    {
+        // the edge at x 200 is 60 up: the floor bends at x 100, 200 and 300 (a dot of the normals under 0.9)
+        World world;
+        world.mMeshes[1] = grid(1, 3, 1);
+        world.mMeshes[1].mVertices[2][2] = 60.f;
+        world.mMeshes[1].mVertices[6][2] = 60.f;
+        const std::vector<Step> corridor{ { { 1, 1 }, 0xffff }, { { 1, 0 }, 0 }, { { 1, 3 }, 1 }, { { 1, 2 }, 0 },
+            { { 1, 5 }, 1 }, { { 1, 4 }, 0 } };
+        Request request;
+        request.mRadius = 20.f;
+        const Smoothed way = smooth(world.meshes(), request, corridor, { 20, 50, 0 }, { 280, 50, 0 }, interior);
+        ASSERT_TRUE(way.mFound);
+        // 0x6B05F0: the start, the bends at 100 and 200 (300 is the end of the mesh), the end
+        ASSERT_EQ(way.mPoints.size(), 4u);
+        EXPECT_NEAR(way.mPoints[1].mLocation.mPoint[0], 100.f, 1e-3f);
+        EXPECT_NEAR(way.mPoints[2].mLocation.mPoint[0], 200.f, 1e-3f);
+        EXPECT_NEAR(way.mPoints[2].mLocation.mPoint[2], 60.f, 1e-3f);
+        // the tangent is the way of the leg in 3D (the end is 12 up) by the request's radius
+        EXPECT_NEAR(std::sqrt(way.mPoints[1].mTangent[0] * way.mPoints[1].mTangent[0]
+                        + way.mPoints[1].mTangent[2] * way.mPoints[1].mTangent[2]),
+            20.f, 1e-3f);
+    }
+
     TEST(FalloutScriptNavMeshSmootherTest, a_way_round_a_corner_keeps_away_from_it)
     {
         // an L: the squares 0 and 1 of the bottom row and square 0 of the top row (square 1 of the top row is cut off)

@@ -71,7 +71,8 @@ namespace FalloutScript::PathFollower
     struct Frame
     {
         float mHeading = 0.f;
-        /// The planned movement of this frame on the map (H+0xA0)
+        /// The movement of this frame on the map: the plan H+0x1C that the mover takes (slot 19, 0x9E32F0), turned by
+        /// the heading (0x92F260) and given to the character controller as a velocity (0xC73170)
         Point mMovement{};
         /// Where it got stuck, for the mark on the mesh (NV 0x9E4CF0 to 0x691510)
         bool mMarkStuck = false;
