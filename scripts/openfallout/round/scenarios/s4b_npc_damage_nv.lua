@@ -108,8 +108,13 @@ return { limit = 600, delay = 4, run = function(r)
     end
     h.checkAtLeast('f-gangers-found', #shooters, 1)
     r.wait(1)
-    for _, ganger in ipairs(shooters) do r.fight(ganger, player, 'ganger -> player') end
-    local shots = watch('gangers', 40, 2)
+    -- (the camp can hold other hostiles: a ganger that turned to one of them is set on the player again, three times)
+    local shots = {}
+    for _ = 1, 3 do
+        for _, ganger in ipairs(shooters) do r.fight(ganger, player, 'ganger -> player') end
+        for _, shot in ipairs(watch('gangers', 13, 2 - #shots)) do shots[#shots + 1] = shot end
+        if #shots >= 2 then break end
+    end
     for _, ganger in ipairs(shooters) do
         r.state('ganger after', ganger)
         r.peace(ganger, 'ganger')

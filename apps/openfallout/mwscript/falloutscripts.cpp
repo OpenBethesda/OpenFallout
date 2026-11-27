@@ -6079,9 +6079,7 @@ namespace OFScript
         // The packages are read by the characters on the thread of the frame, so they are changed there
         runOnMainThread([this, actor, package] {
             // A package that is among them already is the last again
-            std::vector<FalloutScript::FormId>& packages = mScriptPackages[actor];
-            packages.erase(std::remove(packages.begin(), packages.end(), package), packages.end());
-            packages.push_back(package);
+            FalloutScript::addScriptPackage(mScriptPackages, actor, package);
             evaluatePackage(actor);
         });
     }
@@ -6089,12 +6087,9 @@ namespace OFScript
     void FalloutScripts::removeScriptPackage(FalloutScript::FormId actor)
     {
         runOnMainThread([this, actor] {
-            const auto found = mScriptPackages.find(actor);
-            if (found == mScriptPackages.end())
+            if (mScriptPackages.find(actor) == mScriptPackages.end())
                 return;
-            found->second.pop_back();
-            if (found->second.empty())
-                mScriptPackages.erase(found);
+            FalloutScript::removeScriptPackage(mScriptPackages, actor);
             evaluatePackage(actor);
         });
     }
@@ -6111,8 +6106,11 @@ namespace OFScript
 
     void FalloutScripts::resetAI(FalloutScript::FormId actor)
     {
-        // The character gets up from the furniture it uses, then looks at its packages again
+        // The package that a script gave the character ends, it gets up from the furniture it uses, then it looks at
+        // its packages again (FalloutNV.exe's reset branch, FalloutScript::resetScriptPackages): Cass's hire, INFO
+        // 0x15d054, runs ResetAI after EvaluatePackage "so Cass gets off the stool" that a script package put her on
         runOnMainThread([this, actor] {
+            FalloutScript::resetScriptPackages(mScriptPackages, actor);
             const OFWorld::Ptr ptr = findReference(actor);
             if (ptr.isEmpty())
                 return;

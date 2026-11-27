@@ -1,6 +1,7 @@
 -- Step 4b, NPC physics (New Vegas): a character of the High tier moves on the character controller, the same body as the player's.
 -- The character is GS Settler AAM (ACHR 0x104F03, persistent, SpeedMult 100, no template), put where each measure needs him.
---   W  wall    put 10 units from a wall (centre to wall), the controller pushes the capsule out to its radius: 31 x scale
+--   W  wall    put 10 units from a wall (centre to wall), then walks along it after the player: on his first steps the solver puts
+--              the capsule out of the wall to its radius, 31 x scale (an idle actor is not moved: the solver frees only one that moves)
 --   F  fall    let go 650 units above the ground: he falls under gravity (1.38 s for 650 units at 9.8 x 69.99 u/s^2) and takes
 --              the fall damage of rule F2: 0.025 x (650 - 600)^1.65 = 15.9 (Normal difficulty, an NPC victim)
 --   S  speed   walks after the player (a commanded follow, 450 units, a walk, not a run): rule M12, 84.7 u/s holstered x SpeedMult/100
@@ -73,12 +74,45 @@ return { limit = 600, delay = 4, run = function(r)
     end
     h.check('w-a-wall-is-found', best ~= nil, true)
     if best then
+        -- along the wall: the way on which a ray at the same height still meets the wall at about the same distance
+        local along
+        for _, sign in ipairs({ 1, -1 }) do
+            local t = util.vector3(best.dir.y, -best.dir.x, 0) * sign
+            local from = eye + util.vector3(0, 0, 60) + t * 400
+            local to = from + best.dir * 3000
+            local ray = r.ray({ from.x, from.y, from.z }, { to.x, to.y, to.z }, 'wall along', { 'World' })
+            if along == nil and ray and ray.hit
+                and math.abs((flat(util.vector3(ray.x, ray.y, 0)) - flat(from)):length() - best.d) < 40 then
+                along = t
+            end
+        end
+        h.check('w-the-wall-goes-on', along ~= nil, true)
+        along = along or util.vector3(best.dir.y, -best.dir.x, 0)
+        local function wallGap() return (flat(best.hit) - flat(settler.position)):dot(best.dir) end
+        -- the player 400 units along the wall, 80 out from it; the settler 10 units from the wall (his capsule in it)
+        local stand = best.hit - best.dir * 80 + along * 400
+        r.teleport{ pos = { stand.x, stand.y, eye.z }, worldspace = mojave, yaw = 0, onGround = true, label = 'along the wall' }
+        r.wait(1)
         local spot = best.hit - best.dir * 10
-        put(util.vector3(spot.x, spot.y, eye.z), math.atan2(best.dir.x, best.dir.y), true)
-        r.wait(3)
-        local gap = (flat(best.hit) - flat(settler.position)):dot(best.dir)
-        r.log(string.format('W wall at %.0f units, settler centre %.1f from the wall after 3 s (put at 10)', best.d, gap))
-        h.checkRange('w-capsule-pushed-out-to-the-radius', gap, RADIUS - 4, RADIUS + 12)
+        put(util.vector3(spot.x, spot.y, eye.z), math.atan2(along.x, along.y), true)
+        r.wait(1)
+        local idle = wallGap()
+        -- he walks after the player, along the wall: the solver puts the capsule out of the wall on his first steps,
+        -- before he could have walked out (84.7 u/s x 0.2 s = 17 units); without a capsule he stays where he was put
+        r.ai(true)
+        settler:startFollowing(player, 64)
+        local t0 = core.getSimulationTime()
+        r.wait(0.2)
+        local first, firstAt = wallGap(), core.getSimulationTime() - t0
+        r.wait(1.5)
+        local later = wallGap()
+        settler:stopFollowing()
+        r.ai(false)
+        r.log(string.format('W wall at %.0f units; settler centre %.1f from the wall when put (at 10), %.1f after %.2f s of walking, %.1f after %.2f s',
+            best.d, idle, first, firstAt, later, firstAt + 1.5))
+        h.checkRange('w-put-into-the-wall', idle, 6, 14)
+        h.checkRange('w-capsule-out-of-the-wall-at-its-radius', first, RADIUS - 4, RADIUS + 12)
+        h.checkAtLeast('w-stays-out-of-the-wall', later, RADIUS - 4)
     end
 
     ---------------------------------------------------------------------------------------------------------------- F: fall

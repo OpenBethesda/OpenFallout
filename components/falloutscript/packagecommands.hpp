@@ -3,6 +3,9 @@
 
 #include "interpreter.hpp"
 
+#include <map>
+#include <vector>
+
 namespace FalloutScript
 {
     /// What UseWeapon tells a character to do: shoot `mAttacks` times at the target from the place, with the weapon.
@@ -40,8 +43,8 @@ namespace FalloutScript
         virtual void removeScriptPackage(FormId actor) = 0;
         /// The character looks at its packages again, now and not at the next time it does
         virtual void evaluatePackage(FormId actor) = 0;
-        /// The character's AI starts over: it drops what it was doing (it gets up from the furniture it uses) and looks
-        /// at its packages again
+        /// The character's AI starts over: the package that a script gave it ends (resetScriptPackages), it drops what
+        /// it was doing (it gets up from the furniture it uses) and looks at its packages again
         virtual void resetAI(FormId actor) { evaluatePackage(actor); }
 
         /// The character drops what it does and attacks as the order says (UseWeapon); it goes back to its packages
@@ -56,6 +59,20 @@ namespace FalloutScript
         /// Whether the package the character follows now is one that offers the character's services (to trade)
         virtual bool currentPackageOffersServices(FormId /*actor*/) { return false; }
     };
+
+    /// The packages that scripts gave the characters (AddScriptPackage), by the form id of the character's reference,
+    /// the last one given at the back
+    using ScriptPackages = std::map<FormId, std::vector<FormId>>;
+    /// AddScriptPackage: the package goes to the back, out of where it was among them before
+    void addScriptPackage(ScriptPackages& packages, FormId actor, FormId package);
+    /// RemoveScriptPackage: the package given last goes (nothing for a character that has none)
+    void removeScriptPackage(ScriptPackages& packages, FormId actor);
+    /// ResetAI: the character's script package ends, whichever it is. FalloutNV.exe: the command (0x5c9530) asks the
+    /// actor for a reset (0x8a6ce0 with its second flag), and the reset branch frees the furniture the process holds
+    /// (process+0x128, 0x422690), stops the package it follows (0x8814b0, 0x881680), clears the current package
+    /// (process+0x234), looks at the package list (process+0x524) and ends the old package when another one is chosen
+    /// (0x5ac750, process+0x59c). EvaluatePackage (0x5c95a0) asks for the same pass without the reset.
+    void resetScriptPackages(ScriptPackages& packages, FormId actor);
 
     /// What GetCurrentAIPackage answers for a type of package that the record gives, -1 for one it has no number for
     int currentPackageNumber(int type);

@@ -3,7 +3,7 @@
 -- of step 4c (s4/companion-round 665522486d, phases P and R; spec G section 1b): VMS05 at stage 30, 800 caps, Barter 60.
 --   P  prepare   the stand-ins, go to Cass in the Mojave Outpost Barracks (cell 0x141AA5), she sits (GetSitting)
 --   R  recruit   talk with her, the ten picks; she is a teammate
---   U  get up    her follow package has no furniture: she leaves the stool (the exe: a package without furniture takes over)
+--   U  get up    the hire's ResetAI (INFO 0x15d054) ends the script package of the stool: she gets up and stays up 10 s
 --   F  follow    the player goes 600+ units away in the room; she closes the gap
 --   D  door      the player goes out through the barracks door (REFR 0x1438B2); she comes out after him
 local NV = 'FalloutNV.esm'
@@ -57,6 +57,16 @@ return { limit = 900, delay = 4, run = function(r)
     r.log(string.format('U sat %s before the recruit, %s now, package %s', tostring(satBefore), tostring(sitting()),
         tostring(select(2, pcall(h.command, 'GetCurrentPackage', CASS)))))
     h.check('u-cass-gets-up', up, true)
+    -- she stays up: her hire (INFO 0x15d054) ran ResetAI, which ends the script package that sat her on the stool
+    -- (FollowersCassDrinkHomeFirstPackage); the sitting pose does not come back for ten seconds
+    local sat = 0
+    local untilTime = core.getRealTime() + 10
+    while core.getRealTime() < untilTime do
+        r.wait(0.5)
+        if sitting() ~= 0 then sat = sat + 1 end
+    end
+    r.log(string.format('U %d of the checks in ten seconds found her sitting again', sat))
+    h.check('u-cass-stays-up-for-10-s', sat, 0)
 
     -------------------------------------------------------------------------------------------------------------- F: follow
     phase('F follow')
