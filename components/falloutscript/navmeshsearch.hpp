@@ -34,6 +34,18 @@ namespace FalloutScript::NavMeshSearch
         Flag_Water = 0x200,
         /// A door is on it, the door links of the mesh say which (NV 0x6A71A8)
         Flag_Door = 0x1000,
+        /// An actor got stuck there: the mesh's obstacles say how much a step into it costs (set by NV 0x691570 from
+        /// 0x691510, tested at 0x6A7519; never cleared while the mesh is loaded)
+        Flag_Stuck = 0x80000000,
+    };
+
+    /// A mark an actor that got stuck left on a triangle (NV 0x691590, 0x28 bytes, in the list at NavMesh +0xF4)
+    struct Obstacle
+    {
+        Point mPosition{};
+        float mRadius = 0.f; // +0x18
+        float mCost = 1.f; // +0x1C
+        std::uint16_t mTriangle = 0; // +0x24
     };
 
     struct Triangle
@@ -71,6 +83,9 @@ namespace FalloutScript::NavMeshSearch
         /// The door on each door triangle (NVDP), the triangle first
         std::vector<std::pair<std::uint16_t, std::uint32_t>> mDoors;
         Grid mGrid;
+        /// Added while the game runs, only by the stuck marker (NV 0x691510, its one caller 0x9E540D); removed only
+        /// with the mesh (NV 0x68EE72)
+        std::vector<Obstacle> mObstacles;
 
         /// The middle of a triangle, the mean of its corners (NV 0x558220)
         Point centroid(std::uint16_t triangle) const;
@@ -96,6 +111,22 @@ namespace FalloutScript::NavMeshSearch
         Costly, // a step onto it costs a hundred times as much (the door's base has the flag Minimal Use, 0x518000)
     };
 
+    /// Something a path keeps away from, put on the request by the actor avoidance (NV 0x6DC780 reads it): `mType` 0
+    /// and 2 are a ball around `mA`, 1 the stretch from `mA` to `mB`
+    struct AvoidObject
+    {
+        Point mA{}; // +0x0
+        Point mB{}; // +0xC
+        float mRadius = 0.f; // +0x18
+        float mCost = 0.f; // +0x1C
+        int mType = 0; // +0x20
+    };
+
+    /// What `object` adds to the cost of a step to `point` (NV 0x6DC780): (1 - d² / r²) times its cost, d the distance
+    /// of the point from the ball's middle or, for a stretch, from its line where the point is beside it; nothing
+    /// beyond the radius
+    float avoidCost(const AvoidObject& object, const Point& point);
+
     /// The request of a path (NV 0x6E2420 sets the defaults)
     struct Request
     {
@@ -114,6 +145,9 @@ namespace FalloutScript::NavMeshSearch
         /// Edges to stay away from, each a triangle and one of its edges: a step over one costs a hundred times as much
         /// (the list at NavMeshSearch +0x2084, NV 0x6A738E)
         std::set<std::pair<Place, unsigned>> mAvoid;
+        /// +0x94 (getter NV 0x69E390): a step to a triangle's middle costs 1 + the sum of their avoidCost there more
+        /// (NV 0x6A74AD to 0x6A7516, the sum 0x6DC990)
+        std::vector<AvoidObject> mAvoidObjects;
     };
 
     /// One triangle of a path, and the edge of the one before that leads to it (0xffff for the first)
@@ -177,6 +211,11 @@ namespace FalloutScript::NavMeshSearch
     /// nearest at all
     std::optional<std::pair<Place, Point>> locateNearest(
         const std::vector<Candidate>& candidates, const Point& point, float landHeight);
+
+    /// The mark of an actor stuck on its way to `waypoint` on `triangle` (NV 0x9E5282 to 0x9E540D): each mark of the
+    /// triangle that has the waypoint inside it (in 3D) doubles its radius while that is at most 128, otherwise ten
+    /// times its cost; when none has, a new mark of `radius` (the request's) and cost 1 (NV 0x691510)
+    void markStuck(Mesh& mesh, std::uint16_t triangle, const Point& waypoint, float radius);
 
     /// The way from `start` to `goal`, triangle after triangle, or nothing when there is none
     std::optional<std::vector<Step>> search(

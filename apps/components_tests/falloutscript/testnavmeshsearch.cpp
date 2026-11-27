@@ -150,6 +150,62 @@ namespace
         EXPECT_TRUE(upper);
     }
 
+    TEST(FalloutScriptNavMeshSearchTest, the_things_an_actor_keeps_away_from_cost_more_near_their_middle)
+    {
+        // 0x6DC780: (1 - d² / r²) times the cost
+        EXPECT_FLOAT_EQ(avoidCost({ { 0, 0, 0 }, {}, 10.f, 2.f, 2 }, { 0, 5, 0 }), 1.5f);
+        EXPECT_FLOAT_EQ(avoidCost({ { 0, 0, 0 }, {}, 10.f, 2.f, 0 }, { 0, 0, 5 }), 1.5f);
+        EXPECT_FLOAT_EQ(avoidCost({ { 0, 0, 0 }, {}, 10.f, 2.f, 2 }, { 0, 10, 0 }), 0.f);
+        // a stretch: beside it only
+        const AvoidObject stretch{ { 0, 0, 0 }, { 100, 0, 0 }, 10.f, 2.f, 1 };
+        EXPECT_FLOAT_EQ(avoidCost(stretch, { 50, 5, 0 }), 1.5f);
+        EXPECT_FLOAT_EQ(avoidCost(stretch, { -5, 0, 0 }), 0.f);
+        EXPECT_FLOAT_EQ(avoidCost(stretch, { 105, 0, 0 }), 0.f);
+
+        World world;
+        world.mMeshes[1] = grid(1, 3, 2);
+        Request request;
+        request.mAvoidObjects.push_back({ { 150, 50, 0 }, {}, 60.f, 100.f, 2 });
+        const auto path = search(world.meshes(), { 1, 0 }, { 1, 5 }, request, nullptr);
+        ASSERT_TRUE(path);
+        for (const Step& step : *path)
+            EXPECT_TRUE(step.mPlace.mTriangle != 2 && step.mPlace.mTriangle != 3);
+    }
+
+    TEST(FalloutScriptNavMeshSearchTest, where_an_actor_got_stuck_costs_more_each_time)
+    {
+        World world;
+        world.mMeshes[1] = grid(1, 3, 2);
+        Mesh& mesh = world.mMeshes[1];
+        const Point at{ 150, 50, 0 };
+        markStuck(mesh, 3, at, 35.f);
+        ASSERT_EQ(mesh.mObstacles.size(), 1u);
+        EXPECT_TRUE((mesh.mTriangles[3].mFlags & Flag_Stuck) != 0);
+        EXPECT_FLOAT_EQ(mesh.mObstacles[0].mCost, 1.f);
+        markStuck(mesh, 3, at, 35.f);
+        EXPECT_FLOAT_EQ(mesh.mObstacles[0].mRadius, 70.f);
+        markStuck(mesh, 3, at, 35.f);
+        EXPECT_FLOAT_EQ(mesh.mObstacles[0].mRadius, 140.f);
+        markStuck(mesh, 3, at, 35.f); // over 128: the cost grows instead
+        EXPECT_FLOAT_EQ(mesh.mObstacles[0].mRadius, 140.f);
+        EXPECT_FLOAT_EQ(mesh.mObstacles[0].mCost, 10.f);
+        markStuck(mesh, 3, at, 35.f);
+        EXPECT_FLOAT_EQ(mesh.mObstacles[0].mCost, 100.f);
+        // a mark of another triangle is not one of this one's
+        markStuck(mesh, 2, at, 35.f);
+        ASSERT_EQ(mesh.mObstacles.size(), 2u);
+        markStuck(mesh, 2, at, 35.f);
+        markStuck(mesh, 2, at, 35.f);
+        markStuck(mesh, 2, at, 35.f);
+        markStuck(mesh, 2, at, 35.f);
+        EXPECT_FLOAT_EQ(mesh.mObstacles[1].mCost, 100.f);
+
+        const auto path = search(world.meshes(), { 1, 0 }, { 1, 5 }, Request{}, nullptr);
+        ASSERT_TRUE(path);
+        for (const Step& step : *path)
+            EXPECT_TRUE(step.mPlace.mTriangle != 2 && step.mPlace.mTriangle != 3);
+    }
+
     TEST(FalloutScriptNavMeshSearchTest, a_path_goes_on_into_another_mesh_by_its_external_connections)
     {
         World world;

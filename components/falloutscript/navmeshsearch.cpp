@@ -52,6 +52,53 @@ namespace FalloutScript::NavMeshSearch
         };
     }
 
+    float avoidCost(const AvoidObject& object, const Point& point)
+    {
+        const auto dot = [](const Point& a, const Point& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; };
+        const float r2 = object.mRadius * object.mRadius;
+        float d2 = std::numeric_limits<float>::max(); // NV 0x6DC798, the float at 0x106CCD0
+        if (object.mType == 0 || object.mType == 2)
+        {
+            const Point d = minus(object.mA, point);
+            d2 = dot(d, d);
+        }
+        else if (object.mType == 1)
+        {
+            // NV 0x6DC7DE to 0x6DC858: only beside the stretch, not past its ends
+            const Point s = minus(object.mB, object.mA);
+            const Point v = minus(point, object.mA);
+            const float l2 = dot(s, s);
+            const float t = dot(v, s);
+            if (t > 0.f && l2 > t)
+                d2 = dot(v, v) - t * t / l2;
+        }
+        if (r2 <= d2)
+            return 0.f; // NV 0x6DC868
+        return (1.f - d2 / r2) * object.mCost;
+    }
+
+    void markStuck(Mesh& mesh, std::uint16_t triangle, const Point& waypoint, float radius)
+    {
+        bool add = true;
+        for (Obstacle& obstacle : mesh.mObstacles)
+        {
+            if (obstacle.mTriangle != triangle)
+                continue;
+            const Point d = minus(obstacle.mPosition, waypoint);
+            if (!(d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < obstacle.mRadius * obstacle.mRadius))
+                continue; // NV 0x9E5348
+            if (obstacle.mRadius <= 128.f) // NV 0x9E5360, the double at 0x102E430
+                obstacle.mRadius *= 2.f;
+            else
+                obstacle.mCost *= 10.f; // NV 0x9E5397, the double at 0x1020758
+            add = false;
+        }
+        if (!add)
+            return;
+        mesh.mObstacles.push_back({ waypoint, radius, 1.f, triangle });
+        mesh.mTriangles[triangle].mFlags |= Flag_Stuck; // NV 0x69154F
+    }
+
     Point Mesh::centroid(std::uint16_t triangle) const
     {
         const Triangle& t = mTriangles[triangle];
@@ -445,6 +492,26 @@ namespace FalloutScript::NavMeshSearch
                 float step = lengthAcross(minus(point, current.mPoint));
                 if ((there.mFlags & Flag_Preferred) != 0)
                     step *= preferredShare;
+                // The things the actor keeps away from, at the middle of the next triangle (NV 0x6A74AD to 0x6A7516)
+                float avoidSum = 0.f;
+                for (const AvoidObject& object : request.mAvoidObjects)
+                    avoidSum += avoidCost(object, point);
+                if (avoidSum > 0.f)
+                    step *= 1.f + avoidSum;
+                // Where an actor got stuck: the sum of the costs of its marks (NV 0x6A7519 to 0x6A75D0)
+                if ((there.mFlags & Flag_Stuck) != 0)
+                {
+                    float stuckSum = 0.f;
+                    bool any = false;
+                    for (const Obstacle& obstacle : toMesh.mObstacles)
+                        if (obstacle.mTriangle == to.mTriangle)
+                        {
+                            stuckSum += obstacle.mCost;
+                            any = true;
+                        }
+                    if (any)
+                        step *= stuckSum;
+                }
                 // A narrow edge costs up to twice what a wide one does (NV 0x6A75E5 to 0x6A768C): the edge of the next
                 // triangle that leads back
                 const Triangle& toTriangle = toMesh.mTriangles[to.mTriangle];
