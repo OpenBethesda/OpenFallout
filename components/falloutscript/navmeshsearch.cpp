@@ -69,10 +69,10 @@ namespace FalloutScript::NavMeshSearch
             const Point v = minus(point, object.mA);
             const float l2 = dot(s, s);
             const float t = dot(v, s);
-            if (t > 0.f && l2 > t)
+            if (t >= 0.f && l2 >= t) // 0x6DC81E to 0x6DC838
                 d2 = dot(v, v) - t * t / l2;
         }
-        if (r2 <= d2)
+        if (!(d2 < r2))
             return 0.f; // NV 0x6DC868
         return (1.f - d2 / r2) * object.mCost;
     }
@@ -87,7 +87,7 @@ namespace FalloutScript::NavMeshSearch
             const Point d = minus(obstacle.mPosition, waypoint);
             if (!(d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < obstacle.mRadius * obstacle.mRadius))
                 continue; // NV 0x9E5348
-            if (obstacle.mRadius <= 128.f) // NV 0x9E5360, the double at 0x102E430
+            if (obstacle.mRadius < 128.f) // NV 0x9E5360, the double at 0x102E430
                 obstacle.mRadius *= 2.f;
             else
                 obstacle.mCost *= 10.f; // NV 0x9E5397, the double at 0x1020758
@@ -115,19 +115,19 @@ namespace FalloutScript::NavMeshSearch
         const Point& a = mesh.mVertices[t.mVertices[0]];
         const Point& b = mesh.mVertices[t.mVertices[1]];
         const Point& c = mesh.mVertices[t.mVertices[2]];
-        // NV 0x6B9CF0: the weights of the corners at the point; one that is not above zero is outside (0x6B9DA6)
+        // NV 0x6B9CF0: the weights of the corners at the point; one below zero is outside (0x6B9DA6)
         const float det = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
         if (det == 0.f)
             return std::nullopt;
         const float inverse = 1.f / det;
         const float wa = ((b[0] - p[0]) * (c[1] - p[1]) - (c[0] - p[0]) * (b[1] - p[1])) * inverse;
-        if (!(wa > 0.f))
+        if (!(wa >= 0.f))
             return std::nullopt;
         const float wb = ((c[0] - p[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (c[1] - p[1])) * inverse;
-        if (!(wb > 0.f))
+        if (!(wb >= 0.f))
             return std::nullopt;
         const float wc = ((a[0] - p[0]) * (b[1] - p[1]) - (b[0] - p[0]) * (a[1] - p[1])) * inverse;
-        if (!(wc > 0.f))
+        if (!(wc >= 0.f))
             return std::nullopt;
         // between the limits of 0x697730, the largest floats
         const float height = wa * a[2] + wb * b[2] + wc * c[2] - p[2];
@@ -155,7 +155,7 @@ namespace FalloutScript::NavMeshSearch
         constexpr float lowest = -180.f; // 0x106B160
         constexpr float highest = 64.f; // 0x10240C0
         constexpr float closeEnough = 40.f; // 0x1035810
-        const bool onLand = point[2] <= landHeight + aboveLand;
+        const bool onLand = point[2] < landHeight + aboveLand; // 0x696AE4
         std::optional<std::uint16_t> best;
         float bestHeight = std::numeric_limits<float>::max();
         for (const std::uint16_t triangle : grid.mCells[y * grid.mDivisor + x])
@@ -163,12 +163,12 @@ namespace FalloutScript::NavMeshSearch
             if (triangle >= mesh.mTriangles.size() || (mesh.mTriangles[triangle].mFlags & Flag_Covered) != 0)
                 continue;
             const std::optional<float> height = heightAbove(mesh, triangle, point);
-            if (!height || (!onLand && *height <= lowest) || *height > highest) // 0x696B85, 0x696B9A
+            if (!height || (!onLand && *height < lowest) || *height > highest) // 0x696B85, 0x696B9A
                 continue;
             const float distance = std::abs(*height);
             if (distance >= bestHeight)
                 continue;
-            if (distance <= closeEnough)
+            if (distance < closeEnough) // 0x696BD0, 0x696E01
                 return triangle;
             best = triangle;
             bestHeight = distance;
@@ -188,12 +188,12 @@ namespace FalloutScript::NavMeshSearch
         const auto consider = [&](std::uint16_t triangle) -> bool {
             // the test of 0x697730 with these limits: a point outside them counts as outside the triangle
             const std::optional<float> height = heightAbove(mesh, triangle, point);
-            if (height && *height<above&& * height> - below) // 0x697730 with 0x6B9E59, 0x6B9E70
+            if (height && *height <= above && *height >= -below) // 0x697730 with 0x6B9E59, 0x6B9E70
             {
                 const float distance = std::abs(*height);
                 if (distance < insideHeight)
                 {
-                    if (distance <= closeEnough)
+                    if (distance < closeEnough) // 0x696BD0, 0x696E01
                     {
                         inside = triangle;
                         return true;
@@ -324,7 +324,7 @@ namespace FalloutScript::NavMeshSearch
             const float distance
                 = (point[0] - middle[0]) * (point[0] - middle[0]) + (point[1] - middle[1]) * (point[1] - middle[1]);
             const float height = point[2] - middle[2];
-            const bool fits = (low || height <= above) && height > below;
+            const bool fits = (low || height < above) && height > below; // 0x6DE014 to 0x6DE03C
             if (bestFits ? fits && distance < bestDistance : fits || distance < bestDistance)
             {
                 bestMesh = &mesh;
@@ -390,15 +390,15 @@ namespace FalloutScript::NavMeshSearch
         const Point goalPoint = goalMesh->centroid(goal.mTriangle);
 
         std::map<Place, Node> nodes;
-        // The open list orders by the cost so far and the estimate (NV 0x6B9710, 0x6F4790); the first of two equal
-        // ones comes first
+        // The open list orders by the cost so far and the estimate (NV 0x6B9710, 0x6F4790); a node goes before the
+        // first one that costs as much or more (0x6A8438 to 0x6A8440), so of two equal ones the last comes first
         using Entry = std::tuple<float, std::uint64_t, Place, std::uint64_t>;
         std::priority_queue<Entry, std::vector<Entry>, std::greater<Entry>> open;
         std::uint64_t order = 0;
 
         const auto push = [&](Node& node) {
             node.mVersion = ++order;
-            open.emplace(node.mG + node.mH, order, node.mPlace, node.mVersion);
+            open.emplace(node.mG + node.mH, ~order, node.mPlace, node.mVersion);
         };
 
         Node& first = nodes[start];
@@ -522,7 +522,9 @@ namespace FalloutScript::NavMeshSearch
                 const Point& b = toMesh.mVertices[toTriangle.mVertices[(back + 1) % 3]];
                 const float narrow = std::clamp(1.f - lengthAcross(minus(a, b)) / wideEdge, 0.f, 1.f);
                 step *= narrow * 0.5f + 0.5f;
-                step *= waterMultiplier * avoidMultiplier * doorFactor;
+                step *= waterMultiplier; // one at a time, as 0x6A768F to 0x6A76A4
+                step *= avoidMultiplier;
+                step *= doorFactor;
 
                 const float g = current.mG + step;
                 auto [it, inserted] = nodes.try_emplace(to);
