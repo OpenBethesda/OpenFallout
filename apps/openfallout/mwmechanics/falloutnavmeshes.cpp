@@ -1,5 +1,7 @@
 #include "falloutnavmeshes.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <limits>
 
 #include <components/esm4/loadnavm.hpp>
@@ -71,7 +73,13 @@ namespace OFMechanics
                 loaded.mMesh = toSearchMesh(*record);
                 loaded.mCell = *id;
                 if (cell.isExterior())
+                {
                     loaded.mWorldspace = cell.getWorldSpace();
+                    loaded.mGridX = cell.getGridX();
+                    loaded.mGridY = cell.getGridY();
+                }
+                // the doors mark it as they mark the others (marking a mesh again adds nothing, 0x699990)
+                mDoorMarks.clear();
                 loaded.mDisabled = (record->mFlags & 0x800) != 0; // NV 0x440DA0
                 ids.push_back(loaded.mMesh.mId);
             }
@@ -128,5 +136,56 @@ namespace OFMechanics
             return OFBase::Environment::get().getWorld()->getTerrainHeightAt(
                 osg::Vec3f(p[0], p[1], p[2]), found->second.mWorldspace);
         };
+    }
+
+    void FalloutNavMeshes::setDoor(std::uint32_t door, ESM::FormId cell, const ESM::RefId& worldspace,
+        const std::vector<FalloutScript::NavMeshDoors::Shape>& shapes, bool closed)
+    {
+        namespace NavMeshDoors = FalloutScript::NavMeshDoors;
+        const auto marked = mDoorMarks.find(door);
+        if (!closed)
+        {
+            if (marked == mDoorMarks.end())
+                return;
+            for (const std::uint32_t id : marked->second)
+                if (NavMeshSearch::Mesh* mesh = find(id))
+                    NavMeshDoors::open(*mesh, door);
+            mDoorMarks.erase(marked);
+            return;
+        }
+        if (marked != mDoorMarks.end())
+            return;
+        std::vector<std::uint32_t>& meshes = mDoorMarks[door];
+        constexpr float cellSize = 4096.f; // 0x1017A10
+        constexpr float big = std::numeric_limits<float>::max();
+        for (const NavMeshDoors::Shape& shape : shapes)
+        {
+            // NV 0x6C1EA0: an interior's own cell; outside, the loaded cells around the one under the body that its
+            // box is over
+            const int gx = static_cast<int>(shape.mOrigin[0]) >> 12;
+            const int gy = static_cast<int>(shape.mOrigin[1]) >> 12;
+            for (auto& [id, loaded] : mLoaded)
+            {
+                if (worldspace.empty() ? loaded.mCell != cell : loaded.mWorldspace != worldspace)
+                    continue;
+                if (!worldspace.empty())
+                {
+                    if (std::abs(loaded.mGridX - gx) > 1 || std::abs(loaded.mGridY - gy) > 1)
+                        continue;
+                    const NavMeshSearch::Point low{ loaded.mGridX * cellSize, loaded.mGridY * cellSize, -big };
+                    const NavMeshSearch::Point high{ low[0] + cellSize, low[1] + cellSize, big };
+                    if (!NavMeshDoors::overlaps(low, high, shape.mWorldMin, shape.mWorldMax))
+                        continue;
+                }
+                // NV 0x6C2050: the meshes whose grid's box, 128 higher, it overlaps
+                NavMeshSearch::Point top = loaded.mMesh.mGrid.mMax;
+                top[2] += 128.f; // 0x102E430
+                if (!NavMeshDoors::overlaps(loaded.mMesh.mGrid.mMin, top, shape.mWorldMin, shape.mWorldMax))
+                    continue;
+                NavMeshDoors::close(loaded.mMesh, door, shape);
+                if (std::find(meshes.begin(), meshes.end(), id) == meshes.end())
+                    meshes.push_back(id);
+            }
+        }
     }
 }

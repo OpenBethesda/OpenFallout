@@ -11,6 +11,8 @@
 
 #include <components/misc/convert.hpp>
 #include <components/nif/data.hpp>
+#include <components/nif/niffile.hpp>
+#include <components/nif/node.hpp>
 #include <components/nif/physics.hpp>
 #include <components/resource/bulletshape.hpp>
 
@@ -472,5 +474,70 @@ namespace NifBullet
     std::optional<std::uint32_t> havokMaterialOf(const Nif::bhkShape& shape)
     {
         return materialOf(shape, 0);
+    }
+
+    namespace
+    {
+        void collectBodyBoxes(const Nif::NiAVObject& node, const osg::Matrixf& parent, std::vector<HavokBodyBox>& out)
+        {
+            const osg::Matrixf world = node.mTransform.toMatrix() * parent;
+            const auto* object = dynamic_cast<const Nif::bhkCollisionObject*>(node.mCollision.getPtr());
+            const auto* body
+                = object != nullptr ? dynamic_cast<const Nif::bhkRigidBody*>(object->mBody.getPtr()) : nullptr;
+            if (body != nullptr && !body->mShape.empty())
+            {
+                // As the loader of the collision places a body (only a bhkRigidBodyT has a transform of its own)
+                osg::Matrixf bodyTransform;
+                if (body->mRecordType == Nif::RC_bhkRigidBodyT)
+                {
+                    const osg::Vec4f& translation = body->mInfo.mTranslation;
+                    bodyTransform = osg::Matrixf::rotate(body->mInfo.mRotation)
+                        * osg::Matrixf::translate(
+                            osg::Vec3f(translation.x(), translation.y(), translation.z()) * sHavokScale);
+                }
+                std::vector<HavokPiece> pieces;
+                if (convertHavokShape(body->mShape.get(), osg::Matrixf(), pieces).empty() && !pieces.empty())
+                {
+                    HavokBodyBox box;
+                    box.mLayer = body->mHavokFilter.mLayer & 0x7F;
+                    box.mTransform = bodyTransform * world;
+                    btVector3 low(BT_LARGE_FLOAT, BT_LARGE_FLOAT, BT_LARGE_FLOAT);
+                    btVector3 high = -low;
+                    for (const HavokPiece& piece : pieces)
+                    {
+                        btVector3 min, max;
+                        // as the loader turns a matrix into a Bullet transform (addChildShape)
+                        btTransform transform;
+                        transform.setOrigin(Misc::Convert::toBullet(piece.mTransform.getTrans()));
+                        for (int i = 0; i < 3; ++i)
+                            for (int j = 0; j < 3; ++j)
+                                transform.getBasis()[i][j] = piece.mTransform(j, i);
+                        piece.mShape->getAabb(transform, min, max);
+                        low.setMin(min);
+                        high.setMax(max);
+                    }
+                    box.mMin = osg::Vec3f(Misc::Convert::toOsg(low));
+                    box.mMax = osg::Vec3f(Misc::Convert::toOsg(high));
+                    out.push_back(box);
+                }
+            }
+            if (const auto* ninode = dynamic_cast<const Nif::NiNode*>(&node))
+                for (const auto& child : ninode->mChildren)
+                {
+                    if (!child.empty())
+                        collectBodyBoxes(child.get(), world, out);
+                    if (node.mRecordType == Nif::RC_NiSwitchNode || node.mRecordType == Nif::RC_NiFltAnimationNode)
+                        break;
+                }
+        }
+    }
+
+    std::vector<HavokBodyBox> havokBodyBoxes(const Nif::NIFFile& file)
+    {
+        std::vector<HavokBodyBox> out;
+        for (const Nif::Record* root : file.mRoots)
+            if (const auto* node = dynamic_cast<const Nif::NiAVObject*>(root))
+                collectBodyBoxes(*node, osg::Matrixf(), out);
+        return out;
     }
 }

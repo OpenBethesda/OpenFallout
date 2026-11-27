@@ -1863,6 +1863,8 @@ namespace OFScript
         /// character is in a building) goes to first: the door of the cell of the actor that leads to the cell of the
         /// reference (or to the same worldspace), the nearest one to the actor. False when no door does.
         bool doorTowards(const OFWorld::Ptr& actor, FalloutScript::FormId reference, osg::Vec3f& position);
+        /// The open state of a door (FalloutScript::OpenState, as NV 0x47B250 gives it): 0 for what is not a door
+        int doorOpenState(const OFWorld::Ptr& door);
         /// The actor goes through a door to the reference: it is put at the place of the reference, in its cell (the
         /// cell may not be loaded; the character is there when it is)
         void goThrough(const OFWorld::Ptr& actor, FalloutScript::FormId reference);

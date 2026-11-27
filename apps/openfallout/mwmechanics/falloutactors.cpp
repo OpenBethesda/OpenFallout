@@ -17,10 +17,16 @@
 #include <components/esm4/packageschedule.hpp>
 #include <components/falloutscript/actorstatus.hpp>
 #include <components/falloutscript/aimemory.hpp>
+#include <components/falloutscript/animationcommands.hpp>
 #include <components/falloutscript/fightai.hpp>
 #include <components/falloutscript/pathfollower.hpp>
 #include <components/falloutscript/worldrules.hpp>
 #include <components/misc/constants.hpp>
+#include <components/misc/convert.hpp>
+#include <components/misc/resourcehelpers.hpp>
+#include <components/nifbullet/havokshape.hpp>
+#include <components/resource/niffilemanager.hpp>
+#include <components/resource/resourcesystem.hpp>
 
 #include <osg/Quat>
 
@@ -1420,6 +1426,83 @@ namespace OFMechanics
             return std::move(way.mPoints);
         }
 
+        /// The boxes of the bodies of a door's model that the obstacle manager reads (NV 0x6C2210: a body in the layer
+        /// 2, 4, 0xA, 0x14 or 0x1C; 0x6C2650)
+        // shortcut: the bodies at rest (the door closed), where the exe reads their Havok pose when the task runs; the
+        // engine's doors have no moving Havok bodies to read
+        std::vector<FalloutScript::NavMeshDoors::Shape> doorShapes(const OFWorld::Ptr& door)
+        {
+            std::vector<FalloutScript::NavMeshDoors::Shape> shapes;
+            const VFS::Path::NormalizedView model = door.getClass().getModel(door);
+            if (model.value().empty())
+                return shapes;
+            Nif::NIFFilePtr file;
+            try
+            {
+                file = OFBase::Environment::get().getResourceSystem()->getNifFileManager()->get(
+                    Misc::ResourceHelpers::correctMeshPath(model));
+            }
+            catch (const std::exception& e)
+            {
+                Log(Debug::Warning) << "The door " << model.value() << " can not be read for its bodies: " << e.what();
+                return shapes;
+            }
+            const ESM::Position& position = door.getRefData().getPosition();
+            const osg::Matrixf placed = osg::Matrixf::scale(osg::Vec3f(1.f, 1.f, 1.f) * door.getCellRef().getScale())
+                * osg::Matrixf::rotate(Misc::Convert::makeOsgQuat(position))
+                * osg::Matrixf::translate(position.asVec3());
+            for (const NifBullet::HavokBodyBox& box : NifBullet::havokBodyBoxes(*file))
+            {
+                const std::uint8_t layer = box.mLayer;
+                if (layer != 2 && layer != 4 && layer != 0xA && layer != 0x14 && layer != 0x1C) // 0x6C227A
+                    continue;
+                const osg::Matrixf world = box.mTransform * placed;
+                FalloutScript::NavMeshDoors::Axes axes;
+                float scale = 1.f;
+                for (int i = 0; i < 3; ++i)
+                {
+                    osg::Vec3f axis(world(i, 0), world(i, 1), world(i, 2));
+                    scale = axis.normalize();
+                    axes[i] = { axis.x(), axis.y(), axis.z() };
+                }
+                const osg::Vec3f origin = world.getTrans();
+                const osg::Vec3f low = box.mMin * scale;
+                const osg::Vec3f high = box.mMax * scale;
+                shapes.push_back(FalloutScript::NavMeshDoors::shapeOf(axes, { origin.x(), origin.y(), origin.z() },
+                    { low.x(), low.y(), low.z() }, { high.x(), high.y(), high.z() }));
+            }
+            return shapes;
+        }
+
+        /// The in-cell doors of the loaded cells on their meshes (NV 0x6C3640): with bCutDoors (on by default), every
+        /// door without a teleport that has its 3D; at a cell's attach one that is not open is marked (0x5575D0), and
+        /// later as it opens and closes (0x47AC70, 0x47AEC0)
+        void markDoors(OFBase::World& world, FalloutNavMeshes& navMeshes, OFScript::FalloutScripts& scripts)
+        {
+            for (OFWorld::CellStore* cellStore : world.getActiveCells())
+            {
+                const ESM::FormId* id = cellStore->getCell()->getId().getIf<ESM::FormId>();
+                if (id == nullptr)
+                    continue;
+                const ESM::RefId space = cellStore->isExterior() ? cellStore->getCell()->getWorldSpace() : ESM::RefId();
+                cellStore->forEachType<ESM4::Door>([&](const OFWorld::Ptr& door) {
+                    if (door.getCellRef().getTeleport() || !door.getRefData().isEnabled()
+                        || door.getRefData().isDeletedByContentFile() || door.getRefData().getBaseNode() == nullptr)
+                        return true;
+                    const int state = scripts.doorOpenState(door);
+                    if (state == 0)
+                        return true;
+                    const bool closed = state != FalloutScript::OpenState::open;
+                    const std::uint32_t reference = scripts.formOfReference(door);
+                    if (reference == 0 || closed == navMeshes.doorMarked(reference))
+                        return true;
+                    navMeshes.setDoor(reference, *id, space,
+                        closed ? doorShapes(door) : std::vector<FalloutScript::NavMeshDoors::Shape>(), closed);
+                    return true;
+                });
+            }
+        }
+
         /// What the path follower reads of the actor (NV DetailedActorPathHandler, 0x9E0A00)
         PathFollower::Actor followerActor(const Frame& frame, const FalloutActors::Mind& mind,
             const OFRender::FalloutActorAnimation& animation, float walk, float run, bool running)
@@ -2562,6 +2645,8 @@ namespace OFMechanics
         const OFWorld::TimeStamp now = world.getTimeStamp();
         std::vector<PendingEvent> events;
         mNavMeshes.update(world.getStore(), world.getActiveCells());
+        if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+            markDoors(world, mNavMeshes, *scripts);
         Frame frame{ world, falloutClock(now.getHour(), now.getDay()), player.getRefData().getPosition().asVec3(),
             &mNavMeshes, OFBase::Environment::get().getFalloutScripts(), &events, &mMinds };
         duration = std::min(duration, longestStep);

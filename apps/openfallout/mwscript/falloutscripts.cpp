@@ -5988,6 +5988,15 @@ namespace OFScript
         return animation == nullptr || animation->findGroup("Open").empty();
     }
 
+    int FalloutScripts::doorOpenState(const OFWorld::Ptr& door)
+    {
+        const FalloutScript::FormId reference = referenceOf(door);
+        if (reference == 0 || door.getType() != ESM4::Door::sRecordId)
+            return 0;
+        settleDoor(door, reference);
+        return mOpenStates.stateOf(reference, *this);
+    }
+
     void FalloutScripts::activateDoor(const OFWorld::Ptr& door)
     {
         const FalloutScript::FormId reference = referenceOf(door);

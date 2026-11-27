@@ -3,6 +3,7 @@
 
 #include <components/esm/formid.hpp>
 #include <components/esm/refid.hpp>
+#include <components/falloutscript/navmeshdoors.hpp>
 #include <components/falloutscript/navmeshsmoother.hpp>
 
 #include <map>
@@ -38,6 +39,14 @@ namespace OFMechanics
         /// The height of the land under a point of a mesh's cell (NV 0x45CBC0): lowest() in an interior
         FalloutScript::NavMeshSearch::LandHeight land() const;
 
+        /// An in-cell door over the meshes (NV 0x6C3640): one that is not open marks the triangles under the boxes of
+        /// its bodies (0x6C5190, 0x6997E0), an open one takes its marks off (0x6C4FB0, 0x699A30). `worldspace` is that
+        /// of the door's cell, empty in an interior.
+        void setDoor(std::uint32_t door, ESM::FormId cell, const ESM::RefId& worldspace,
+            const std::vector<FalloutScript::NavMeshDoors::Shape>& shapes, bool closed);
+        /// Whether the door's marks are on the meshes that are loaded (a mesh that is loaded again has none)
+        bool doorMarked(std::uint32_t door) const { return mDoorMarks.contains(door); }
+
     private:
         struct Loaded
         {
@@ -45,7 +54,11 @@ namespace OFMechanics
             ESM::FormId mCell;
             ESM::RefId mWorldspace; // empty in an interior
             bool mDisabled = false;
+            int mGridX = 0; // of an exterior cell
+            int mGridY = 0;
         };
+        /// The meshes each closed door marked
+        std::map<std::uint32_t, std::vector<std::uint32_t>> mDoorMarks;
         std::unordered_map<ESM::FormId, std::vector<const ESM4::NavMesh*>> mByCell;
         bool mIndexed = false;
         std::map<std::uint32_t, Loaded> mLoaded;
