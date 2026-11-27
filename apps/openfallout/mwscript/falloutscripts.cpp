@@ -5454,6 +5454,12 @@ namespace OFScript
         return mPlaced.erase(scriptReferenceOf(actor)) > 0;
     }
 
+    void FalloutScripts::notePlaced(const OFWorld::Ptr& actor)
+    {
+        if (const FalloutScript::FormId reference = scriptReferenceOf(actor); reference != 0)
+            mPlaced.insert(reference);
+    }
+
     bool FalloutScripts::isUnconscious(const OFWorld::Ptr& actor) const
     {
         const FalloutScript::FormId reference = scriptReferenceOf(actor);

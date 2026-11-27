@@ -44,8 +44,11 @@ namespace OFMechanics
         /// of the door's cell, empty in an interior.
         void setDoor(std::uint32_t door, ESM::FormId cell, const ESM::RefId& worldspace,
             const std::vector<FalloutScript::NavMeshDoors::Shape>& shapes, bool closed);
-        /// Whether the door's marks are on the meshes that are loaded (a mesh that is loaded again has none)
-        bool doorMarked(std::uint32_t door) const { return mDoorMarks.contains(door); }
+        /// Whether the door's marks are on the meshes that are loaded: not when a mesh was loaded since the doors were
+        /// last marked
+        bool doorMarked(std::uint32_t door) const { return !mMeshesAdded && mDoorMarks.contains(door); }
+        /// Every closed door has marked the meshes that are loaded
+        void doorsMarked() { mMeshesAdded = false; }
 
     private:
         struct Loaded
@@ -59,6 +62,7 @@ namespace OFMechanics
         };
         /// The meshes each closed door marked
         std::map<std::uint32_t, std::vector<std::uint32_t>> mDoorMarks;
+        bool mMeshesAdded = false;
         std::unordered_map<ESM::FormId, std::vector<const ESM4::NavMesh*>> mByCell;
         bool mIndexed = false;
         std::map<std::uint32_t, Loaded> mLoaded;

@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <limits>
 
+#include <components/debug/debuglog.hpp>
+
 #include <components/esm4/loadnavm.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -41,6 +43,30 @@ namespace OFMechanics
         mesh.mGrid.mMin = { g.minX, g.minY, g.minZ };
         mesh.mGrid.mMax = { g.maxX, g.maxY, g.maxZ };
         mesh.mGrid.mCells = g.cells;
+        // A plugin's indices are not trusted: a triangle with a corner that is not there makes the mesh unusable, and
+        // a link to a triangle or connection that is not there is no link
+        for (NavMeshSearch::Triangle& triangle : mesh.mTriangles)
+        {
+            for (const std::uint16_t corner : triangle.mVertices)
+                if (corner >= mesh.mVertices.size())
+                {
+                    Log(Debug::Warning) << "NavMesh " << std::hex << record.mId.toUint32() << std::dec
+                                        << " has a triangle with a corner that is not there";
+                    return NavMeshSearch::Mesh{ mesh.mId };
+                }
+            for (unsigned edge = 0; edge < 3; ++edge)
+            {
+                const bool external = (triangle.mFlags & (1u << edge)) != 0;
+                const std::size_t count = external ? mesh.mExternal.size() : mesh.mTriangles.size();
+                if (triangle.mEdges[edge] != 0xffff && triangle.mEdges[edge] >= count)
+                {
+                    triangle.mEdges[edge] = 0xffff;
+                    triangle.mFlags &= ~(1u << edge);
+                }
+            }
+        }
+        for (std::vector<std::uint16_t>& square : mesh.mGrid.mCells)
+            std::erase_if(square, [&](std::uint16_t t) { return t >= mesh.mTriangles.size(); });
         return mesh;
     }
 
@@ -78,8 +104,8 @@ namespace OFMechanics
                     loaded.mGridX = cell.getGridX();
                     loaded.mGridY = cell.getGridY();
                 }
-                // the doors mark it as they mark the others (marking a mesh again adds nothing, 0x699990)
-                mDoorMarks.clear();
+                // the closed doors mark it as they mark the others (marking a mesh again adds nothing, 0x699990)
+                mMeshesAdded = true;
                 loaded.mDisabled = (record->mFlags & 0x800) != 0; // NV 0x440DA0
                 ids.push_back(loaded.mMesh.mId);
             }
@@ -153,8 +179,6 @@ namespace OFMechanics
             mDoorMarks.erase(marked);
             return;
         }
-        if (marked != mDoorMarks.end())
-            return;
         std::vector<std::uint32_t>& meshes = mDoorMarks[door];
         constexpr float cellSize = 4096.f; // 0x1017A10
         constexpr float big = std::numeric_limits<float>::max();

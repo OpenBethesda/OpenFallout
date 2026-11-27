@@ -1839,6 +1839,8 @@ namespace OFScript
         bool isUnconscious(const OFWorld::Ptr& actor) const;
         /// Whether a script's MoveTo put the character or creature somewhere since this was last asked (main thread)
         bool takePlaced(const OFWorld::Ptr& actor);
+        /// Something else (a Lua teleport) put the character or creature somewhere, as a script's MoveTo does
+        void notePlaced(const OFWorld::Ptr& actor);
 
         /// A character or creature near the player heals by its heal rate for that many simulated seconds (the player
         /// heals in update())

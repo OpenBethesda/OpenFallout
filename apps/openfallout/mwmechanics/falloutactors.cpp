@@ -1501,6 +1501,7 @@ namespace OFMechanics
                     return true;
                 });
             }
+            navMeshes.doorsMarked();
         }
 
         /// What the path follower reads of the actor (NV DetailedActorPathHandler, 0x9E0A00)
@@ -1516,9 +1517,14 @@ namespace OFMechanics
             // NV 0x8DA950 and its callers: a walk forward, or a run forward (0x201); one that cannot run walks
             // (0x9DDDDF, 0x884750)
             actor.mRequested = running ? 0x201u : 0x101u;
-            actor.mHasBackward = animation.hasPlainMove(OFRender::FalloutDirection::Backward);
-            actor.mHasLeft = animation.hasPlainMove(OFRender::FalloutDirection::Left);
-            actor.mHasRight = animation.hasPlainMove(OFRender::FalloutDirection::Right);
+            // Without the root of a movement animation to move it, it has no 3D as far as the handler goes: its step
+            // is forward at its gait (0x9E3520), and so it goes forward
+            if (animation.hasRootMotion())
+            {
+                actor.mHasBackward = animation.hasPlainMove(OFRender::FalloutDirection::Backward);
+                actor.mHasLeft = animation.hasPlainMove(OFRender::FalloutDirection::Left);
+                actor.mHasRight = animation.hasPlainMove(OFRender::FalloutDirection::Right);
+            }
             actor.mForwardEnd = animation.forwardEnd();
             // NV 0x9E4E59 to 0x9E4EF6: what its controller ran into in the last step is another actor ([ctrl+0x638])
             actor.mBlockedByActor = frame.mWorld.touchedActor(mind.mPtr);
