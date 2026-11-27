@@ -225,4 +225,105 @@ namespace FalloutScript::NavMeshRoute
         points.push_back({ Kind::Location, goalPosition, &goal, 0 }); // 0x6C9899
         return points;
     }
+
+    SpaceRoute searchSpaces(
+        const SpaceDoors& doors, const Space& start, const Point& startPosition, const Space& goal, bool withDoors)
+    {
+        constexpr float doorPenalty = 409600.f; // 0x106C238
+        struct SpaceNode
+        {
+            float mG = 0.f; // +0; the estimate +4 is always 1 (0x6F3D00, 0x6F3A35)
+            Space mSpace; // +8 to +0x13
+            SpaceDoor mDoor; // +0x14 and the landing +0x18
+            SpaceNode* mParent = nullptr; // +0x24
+            bool mOpen = false;
+        };
+        std::map<Space, SpaceNode> nodes;
+        std::list<SpaceNode*> open;
+        // The same list as the other searches (0x6F4390 to 0x6F43E0): with the estimate always 1, the order of g
+        const auto insert = [&](SpaceNode* node) {
+            auto at = std::find_if(
+                open.begin(), open.end(), [&](const SpaceNode* other) { return node->mG + 1.f <= other->mG + 1.f; });
+            open.insert(at, node);
+            node->mOpen = true;
+        };
+        const auto remove = [&](SpaceNode* node) {
+            if (node->mOpen)
+                open.remove(node);
+            node->mOpen = false;
+        };
+
+        SpaceNode* first = &nodes[start];
+        first->mSpace = start;
+        insert(first);
+        SpaceNode* best = nullptr;
+        SpaceNode* reached = nullptr;
+        std::vector<SpaceNode*> children;
+        while (!open.empty())
+        {
+            SpaceNode* current = open.front();
+            open.pop_front();
+            current->mOpen = false;
+            if (best == nullptr)
+                best = current;
+            if (current->mSpace == goal) // 0x6F3B7A to 0x6F3BBA
+            {
+                reached = current;
+                best = current;
+                break;
+            }
+            children.clear();
+            if (withDoors) // 0x6F3745 to 0x6F3764
+            {
+                // where one is in this space: where one came out of the last door, or the start (0x6F394A)
+                const Point& from = current == first ? startPosition : current->mDoor.mLanding;
+                for (const SpaceDoor& door : doors(current->mSpace))
+                {
+                    if (!door.mPasses)
+                        continue; // mode2 0 (0x6F38C6)
+                    const float penalty = door.mMinimalUse ? doorPenalty : 0.f; // 0x6F38FB to 0x6F391D
+                    const float g = current->mG + distance(door.mPosition, from) + penalty; // 0x6F39E1 to 0x6F39EC
+                    auto [it, inserted] = nodes.try_emplace(door.mTarget);
+                    SpaceNode* node = &it->second;
+                    if (!inserted)
+                    {
+                        if (!(g < node->mG)) // 0x6F3E79
+                            continue;
+                        remove(node);
+                    }
+                    node->mG = g;
+                    node->mSpace = door.mTarget;
+                    node->mDoor = door;
+                    children.push_back(node);
+                }
+            }
+            bool abort = false;
+            for (SpaceNode* child : children) // 0x6F3FB0, the abort at 0x6F4127
+            {
+                remove(child);
+                if (child == current->mParent)
+                {
+                    abort = true;
+                    break;
+                }
+                child->mParent = current;
+                insert(child);
+            }
+            if (abort)
+                break;
+        }
+
+        // 0x6F4230; with every estimate 1 the nearest is the first node (a strictly lower estimate never comes)
+        SpaceRoute found;
+        found.mReached = reached != nullptr;
+        for (const SpaceNode* node = best; node != nullptr; node = node->mParent)
+        {
+            found.mSpaces.push_back(node->mSpace);
+            if (node->mParent != nullptr)
+                found.mDoors.push_back(node->mDoor);
+        }
+        std::reverse(found.mSpaces.begin(), found.mSpaces.end());
+        std::reverse(found.mDoors.begin(), found.mDoors.end());
+        return found;
+    }
 }

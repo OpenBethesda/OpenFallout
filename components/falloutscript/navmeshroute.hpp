@@ -3,6 +3,7 @@
 
 #include "navmeshsearch.hpp"
 
+#include <compare>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -87,6 +88,44 @@ namespace FalloutScript::NavMeshRoute
     /// The route that NV 0x6C94C0 makes of a search (0x6C9611 to 0x6C9899)
     std::vector<RoutePoint> route(const Found& found, const Doors& doors, const Info& start, const Point& startPosition,
         const Info& goal, const Point& goalPosition);
+
+    /// A space of TeleportDoorSearch: an interior cell, or a world space (the triple of NV 0x6F3507 to 0x6F3586)
+    struct Space
+    {
+        bool mInterior = false;
+        std::uint32_t mCell = 0;
+        std::uint32_t mWorld = 0;
+
+        bool operator==(const Space&) const = default;
+        auto operator<=>(const Space&) const = default;
+    };
+
+    /// A teleport door of a space, as TeleportDoorSearch reads it (NV 0x6F37AA to 0x6F3AC9)
+    struct SpaceDoor
+    {
+        std::uint32_t mDoor = 0;
+        Point mPosition{}; // vfunc 0x1F4
+        Space mTarget; // the cell of its teleport, or its world space (0x43A320, 0x43A2B0)
+        Point mLanding{}; // its teleport marker (0x717E50 of 0x568E50)
+        bool mMinimalUse = false;
+        bool mPasses = false; // as Door::mPasses
+    };
+
+    /// The teleport doors of a space that are not disabled (0x800) or deleted (0x20), whose base is a door other than
+    /// PrisonMarker (form 4, made at NV 0x46BD4F) and that have a teleport (NV 0x54DB50)
+    using SpaceDoors = std::function<std::vector<SpaceDoor>(const Space& space)>;
+
+    struct SpaceRoute
+    {
+        bool mReached = false;
+        std::vector<Space> mSpaces;
+        std::vector<SpaceDoor> mDoors; // the door from each space to the next
+    };
+
+    /// NV 0x6F34E0 as 0x6C9B20 runs it (mode 0, no limit, mode2 0): A* over the spaces, a step the straight distance
+    /// to a door from where one came into the space; `withDoors` as for search()
+    SpaceRoute searchSpaces(
+        const SpaceDoors& doors, const Space& start, const Point& startPosition, const Space& goal, bool withDoors);
 }
 
 #endif

@@ -116,4 +116,39 @@ namespace
         ASSERT_FALSE(found.mInfos.empty());
         EXPECT_EQ(found.mInfos.back()->mId, 3u); // 0x6B9354: the lowest estimate
     }
+
+    TEST(FalloutScriptNavMeshRouteTest, the_spaces_are_searched_by_the_distance_to_their_doors)
+    {
+        // the world space 50, the cells 60 and 61: two ways from the world into 61, the near one through 60
+        const Space world{ false, 0, 50 };
+        const Space hall{ true, 60, 0 };
+        const Space vault{ true, 61, 0 };
+        const SpaceDoors doors = [&](const Space& space) {
+            std::vector<SpaceDoor> list;
+            const auto door = [&](std::uint32_t id, float x, Space to, float landing) {
+                SpaceDoor d;
+                d.mDoor = id;
+                d.mPosition = { x, 0.f, 0.f };
+                d.mTarget = to;
+                d.mLanding = { landing, 0.f, 0.f };
+                d.mPasses = true;
+                list.push_back(d);
+            };
+            if (space == world)
+            {
+                door(1, 100.f, hall, 0.f);
+                door(2, 900.f, vault, 0.f);
+            }
+            else if (space == hall)
+                door(3, 300.f, vault, 0.f);
+            return list;
+        };
+        const SpaceRoute found = searchSpaces(doors, world, { 0, 0, 0 }, vault, true);
+        ASSERT_TRUE(found.mReached);
+        ASSERT_EQ(found.mSpaces.size(), 3u); // 100 + 300 is less than 900
+        EXPECT_EQ(found.mDoors[0].mDoor, 1u);
+        EXPECT_EQ(found.mDoors[1].mDoor, 3u);
+        // no doors for the request: nothing is reached
+        EXPECT_FALSE(searchSpaces(doors, world, { 0, 0, 0 }, vault, false).mReached);
+    }
 }
