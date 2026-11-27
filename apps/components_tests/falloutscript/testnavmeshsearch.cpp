@@ -227,6 +227,10 @@ namespace
         ASSERT_EQ(path->size(), 4u);
         EXPECT_EQ((*path)[1].mPlace, (Place{ 1, 0 }));
         EXPECT_EQ((*path)[2].mPlace, (Place{ 2, 1 }));
+        // a connection of type 1 is no way (0x6A70C1)
+        world.mMeshes[1].mExternal[0].mType = 1;
+        EXPECT_FALSE(search(world.meshes(), { 1, 1 }, { 2, 0 }, Request{}, nullptr));
+        world.mMeshes[1].mExternal[0].mType = 0;
         // a mesh that is not loaded is no way (0x68F4F2)
         world.mMeshes.erase(2);
         EXPECT_TRUE(search(world.meshes(), { 1, 1 }, { 1, 0 }, Request{}, nullptr));

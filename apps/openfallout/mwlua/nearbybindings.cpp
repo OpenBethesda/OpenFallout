@@ -107,6 +107,7 @@ namespace OFLua
                     { "AnyPhysical", OFPhysics::CollisionType_AnyPhysical },
                     { "Camera", OFPhysics::CollisionType_CameraOnly },
                     { "VisualOnly", OFPhysics::CollisionType_VisualOnly },
+                    { "Ragdoll", OFPhysics::CollisionType_Ragdoll },
                 }));
 
         api["castRay"] = [](const osg::Vec3f& from, const osg::Vec3f& to, sol::optional<sol::table> options) {

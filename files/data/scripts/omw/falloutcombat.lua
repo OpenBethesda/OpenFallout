@@ -70,7 +70,9 @@ local function aim(stats)
     local from = camera.getPosition()
     local origin = self.position
     local to = from + camera.viewportToWorldVector(center) * (stats.range + (from - origin):length())
-    local result = nearby.castRay(from, to, { ignore = self, collisionType = nearby.COLLISION_TYPE.Default })
+    -- a body that is down stops the shot, as it does an NPC's
+    local collisionType = util.bitOr(nearby.COLLISION_TYPE.Default, nearby.COLLISION_TYPE.Ragdoll)
+    local result = nearby.castRay(from, to, { ignore = self, collisionType = collisionType })
     if result.hitObject == nil or result.hitPos == nil then return nil end
     local away = result.hitPos - origin
     if math.sqrt(away.x * away.x + away.y * away.y) > stats.range then return nil end

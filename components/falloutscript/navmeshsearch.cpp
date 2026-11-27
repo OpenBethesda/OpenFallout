@@ -115,23 +115,23 @@ namespace FalloutScript::NavMeshSearch
         const Point& a = mesh.mVertices[t.mVertices[0]];
         const Point& b = mesh.mVertices[t.mVertices[1]];
         const Point& c = mesh.mVertices[t.mVertices[2]];
-        // NV 0x6B9CF0: the weights of the corners at the point; a weight below zero is outside
+        // NV 0x6B9CF0: the weights of the corners at the point; one that is not above zero is outside (0x6B9DA6)
         const float det = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
         if (det == 0.f)
             return std::nullopt;
         const float inverse = 1.f / det;
         const float wa = ((b[0] - p[0]) * (c[1] - p[1]) - (c[0] - p[0]) * (b[1] - p[1])) * inverse;
-        if (!(wa >= 0.f))
+        if (!(wa > 0.f))
             return std::nullopt;
         const float wb = ((c[0] - p[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (c[1] - p[1])) * inverse;
-        if (!(wb >= 0.f))
+        if (!(wb > 0.f))
             return std::nullopt;
         const float wc = ((a[0] - p[0]) * (b[1] - p[1]) - (b[0] - p[0]) * (a[1] - p[1])) * inverse;
-        if (!(wc >= 0.f))
+        if (!(wc > 0.f))
             return std::nullopt;
         // between the limits of 0x697730, the largest floats
         const float height = wa * a[2] + wb * b[2] + wc * c[2] - p[2];
-        if (!(std::abs(height) <= std::numeric_limits<float>::max()))
+        if (!(std::abs(height) < std::numeric_limits<float>::max())) // 0x6B9E59, 0x6B9E70
             return std::nullopt;
         return height;
     }
@@ -163,7 +163,7 @@ namespace FalloutScript::NavMeshSearch
             if (triangle >= mesh.mTriangles.size() || (mesh.mTriangles[triangle].mFlags & Flag_Covered) != 0)
                 continue;
             const std::optional<float> height = heightAbove(mesh, triangle, point);
-            if (!height || (!onLand && *height < lowest) || *height > highest)
+            if (!height || (!onLand && *height <= lowest) || *height > highest) // 0x696B85, 0x696B9A
                 continue;
             const float distance = std::abs(*height);
             if (distance >= bestHeight)
@@ -188,7 +188,7 @@ namespace FalloutScript::NavMeshSearch
         const auto consider = [&](std::uint16_t triangle) -> bool {
             // the test of 0x697730 with these limits: a point outside them counts as outside the triangle
             const std::optional<float> height = heightAbove(mesh, triangle, point);
-            if (height && *height <= above && *height >= -below)
+            if (height && *height<above&& * height> - below) // 0x697730 with 0x6B9E59, 0x6B9E70
             {
                 const float distance = std::abs(*height);
                 if (distance < insideHeight)
@@ -442,6 +442,9 @@ namespace FalloutScript::NavMeshSearch
             {
                 const auto next = across(meshes, place, edge);
                 if (!next)
+                    continue;
+                // An external connection of type 1 is no way (NV 0x6A70B0 to 0x6A70C6)
+                if ((here.mFlags & (1u << edge)) != 0 && mesh.mExternal[here.mEdges[edge]].mType == 1)
                     continue;
                 const Place& to = next->first;
                 const std::uint16_t back = next->second;

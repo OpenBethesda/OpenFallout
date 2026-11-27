@@ -61,6 +61,9 @@ namespace FalloutScript::NavMeshSearch
     {
         std::uint32_t mMesh = 0;
         std::uint16_t mTriangle = 0;
+        /// The first field of the record; 1: no way over it for the search (NV 0x6A70C1) and the smoother's walk (NV
+        /// 0x6B21F7)
+        std::uint32_t mType = 0;
     };
 
     /// The triangles of a mesh by squares of the map (NVGD, read by NV 0x69DA40)
