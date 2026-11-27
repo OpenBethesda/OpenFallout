@@ -1502,7 +1502,8 @@ namespace OFMechanics
             // A script may force it to run (SetForceRun), or to sneak, which is slower than a run (the speed is then
             // scaled in moveSpeedMultiplier)
             if (frame.mScripts != nullptr)
-                run = (run || frame.mScripts->actorForcesRun(mind.mPtr)) && !frame.mScripts->actorForcesSneak(mind.mPtr);
+                run = (run || frame.mScripts->actorForcesRun(mind.mPtr))
+                    && !frame.mScripts->actorForcesSneak(mind.mPtr);
             const bool running = run && animation->canRun();
             // A character goes at the speed of the movement rules, the player's own (fMoveBaseSpeed by its SpeedMult,
             // the legs, the armor, the weapon, a forced sneak); a creature at the speed of its animation by its

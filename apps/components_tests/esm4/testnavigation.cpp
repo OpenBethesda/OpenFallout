@@ -222,8 +222,8 @@ namespace
     {
         const std::string data = subRecord("NVMI", bytePattern(8, 1)) + zString("EDID", "AfterTheNavMeshInfo");
 
-        const std::pair<float, int> games[]
-            = { { 0.94f, 15 }, { 1.32f, 15 }, { 1.34f, 15 }, { 1.7f, 44 }, { 1.f, 131 } };
+        // (Fallout 3 and New Vegas are read: readsTheNavMeshesOfFalloutWithTheirNeighboursAndDoors)
+        const std::pair<float, int> games[] = { { 1.7f, 44 }, { 1.f, 131 } };
         for (const auto& [header, form] : games)
         {
             const ESM4::Navigation navigation
