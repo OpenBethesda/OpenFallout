@@ -89,6 +89,9 @@ namespace OFPhysics
         /// Where the first body is (the pelvis of a person)
         btVector3 rootPosition() const;
 
+        /// The bodies are put where `moved` takes them, as a script moves the body they belong to
+        void moveBy(const btTransform& moved);
+
     private:
         struct Part
         {

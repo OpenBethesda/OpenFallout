@@ -387,6 +387,9 @@ namespace OFPhysics
             std::string mLabel;
             float mAge = 0.f;
             bool mRested = false;
+            /// Where the reference was, and its heading, when the bodies last went with it
+            osg::Vec3f mAt;
+            float mHeading = 0.f;
         };
         std::unordered_map<const OFWorld::LiveCellRefBase*, RagdollEntry> mRagdolls;
         /// The copies of what is near the ragdolls, by the object of the world of the living they copy

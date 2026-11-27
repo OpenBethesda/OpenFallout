@@ -564,6 +564,22 @@ namespace OFPhysics
             foundActor->second->updatePosition();
             mTaskScheduler->updateSingleAabb(foundActor->second, true);
         }
+        // A body a script moves takes its ragdoll with it, turned about it as it turned
+        if (auto found = mRagdolls.find(ptr.mRef); found != mRagdolls.end())
+        {
+            RagdollEntry& entry = found->second;
+            const ESM::Position& position = ptr.getRefData().getPosition();
+            const osg::Vec3f at = position.asVec3();
+            if (at != entry.mAt || position.rot[2] != entry.mHeading)
+            {
+                const btTransform turn(btQuaternion(btVector3(0, 0, 1), entry.mHeading - position.rot[2]));
+                const btTransform moved = btTransform(btQuaternion::getIdentity(), Misc::Convert::toBullet(at)) * turn
+                    * btTransform(btQuaternion::getIdentity(), -Misc::Convert::toBullet(entry.mAt));
+                entry.mRagdoll->moveBy(moved);
+                entry.mAt = at;
+                entry.mHeading = position.rot[2];
+            }
+        }
     }
 
     void PhysicsSystem::addCharacter(const OFWorld::Ptr& ptr, const CharacterShape& shape)
@@ -765,7 +781,10 @@ namespace OFPhysics
         Log(Debug::Info) << "Ragdoll: " << ptr.getCellRef().getRefId() << " falls with " << data->second->mBones.size()
                          << " bodies and " << data->second->mJoints.size() << " constraints of " << path << " at "
                          << root.x() << " " << root.y() << " " << root.z();
-        mRagdolls.emplace(ptr.mRef, RagdollEntry{ std::move(ragdoll), ptr.getCellRef().getRefId().toDebugString() });
+        const ESM::Position& position = ptr.getRefData().getPosition();
+        mRagdolls.emplace(ptr.mRef,
+            RagdollEntry{ std::move(ragdoll), ptr.getCellRef().getRefId().toDebugString(), 0.f, false,
+                position.asVec3(), position.rot[2] });
         return true;
     }
 

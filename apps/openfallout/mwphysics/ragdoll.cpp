@@ -424,6 +424,22 @@ namespace OFPhysics
         }
     }
 
+    void Ragdoll::moveBy(const btTransform& moved)
+    {
+        for (Part& part : mParts)
+        {
+            btRigidBody& body = *part.mBody;
+            const btTransform transform = moved * body.getWorldTransform();
+            body.setWorldTransform(transform);
+            body.setInterpolationWorldTransform(transform);
+            body.setLinearVelocity(moved.getBasis() * body.getLinearVelocity());
+            body.setAngularVelocity(moved.getBasis() * body.getAngularVelocity());
+            body.activate(true);
+            if (part.mCopy->getBroadphaseHandle() != nullptr)
+                mScheduler.moveCollisionObject(part.mCopy.get(), transform);
+        }
+    }
+
     void Ragdoll::getAabb(btVector3& min, btVector3& max) const
     {
         min = btVector3(BT_LARGE_FLOAT, BT_LARGE_FLOAT, BT_LARGE_FLOAT);
