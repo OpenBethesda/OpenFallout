@@ -30,8 +30,8 @@ namespace FalloutScript::NavMeshSearch
     };
     Walk walk(const Meshes& meshes, const Request& request, const Location& from, const Point& to);
 
-    /// The height of the mesh at the point when the point is inside the triangle on the map and not `maxAbove` or more
-    /// above it nor `maxBelow` or more below it (NV 0x697980)
+    /// The height of the mesh at the point when the point is inside the triangle on the map or on its edge, and at most
+    /// `maxAbove` above it and `maxBelow` below it (NV 0x697980)
     std::optional<float> heightOn(
         const Mesh& mesh, std::uint16_t triangle, const Point& point, float maxAbove, float maxBelow);
 

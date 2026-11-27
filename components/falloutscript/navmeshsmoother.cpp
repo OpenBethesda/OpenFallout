@@ -44,7 +44,7 @@ namespace FalloutScript::NavMeshSearch
         Point unit(const Point& a)
         {
             const float l = length(a);
-            if (l < 1e-6f)
+            if (l <= 1e-6f) // 0x4A0C10
                 return {};
             return times(a, 1.f / l);
         }
@@ -141,8 +141,8 @@ namespace FalloutScript::NavMeshSearch
         {
             const float th = turn(arc.mFrom, arc.mTo);
             if (arc.mSide == 0)
-                return (th > 0.f ? th : th + twoPi) * radius;
-            return (th > 0.f ? twoPi - th : -th) * radius;
+                return (th < 0.f ? th + twoPi : th) * radius; // 0x6A07DB
+            return (th < 0.f ? -th : twoPi - th) * radius; // 0x6A0806
         }
 
         Point onCircle(const Point& centre, float radius, const float n[2])
@@ -250,13 +250,13 @@ namespace FalloutScript::NavMeshSearch
             const float dy = (b[1] - centre[1]) / radius - ay;
             const bool xMajor = (dy == 0.f && dx != 0.f) ? true
                 : (dy != 0.f && dx == 0.f)               ? false
-                                                         : std::abs(dy) <= std::abs(dx);
+                                                         : std::abs(dy) < std::abs(dx); // 0x6BAD37
             // the line as y = m x + c (or x = m y + c), its points on the unit circle
             const float m = xMajor ? dy / dx : dx / dy;
             const float c = xMajor ? ay - m * ax : ax - m * ay;
             const float q = m * m + 1.f;
             const float disc = q - c * c;
-            if (disc <= -eps)
+            if (disc < -eps) // 0x6BADA7
                 return result;
             const float k = 1.f / q;
             const auto t = [&](float major) { return xMajor ? (major - ax) / dx : (major - ay) / dy; };
@@ -497,7 +497,7 @@ namespace FalloutScript::NavMeshSearch
             const float cz = left ? a[0] * b[1] - a[1] * b[0] : b[0] * a[1] - b[1] * a[0];
             const float d = dot(a, b);
             const bool end = i == 0 || i + 1 == chain.size();
-            if (!end && !(d > 0.f ? cz <= 0.05f : cz <= -0.05f)) // 0x103C7C8, 0x106B9D8
+            if (!end && !(d > 0.f ? cz < 0.05f : cz < -0.05f)) // 0x103C7C8, 0x106B9D8
                 return;
             std::vector<std::size_t>& list = left ? mLeft : mRight;
             Pov pov;
@@ -663,7 +663,7 @@ namespace FalloutScript::NavMeshSearch
                 return true;
             std::vector<Tangent> entries = tangents(pa.mPoint, pa.mRadius, pb.mPoint, pb.mRadius, a.mSide);
             if (!hasParent
-                && !(dot(minus(pa.mPoint, pb.mPoint), minus(pa.mPoint, pb.mPoint)) > pb.mRadius * pb.mRadius))
+                && dot(minus(pa.mPoint, pb.mPoint), minus(pa.mPoint, pb.mPoint)) < pb.mRadius * pb.mRadius) // 0x6B109A
             {
                 // NV 0x6B10A3: the start is inside the circle
                 Point v = minus(pa.mPoint, pb.mPoint);
@@ -705,7 +705,7 @@ namespace FalloutScript::NavMeshSearch
                     float th = turn(a.mB, entry.mA);
                     if (a.mSide == 0)
                     {
-                        if (th <= 0.f)
+                        if (th < 0.f) // 0x6B138F
                             th += twoPi;
                         if (th > 3.4906585f) // 0x106BA00
                             continue;
@@ -714,7 +714,7 @@ namespace FalloutScript::NavMeshSearch
                     {
                         if (th > 0.f)
                             th -= twoPi;
-                        if (th <= -3.4906585f) // 0x106B9F8
+                        if (th < -3.4906585f) // 0x106B9F8, 0x6B1404
                             continue;
                     }
                 }
@@ -1015,7 +1015,7 @@ namespace FalloutScript::NavMeshSearch
                     diff -= twoPi;
                 while (diff < -pi)
                     diff += twoPi;
-                if (std::abs(diff) > pi / 2.f) // 0x1064F50
+                if (std::abs(diff) < pi / 2.f) // 0x6B04CC: 0x1064F50
                 {
                     const float l = std::sqrt(length2Across(v));
                     v = { std::sin(mRequest.mHeading) * l, std::cos(mRequest.mHeading) * l, 0.f };
@@ -1039,17 +1039,17 @@ namespace FalloutScript::NavMeshSearch
         const Point b = minus(v2, p);
         const Point c = minus(v0, p);
         const float w0 = (a[0] * b[1] - b[0] * a[1]) * inv;
-        if (!(w0 > 0.f)) // 0x697A94
+        if (w0 < 0.f) // 0x697A94
             return std::nullopt;
         const float w1 = (b[0] * c[1] - c[0] * b[1]) * inv;
-        if (!(w1 > 0.f))
+        if (w1 < 0.f) // 0x697ADB
             return std::nullopt;
         const float w2 = (c[0] * a[1] - a[0] * c[1]) * inv;
-        if (!(w2 > 0.f))
+        if (w2 < 0.f) // 0x697B06
             return std::nullopt;
         const float z = w0 * v0[2] + w1 * v1[2] + w2 * v2[2];
         const float dz = p[2] - z;
-        if (!(dz < maxAbove) || !(dz > -maxBelow)) // 0x697B4B, 0x697B62
+        if (dz > maxAbove || dz < -maxBelow) // 0x697B4B, 0x697B62
             return std::nullopt;
         return z;
     }

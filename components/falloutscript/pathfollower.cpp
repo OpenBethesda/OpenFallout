@@ -300,7 +300,7 @@ namespace FalloutScript::PathFollower
             return;
         }
         // 0x9E3D9B: only forward while it goes forward (the last frame's plan)
-        if (mPlanned[1] <= 0.f)
+        if (mPlanned[1] < 0.f) // 0x9E3E20
             return;
         const Point world = rotate(mPlanned, actor.mHeading);
         const auto measure = [&](float& a, float& b, float& c) {
@@ -338,7 +338,7 @@ namespace FalloutScript::PathFollower
                 mT = last;
                 break;
             }
-            if (a < 0.f || b <= 0.f)
+            if (a < 0.f || b < 0.f) // 0x9E42D1 to 0x9E4313
             {
                 if (!(before <= a))
                     break;
@@ -377,7 +377,7 @@ namespace FalloutScript::PathFollower
             }
         }
         const float maxStep = actor.mTurnSpeed * degree * dt * 3.f * f; // 0x1021928
-        if (maxStep <= std::abs(c))
+        if (maxStep < std::abs(c)) // 0x9E4AB4
         {
             const float a = std::abs(c);
             if (a > 2.7f) // 0x1092498

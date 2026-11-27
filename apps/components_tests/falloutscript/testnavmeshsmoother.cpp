@@ -98,9 +98,9 @@ namespace
     {
         Mesh mesh = grid(1, 1, 1);
         mesh.mVertices[3][2] = 30.f;
-        // 0x697980: inside only, the edge is outside
+        // 0x697980: inside or on the edge (a weight of 0 is kept, 0x697A94)
         EXPECT_TRUE(heightOn(mesh, 0, { 90, 10, 0 }, 180.f, 64.f));
-        EXPECT_FALSE(heightOn(mesh, 0, { 50, 0, 0 }, 180.f, 64.f));
+        EXPECT_TRUE(heightOn(mesh, 0, { 50, 0, 0 }, 180.f, 64.f));
         EXPECT_FALSE(heightOn(mesh, 0, { 10, 90, 0 }, 180.f, 64.f));
         // too far below it
         EXPECT_FALSE(heightOn(mesh, 0, { 90, 10, -80 }, 180.f, 64.f));
