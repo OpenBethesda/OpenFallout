@@ -366,6 +366,7 @@ add_component_dir (falloutscript
     ragdollrules
     navmeshsearch
     navmeshsmoother
+    pathfollower
     )
 
 add_component_dir (misc

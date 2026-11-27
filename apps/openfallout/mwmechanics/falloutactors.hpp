@@ -14,6 +14,7 @@
 #include <osg/Vec3f>
 
 #include "../mwworld/ptr.hpp"
+#include "falloutnavmeshes.hpp"
 namespace OFWorld
 {
     class CellStore;
@@ -127,6 +128,8 @@ namespace OFMechanics
         /// The characters of the cells that are loaded and that have no mind: they are there to be seen, and to see
         std::map<const OFWorld::LiveCellRefBase*, OFWorld::Ptr> mUnminded;
         std::map<ESM::RefNum, Command> mCommands;
+        /// The navmeshes of the cells that are loaded, with what the actors marked on them
+        FalloutNavMeshes mNavMeshes;
 
         /// A follower on its way through a door after the player
         struct Arrival

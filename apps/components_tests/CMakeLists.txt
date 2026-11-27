@@ -247,6 +247,7 @@ file(GLOB UNITTEST_SRC_FILES
     falloutscript/testragdollrules.cpp
     falloutscript/testnavmeshsearch.cpp
     falloutscript/testnavmeshsmoother.cpp
+    falloutscript/testpathfollower.cpp
     falloutscript/testformlists.cpp
     falloutscript/testlevelledlists.cpp
     falloutscript/testspawncommands.cpp

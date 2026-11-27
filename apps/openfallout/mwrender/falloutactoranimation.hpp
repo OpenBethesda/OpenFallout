@@ -56,6 +56,11 @@ namespace OFRender
         /// The weapon goes out of the hands
         void holsterWeapon();
         bool isWeaponDrawn() const { return mDrawn; }
+        /// Nothing plays over the animation it moves with: no idle a script plays, no pose in furniture, no fall. The
+        /// executables ask whether the strongest animation is the movement one in the groups Forward to DodgeRight (NV
+        /// 0x495BE0), which for a walker follows what it is told to do; here the walk follows how fast it goes, so a
+        /// walker held against a wall would stand in its idle, and the walk it is told to do is taken as playing.
+        bool movementLeads() const { return !mDown && mPoseKind == 0 && !mScriptIdleWasPlaying; }
 
         /// One attack with what it holds: a gun fires, a melee weapon or the hands swing in turn left and right. A gun
         /// whose projectile has a muzzle flash (the record's flash model and the seconds it lasts) flashes at its muzzle.

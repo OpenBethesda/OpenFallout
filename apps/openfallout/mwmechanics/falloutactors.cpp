@@ -3,17 +3,12 @@
 
 #include <algorithm>
 #include <cmath>
-#include <deque>
 #include <limits>
 #include <optional>
 #include <set>
 #include <vector>
 
 #include <components/debug/debuglog.hpp>
-#include <components/detournavigator/areatype.hpp>
-#include <components/detournavigator/flags.hpp>
-#include <components/detournavigator/navigatorutils.hpp>
-#include <components/detournavigator/status.hpp>
 #include <components/esm/util.hpp>
 #include <components/esm4/loadcrea.hpp>
 #include <components/esm4/loadfurn.hpp>
@@ -22,10 +17,10 @@
 #include <components/esm4/packageschedule.hpp>
 #include <components/falloutscript/actorstatus.hpp>
 #include <components/falloutscript/aimemory.hpp>
-#include <components/falloutscript/worldrules.hpp>
 #include <components/falloutscript/fightai.hpp>
+#include <components/falloutscript/pathfollower.hpp>
+#include <components/falloutscript/worldrules.hpp>
 #include <components/misc/constants.hpp>
-#include <components/settings/values.hpp>
 
 #include <osg/Quat>
 
@@ -42,6 +37,7 @@
 #include "../mwworld/timestamp.hpp"
 #include "../mwworld/worldmodel.hpp"
 
+#include "falloutnavmeshes.hpp"
 #include "falloutpackages.hpp"
 
 namespace OFMechanics
@@ -77,18 +73,8 @@ namespace OFMechanics
         // finds from this far above them to this far below them
         constexpr float groundProbeUp = 48.f;
         constexpr float groundProbeDown = 160.f;
-        // An actor waits for the player to move out of the way when it would come this close
-        constexpr float yieldDistance = 70.f;
-        // ... for this many seconds: a player that stands in the way (it is not moved by anyone) is walked past
-        constexpr float yieldPatience = 4.f;
-        // ... unless the player is this far above or below it: a player upstairs is not in the way
-        constexpr float yieldHeight = 64.f;
-        // An actor that has not come this fraction of the distance that it should have for this long is stuck
-        constexpr float progressInterval = 1.5f;
-        constexpr float progressFraction = 0.3f;
-        constexpr float stuckTime = 4.5f;
-        // How long it waits before it asks for a path again, after the navigator had none (its mesh is made as the
-        // player goes about), and before it tries again to go where it could not
+        // How long it waits before it asks for a path again, after there was none, and before it tries again to go
+        // where it could not
         constexpr float pathRetryTime = 1.f;
         constexpr float giveUpTime = 10.f;
         // A package that scripts wait for and has had no path for this long is logged once (the navigator makes its
@@ -97,11 +83,8 @@ namespace OFMechanics
         // A character that has not got to the place of a Travel package that scripts wait for after this many tries
         // is put there
         constexpr int failuresBeforeJump = 2;
-        // The navigator is asked for paths that end at the nearest place within this distance of the target
-        constexpr float endTolerance = 96.f;
-        // The walk in a straight line where the navigator has no path looks at the way from this far above the floor
+        // A thrown actor looks for what it meets from this far above its feet
         constexpr float straightKneeHeight = 35.f;
-        constexpr float straightChestHeight = 100.f;
         /// How near to a door a character that goes through it has arrived
         constexpr float doorArrival = 96.f;
         // A follower asks for a new path when the one it follows has gone this far from where its path ends
@@ -201,7 +184,6 @@ namespace OFMechanics
         bool mHasFacing = false;
         float mFacing = 0.f; // which way it faces when it gets there
 
-        bool mAgent = false; // the navigator has been told of an actor of its size, so that it makes a mesh for it
         float mSight = 0.f; // seconds until it looks for the player to go for
         bool mFighting = false; // it was in a fight the last time it was looked at
         FalloutScript::FormId mDrawn = 0; // the weapon whose animations it was last given in a fight
@@ -221,7 +203,7 @@ namespace OFMechanics
         float mWait = 0.f; // seconds to stand still before it does anything else
         bool mWalking = false; // it goes to mDestination
         bool mFleeing = false; // mDestination is a place to run to from the target of its fight, not the target
-        bool mPartial = false; // the path it follows stops short of mDestination: the navigator could not make the rest
+        bool mPartial = false; // the path it follows stops short of mDestination
         std::string mPathStatus; // why the last path asked for was not one (said when a package cannot be walked)
         bool mAtGoal = false; // a goal that stays is reached
         bool mSpoke = false; // a Dialogue package: it has said what it came to say, and is done when the lines are over
@@ -246,7 +228,8 @@ namespace OFMechanics
         int mFailures = 0; // how many times in a row it has had no way to get to the place of the package
         osg::Vec3f mRestPlace; // where it stood when it reached it
         osg::Vec3f mDestination;
-        std::deque<osg::Vec3f> mWaypoints;
+        /// How it walks its path (NV DetailedActorPathHandler)
+        FalloutScript::PathFollower::Follower mFollower;
         float mPathRetry = 0.f;
 
         // What the scripts were last told of its package (GetCurrentAIProcedure, IsWaiting, GetPackageTarget): told when
@@ -257,12 +240,6 @@ namespace OFMechanics
         std::uint32_t mToldFlags = 0;
         FalloutScript::FormId mToldTarget = 0;
 
-        // Whether it gets on
-        osg::Vec3f mCheckpoint;
-        float mCheckpointTime = 0.f;
-        float mStuck = 0.f;
-        bool mYielded = false;
-        FalloutYield mYield; // how long it has waited for the player to move out of its way, and whether it goes on
         float mPathWaiting = 0.f; // how long the navigator has had no mesh to make a path on
         bool mPathWaitingReported = false;
 
@@ -440,7 +417,8 @@ namespace OFMechanics
             OFBase::World& mWorld;
             ESM4::PackageClock mClock;
             osg::Vec3f mPlayer;
-            bool mNavigator = false;
+            /// The navmeshes of the cells that are loaded, which the paths are made on
+            FalloutNavMeshes* mNavMeshes = nullptr;
             /// What decides the conditions of the packages: null when there are no scripts
             OFScript::FalloutScripts* mScripts = nullptr;
             /// What the packages of the actors do that scripts are told of, which they are after all the actors have
@@ -602,26 +580,11 @@ namespace OFMechanics
 
     namespace
     {
-        /// The navigator makes a navigation mesh for each size of actor that it has been told of. The scene tells it of
-        /// the character bodies it adds; an actor tells it once more for itself, so that the mesh stays while it walks.
-        /// All of them go by one size (World::getPathfindingAgentBounds): the game has no mesh for each size of
-        /// creature.
-        void registerAgent(FalloutActors::Mind& mind)
-        {
-            OFBase::World& world = *OFBase::Environment::get().getWorld();
-            DetourNavigator::Navigator* navigator = world.getNavigator();
-            if (navigator != nullptr && navigator->addAgent(world.getPathfindingAgentBounds(mind.mPtr)))
-                mind.mAgent = true;
-        }
-
         void stopWalking(FalloutActors::Mind& mind)
         {
             mind.mWalking = false;
             mind.mFleeing = false;
-            mind.mWaypoints.clear();
-            mind.mStuck = 0.f;
-            mind.mYielded = false;
-            mind.mYield = FalloutYield();
+            mind.mFollower.stop();
             mind.mPathWaiting = 0.f;
             mind.mPathWaitingReported = false;
         }
@@ -642,16 +605,6 @@ namespace OFMechanics
                     Log(Debug::Info) << mind.mPtr.getCellRef().getRefId() << " has no ragdoll: its body stays as it is";
             }
             frame.mWorld.setObjectCollision(mind.mPtr, false);
-        }
-
-        void releaseAgent(FalloutActors::Mind& mind)
-        {
-            if (!mind.mAgent)
-                return;
-            mind.mAgent = false;
-            OFBase::World& world = *OFBase::Environment::get().getWorld();
-            if (DetourNavigator::Navigator* navigator = world.getNavigator())
-                navigator->removeAgent(world.getPathfindingAgentBounds(mind.mPtr));
         }
     }
 
@@ -859,7 +812,6 @@ namespace OFMechanics
         Mind& mind = *mMinds.emplace(ptr.mRef, std::make_unique<Mind>(ptr, packagesOf(ptr), seed)).first->second;
         mind.mScripted = scriptPackagesOf(ptr);
         restoreState(mind);
-        registerAgent(mind);
         return mind;
     }
 
@@ -1083,7 +1035,6 @@ namespace OFMechanics
         const auto found = mMinds.find(ptr.mRef);
         if (found == mMinds.end())
             return;
-        releaseAgent(*found->second);
         // The scripts are not told any more of what the actor does
         if (found->second->mReported != 0)
             if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
@@ -1119,7 +1070,6 @@ namespace OFMechanics
         {
             if (it->second->mPtr.getCell() == cell)
             {
-                releaseAgent(*it->second);
                 if (it->second->mReported != 0)
                     if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
                         scripts->forgetMind(it->second->mReported);
@@ -1381,110 +1331,116 @@ namespace OFMechanics
             return true;
         }
 
-        /// Whether the actor can walk the straight line to the place on the floor that the world has under it (see
-        /// falloutStraightWalkable): used where the navigator has no path, because its mesh has holes and islands
-        /// (round 10P: a vault of Fallout 3) or the target stands off it (the pistol raider in round 10O)
-        bool walksStraight(OFBase::World& world, const osg::Vec3f& from, const osg::Vec3f& to)
+        namespace NavMeshSearch = FalloutScript::NavMeshSearch;
+        namespace PathFollower = FalloutScript::PathFollower;
+
+        NavMeshSearch::Point toPoint(const osg::Vec3f& v)
         {
-            const auto floor = [&world](float x, float y, float last) -> std::optional<float> {
-                const osg::Vec3f above(x, y, last + groundProbeUp);
-                const float reach = groundProbeUp + groundProbeDown;
-                const float distance = world.getDistToNearestRayHit(above, osg::Vec3f(0.f, 0.f, -1.f), reach);
-                if (distance >= reach)
-                    return std::nullopt;
-                return above.z() - distance;
-            };
-            // The knees and the chest of the walker
-            const auto blocked = [&world](const osg::Vec3f& a, const osg::Vec3f& b) {
-                return falloutSegmentBlocked(
-                    a, b,
-                    [&world](const osg::Vec3f& start, const osg::Vec3f& direction, float longest) {
-                        return world.getDistToNearestRayHit(start, direction, longest);
-                    },
-                    { straightKneeHeight, straightChestHeight });
-            };
-            return falloutStraightWalkable(from, to, floor, blocked);
+            return { v.x(), v.y(), v.z() };
         }
 
-        /// The actor goes to the place in a straight line, which the world lets it walk
-        Walk straightWalk(FalloutActors::Mind& mind, const osg::Vec3f& destination, const char* why)
+        /// The loaded cell a place is in: the actor's own in an interior, the exterior cell under it outside (NV
+        /// PathingLocation 0x6DD280)
+        const OFWorld::CellStore* cellAt(const Frame& frame, const OFWorld::Ptr& ptr, const osg::Vec3f& position)
         {
-            static int said = 0;
-            if (said < 40)
-            {
-                ++said;
-                Log(Debug::Info) << mind.mPtr.getCellRef().getRefId() << " walks straight to " << destination.x() << ","
-                                 << destination.y() << "," << destination.z() << " (" << why
-                                 << "): the floor is there and nothing is in the way";
-            }
-            mind.mWaypoints.clear();
-            mind.mWaypoints.push_back(destination);
-            mind.mPartial = false;
-            mind.mPathStatus.clear();
-            return Walk::Moving;
+            const OFWorld::CellStore* cell = ptr.getCell();
+            if (cell == nullptr || !cell->isExterior())
+                return cell;
+            const ESM::ExteriorCellLocation index
+                = ESM::positionToExteriorCellLocation(position.x(), position.y(), cell->getCell()->getWorldSpace());
+            for (const OFWorld::CellStore* active : frame.mWorld.getActiveCells())
+                if (active->isExterior() && active->getCell()->getExteriorCellLocation() == index)
+                    return active;
+            return nullptr;
         }
 
-        /// Asks the navigator for the path from where the actor is to the place. Success when it has waypoints.
-        Walk buildPath(const Frame& frame, FalloutActors::Mind& mind, const osg::Vec3f& destination)
+        /// The triangle a place is on and the place on it, as the game finds the start and the end of a path (NV
+        /// 0x6DD6F0, then 0x6DDC00 when that finds none)
+        std::optional<std::pair<NavMeshSearch::Place, NavMeshSearch::Point>> placeOnMesh(
+            const Frame& frame, const OFWorld::Ptr& ptr, const osg::Vec3f& position, bool nearest = true)
         {
-            mind.mWaypoints.clear();
+            const OFWorld::CellStore* cell = cellAt(frame, ptr, position);
+            if (cell == nullptr)
+                return std::nullopt;
+            const ESM::FormId* id = cell->getCell()->getId().getIf<ESM::FormId>();
+            if (id == nullptr)
+                return std::nullopt;
+            const std::vector<NavMeshSearch::Candidate> candidates = frame.mNavMeshes->candidates(*id);
+            // the height of the land there (NV 0x45CBC0): none in an interior
+            const float land = cell->isExterior()
+                ? frame.mWorld.getTerrainHeightAt(position, cell->getCell()->getWorldSpace())
+                : std::numeric_limits<float>::lowest();
+            const NavMeshSearch::Point point = toPoint(position);
+            if (auto found = NavMeshSearch::locate(candidates, point, land); found || !nearest)
+                return found;
+            return NavMeshSearch::locateNearest(candidates, point, land);
+        }
+
+        /// The path request of an actor (NV 0x6E2420 and 0x6E2A55): 0.6 of the width of its bounds by its scale
+        /// (0x885140)
+        NavMeshSearch::Request requestOf(const Frame& frame, const FalloutActors::Mind& mind, float arrival)
+        {
+            NavMeshSearch::Request request;
+            request.mRadius = 0.6f * 2.f * frame.mWorld.getHalfExtents(mind.mPtr).x();
+            if (arrival > 0.f)
+                request.mGoalRadius = arrival;
+            return request;
+        }
+
+        /// The way from where the actor is to the place on the meshes of the cells that are loaded: the search's
+        /// triangles (NV 0x6A6B70) and the smoother's way along them (NV 0x6AD770)
+        std::optional<PathFollower::Path> findPath(const Frame& frame, FalloutActors::Mind& mind,
+            const NavMeshSearch::Request& request, const osg::Vec3f& destination)
+        {
             mind.mPartial = false;
             mind.mPathStatus.clear();
-            const osg::Vec3f start = mind.position();
-            if (!frame.mNavigator)
+            const auto from = placeOnMesh(frame, mind.mPtr, mind.position());
+            const auto to = placeOnMesh(frame, mind.mPtr, destination);
+            if (!from || !to)
             {
-                // Without a navigator the actor goes straight, as far as the ground allows
-                mind.mWaypoints.push_back(destination);
-                return Walk::Moving;
+                mind.mPathStatus = !from ? "no navmesh under the actor" : "no navmesh under the place";
+                return std::nullopt;
             }
+            const NavMeshSearch::Meshes meshes = frame.mNavMeshes->meshes();
+            // shortcut: the doors on the meshes are not filled yet (the in-cell door step), so none is asked about
+            const auto steps = NavMeshSearch::search(
+                meshes, from->first, to->first, request, [](std::uint32_t) { return NavMeshSearch::Door::Open; });
+            if (!steps)
+            {
+                mind.mPathStatus = "the search found no way";
+                return std::nullopt;
+            }
+            NavMeshSearch::Smoothed way
+                = NavMeshSearch::smooth(meshes, request, *steps, from->second, to->second, frame.mNavMeshes->land());
+            if (!way.mFound)
+            {
+                mind.mPathStatus = "the smoother found no way along the triangles";
+                return std::nullopt;
+            }
+            return std::move(way.mPoints);
+        }
 
-            const DetourNavigator::Status status = DetourNavigator::findPath(*frame.mWorld.getNavigator(),
-                frame.mWorld.getPathfindingAgentBounds(mind.mPtr), start, destination, DetourNavigator::Flag_walk,
-                DetourNavigator::AreaCosts(), endTolerance, {}, std::back_inserter(mind.mWaypoints));
-            switch (status)
+        /// What the path follower reads of the actor (NV DetailedActorPathHandler, 0x9E0A00)
+        PathFollower::Actor followerActor(const Frame& frame, const FalloutActors::Mind& mind,
+            const OFRender::FalloutActorAnimation& animation, float speed)
+        {
+            PathFollower::Actor actor;
+            const ESM::Position& position = mind.mPtr.getRefData().getPosition();
+            actor.mPosition = toPoint(position.asVec3());
+            actor.mHeading = position.rot[2];
+            actor.mSpeed = speed;
+            const osg::Vec3f half = frame.mWorld.getHalfExtents(mind.mPtr);
+            actor.mRadius = 0.5f * std::max(2.f * std::max(half.x(), half.y()), 32.f); // NV 0x885020
+            actor.mCreature = mind.mPtr.getType() == ESM4::Creature::sRecordId; // vfunc 0x21C
+            if (actor.mCreature)
             {
-                case DetourNavigator::Status::Success:
-                    if (!mind.mWaypoints.empty())
-                    {
-                        // The mesh ends where the nearest of its places to the target is: when the target stands off it
-                        // (up to the tolerance), the character goes on in a straight line from there
-                        const osg::Vec3f last = mind.mWaypoints.back();
-                        if (distanceAcross(last, destination) > waypointDistance
-                            && walksStraight(frame.mWorld, last, destination))
-                            mind.mWaypoints.push_back(destination);
-                        return Walk::Moving;
-                    }
-                    mind.mPathStatus = "the path has no waypoints";
-                    return Walk::Failed;
-                case DetourNavigator::Status::PartialPath:
-                    // The place is on another island of the mesh, or in a part of it that is not made yet: the path
-                    // goes as far as the navigator can, and a path that goes nowhere from here is no path
-                    mind.mPartial = true;
-                    if (mind.mWaypoints.empty() || (start - mind.mWaypoints.back()).length() < waypointDistance)
-                    {
-                        mind.mWaypoints.clear();
-                        if (walksStraight(frame.mWorld, start, destination))
-                            return straightWalk(mind, destination, "the path goes nowhere from here");
-                        mind.mPathStatus
-                            = "the path goes nowhere from here (another island of the mesh, or a part of "
-                              "it that is not made)";
-                        return Walk::Failed;
-                    }
-                    return Walk::Moving;
-                case DetourNavigator::Status::NavMeshNotFound:
-                    mind.mWaypoints.clear();
-                    mind.mPathStatus = "the navigator has no mesh for the cell yet";
-                    return Walk::Waiting;
-                default:
-                    mind.mPathStatus = DetourNavigator::getMessage(status);
-                    if (walksStraight(frame.mWorld, start, destination))
-                        return straightWalk(mind, destination, DetourNavigator::getMessage(status));
-                    Log(Debug::Verbose) << "No path for " << mind.mPtr.getCellRef().getRefId() << " from " << start.x()
-                                        << "," << start.y() << " to " << destination.x() << "," << destination.y()
-                                        << ": " << DetourNavigator::getMessage(status);
-                    mind.mWaypoints.clear();
-                    return Walk::Failed;
+                // NV 0x8D47F0: the creature's own, else fCreatureDefaultTurningSpeed
+                const float own = mind.mPtr.get<ESM4::Creature>()->mBase->mTurningSpeed;
+                actor.mTurnSpeed = own != 0.f ? own : 45.f;
             }
+            // (byte +0x104, riding: there are no mounts)
+            actor.mMoving = animation.movementLeads();
+            return actor;
         }
 
         void faceToward(const Frame& frame, FalloutActors::Mind& mind, float target, float duration)
@@ -1496,15 +1452,15 @@ namespace OFMechanics
                     mind.mPtr, osg::Vec3f(position.rot[0], position.rot[1], turned), OFBase::RotationFlag_none);
         }
 
-        /// One frame of walking to the place. The actor is there within `arrival` units of the place (0: at it) and on
-        /// its floor, and may run.
+        /// One frame of walking to the place, as the path handler of the executables walks it (NV 0x9E0470, 0x9E0A00).
+        /// The actor is there within `arrival` units of the place (0: the request's goal radius) and may run.
         Walk walkTo(const Frame& frame, FalloutActors::Mind& mind, const osg::Vec3f& destination, float duration,
             float arrival = 0.f, bool run = false)
         {
             // A character that is there already has arrived, whether it could walk or not
             if (arrival > 0.f && isNear(mind.position(), destination, arrival))
             {
-                mind.mWaypoints.clear();
+                mind.mFollower.stop();
                 return Walk::Arrived;
             }
 
@@ -1515,43 +1471,9 @@ namespace OFMechanics
             if (!mind.mWalking)
             {
                 mind.mWalking = true;
-                mind.mWaypoints.clear();
-                mind.mStuck = 0.f;
-                mind.mCheckpoint = mind.position();
-                mind.mCheckpointTime = 0.f;
-            }
-            if (mind.mWaypoints.empty())
-            {
-                if (mind.mPathRetry > 0.f)
-                {
-                    mind.mPathRetry -= duration;
-                    return Walk::Waiting;
-                }
-                const Walk built = buildPath(frame, mind, destination);
-                if (built != Walk::Moving)
-                {
-                    mind.mPathRetry = pathRetryTime;
-                    return built;
-                }
+                mind.mFollower.stop();
             }
 
-            const osg::Vec3f position = mind.position();
-            while (mind.mWaypoints.size() > 1 && isNear(position, mind.mWaypoints.front(), waypointDistance))
-                mind.mWaypoints.pop_front();
-            if (isNear(position, mind.mWaypoints.front(), waypointDistance / 2.f))
-            {
-                mind.mWaypoints.clear();
-                // The end of a path that stopped short is not the place: another path is asked for from here, which
-                // fails when it gets no nearer
-                if (mind.mPartial)
-                {
-                    mind.mPathRetry = 0.f;
-                    return Walk::Waiting;
-                }
-                return Walk::Arrived;
-            }
-
-            const osg::Vec3f next = mind.mWaypoints.front();
             // A script may force it to run (SetForceRun), or to sneak, which is slower than a run (the speed is then
             // scaled in moveSpeedMultiplier)
             if (frame.mScripts != nullptr)
@@ -1568,61 +1490,80 @@ namespace OFMechanics
                 else
                     speed *= static_cast<float>(frame.mScripts->creatureSpeedShare(mind.mPtr));
             }
-            // On the character controller it is given the speed toward the next point (no more than takes it there in
-            // this frame) and the solver moves it, up steps and slopes and against walls; without one it is put there
-            const bool controlled = onController(mind.mPtr);
-            osg::Vec3f place = falloutStepToward(position, next, speed * duration);
-            if (!controlled)
-                place.z() = groundHeight(frame.mWorld, place);
 
-            faceToward(frame, mind, std::atan2(next.x() - position.x(), next.y() - position.y()), duration);
-
-            // The player is in the way: wait where it is, for a while
-            const float toPlayer = distanceAcross(place, frame.mPlayer);
-            const bool wasPassing = mind.mYield.mPassing;
-            const bool nearPlayer = std::abs(position.z() - frame.mPlayer.z()) < yieldHeight
-                && distanceAcross(position, frame.mPlayer) < yieldDistance;
-            const bool inTheWay = std::abs(place.z() - frame.mPlayer.z()) < yieldHeight && toPlayer < yieldDistance
-                && toPlayer < distanceAcross(position, frame.mPlayer);
-            // SetNoAvoidance: nothing steps aside for the player
-            const bool avoids = frame.mScripts == nullptr || !frame.mScripts->actorsAvoidanceOff();
-            if (avoids && falloutYields(mind.mYield, nearPlayer, inTheWay, duration, yieldPatience))
+            const PathFollower::Actor actor = followerActor(frame, mind, *animation, speed);
+            if (!mind.mFollower.active())
             {
-                mind.mYielded = true;
-                return Walk::Moving;
+                if (mind.mPathRetry > 0.f)
+                {
+                    mind.mPathRetry -= duration;
+                    return Walk::Waiting;
+                }
+                const NavMeshSearch::Request request = requestOf(frame, mind, arrival);
+                std::optional<PathFollower::Path> path = findPath(frame, mind, request, destination);
+                if (!path)
+                {
+                    mind.mPathRetry = pathRetryTime;
+                    return Walk::Failed;
+                }
+                PathFollower::Start start;
+                start.mRadius = request.mRadius;
+                start.mGoalRadius = request.mGoalRadius;
+                if (mind.mFollower.start(std::move(*path), start, actor) == PathFollower::Result::Arrived)
+                    return Walk::Arrived;
             }
-            if (mind.mYield.mPassing && !wasPassing)
-                Log(Debug::Info) << mind.mPtr.getCellRef().getRefId() << " waited " << yieldPatience
-                                 << " s for the player to move out of its way and goes on";
-            if (!isLoaded(frame, mind.mPtr, place))
+
+            PathFollower::Frame out;
+            const PathFollower::Result result = mind.mFollower.update(actor, duration, out);
+            const ESM::Position& position = mind.mPtr.getRefData().getPosition();
+            if (std::abs(out.mHeading - position.rot[2]) > 1e-6f)
+                frame.mWorld.rotateObject(
+                    mind.mPtr, osg::Vec3f(position.rot[0], position.rot[1], out.mHeading), OFBase::RotationFlag_none);
+            const osg::Vec3f movement(out.mMovement[0], out.mMovement[1], out.mMovement[2]);
+            const osg::Vec3f here = mind.position();
+            if (!isLoaded(frame, mind.mPtr, here + movement))
                 return Walk::Failed;
-
-            if (controlled)
+            // On the character controller it is given the speed of the plan and the solver moves it, up steps and
+            // slopes and against walls; without one it is put there, on the ground
+            if (onController(mind.mPtr))
+                queueVelocity(frame.mWorld, mind.mPtr, duration > 0.f ? movement / duration : osg::Vec3f());
+            else if (movement.length2() > 0.f)
             {
-                // (the speed is along the ground: a slope or a step does not slow it, the solver climbs them)
-                osg::Vec3f way = next - position;
-                way.z() = 0.f;
-                const float length = way.length();
-                const float pace = duration > 0.f ? std::min(speed, length / duration) : 0.f;
-                queueVelocity(frame.mWorld, mind.mPtr, length > 0.f ? way * (pace / length) : osg::Vec3f());
-            }
-            else
+                osg::Vec3f place = here + movement;
+                place.z() = groundHeight(frame.mWorld, place);
                 frame.mWorld.moveObject(mind.mPtr, place);
-
-            // Does it get on?
-            mind.mCheckpointTime += duration;
-            if (mind.mCheckpointTime >= progressInterval)
-            {
-                const float moved = distanceAcross(mind.position(), mind.mCheckpoint);
-                if (mind.mYielded || moved >= speed * mind.mCheckpointTime * progressFraction)
-                    mind.mStuck = 0.f;
-                else
-                    mind.mStuck += mind.mCheckpointTime;
-                mind.mCheckpoint = mind.position();
-                mind.mCheckpointTime = 0.f;
-                mind.mYielded = false;
             }
-            return mind.mStuck >= stuckTime ? Walk::Failed : Walk::Moving;
+
+            switch (result)
+            {
+                case PathFollower::Result::Moving:
+                    return Walk::Moving;
+                case PathFollower::Result::Arrived:
+                    return Walk::Arrived;
+                case PathFollower::Result::Stuck:
+                    // NV 0x9E5282 to 0x9E540D: the waypoint is marked on its triangle, and the path is made again (the
+                    // search costs the marked triangles more)
+                    if (out.mMarkStuck)
+                    {
+                        // (0x9E520F: the triangle under the waypoint, 0x6DD6F0, or no mark)
+                        if (const auto at = placeOnMesh(
+                                frame, mind.mPtr, osg::Vec3f(out.mStuckAt[0], out.mStuckAt[1], out.mStuckAt[2]), false))
+                            if (NavMeshSearch::Mesh* mesh = frame.mNavMeshes->find(at->first.mMesh))
+                                NavMeshSearch::markStuck(
+                                    *mesh, at->first.mTriangle, out.mStuckAt, requestOf(frame, mind, arrival).mRadius);
+                        Log(Debug::Info) << mind.mPtr.getCellRef().getRefId() << " is stuck on its way at "
+                                         << out.mStuckAt[0] << "," << out.mStuckAt[1] << "," << out.mStuckAt[2]
+                                         << ": the place is marked and the path is made again";
+                    }
+                    mind.mFollower.stop();
+                    return Walk::Moving;
+                default:
+                    mind.mPathStatus = result == PathFollower::Result::TooHigh
+                        ? "the end of the path is too far above or below it"
+                        : "a door on the way does not open";
+                    mind.mFollower.stop();
+                    return Walk::Failed;
+            }
         }
 
         /// One frame of an actor whose AI a Lua script switched off (`self:enableAI(false)`): the controls the script
@@ -2106,7 +2047,7 @@ namespace OFMechanics
                 if (!mind.mWalking || distanceAcross(target, mind.mDestination) > repathDistance)
                 {
                     mind.mDestination = target;
-                    mind.mWaypoints.clear();
+                    mind.mFollower.stop();
                 }
                 switch (walkTo(frame, mind, mind.mDestination, duration, distance, falloutFollowRuns(away, distance)))
                 {
@@ -2236,7 +2177,7 @@ namespace OFMechanics
                     const osg::Vec3f place = order.mPlace.getRefData().getPosition().asVec3();
                     if (!mind.mWalking || distanceAcross(place, mind.mDestination) > fightRepathDistance)
                     {
-                        mind.mWaypoints.clear();
+                        mind.mFollower.stop();
                         mind.mDestination = place;
                         mind.mFleeing = false;
                     }
@@ -2391,7 +2332,7 @@ namespace OFMechanics
                     if (!mind.mWalking || mind.mFleeing
                         || distanceAcross(target, mind.mDestination) > fightRepathDistance)
                     {
-                        mind.mWaypoints.clear();
+                        mind.mFollower.stop();
                         mind.mDestination = target;
                         mind.mFleeing = false;
                     }
@@ -2409,7 +2350,7 @@ namespace OFMechanics
                     // walk to the target is over
                     if (!mind.mWalking || !mind.mFleeing)
                     {
-                        mind.mWaypoints.clear();
+                        mind.mFollower.stop();
                         mind.mFleeing = true;
                         osg::Vec3f direction = mind.position() - target;
                         direction.z() = 0.f;
@@ -2557,7 +2498,7 @@ namespace OFMechanics
             return;
         const OFWorld::TimeStamp now = world.getTimeStamp();
         Frame frame{ world, falloutClock(now.getHour(), now.getDay()), player.getRefData().getPosition().asVec3(),
-            Settings::navigator().mEnable, scripts, nullptr, &mMinds };
+            &mNavMeshes, scripts, nullptr, &mMinds };
         facesSpeaker(frame, *found->second, speaker, std::min(duration, longestStep));
     }
 
@@ -2586,8 +2527,9 @@ namespace OFMechanics
 
         const OFWorld::TimeStamp now = world.getTimeStamp();
         std::vector<PendingEvent> events;
+        mNavMeshes.update(world.getStore(), world.getActiveCells());
         Frame frame{ world, falloutClock(now.getHour(), now.getDay()), player.getRefData().getPosition().asVec3(),
-            Settings::navigator().mEnable, OFBase::Environment::get().getFalloutScripts(), &events, &mMinds };
+            &mNavMeshes, OFBase::Environment::get().getFalloutScripts(), &events, &mMinds };
         duration = std::min(duration, longestStep);
 
         // The character that the player talks with
@@ -2781,7 +2723,7 @@ namespace OFMechanics
                     if (!mind.mWalking || distanceAcross(target, mind.mDestination) > repathDistance)
                     {
                         mind.mDestination = target;
-                        mind.mWaypoints.clear();
+                        mind.mFollower.stop();
                     }
                     switch (walkTo(frame, mind, mind.mDestination, duration, mind.mFollowing.mDistance,
                         falloutFollowRuns(away, mind.mFollowing.mDistance)))

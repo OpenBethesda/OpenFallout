@@ -91,6 +91,7 @@
 #include <components/esm4/loadmisc.hpp>
 #include <components/esm4/loadmstt.hpp>
 #include <components/esm4/loadmusc.hpp>
+#include <components/esm4/loadnavm.hpp>
 #include <components/esm4/loadnote.hpp>
 #include <components/esm4/loadnpc.hpp>
 #include <components/esm4/loadotft.hpp>

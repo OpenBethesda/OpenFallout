@@ -105,7 +105,7 @@ add_openfallout_dir (mwclass
 
 add_openfallout_dir (mwmechanics
     mechanicsmanagerimp processlists falloutactor stat movement actorutil drawstate levelledlist weapontype
-    falloutpackages falloutactors
+    falloutpackages falloutactors falloutnavmeshes
     )
 
 add_openfallout_dir (mwstate
