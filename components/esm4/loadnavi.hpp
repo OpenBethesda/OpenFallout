@@ -104,6 +104,25 @@ namespace ESM4
 
         std::vector<NavMeshInfo> mNavMeshInfo;
 
+        /// One navigation mesh in the navigation data of Fallout 3 and New Vegas: NVMI, and the lists of NVCI (NV
+        /// 0x6B4B50, 0x6B51A0; the object of 0x5C bytes of 0x6B46A0)
+        struct FalloutInfo
+        {
+            ESM::FormId mNavMesh; // +0
+            std::uint32_t mFlags = 0; // +8: 0x10 not to be used (0x68F320), 0x20 an island follows
+            ESM::FormId mSpace; // +4: the cell or the world space
+            std::uint32_t mUnknown = 0; // +0xC
+            float mCentre[3] = { 0.f, 0.f, 0.f }; // +0x10
+            float mCost = 0.f; // +0x20, from version 10 (0x6B4DA5)
+            std::vector<ESM::FormId> mNeighbours; // +0x24 (a step costs 3 times the distance, 0x6B85EE)
+            std::vector<ESM::FormId> mNeighboursToo; // +0x34, from version 11 (0x6B52B1)
+            std::vector<ESM::FormId> mDoors; // +0x44: teleport doors
+        };
+
+        /// NVER (NV 0x6B5FAD)
+        std::uint32_t mVersion = 1;
+        std::vector<FalloutInfo> mFalloutInfo;
+
         std::vector<std::pair<std::uint32_t, std::vector<ESM::FormId>>> mPreferredPaths;
 
         std::map<ESM::FormId, std::uint32_t> mPathIndexMap;

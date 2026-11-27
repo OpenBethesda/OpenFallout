@@ -100,6 +100,19 @@ void ESM4::Reference::load(ESM4::Reader& reader)
                 // << ", 0x" << std::hex << (mEsp.flags & 0xff) << std::endl;// FIXME
                 break;
             }
+            case ESM::fourCC("XNDP"):
+            {
+                if (subHdr.dataSize != 8)
+                {
+                    reader.skipSubRecordData();
+                    break;
+                }
+                std::uint16_t unused = 0;
+                reader.getFormId(mNavMeshDoorMesh);
+                reader.get(mNavMeshDoorTriangle);
+                reader.get(unused);
+                break;
+            }
             case ESM::fourCC("XTEL"):
             {
                 switch (subHdr.dataSize)
@@ -376,7 +389,6 @@ void ESM4::Reference::load(ESM4::Reader& reader)
             case ESM::fourCC("XMBO"):
             case ESM::fourCC("XMBP"):
             case ESM::fourCC("XMBR"):
-            case ESM::fourCC("XNDP"):
             case ESM::fourCC("XOCP"):
             case ESM::fourCC("XPOD"):
             case ESM::fourCC("XPTL"):

@@ -26,6 +26,7 @@
 */
 #include "loadnavi.hpp"
 
+#include <map>
 #include <stdexcept>
 
 #include "reader.hpp"
@@ -235,6 +236,7 @@ void ESM4::Navigation::load(ESM4::Reader& reader)
     // mFlags  = reader.hdr().record.flags;
     std::uint32_t esmVer = reader.esmVersion();
     bool isFONV = esmVer == ESM::VER_132 || esmVer == ESM::VER_133 || esmVer == ESM::VER_134;
+    std::map<ESM::FormId, std::size_t> falloutIndex; // the NVMI of each mesh, for its NVCI
 
     while (reader.getSubRecordHeader())
     {
@@ -332,13 +334,32 @@ void ESM4::Navigation::load(ESM4::Reader& reader)
             }
             case ESM::fourCC("NVER"):
             {
-                std::uint32_t version; // always the same? (0x0c)
-                reader.get(version); // TODO: store this or use it for merging?
-                // std::cout << "NAVI version " << std::dec << version << std::endl;
+                reader.get(mVersion);
                 break;
             }
             case ESM::fourCC("NVMI"): // multiple
             {
+                if (reader.isFalloutFile())
+                {
+                    // NV 0x6B4B50: the flags, the mesh, its cell or world space, a word, the centre, an island when
+                    // the flags have 0x20 (not kept), and from version 10 the cost
+                    FalloutInfo info;
+                    reader.get(info.mFlags);
+                    reader.getFormId(info.mNavMesh);
+                    reader.getFormId(info.mSpace);
+                    reader.get(info.mUnknown);
+                    reader.get(info.mCentre);
+                    constexpr std::uint32_t start = 28;
+                    const std::uint32_t cost = mVersion >= 10 ? 4 : 0;
+                    if (subHdr.dataSize < start + cost)
+                        throw std::runtime_error("ESM4::NAVI::load - NVMI is too short");
+                    reader.skipSubRecordData(subHdr.dataSize - start - cost);
+                    if (cost != 0)
+                        reader.get(info.mCost);
+                    falloutIndex[info.mNavMesh] = mFalloutInfo.size();
+                    mFalloutInfo.push_back(std::move(info));
+                    break;
+                }
                 // Can only read TES4 navmesh data
                 // Note FO4 FIXME above
                 if (esmVer == ESM::VER_094 || esmVer == ESM::VER_170 || isFONV || esmVer == ESM::VER_100)
@@ -353,8 +374,32 @@ void ESM4::Navigation::load(ESM4::Reader& reader)
                 mNavMeshInfo.push_back(std::move(nvmi));
                 break;
             }
+            case ESM::fourCC("NVCI"):
+                if (reader.isFalloutFile())
+                {
+                    // NV 0x6B6214 and 0x6B51A0: the mesh, then its neighbours, from version 11 more neighbours, and
+                    // its doors
+                    ESM::FormId mesh;
+                    reader.getFormId(mesh);
+                    const auto found = falloutIndex.find(mesh);
+                    if (found == falloutIndex.end())
+                        throw std::runtime_error("ESM4::NAVI::load - NVCI of a mesh without NVMI"); // 0x6B62EB
+                    FalloutInfo* const info = &mFalloutInfo[found->second];
+                    const auto list = [&](std::vector<ESM::FormId>& ids) {
+                        std::uint32_t count = 0;
+                        reader.get(count);
+                        ids.resize(count);
+                        for (ESM::FormId& id : ids)
+                            reader.getFormId(id);
+                    };
+                    list(info->mNeighbours);
+                    if (mVersion >= 11)
+                        list(info->mNeighboursToo);
+                    list(info->mDoors);
+                    break;
+                }
+                [[fallthrough]];
             case ESM::fourCC("NVSI"): // from Dawnguard onwards
-            case ESM::fourCC("NVCI"): // FO3
             {
                 reader.skipSubRecordData(); // FIXME:
                 break;

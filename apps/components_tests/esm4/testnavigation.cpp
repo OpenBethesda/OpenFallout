@@ -296,6 +296,60 @@ namespace
         EXPECT_EQ(navigation.mEditorId, "Next");
     }
 
+    // The NVMI of Fallout 3 and New Vegas (NV 0x6B4B50)
+    std::string falloutInfo(std::uint32_t mesh, std::uint32_t flags, const std::string& island = {})
+    {
+        std::string data;
+        append(data, flags);
+        append(data, mesh);
+        append<std::uint32_t>(data, 0x00000a01); // the cell
+        append<std::uint32_t>(data, 7);
+        for (const float coordinate : { 10.f, 20.f, 30.f })
+            append(data, coordinate);
+        data += island;
+        append(data, 0.25f); // the cost
+        return data;
+    }
+
+    TEST(ESM4NavigationTest, readsTheNavMeshesOfFalloutWithTheirNeighboursAndDoors)
+    {
+        std::string links;
+        append<std::uint32_t>(links, 0x00000802);
+        links += formIds({ 0x00000803 }) + formIds({ 0x00000804, 0x00000805 }) + formIds({ 0x00000901 });
+        const ESM4::Navigation navigation = loadVersionedRecord<ESM4::Navigation>("NAVI", 1.34f, 15,
+            valueSubRecord<std::uint32_t>("NVER", 11) + subRecord("NVMI", falloutInfo(0x00000801, 0))
+                + subRecord("NVMI", falloutInfo(0x00000802, 0x20, bytePattern(28, 3))) + subRecord("NVCI", links));
+
+        EXPECT_EQ(navigation.mVersion, 11u);
+        ASSERT_EQ(navigation.mFalloutInfo.size(), 2u);
+        const ESM4::Navigation::FalloutInfo& island = navigation.mFalloutInfo[1];
+        EXPECT_EQ(island.mNavMesh.toUint32(), 0x802u);
+        EXPECT_EQ(island.mFlags, 0x20u);
+        EXPECT_EQ(island.mSpace.toUint32(), 0xa01u);
+        EXPECT_EQ(island.mUnknown, 7u);
+        EXPECT_EQ(island.mCentre[2], 30.f);
+        EXPECT_EQ(island.mCost, 0.25f); // after the island
+        ASSERT_EQ(island.mNeighbours.size(), 1u);
+        EXPECT_EQ(island.mNeighbours[0].toUint32(), 0x803u);
+        ASSERT_EQ(island.mNeighboursToo.size(), 2u);
+        ASSERT_EQ(island.mDoors.size(), 1u);
+        EXPECT_EQ(island.mDoors[0].toUint32(), 0x901u);
+        EXPECT_TRUE(navigation.mFalloutInfo[0].mDoors.empty());
+        EXPECT_TRUE(navigation.mNavMeshInfo.empty());
+
+        // version 10 has no second list of neighbours
+        std::string older;
+        append<std::uint32_t>(older, 0x00000801);
+        older += formIds({ 0x00000802 }) + formIds({ 0x00000902 });
+        const ESM4::Navigation ten = loadVersionedRecord<ESM4::Navigation>("NAVI", 0.94f, 15,
+            valueSubRecord<std::uint32_t>("NVER", 10) + subRecord("NVMI", falloutInfo(0x00000801, 0))
+                + subRecord("NVCI", older));
+        ASSERT_EQ(ten.mFalloutInfo.size(), 1u);
+        ASSERT_EQ(ten.mFalloutInfo[0].mDoors.size(), 1u);
+        EXPECT_EQ(ten.mFalloutInfo[0].mDoors[0].toUint32(), 0x902u);
+        EXPECT_TRUE(ten.mFalloutInfo[0].mNeighboursToo.empty());
+    }
+
     TEST(ESM4NavigationTest, doesNotReadASubrecordItDoesNotKnow)
     {
         EXPECT_THAT(loadFailure(subRecord("XXYZ", "")), HasSubstr("Unknown subrecord XXYZ"));

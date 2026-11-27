@@ -80,11 +80,11 @@ namespace
     // The sub-records that the loader of a reference does not read, whichever game writes them
     const std::string sIgnoredReferenceData = ignored({ "LNAM", "XLIG", "XEMI", "XRDS", "XRGB", "XRGD", "XALP", "XPCI",
         "XLCM", "VMAD", "INAM", "PDTO", "SCHR", "SCTX", "XAPD", "XAPR", "XCVL", "XCZA", "XCZC", "XEZN", "XFVC", "XHTW",
-        "XIS2", "XLCN", "XLIB", "XLRM", "XLRT", "XLTW", "XMBO", "XMBP", "XMBR", "XNDP", "XOCP", "XPOD", "XPTL", "XPPA",
-        "XPRD", "XPWR", "XRMR", "XSPC", "XTNM", "XTRI", "XWCN", "XWCU", "XATR", "XHLT", "XCHG", "XHLP", "XAMT", "XAMC",
-        "XRAD", "XIBS", "XORD", "XCLP", "SCDA", "RCLR", "BNAM", "MMRK", "MNAM", "NNAM", "XATO", "SCRV", "SCVR", "SLSD",
-        "XSRF", "XSRD", "WMI1", "XLRL", "XASP", "XATP", "XBSD", "XCVR", "XCZR", "XLKT", "XLYR", "XMSP", "XPDD", "XPLK",
-        "XRFG", "XWPG", "XWPN" });
+        "XIS2", "XLCN", "XLIB", "XLRM", "XLRT", "XLTW", "XMBO", "XMBP", "XMBR", "XOCP", "XPOD", "XPTL", "XPPA", "XPRD",
+        "XPWR", "XRMR", "XSPC", "XTNM", "XTRI", "XWCN", "XWCU", "XATR", "XHLT", "XCHG", "XHLP", "XAMT", "XAMC", "XRAD",
+        "XIBS", "XORD", "XCLP", "SCDA", "RCLR", "BNAM", "MMRK", "MNAM", "NNAM", "XATO", "SCRV", "SCVR", "SLSD", "XSRF",
+        "XSRD", "WMI1", "XLRL", "XASP", "XATP", "XBSD", "XCVR", "XCZR", "XLKT", "XLYR", "XMSP", "XPDD", "XPLK", "XRFG",
+        "XWPG", "XWPN" });
 
     TEST(ESM4ReferenceTest, aReferenceHasItsBaseObjectPlacementAndOwner)
     {
@@ -94,7 +94,8 @@ namespace
                 + valueSubRecord<float>("XSCL", 2.5f) + valueSubRecord<std::uint32_t>("XOWN", 0x810)
                 + valueSubRecord<std::uint32_t>("XGLB", 0x811) + valueSubRecord<std::int32_t>("XRNK", 3)
                 + subRecord("XESP", enableParent(0x812, 3)) + valueSubRecord<std::int32_t>("XCNT", 5)
-                + valueSubRecord<std::uint32_t>("XTRG", 0x813) + valueSubRecord<std::uint32_t>("CNAM", 0x814));
+                + valueSubRecord<std::uint32_t>("XTRG", 0x813) + valueSubRecord<std::uint32_t>("CNAM", 0x814)
+                + valueSubRecord<std::uint64_t>("XNDP", 0x0000002a00000815ull));
 
         EXPECT_EQ(reference.mId.toUint32(), 0x801u);
         EXPECT_EQ(reference.mEditorId, "OFTestRef");
@@ -113,6 +114,8 @@ namespace
         EXPECT_EQ(reference.mCount, 5);
         EXPECT_EQ(reference.mTargetRef.toUint32(), 0x813u);
         EXPECT_EQ(reference.mAudioLocation.toUint32(), 0x814u);
+        EXPECT_EQ(reference.mNavMeshDoorMesh.toUint32(), 0x815u);
+        EXPECT_EQ(reference.mNavMeshDoorTriangle, 42u);
     }
 
     TEST(ESM4ReferenceTest, aReferenceHasTheDefaultsOfAnUnnamedPlacement)
