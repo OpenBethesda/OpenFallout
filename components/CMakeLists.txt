@@ -365,6 +365,7 @@ add_component_dir (falloutscript
     characterbody
     ragdollrules
     navmeshsearch
+    navmeshdoors
     navmeshroute
     navmeshsmoother
     pathfollower

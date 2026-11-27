@@ -83,7 +83,8 @@ namespace FalloutScript::NavMeshSearch
         std::vector<Point> mVertices;
         std::vector<Triangle> mTriangles;
         std::vector<Link> mExternal;
-        /// The door on each door triangle (NVDP), the triangle first
+        /// The door on each door triangle, the triangle first: added while the game runs, when a door closes over the
+        /// mesh (NV 0x6997E0, mesh +0x68; the file's NVDP goes elsewhere and the search does not read it)
         std::vector<std::pair<std::uint16_t, std::uint32_t>> mDoors;
         Grid mGrid;
         /// Added while the game runs, only by the stuck marker (NV 0x691510, its one caller 0x9E540D); removed only
