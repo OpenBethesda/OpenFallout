@@ -148,21 +148,38 @@ namespace FalloutScript::NavMeshSearch
             int mSide = 0;
         };
 
-        // The angle anticlockwise from x to v, 0 to 2 pi
-        float around(const float x[2], const float v[2])
+        // `v` in the frame of the unit vector `x`: (cos, sin) of the angle from x to v (NV 0x698620)
+        std::array<float, 2> inFrameOf(const float x[2], const float v[2])
         {
-            float a = turn(x, v);
-            if (a < 0.f)
-                a += twoPi;
-            return a;
+            return { v[0] * x[0] + v[1] * x[1], v[1] * x[0] - v[0] * x[1] };
         }
 
-        // `q` is not past the end of the arc (NV 0x6A0660, 0x6A06F0)
+        // The quarter a vector is in, anticlockwise from +x; 0 counts as positive (NV 0x698680)
+        int quarter(const std::array<float, 2>& v)
+        {
+            int q = 0;
+            if (v[1] < 0.f)
+                q ^= 3;
+            if (v[0] < 0.f)
+                q ^= 1;
+            return q;
+        }
+
+        // `q` is not past the end of the arc (NV 0x6A0660, 0x6A06F0): q and the end in the frame of the start, by
+        // their quarters, and in the same quarter by their sines
         bool within(const Arc& arc, const float q[2])
         {
             const float* x = arc.mSide == 0 ? arc.mFrom : arc.mTo;
             const float* y = arc.mSide == 0 ? arc.mTo : arc.mFrom;
-            return around(x, q) <= around(x, y);
+            const std::array<float, 2> end = inFrameOf(x, y);
+            const std::array<float, 2> at = inFrameOf(x, q);
+            const int a = quarter(at);
+            const int b = quarter(end);
+            if (a != b)
+                return a < b;
+            if (a == 0 || a == 3)
+                return end[1] >= at[1]; // 0x6A0747
+            return end[1] <= at[1]; // 0x6A0773
         }
 
         // NV 0x6A07A0

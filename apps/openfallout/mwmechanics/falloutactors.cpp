@@ -1442,6 +1442,7 @@ namespace OFMechanics
             if (frame.mScripts != nullptr)
             {
                 actor.mHeld = frame.mScripts->heldStill(mind.mPtr);
+                actor.mCanAct = !actor.mHeld; // NV 0x8843A0: 0x437BD0 unconscious, 0x437BF0 restrained
                 if (const std::optional<osg::Vec3f> point = frame.mScripts->facingPoint(mind.mPtr))
                     actor.mGoalPoint = toPoint(*point);
             }
