@@ -177,6 +177,94 @@ namespace
         EXPECT_FALSE(across(world.meshes(), { 1, 0 }, 1));
     }
 
+    TEST(FalloutScriptNavMeshSearchTest, the_triangle_under_a_point)
+    {
+        // Two floors of one square, the upper one 100 higher, both in the one square of the grid
+        Mesh mesh = grid(1, 1, 1);
+        const std::size_t ground = mesh.mVertices.size();
+        for (std::size_t i = 0; i < ground; ++i)
+            mesh.mVertices.push_back({ mesh.mVertices[i][0], mesh.mVertices[i][1], 100.f });
+        for (std::uint16_t t = 0; t < 2; ++t)
+        {
+            Triangle upper = mesh.mTriangles[t];
+            for (auto& corner : upper.mVertices)
+                corner = static_cast<std::uint16_t>(corner + ground);
+            upper.mEdges = { 0xffff, 0xffff, 0xffff };
+            mesh.mTriangles.push_back(upper);
+        }
+        mesh.mGrid.mDivisor = 1;
+        mesh.mGrid.mCellX = mesh.mGrid.mCellY = 100.f;
+        mesh.mGrid.mMin = { 0.f, 0.f, 0.f };
+        mesh.mGrid.mMax = { 100.f, 100.f, 100.f };
+        mesh.mGrid.mCells = { { 0, 1, 2, 3 } };
+
+        // Below the right side of the diagonal: triangle 0 on the ground, 2 above
+        EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 10.f }), std::optional<std::uint16_t>(0));
+        EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 95.f }), std::optional<std::uint16_t>(2));
+        EXPECT_EQ(triangleAt(mesh, { 20.f, 70.f, 95.f }), std::optional<std::uint16_t>(3));
+        // Up to 64 above the point, so nothing from far below (0x10240C0)
+        EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, -70.f }), std::nullopt);
+        // 150 above the upper floor: more than 40 off, so the nearest, but nothing more than 180 below (0x106B160)
+        EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 250.f }), std::optional<std::uint16_t>(2));
+        EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 400.f }), std::nullopt);
+        // ...unless the point is near the land
+        EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 400.f }, 360.f), std::optional<std::uint16_t>(2));
+        // Outside the box of the grid
+        EXPECT_EQ(triangleAt(mesh, { 120.f, 20.f, 10.f }), std::nullopt);
+        // A covered triangle is passed over (0x696B2D)
+        EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 40.f }), std::optional<std::uint16_t>(0));
+        mesh.mTriangles[0].mFlags |= Flag_Covered;
+        EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 40.f }), std::optional<std::uint16_t>(2));
+        EXPECT_EQ(heightAbove(mesh, 2, { 70.f, 20.f, 10.f }), std::optional<float>(90.f));
+        EXPECT_EQ(heightAbove(mesh, 1, { 70.f, 20.f, 10.f }), std::nullopt);
+    }
+
+    TEST(FalloutScriptNavMeshSearchTest, a_point_off_the_mesh_is_moved_onto_the_nearest_triangle)
+    {
+        Mesh mesh = grid(1, 1, 1);
+        mesh.mGrid.mDivisor = 1;
+        mesh.mGrid.mCellX = mesh.mGrid.mCellY = 100.f;
+        mesh.mGrid.mMax = { 100.f, 100.f, 0.f };
+        mesh.mGrid.mCells = { { 0, 1 } };
+        // On the mesh: inside, nothing moves
+        const auto inside = nearestTriangle(mesh, { 70.f, 20.f, 30.f });
+        ASSERT_TRUE(inside);
+        EXPECT_EQ(inside->mTriangle, 0);
+        EXPECT_TRUE(inside->mInside);
+        // 200 above is beyond the 180 of 0x106B158: the nearest middle, not inside
+        const auto high = nearestTriangle(mesh, { 70.f, 20.f, 200.f });
+        ASSERT_TRUE(high);
+        EXPECT_FALSE(high->mInside);
+        // Off the side of the grid: every triangle, the nearest middle is that of triangle 0 (66.7, 33.3)
+        const auto off = nearestTriangle(mesh, { 120.f, 50.f, 0.f });
+        ASSERT_TRUE(off);
+        EXPECT_EQ(off->mTriangle, 0);
+        EXPECT_FALSE(off->mInside);
+        // ...and the point goes 0.9 of the way from that middle to where the line to it leaves the triangle, x 100
+        const Point moved = moveOnto(mesh, 0, { 120.f, 50.f, 0.f });
+        EXPECT_NEAR(moved[0], 0.1f * 200.f / 3.f + 90.f, 1e-3f);
+        EXPECT_NEAR(moved[1], 0.1f * 100.f / 3.f + 0.9f * 43.75f, 1e-3f);
+        ASSERT_TRUE(triangleAt(mesh, moved));
+
+        // One mesh: locate gives up where locateNearest moves the point (0x6DD74C, 0x6DDC00)
+        const std::vector<Candidate> one{ { &mesh, false } };
+        EXPECT_FALSE(locate(one, { 120.f, 50.f, 0.f }, std::numeric_limits<float>::lowest()));
+        const auto nearest = locateNearest(one, { 120.f, 50.f, 0.f }, std::numeric_limits<float>::lowest());
+        ASSERT_TRUE(nearest);
+        EXPECT_EQ(nearest->first, (Place{ 1, 0 }));
+        // Two meshes: the second one's triangle under the point wins, the first is disabled
+        Mesh other = grid(2, 1, 1);
+        for (auto& vertex : other.mVertices)
+            vertex[0] += 100.f;
+        other.mGrid = mesh.mGrid;
+        other.mGrid.mMin[0] = 100.f;
+        other.mGrid.mMax[0] = 200.f;
+        const std::vector<Candidate> two{ { &mesh, true }, { &other, false } };
+        const auto found = locate(two, { 120.f, 50.f, 0.f }, std::numeric_limits<float>::lowest());
+        ASSERT_TRUE(found);
+        EXPECT_EQ(found->first, (Place{ 2, 1 }));
+    }
+
     TEST(FalloutScriptNavMeshSearchTest, a_real_mesh_of_new_vegas)
     {
         // NAVM 0014F130 of FalloutNV.esm: triangle 0 (corners 0 1 2, edges 1 none 0, flags 0x804) and triangle 1

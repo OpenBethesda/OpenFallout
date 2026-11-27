@@ -62,6 +62,235 @@ namespace FalloutScript::NavMeshSearch
         return { sum[0] / 3.f, sum[1] / 3.f, sum[2] / 3.f };
     }
 
+    std::optional<float> heightAbove(const Mesh& mesh, std::uint16_t triangle, const Point& p)
+    {
+        const Triangle& t = mesh.mTriangles[triangle];
+        const Point& a = mesh.mVertices[t.mVertices[0]];
+        const Point& b = mesh.mVertices[t.mVertices[1]];
+        const Point& c = mesh.mVertices[t.mVertices[2]];
+        // NV 0x6B9CF0: the weights of the corners at the point; a weight below zero is outside
+        const float det = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+        if (det == 0.f)
+            return std::nullopt;
+        const float inverse = 1.f / det;
+        const float wa = ((b[0] - p[0]) * (c[1] - p[1]) - (c[0] - p[0]) * (b[1] - p[1])) * inverse;
+        if (!(wa >= 0.f))
+            return std::nullopt;
+        const float wb = ((c[0] - p[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (c[1] - p[1])) * inverse;
+        if (!(wb >= 0.f))
+            return std::nullopt;
+        const float wc = ((a[0] - p[0]) * (b[1] - p[1]) - (b[0] - p[0]) * (a[1] - p[1])) * inverse;
+        if (!(wc >= 0.f))
+            return std::nullopt;
+        // between the limits of 0x697730, the largest floats
+        const float height = wa * a[2] + wb * b[2] + wc * c[2] - p[2];
+        if (!(std::abs(height) <= std::numeric_limits<float>::max()))
+            return std::nullopt;
+        return height;
+    }
+
+    std::optional<std::uint16_t> triangleAt(const Mesh& mesh, const Point& point, float landHeight)
+    {
+        // The square of the grid (NV 0x69D370): none outside the box of the grid, the last one on the far sides
+        const Grid& grid = mesh.mGrid;
+        if (grid.mDivisor == 0 || grid.mCells.size() != std::size_t(grid.mDivisor) * grid.mDivisor
+            || point[0] < grid.mMin[0] || point[0] > grid.mMax[0] || point[1] < grid.mMin[1] || point[1] > grid.mMax[1])
+            return std::nullopt;
+        const auto square = [&](float offset, float size) {
+            const float index = std::floor(offset / size);
+            return index < float(grid.mDivisor) ? std::uint32_t(index) : grid.mDivisor - 1;
+        };
+        const std::uint32_t x = square(point[0] - grid.mMin[0], grid.mCellX);
+        const std::uint32_t y = square(point[1] - grid.mMin[1], grid.mCellY);
+
+        // NV 0x696A50
+        constexpr float aboveLand = 50.f; // 0x101E2C0
+        constexpr float lowest = -180.f; // 0x106B160
+        constexpr float highest = 64.f; // 0x10240C0
+        constexpr float closeEnough = 40.f; // 0x1035810
+        const bool onLand = point[2] <= landHeight + aboveLand;
+        std::optional<std::uint16_t> best;
+        float bestHeight = std::numeric_limits<float>::max();
+        for (const std::uint16_t triangle : grid.mCells[y * grid.mDivisor + x])
+        {
+            if (triangle >= mesh.mTriangles.size() || (mesh.mTriangles[triangle].mFlags & Flag_Covered) != 0)
+                continue;
+            const std::optional<float> height = heightAbove(mesh, triangle, point);
+            if (!height || (!onLand && *height < lowest) || *height > highest)
+                continue;
+            const float distance = std::abs(*height);
+            if (distance >= bestHeight)
+                continue;
+            if (distance <= closeEnough)
+                return triangle;
+            best = triangle;
+            bestHeight = distance;
+        }
+        return best;
+    }
+
+    std::optional<Nearest> nearestTriangle(const Mesh& mesh, const Point& point)
+    {
+        constexpr float above = 180.f; // 0x106B158
+        constexpr float below = 64.f; // 0x101E6EC
+        constexpr float closeEnough = 40.f; // 0x1035810
+        std::optional<std::uint16_t> inside;
+        float insideHeight = std::numeric_limits<float>::max();
+        std::optional<std::uint16_t> nearest;
+        float nearestDistance = std::numeric_limits<float>::max();
+        const auto consider = [&](std::uint16_t triangle) -> bool {
+            // the test of 0x697730 with these limits: a point outside them counts as outside the triangle
+            const std::optional<float> height = heightAbove(mesh, triangle, point);
+            if (height && *height <= above && *height >= -below)
+            {
+                const float distance = std::abs(*height);
+                if (distance < insideHeight)
+                {
+                    if (distance <= closeEnough)
+                    {
+                        inside = triangle;
+                        return true;
+                    }
+                    inside = triangle;
+                    insideHeight = distance;
+                }
+                return false;
+            }
+            const Point middle = mesh.centroid(triangle);
+            const float distance = (middle[0] - point[0]) * (middle[0] - point[0])
+                + (middle[1] - point[1]) * (middle[1] - point[1]) + (middle[2] - point[2]) * (middle[2] - point[2]);
+            if (distance < nearestDistance)
+            {
+                nearest = triangle;
+                nearestDistance = distance;
+            }
+            return false;
+        };
+        const Grid& grid = mesh.mGrid;
+        const bool inGrid = grid.mDivisor != 0 && grid.mCells.size() == std::size_t(grid.mDivisor) * grid.mDivisor
+            && point[0] >= grid.mMin[0] && point[0] <= grid.mMax[0] && point[1] >= grid.mMin[1]
+            && point[1] <= grid.mMax[1];
+        if (inGrid)
+        {
+            const auto square = [&](float offset, float size) {
+                const float index = std::floor(offset / size);
+                return index < float(grid.mDivisor) ? std::uint32_t(index) : grid.mDivisor - 1;
+            };
+            const std::uint32_t x = square(point[0] - grid.mMin[0], grid.mCellX);
+            const std::uint32_t y = square(point[1] - grid.mMin[1], grid.mCellY);
+            for (const std::uint16_t triangle : grid.mCells[y * grid.mDivisor + x])
+                if (triangle < mesh.mTriangles.size() && (mesh.mTriangles[triangle].mFlags & Flag_Covered) == 0
+                    && consider(triangle))
+                    break;
+        }
+        else
+        {
+            // every triangle, the covered ones too (NV 0x696E9F)
+            for (std::size_t triangle = 0; triangle < mesh.mTriangles.size(); ++triangle)
+                if (consider(static_cast<std::uint16_t>(triangle)))
+                    break;
+        }
+        if (inside)
+            return Nearest{ *inside, true };
+        if (nearest)
+            return Nearest{ *nearest, false };
+        return std::nullopt;
+    }
+
+    Point moveOnto(const Mesh& mesh, std::uint16_t triangle, const Point& point)
+    {
+        const Triangle& t = mesh.mTriangles[triangle];
+        const Point from = mesh.centroid(triangle);
+        const auto cross = [](const Point& o, const Point& p, const Point& q) {
+            return (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+        };
+        for (unsigned edge = 0; edge < 3; ++edge)
+        {
+            const Point& a = mesh.mVertices[t.mVertices[edge]];
+            const Point& b = mesh.mVertices[t.mVertices[(edge + 1) % 3]];
+            if (a == b)
+                continue;
+            // NV 0x6BA240: the edge a b and the line from the middle to the point cross on the map
+            const float ad = cross(point, a, b);
+            const float ac = cross(from, a, b);
+            const float ca = cross(a, from, point);
+            const float cb = cross(b, from, point);
+            if (ad * ac > 0.f || ca * cb > 0.f || ad == 0.f || cb == 0.f)
+                continue;
+            const float along = ca / (ca - cb);
+            const Point hit{ a[0] + (b[0] - a[0]) * along, a[1] + (b[1] - a[1]) * along, a[2] + (b[2] - a[2]) * along };
+            // 0x101E2BC and 0x10177E8
+            return { from[0] * 0.1f + hit[0] * 0.9f, from[1] * 0.1f + hit[1] * 0.9f, from[2] * 0.1f + hit[2] * 0.9f };
+        }
+        return point;
+    }
+
+    std::optional<std::pair<Place, Point>> locate(
+        const std::vector<Candidate>& candidates, const Point& point, float landHeight)
+    {
+        // NV 0x6DD74C: the one mesh of the place, whatever its flags; the point is not moved
+        if (candidates.size() == 1)
+        {
+            const auto triangle = triangleAt(*candidates.front().mMesh, point, landHeight);
+            if (!triangle)
+                return std::nullopt;
+            return std::make_pair(Place{ candidates.front().mMesh->mId, *triangle }, point);
+        }
+        // NV 0x6DD80C
+        for (const Candidate& candidate : candidates)
+            if (!candidate.mDisabled)
+                if (const auto triangle = triangleAt(*candidate.mMesh, point, landHeight))
+                    return std::make_pair(Place{ candidate.mMesh->mId, *triangle }, point);
+        return locateNearest(candidates, point, landHeight);
+    }
+
+    std::optional<std::pair<Place, Point>> locateNearest(
+        const std::vector<Candidate>& candidates, const Point& point, float landHeight)
+    {
+        // NV 0x6DDC00
+        if (candidates.size() == 1)
+        {
+            const Mesh& mesh = *candidates.front().mMesh;
+            const auto nearest = nearestTriangle(mesh, point);
+            if (!nearest)
+                return std::nullopt;
+            return std::make_pair(Place{ mesh.mId, nearest->mTriangle },
+                nearest->mInside ? point : moveOnto(mesh, nearest->mTriangle, point));
+        }
+        constexpr float nearLand = 25.f; // 0x104F2F0
+        constexpr float above = 180.f; // 0x104ED58
+        constexpr float below = -64.f; // 0x106B9F0
+        const bool low = point[2] < landHeight + nearLand;
+        const Mesh* bestMesh = nullptr;
+        std::uint16_t bestTriangle = 0;
+        float bestDistance = std::numeric_limits<float>::max();
+        bool bestFits = false;
+        for (const Candidate& candidate : candidates)
+        {
+            const Mesh& mesh = *candidate.mMesh;
+            const auto nearest = nearestTriangle(mesh, point);
+            if (!nearest)
+                continue;
+            if (nearest->mInside)
+                return std::make_pair(Place{ mesh.mId, nearest->mTriangle }, point);
+            const Point middle = mesh.centroid(nearest->mTriangle);
+            const float distance
+                = (point[0] - middle[0]) * (point[0] - middle[0]) + (point[1] - middle[1]) * (point[1] - middle[1]);
+            const float height = point[2] - middle[2];
+            const bool fits = (low || height <= above) && height > below;
+            if (bestFits ? fits && distance < bestDistance : fits || distance < bestDistance)
+            {
+                bestMesh = &mesh;
+                bestTriangle = nearest->mTriangle;
+                bestDistance = distance;
+                bestFits = bestFits || fits;
+            }
+        }
+        if (bestMesh == nullptr)
+            return std::nullopt;
+        return std::make_pair(Place{ bestMesh->mId, bestTriangle }, moveOnto(*bestMesh, bestTriangle, point));
+    }
+
     std::optional<std::pair<Place, std::uint16_t>> across(const Meshes& meshes, const Place& place, unsigned edge)
     {
         const Mesh* mesh = meshes(place.mMesh);

@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <set>
 #include <tuple>
@@ -24,6 +25,9 @@ namespace FalloutScript::NavMeshSearch
         Flag_External2 = 0x4,
         /// Only actors up to fPathingLargeActorRadius go there (NV 0x6A72E3)
         Flag_NoLargeActors = 0x10,
+        /// Set while the game runs by the obstacle task (NV 0x6BC6FC, from 0x6C82F9); the lookup of the triangle under
+        /// a point passes over it (NV 0x696B2D)
+        Flag_Covered = 0x20,
         /// A step into it costs a hundredth (NV 0x693B70, 0x6A74A4)
         Flag_Preferred = 0x40,
         /// Water (NV 0x6A5EC0)
@@ -47,6 +51,17 @@ namespace FalloutScript::NavMeshSearch
         std::uint16_t mTriangle = 0;
     };
 
+    /// The triangles of a mesh by squares of the map (NVGD, read by NV 0x69DA40)
+    struct Grid
+    {
+        std::uint32_t mDivisor = 0; // squares on a side
+        float mCellX = 0.f;
+        float mCellY = 0.f;
+        Point mMin{};
+        Point mMax{};
+        std::vector<std::vector<std::uint16_t>> mCells; // a row of squares after another, by y then x (NV 0x6967C0)
+    };
+
     struct Mesh
     {
         std::uint32_t mId = 0;
@@ -55,6 +70,7 @@ namespace FalloutScript::NavMeshSearch
         std::vector<Link> mExternal;
         /// The door on each door triangle (NVDP), the triangle first
         std::vector<std::pair<std::uint16_t, std::uint32_t>> mDoors;
+        Grid mGrid;
 
         /// The middle of a triangle, the mean of its corners (NV 0x558220)
         Point centroid(std::uint16_t triangle) const;
@@ -114,6 +130,53 @@ namespace FalloutScript::NavMeshSearch
     /// The triangle across edge `edge` of `place`, and its edge that leads back (NV 0x68F460); nothing when the edge
     /// leads nowhere or the link is one way
     std::optional<std::pair<Place, std::uint16_t>> across(const Meshes& meshes, const Place& place, unsigned edge);
+
+    /// How far the mesh is above (positive) or below `point` where the point is inside `triangle` on the map, or
+    /// nothing when it is outside (NV 0x697730, 0x6B9CF0)
+    std::optional<float> heightAbove(const Mesh& mesh, std::uint16_t triangle, const Point& point);
+
+    /// The triangle of `mesh` under `point` (NV 0x696A50): one of the triangles of the point's square of the grid that
+    /// has the point inside it on the map and is at most 64 above it, and, unless the point is no more than 50 above
+    /// `landHeight` (the height of the land there, lowest() in an interior), at most 180 below it; the first that is
+    /// within 40, otherwise the nearest
+    std::optional<std::uint16_t> triangleAt(
+        const Mesh& mesh, const Point& point, float landHeight = std::numeric_limits<float>::lowest());
+
+    /// The triangle of `mesh` nearest `point` (NV 0x696CF0): the first of the point's square of the grid (of all the
+    /// triangles when the point is outside the grid) that has it inside on the map, at most 180 above it and 64 below,
+    /// within 40, otherwise the nearest such; `inside` false when none has the point inside and this is the triangle
+    /// with the nearest middle
+    struct Nearest
+    {
+        std::uint16_t mTriangle = 0;
+        bool mInside = false;
+    };
+    std::optional<Nearest> nearestTriangle(const Mesh& mesh, const Point& point);
+
+    /// Where the line from the middle of `triangle` to `point` leaves the triangle, nothing when it does not (NV
+    /// 0x698160 with 0x6BA240), and the point 0.9 of the way from the middle to there (NV 0x6DDD18 to 0x6DDDC1)
+    Point moveOnto(const Mesh& mesh, std::uint16_t triangle, const Point& point);
+
+    /// A mesh where a point may be: one of the cell's, or of the exterior cell under it (NV PathingLocation 0x6DD280)
+    struct Candidate
+    {
+        const Mesh* mMesh = nullptr;
+        bool mDisabled = false; // the record has the flag 0x800 (NV 0x440DA0)
+    };
+
+    /// The triangle of a point in a loaded cell, and the point, as the game finds them first (NV 0x6DD6F0): with one
+    /// mesh, its triangle under the point (triangleAt) or nothing; with more, the first not disabled that has one,
+    /// otherwise locateNearest
+    std::optional<std::pair<Place, Point>> locate(
+        const std::vector<Candidate>& candidates, const Point& point, float landHeight);
+
+    /// The triangle nearest a point and the point moved onto it, which the game uses when locate finds nothing and for
+    /// the start of a path (NV 0x6DDC00, its callers 0x8E1A37 and 0x6D0C36): with one mesh, its nearestTriangle; with
+    /// more, the first mesh's triangle that has the point inside, or else the one with the nearest middle among those
+    /// the point is less than 64 below and, unless it is below `landHeight` + 25, at most 180 above, or else the
+    /// nearest at all
+    std::optional<std::pair<Place, Point>> locateNearest(
+        const std::vector<Candidate>& candidates, const Point& point, float landHeight);
 
     /// The way from `start` to `goal`, triangle after triangle, or nothing when there is none
     std::optional<std::vector<Step>> search(
