@@ -69,6 +69,11 @@ namespace OFRender
     /// between two of them).
     FalloutDirection chooseFalloutDirection(float forward, float side, FalloutDirection current);
 
+    /// Whether the folder has the plain file of the way, the one with no weapon's letters (`mtbackward.kf`): what the
+    /// executables ask of an actor's animations with the bare group number (NV 0x494710 with 4, 5 and 6)
+    bool hasFalloutPlainMove(
+        std::string_view folder, FalloutDirection direction, bool female, const std::vector<std::string>& files);
+
     /// The animation file for one way of moving, among the paths of the files in the folder of the skeleton of a
     /// character (lower case, as the virtual file system lists them, files of folders below that one included). The
     /// games name them by what the character holds, whether it sneaks, whether it runs and which way it goes:

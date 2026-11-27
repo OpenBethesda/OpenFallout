@@ -129,4 +129,45 @@ namespace
         for (int i = 0; i < 100; ++i)
             ASSERT_EQ(follower.update(actor, 0.1f, frame), Result::Moving);
     }
+
+    TEST(FalloutScriptPathFollowerTest, on_a_short_way_behind_it_backs_up_without_turning)
+    {
+        // 30 units behind it and a little to its left, under the request's radius of 35: it keeps its heading
+        // (0x9E0757)
+        Follower follower;
+        Actor actor;
+        actor.mSpeed = 100.f;
+        actor.mHasBackward = true;
+        actor.mRootMotion = Point{ 0.f, -2.f, 0.f }; // its Backward animation moves it back
+        Frame frame;
+        ASSERT_EQ(follower.start({ at(0, 0), at(-5, -30) }, Start{}, actor), Result::Moving);
+        ASSERT_EQ(follower.update(actor, 0.1f, frame), Result::Moving);
+        EXPECT_EQ(frame.mMove & 0xFu, 2u); // 0x9E2EA6: more than 135 degrees off with a Backward group
+        EXPECT_FLOAT_EQ(frame.mHeading, 0.f);
+        EXPECT_LT(frame.mMovement[1], -1.9f); // toward the end, behind it
+        // without a Backward group it goes to the side it is on, the left (0x9E2F43)
+        Follower side;
+        actor.mHasBackward = false;
+        side.start({ at(0, 0), at(-5, -30) }, Start{}, actor);
+        side.update(actor, 0.1f, frame);
+        EXPECT_EQ(frame.mMove & 0xFu, 4u);
+    }
+
+    TEST(FalloutScriptPathFollowerTest, a_run_starts_with_a_walk_of_half_the_forward_cycle)
+    {
+        Follower follower;
+        Actor actor;
+        actor.mSpeed = 100.f;
+        actor.mRequested = 0x201;
+        actor.mForwardEnd = 1.f; // 0x9E3072: half of it, 0.5 s
+        follower.start({ at(0, 0), at(0, 1000) }, Start{}, actor);
+        for (int i = 0; i < 6; ++i)
+        {
+            Frame frame;
+            ASSERT_EQ(follower.update(actor, 0.125f, frame), Result::Moving);
+            actor.mPosition[1] += frame.mMovement[1];
+            // a walk while the time left is not below 0, and on the frame it goes below (0x9E30C6)
+            EXPECT_EQ(frame.mMove, i < 5 ? 0x101u : 0x201u);
+        }
+    }
 }

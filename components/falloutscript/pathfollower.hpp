@@ -3,6 +3,7 @@
 
 #include "navmeshsmoother.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -34,8 +35,9 @@ namespace FalloutScript::PathFollower
         /// vfunc 0x354: degrees a second (fCharacterDefaultTurningSpeed 90 for characters, NV 0x8D3290;
         /// fCreatureDefaultTurningSpeed 45 for a creature without its own, 0x8D47F0)
         float mTurnSpeed = 90.f;
-        /// How far it goes in a second at its gait (NV 0x8A0B10)
+        /// How far it goes in a second walking, and running (NV 0x884DC0, 0x884EB0 by the word, 0x8A0B10)
         float mSpeed = 0.f;
+        float mRunSpeed = 0.f;
         /// NV 0x8BE1B0 to 0x885020: half the larger of its widths on the map by its scale, or of 32
         float mRadius = 16.f;
         /// It may act (NV 0x8843A0: alive, not paralysed, not in a scene that holds it)
@@ -53,6 +55,20 @@ namespace FalloutScript::PathFollower
         /// Its strongest animation is its movement one and plays a group from Forward to DodgeRight, 3 to 14 (NV
         /// 0x495BE0)
         bool mMoving = true;
+        /// The movement word its owner asks for (ActorMover +0x34, owner vfunc 0x1C): 0x100 walk, 0x200 run, and the
+        /// way in the low bits (1 forward); a package asks for 0x101, or 0x201 to run (NV 0x8DA950)
+        std::uint32_t mRequested = 0x101;
+        /// The owner's goal point (+0x73 with +0x4 to +0xC, NV 0x8B3D10): it faces it while it walks
+        std::optional<Point> mGoalPoint;
+        /// Its plain set of animations has the groups Backward, Left and Right (NV 0x494710 with 4, 5 and 6)
+        bool mHasBackward = false;
+        bool mHasLeft = false;
+        bool mHasRight = false;
+        /// The time of the text key "End" of its Forward group (NV 0x897B50(3), 0x5F3780(1))
+        float mForwardEnd = 0.f;
+        /// What its movement animation moved it this frame, in its own frame (x right, y forward; NV 0x8B7100 with
+        /// 0x494390); none when it has no 3D, and then it goes at its gait (0x9E3520)
+        std::optional<Point> mRootMotion;
     };
 
     /// What the path request says to the follower (NV PathingRequest)
@@ -77,6 +93,9 @@ namespace FalloutScript::PathFollower
         /// Where it got stuck, for the mark on the mesh (NV 0x9E4CF0 to 0x691510)
         bool mMarkStuck = false;
         Point mStuckAt{};
+        /// The movement word it publishes (H+0x60, published by 0x9DDC00 for the animation, 0x895110): 0x100 walk,
+        /// 0x200 run; 1 forward, 2 backward, 4 left, 8 right, 0x10 and 0x20 a turn on the spot to the left and right
+        std::uint32_t mMove = 0;
     };
 
     enum class Result
@@ -113,6 +132,7 @@ namespace FalloutScript::PathFollower
         Result reached(const Actor& actor) const; // NV 0x9E8000
         bool startTurn(const Actor& actor, float heading); // NV 0x9E7610 with both flags clear
         float turnStep(const Actor& actor, float dt); // NV 0x9E7D70
+        void chooseMove(const Actor& actor, float dt); // NV 0x9E2AA0
 
         Path mPath;
         Start mRequest;
@@ -134,6 +154,12 @@ namespace FalloutScript::PathFollower
         bool mTurning = false; // +0xDC
         float mTurnTo = 0.f; // +0x68
         float mTurnTime = -1.f; // +0x94
+        std::uint32_t mMove = 0; // +0x60
+        int mRunStart = 0; // +0xCC
+        float mRunStartTime = 0.f; // +0x90
+        float mDecisionTime = 1.f; // +0x8C
+        bool mTurnInPlace = false; // +0xE1
+        float mTurnInPlaceTime = 0.f; // +0xB8
     };
 }
 

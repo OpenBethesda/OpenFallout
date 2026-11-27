@@ -458,6 +458,9 @@ namespace OFRender
 
         /** Retrieves the velocity (in units per second) that the animation will move. */
         float getVelocity(std::string_view groupname) const;
+        /// The accumulation root's way a second over the cycle of the group, in 3D: (where it ends - where it starts) /
+        /// the time between, as FalloutNV.exe 0x493D50 keeps it for a group (0 when it has no root)
+        float getCycleSpeed(std::string_view group) const;
 
         virtual osg::Vec3f runAnimation(float duration);
 

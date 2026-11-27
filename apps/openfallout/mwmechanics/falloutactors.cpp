@@ -471,9 +471,9 @@ namespace OFMechanics
         }
 
         /// The animation of the actor that tells how it walks, null when it has none or cannot walk
-        const OFRender::FalloutActorAnimation* walker(OFBase::World& world, const OFWorld::Ptr& ptr)
+        OFRender::FalloutActorAnimation* walker(OFBase::World& world, const OFWorld::Ptr& ptr)
         {
-            const auto* animation = dynamic_cast<const OFRender::FalloutActorAnimation*>(world.getAnimation(ptr));
+            auto* animation = dynamic_cast<OFRender::FalloutActorAnimation*>(world.getAnimation(ptr));
             return animation != nullptr && animation->canWalk() ? animation : nullptr;
         }
 
@@ -1422,13 +1422,29 @@ namespace OFMechanics
 
         /// What the path follower reads of the actor (NV DetailedActorPathHandler, 0x9E0A00)
         PathFollower::Actor followerActor(const Frame& frame, const FalloutActors::Mind& mind,
-            const OFRender::FalloutActorAnimation& animation, float speed)
+            const OFRender::FalloutActorAnimation& animation, float walk, float run, bool running)
         {
             PathFollower::Actor actor;
             const ESM::Position& position = mind.mPtr.getRefData().getPosition();
             actor.mPosition = toPoint(position.asVec3());
             actor.mHeading = position.rot[2];
-            actor.mSpeed = speed;
+            actor.mSpeed = walk;
+            actor.mRunSpeed = run;
+            // NV 0x8DA950 and its callers: a walk forward, or a run forward (0x201); one that cannot run walks
+            // (0x9DDDDF, 0x884750)
+            actor.mRequested = running ? 0x201u : 0x101u;
+            actor.mHasBackward = animation.hasPlainMove(OFRender::FalloutDirection::Backward);
+            actor.mHasLeft = animation.hasPlainMove(OFRender::FalloutDirection::Left);
+            actor.mHasRight = animation.hasPlainMove(OFRender::FalloutDirection::Right);
+            actor.mForwardEnd = animation.forwardEnd();
+            // NV 0x8B7100: what its movement animation moved it, by its size (0x567400, the update at 0x493260); the
+            // height is left out (0x494640 to 0x494682)
+            if (animation.hasRootMotion())
+            {
+                const double size = frame.mScripts != nullptr ? frame.mScripts->sizeOf(mind.mPtr) : 1.0;
+                const osg::Vec3f moved = animation.rootMotion() * static_cast<float>(size);
+                actor.mRootMotion = PathFollower::Point{ moved.x(), moved.y(), 0.f };
+            }
             const osg::Vec3f half = frame.mWorld.getHalfExtents(mind.mPtr);
             actor.mRadius = 0.5f * std::max(2.f * std::max(half.x(), half.y()), 32.f); // NV 0x885020
             actor.mCreature = mind.mPtr.getType() == ESM4::Creature::sRecordId; // vfunc 0x21C
@@ -1464,7 +1480,7 @@ namespace OFMechanics
                 return Walk::Arrived;
             }
 
-            const OFRender::FalloutActorAnimation* animation = walker(frame.mWorld, mind.mPtr);
+            OFRender::FalloutActorAnimation* animation = walker(frame.mWorld, mind.mPtr);
             if (animation == nullptr)
                 return Walk::Failed;
 
@@ -1479,19 +1495,24 @@ namespace OFMechanics
             if (frame.mScripts != nullptr)
                 run = (run || frame.mScripts->actorForcesRun(mind.mPtr)) && !frame.mScripts->actorForcesSneak(mind.mPtr);
             const bool running = run && animation->canRun();
-            float speed = running ? runSpeed(*animation) : walkSpeed(*animation);
             // A character goes at the speed of the movement rules, the player's own (fMoveBaseSpeed by its SpeedMult,
             // the legs, the armor, the weapon, a forced sneak); a creature at the speed of its animation by its
-            // SpeedMult and its legs (fallout-rules.md B)
-            if (frame.mScripts != nullptr)
-            {
-                if (const std::optional<double> ruled = frame.mScripts->characterMoveSpeed(mind.mPtr, running))
-                    speed = static_cast<float>(*ruled);
-                else
-                    speed *= static_cast<float>(frame.mScripts->creatureSpeedShare(mind.mPtr));
-            }
+            // SpeedMult and its legs (fallout-rules.md B). The handler takes the walk or the run by its word.
+            const auto speedOf = [&](bool fast) {
+                float speed = fast ? runSpeed(*animation) : walkSpeed(*animation);
+                if (frame.mScripts != nullptr)
+                {
+                    if (const std::optional<double> ruled = frame.mScripts->characterMoveSpeed(mind.mPtr, fast))
+                        speed = static_cast<float>(*ruled);
+                    else
+                        speed *= static_cast<float>(frame.mScripts->creatureSpeedShare(mind.mPtr));
+                }
+                return speed;
+            };
+            const float walk = speedOf(false);
+            const float runs = running ? speedOf(true) : walk;
 
-            const PathFollower::Actor actor = followerActor(frame, mind, *animation, speed);
+            const PathFollower::Actor actor = followerActor(frame, mind, *animation, walk, runs, running);
             if (!mind.mFollower.active())
             {
                 if (mind.mPathRetry > 0.f)
@@ -1515,6 +1536,9 @@ namespace OFMechanics
 
             PathFollower::Frame out;
             const PathFollower::Result result = mind.mFollower.update(actor, duration, out);
+            // NV 0x9DDC00 publishes the word for the animation (0x895110), which plays the group of it at the speed of
+            // the rules for the gait of the word
+            animation->setPathMovement(out.mMove, (out.mMove & 0x200u) != 0 ? runs : walk);
             const ESM::Position& position = mind.mPtr.getRefData().getPosition();
             if (std::abs(out.mHeading - position.rot[2]) > 1e-6f)
                 frame.mWorld.rotateObject(

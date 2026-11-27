@@ -1,10 +1,13 @@
 #ifndef OPENFALLOUT_MWRENDER_FALLOUTACTORANIMATION_H
 #define OPENFALLOUT_MWRENDER_FALLOUTACTORANIMATION_H
 
+#include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <osg/MatrixTransform>
@@ -61,6 +64,20 @@ namespace OFRender
         /// 0x495BE0), which for a walker follows what it is told to do; here the walk follows how fast it goes, so a
         /// walker held against a wall would stand in its idle, and the walk it is told to do is taken as playing.
         bool movementLeads() const { return !mDown && mPoseKind == 0 && !mScriptIdleWasPlaying; }
+
+        /// For the next advance: the movement word of the path handler and the speed of the rules it goes at (NV
+        /// 0x895110 reads the word at 0x895509). The group follows the word, not how its place changes, and plays at
+        /// the speed over the speed of the group's cycle (0x896FA8 to 0x897136)
+        void setPathMovement(std::uint32_t word, float speed);
+        /// What the movement animation moved the root in the last advance, in the actor's own frame and size (NV
+        /// 0x494390 before the actor's scale)
+        const osg::Vec3f& rootMotion() const { return mRootMotion; }
+        /// It has a root the animations move (the accumulation root, "Bip01"); without one the handler goes at the gait
+        bool hasRootMotion() const { return mAccumRoot != nullptr; }
+        /// Its plain set of animations, the files with no weapon's letters, has the way (NV 0x494710 with 4, 5 and 6)
+        bool hasPlainMove(FalloutDirection direction) const;
+        /// The time of the text key "End" of the Forward walk it would play now (NV 0x897B50(3)), 0 for none
+        float forwardEnd() const;
 
         /// One attack with what it holds: a gun fires, a melee weapon or the hands swing in turn left and right. A gun
         /// whose projectile has a muzzle flash (the record's flash model and the seconds it lasts) flashes at its muzzle.
@@ -307,6 +324,12 @@ namespace OFRender
         float mSpeed = 0.f;
         osg::Vec3f mLastPosition;
         bool mHasLastPosition = false;
+        /// What the path handler said for this advance, and what it made of it
+        std::optional<std::pair<std::uint32_t, float>> mPathMovement;
+        bool mPathDriven = false;
+        int mPathTurn = 0;
+        float mPathSpeed = 0.f;
+        osg::Vec3f mRootMotion;
     };
 }
 

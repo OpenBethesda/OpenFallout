@@ -189,6 +189,8 @@ namespace FalloutScript::PathFollower
         mPath = std::move(path);
         mRequest = request;
         mState = 1; // 0x9E047C
+        if (mRunStart == 0)
+            mRunStart = 3; // 0x9E0489 to 0x9E0495
         if (mAvoidance != 2 && mAvoidance != 4) // 0x9E04A2
         {
             mAvoidance = 1;
@@ -220,14 +222,14 @@ namespace FalloutScript::PathFollower
         mSegment = 0;
         mWaypoint = pointAt(mPath, 0.f);
         mPrevious = mWaypoint;
-        // 0x9E0757: a way shorter than the request's radius is walked without turning (+0xC1: its own heading)
-        // shortcut: the owner's goal point (0x8B3D10; set from a package with a target, 0x8F74C0) is not ported, so it
-        // never stops this
-        mKeepHeading = !actor.mMounted && request.mRadius > lengthOf(mPath);
+        // 0x9E0757: a way shorter than the request's radius is walked without turning (+0xC1: its own heading), unless
+        // the owner has a goal point to face (0x9E078A)
+        mKeepHeading = !actor.mMounted && request.mRadius > lengthOf(mPath) && !actor.mGoalPoint;
         if (reached(actor) == Result::Moving) // 0x9E07D5
         {
-            // 0x9E07E5 to 0x9E08C8: it turns on the spot to the first point, unless that is almost straight up or down
-            const Point to = minus(mWaypoint, actor.mPosition);
+            // 0x9E07E5 to 0x9E08C8: it turns on the spot to the first point, or to the goal point (0x9E07F6), unless
+            // that is almost straight up or down
+            const Point to = minus(!mTurnInPlace && actor.mGoalPoint ? *actor.mGoalPoint : mWaypoint, actor.mPosition);
             const float heading = std::abs(to[2]) < 0.95f * std::sqrt(length2(to)) ? headingOf(to) : actor.mHeading;
             startTurn(actor, heading);
         }
@@ -260,7 +262,11 @@ namespace FalloutScript::PathFollower
         const float scale = actor.mCreature ? 1.25f : (actor.mMounted ? 2.5f : 1.5f);
         const float step = actor.mTurnSpeed * degree * dt * scale;
         if (std::abs(d) > degree && !(step > std::abs(d)))
+        {
+            // 0x9E7F6B to 0x9E7F9B: the owner's gait with the bit of the way it turns
+            mMove = (actor.mRequested & 0xFF00u) | (d > 0.f ? 0x20u : 0x10u);
             heading = d > 0.f ? h + step : h - step;
+        }
         else if (mTurnTime <= 0.f)
             mTurning = false;
         mTurnTime -= dt; // 0x9E7FE0
@@ -299,8 +305,14 @@ namespace FalloutScript::PathFollower
             mWaypoint = mPath.back().mLocation.mPoint;
             return;
         }
-        // 0x9E3D9B: only forward while it goes forward (the last frame's plan)
-        if (mPlanned[1] < 0.f) // 0x9E3E20
+        // 0x9E3E01 to 0x9E3EA0: not while the last frame's plan goes against the way it walks
+        if ((mMove & 1) != 0 && mPlanned[1] < 0.f) // 0x9E3E20
+            return;
+        if ((mMove & 2) != 0 && mPlanned[1] > 0.f) // 0x9E3E49
+            return;
+        if ((mMove & 4) != 0 && mPlanned[0] > 0.f) // 0x9E3E72
+            return;
+        if ((mMove & 8) != 0 && mPlanned[0] < 0.f) // 0x9E3E9B
             return;
         const Point world = rotate(mPlanned, actor.mHeading);
         const auto measure = [&](float& a, float& b, float& c) {
@@ -355,8 +367,20 @@ namespace FalloutScript::PathFollower
 
     float Follower::turn(const Actor& actor, float dt, float& slow) const
     {
-        // NV 0x9E4450: its own heading on a short way, else toward the path a tenth of a segment on
-        const float want = mKeepHeading ? actor.mHeading : headingOf(minus(pointAt(mPath, mT + 0.1f), actor.mPosition));
+        // NV 0x9E4450: its own heading on a short way; the goal point's way (0x9E4584 to 0x9E46B4), or its own heading
+        // within half its radius of it across the map; else toward the path a tenth of a segment on.
+        // shortcut: the point it looks from (0x9A8050, the weapon's node for some weapons) is taken as where it stands,
+        // which only matters for actors with a goal point
+        float want = 0.f;
+        if (mKeepHeading)
+            want = actor.mHeading;
+        else if (!mTurnInPlace && actor.mGoalPoint)
+        {
+            const Point to = minus(*actor.mGoalPoint, actor.mPosition);
+            want = 0.25f * actor.mRadius * actor.mRadius <= length2Across(to) ? headingOf(to) : actor.mHeading;
+        }
+        else
+            want = headingOf(minus(pointAt(mPath, mT + 0.1f), actor.mPosition));
         const float h = wrap(actor.mHeading);
         const float c = wrap(wrap(want) - h);
         if (std::abs(c) < degree)
@@ -367,11 +391,12 @@ namespace FalloutScript::PathFollower
         if (actor.mTurnSpeed > 45.f)
         {
             const float l = std::sqrt(length2(minus(mWaypoint, actor.mPosition)));
-            if (l < actor.mSpeed)
+            const float speed = (mMove & 0x200u) != 0 ? actor.mRunSpeed : actor.mSpeed; // 0x9E4942
+            if (l < speed)
             {
                 float t = 0.f;
                 Point ahead{};
-                along(mPath, mT, actor.mSpeed - l, t, ahead);
+                along(mPath, mT, speed - l, t, ahead);
                 const float to = std::abs(wrap(headingOf(minus(ahead, actor.mPosition)) - actor.mHeading));
                 f = std::clamp(to / (pi / 2.f), 0.025f, 1.f); // 0x10313D4
             }
@@ -426,10 +451,100 @@ namespace FalloutScript::PathFollower
         return false;
     }
 
+    void Follower::chooseMove(const Actor& actor, float dt)
+    {
+        const std::uint32_t old = mMove;
+        if (mTurnInPlace) // 0x9E2AEA to 0x9E2B2F
+        {
+            mTurnInPlaceTime -= dt;
+            if (mTurnInPlaceTime < 0.f)
+            {
+                mTurnInPlace = false;
+                mDecisionTime = 1.f;
+            }
+        }
+        std::uint32_t hi = actor.mRequested & 0xFF00u; // 0x9DD130
+        std::uint32_t lo = mMove & 0x3Fu;
+        if (!mTurnInPlace && (actor.mGoalPoint || mKeepHeading)) // 0x9E2B94 to 0x9E2BC1
+        {
+            // the way it would face: to the goal point, or its own (+0xC1 is set with +0xC0, 0x9E0796)
+            const float b
+                = actor.mGoalPoint ? headingOf(minus(*actor.mGoalPoint, actor.mPosition)) : wrap(actor.mHeading);
+            // the way to the waypoint (0x9A8AF0), from 0 to 2 pi (0x4B1480), and the angle between (0x4B15E0)
+            float a = headingOf(minus(mWaypoint, actor.mPosition));
+            if (a < 0.f)
+                a += twoPi;
+            float d = b - a;
+            float side = 0.f;
+            if (d > 0.f)
+            {
+                side = 1.f;
+                if (d > pi)
+                {
+                    side = -1.f;
+                    d = twoPi - d;
+                }
+            }
+            else if (d < 0.f)
+            {
+                if (d <= -pi)
+                {
+                    d += twoPi;
+                    side = 1.f;
+                }
+                else
+                    side = -1.f;
+            }
+            if (!(mDecisionTime <= 0.25f)) // 0x9E2DDD to 0x9E2DEE (it starts at 1 and is never lowered)
+            {
+                const float e = std::abs(d) * 57.29578f; // 0x102F248
+                if (std::abs(d) <= degree)
+                    lo = actor.mRequested & 0x3Fu; // 0x9E2FBF
+                else if (e > 135.f && actor.mHasBackward) // 0x1092488
+                    lo = 2;
+                else if (e <= 45.f) // 0x10357E8
+                    lo = 1;
+                else if (actor.mCreature && !(side > 0.f ? actor.mHasLeft : actor.mHasRight))
+                {
+                    // 0x9E2F25 to 0x9E2F3B, 0x9E2F8F: a creature without the group turns on the spot for a second
+                    lo = 1;
+                    mTurnInPlace = true;
+                    mTurnInPlaceTime = 1.f;
+                }
+                else
+                    lo = side > 0.f ? 4 : 8;
+            }
+            else
+                mDecisionTime += dt;
+        }
+        else
+            lo = actor.mRequested & 0x3Fu; // 0x9E2FF1
+        // 0x9E3011 to 0x9E30F8: a run starts with a walk of half the Forward animation's cycle
+        if (mRunStart == 3 && (hi & 0x200u) != 0 && ((old & 0x200u) == 0 || ((old & 0x30u) != 0 && (lo & 0x30u) == 0)))
+        {
+            mRunStart = 1;
+            mRunStartTime = 0.5f * actor.mForwardEnd;
+        }
+        if (mRunStart == 1)
+        {
+            hi = (hi & ~0x200u) | 0x100u;
+            mRunStartTime -= dt;
+            if (mRunStartTime < 0.f) // 0x9E30C6
+            {
+                mRunStart = 2;
+                mRunStartTime = 0.f;
+            }
+        }
+        else if (mRunStart == 2)
+            mRunStart = 3;
+        mMove = lo | hi;
+    }
+
     Result Follower::update(const Actor& actor, float dt, Frame& out)
     {
         out = Frame{};
         out.mHeading = actor.mHeading;
+        out.mMove = mMove; // published every update (0x9DDD2B)
         const auto cleanup = [&] { // 0x9E8790
             mPlanned = {};
             mPlannedLength = 0.f;
@@ -471,6 +586,7 @@ namespace FalloutScript::PathFollower
         if (mTurning) // 0x9E0CAE
         {
             out.mHeading = turnStep(actor, dt);
+            out.mMove = mMove;
             cleanup();
             return Result::Moving;
         }
@@ -479,6 +595,8 @@ namespace FalloutScript::PathFollower
             cleanup();
             return Result::Moving;
         }
+        chooseMove(actor, dt); // 0x9E0F1C
+        out.mMove = mMove;
         if (!stuck(actor, dt, out))
         {
             if (mState == 4)
@@ -489,17 +607,34 @@ namespace FalloutScript::PathFollower
             mAvoidance = 5;
             return Result::Stuck;
         }
-        // 0x9E3520: forward at its gait
-        mPlanned = { 0.f, actor.mSpeed * dt, 0.f };
+        // 0x9E3520: what its movement animation moved it, else forward at its gait
+        const float speed = (mMove & 0x200u) != 0 ? actor.mRunSpeed : actor.mSpeed; // 0x8A0B10 by the word
+        mPlanned = actor.mRootMotion ? *actor.mRootMotion : Point{ 0.f, speed * dt, 0.f };
         float slow = 0.f;
         const float heading = turn(actor, dt, slow);
         out.mHeading = heading;
         if (slow > 0.f)
             mPlanned = { mPlanned[0] * slow, mPlanned[1] * slow, mPlanned[2] * slow };
-        // 0x9E37D7: toward the waypoint
+        // 0x9E37D7: toward the waypoint, from the axis of the body the animation moves it along (the table at 0x9E3940:
+        // back +pi, left -pi/2, right +pi/2)
         Point to = minus(mWaypoint, actor.mPosition);
         to[2] = 0.f;
-        mPlanned = rotate(mPlanned, headingOf(to) - heading);
+        float offset = 0.f;
+        switch (mMove & 0xFu)
+        {
+            case 2:
+                offset = pi;
+                break;
+            case 4:
+                offset = -pi / 2.f;
+                break;
+            case 8:
+                offset = pi / 2.f;
+                break;
+            default:
+                break;
+        }
+        mPlanned = rotate(mPlanned, headingOf(to) - (heading + offset));
         mPlannedLength = std::sqrt(length2Across(mPlanned));
         out.mMovement = rotate(mPlanned, heading);
         // 0x9E14D8: on the last segment it goes no farther than the end

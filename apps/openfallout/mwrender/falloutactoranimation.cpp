@@ -464,7 +464,21 @@ namespace OFRender
             return;
         }
         updateGait(duration);
-        runAnimation(duration);
+        mRootMotion = runAnimation(duration);
+        // NV 0x4943A8 to 0x4945E7: walking a way, a part of the step more than four times the cycle's step at this rate
+        // is taken as that step (a jump of the root, as at the end of a loop)
+        if (mPathDriven && mGait != FalloutGait::Idle && !mMoveGroup.empty())
+        {
+            const float cycle = getCycleSpeed(mMoveGroup);
+            const float whole = std::trunc(cycle);
+            if (whole != 0.f)
+            {
+                const float most = cycle * (mPathSpeed / whole) * duration;
+                for (int i = 0; i < 3; ++i)
+                    if (std::abs(mRootMotion[i]) > 4.f * most) // 0x101DB80
+                        mRootMotion[i] = mRootMotion[i] > 0.f ? most : -most;
+            }
+        }
         publishActivity();
         watchPose(duration);
         logPose(duration);
@@ -791,12 +805,84 @@ namespace OFRender
 
         // A character in a piece of furniture does not walk: its place changes by a few units when it is put on its
         // seat, which would play the walk over the pose of its seat
+        mPathDriven = false;
+        if (const auto path = std::exchange(mPathMovement, std::nullopt); path && mPoseKind == 0)
+        {
+            // NV 0x896B7B to 0x896CF4: the group of the word. A way with the run bit runs, one with another gait bit
+            // walks, one with none stands; with no way the turn bits turn it on the spot. Under a speed of 1 it stands
+            // (0x896D05 to 0x896D51)
+            const auto [word, speed] = *path;
+            FalloutGait gait = FalloutGait::Idle;
+            FalloutDirection direction = FalloutDirection::Forward;
+            mPathTurn = 0;
+            if ((word & 0xFu) != 0)
+            {
+                if ((word & 0x200u) != 0)
+                    gait = FalloutGait::Run;
+                else if ((word & 0xFF00u) != 0)
+                    gait = FalloutGait::Walk;
+                direction = (word & 1u) != 0 ? FalloutDirection::Forward
+                    : (word & 2u) != 0       ? FalloutDirection::Backward
+                    : (word & 4u) != 0       ? FalloutDirection::Left
+                                             : FalloutDirection::Right;
+            }
+            else if ((word & 0x10u) != 0)
+                mPathTurn = 4; // TurnLeft
+            else if ((word & 0x20u) != 0)
+                mPathTurn = 5; // TurnRight
+            if (gait == FalloutGait::Run && !mGaits.mHasRun)
+                gait = FalloutGait::Walk;
+            if (!(speed >= 1.f))
+                gait = FalloutGait::Idle;
+            mPathDriven = true;
+            mPathSpeed = speed;
+            setGait(gait);
+            mDirection = direction;
+            updateMovement();
+            return;
+        }
         setGait(mPoseKind != 0 ? FalloutGait::Idle : chooseFalloutGait(mSpeed, mGait, mGaits));
         // A character of the world faces where it goes (it turns as it walks, so for a while the way it goes is to its
         // side or behind it: round 14F saw walking backward and sideways); only the player's body strafes and steps back
         mDirection = mMotionSource.isEmpty() ? FalloutDirection::Forward
                                               : chooseFalloutDirection(mForwardSpeed, mSideSpeed, mDirection);
         updateMovement();
+    }
+
+    void FalloutActorAnimation::setPathMovement(std::uint32_t word, float speed)
+    {
+        mPathMovement = std::make_pair(word, speed);
+    }
+
+    bool FalloutActorAnimation::hasPlainMove(FalloutDirection direction) const
+    {
+        return hasFalloutPlainMove(
+            mMoveFolder, direction, mFemale, animationFilesOf(*mResourceSystem->getVFS(), mMoveFolder));
+    }
+
+    float FalloutActorAnimation::forwardEnd() const
+    {
+        // NV 0x897910: the Forward group for how it moves now (sneaking) and the weapon in its hands
+        const std::string_view prefix = mDrawn ? falloutWeaponPrefix(mWeaponType) : std::string_view();
+        const std::string file = chooseFalloutMove(mMoveFolder, prefix, mSneaking, FalloutDirection::Forward, false,
+            mFemale, animationFilesOf(*mResourceSystem->getVFS(), mMoveFolder), false);
+        if (file.empty())
+            return 0.f;
+        const std::string group(VFS::Path::Normalized(file).stem());
+        std::vector<const SceneUtil::TextKeyMap*> maps;
+        getTextKeyMaps(maps);
+        for (auto source = maps.rbegin(); source != maps.rend(); ++source)
+        {
+            const SceneUtil::TextKeyMap& keys = **source;
+            if (!keys.hasGroupStart(group))
+                continue;
+            // the text keys of the sequence come along in lower case (nifloader.cpp)
+            for (const auto& [time, text] : keys)
+                if (text == "end")
+                    return time;
+            return 0.f; // 0x5F2519: the time of a key that is not there stays 0
+        }
+        return 0.f;
     }
 
     void FalloutActorAnimation::setGait(FalloutGait gait)
@@ -883,7 +969,13 @@ namespace OFRender
         // and a moment more, so that a short turn is not a flicker
         constexpr float turnFrom = 0.5f;
         constexpr float turnHold = 0.35f;
-        if (special == 0 && mPoseKind == 0 && mGait == FalloutGait::Idle && !isDown() && !mFirstPerson)
+        if (mPathDriven)
+        {
+            // the path handler says when it turns on the spot
+            mTurning = special == 0 && mGait == FalloutGait::Idle ? mPathTurn : 0;
+            mTurnLeft = 0.f;
+        }
+        else if (special == 0 && mPoseKind == 0 && mGait == FalloutGait::Idle && !isDown() && !mFirstPerson)
         {
             if (std::abs(mTurnRate) > turnFrom)
             {
@@ -999,7 +1091,21 @@ namespace OFRender
         }
 
         // The feet keep up with the ground: the animation plays as much faster or slower as the actor is
-        if (!mMoveGroup.empty() && mGait != FalloutGait::Idle && special == 0)
+        if (mPathDriven && !mMoveGroup.empty())
+        {
+            // NV 0x896FA8 to 0x897136: the speed of the rules over the cycle's speed cut to a whole number, and the
+            // groups that turn on the spot at the turn scale of the pathing (0x897020: fAITurnSpeedScale 1.5,
+            // fCreatureTurnSpeedScale 1.25)
+            if (special == 4 || special == 5)
+                adjustSpeedMult(mMoveGroup, mPtr.getType() == ESM4::Creature::sRecordId ? 1.25f : 1.5f);
+            else if (mGait != FalloutGait::Idle && special == 0)
+            {
+                const float cycle = std::trunc(getCycleSpeed(mMoveGroup));
+                if (cycle != 0.f)
+                    adjustSpeedMult(mMoveGroup, mPathSpeed / cycle);
+            }
+        }
+        else if (!mMoveGroup.empty() && mGait != FalloutGait::Idle && special == 0)
             adjustSpeedMult(mMoveGroup, falloutAnimationSpeed(mSpeed, getVelocity(mMoveGroup)));
     }
 
