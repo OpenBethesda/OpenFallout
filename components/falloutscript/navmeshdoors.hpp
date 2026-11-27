@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 /// The in-cell doors on the navmeshes, as the obstacle manager of the executables marks them (FalloutNV.exe
@@ -44,6 +45,61 @@ namespace FalloutScript::NavMeshDoors
 
     /// NV 0x699A30: the door is open; every triangle it was on loses the flag
     void open(Mesh& mesh, std::uint32_t door);
+
+    /// An owner as the lock gate reads one (NV 0x546EE0, 0x502550)
+    struct Owner
+    {
+        enum class Kind
+        {
+            None,
+            Npc, // an NPC_ base (RTTI TESNPC, 0x546F25)
+            Faction, // form type 8 (0x50259F), RTTI TESFaction (0x546F61)
+            Other,
+        };
+        Kind mKind = Kind::None;
+        std::uint32_t mForm = 0;
+        /// The rank a member needs (-1 in the data counts as 0, 0x567A9D)
+        int mRank = 0;
+    };
+
+    /// What the search reads of a door's lock (the context of NV 0x501E80)
+    struct DoorLock
+    {
+        /// It has lock data (XLOC, its own or its teleport partner's; 0x569160)
+        bool mHasLock = false;
+        bool mLocked = false; // flags bit 0x01 (0x5021A0)
+        std::uint32_t mKey = 0; // +4
+        /// It needs its key (the class of its level is past the hardest, 0x430B40): a leveled lock is capped at 99
+        /// (0x430A7B), so only a plain one can
+        bool mKeyOnly = false;
+        /// The owner of the door's cell (ctx+0, 0x546A40) with that cell's rank
+        Owner mCellOwner;
+        /// A load door's far cell (ctx+4) and its owner
+        bool mHasDestination = false;
+        Owner mDestinationOwner;
+        /// The door's own owner (ctx+0xC, 0x567790) and rank (ctx+0x10, 0x5679F0)
+        Owner mOwner;
+        /// The global of the door (ctx+0x14, 0x567960) is there and not 0 (0x5025B9 to 0x5025E8)
+        bool mGlobalSet = false;
+    };
+
+    /// What the search reads of the actor it searches for (NV 0x502670)
+    struct Searcher
+    {
+        std::uint32_t mBase = 0; // +0
+        bool mNpc = false; // its base is an NPC_ (type 0x2A)
+        /// Its rank in a faction, -1 when it is not a member (0x47D680)
+        std::function<int(std::uint32_t faction)> mRank;
+        /// It carries at least one of the item (0x4CFFE0); none when it has no inventory (+4)
+        std::function<bool(std::uint32_t item)> mCarries;
+        /// The class of its base has the flag 0x02 (0x5F6E60, the class DATA flags at +0x10)
+        bool mGuardClass = false;
+        /// Its package's type is 0x15 (+8, 0x8A61B0)
+        bool mPackage15 = false;
+    };
+
+    /// NV 0x502450: the searcher passes the lock, and whether it does by picking it (with a Bobby Pin, MISC 0xA)
+    bool passesLock(const DoorLock& lock, const Searcher& searcher, std::uint32_t bobbyPin, bool& byPicking);
 }
 
 #endif

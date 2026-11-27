@@ -265,4 +265,69 @@ namespace FalloutScript::NavMeshDoors
             it = mesh.mDoors.erase(it);
         }
     }
+
+    namespace
+    {
+        // NV 0x546EE0: the searcher's base is the owner, or a member of the owning faction with its rank
+        bool ownedBy(const Owner& owner, const Searcher& searcher)
+        {
+            switch (owner.mKind)
+            {
+                case Owner::Kind::Npc:
+                    return owner.mForm == searcher.mBase; // 0x546F25
+                case Owner::Kind::Faction:
+                    // a creature's base is no TESNPC (0x546F61 to 0x546F7E)
+                    return searcher.mNpc && searcher.mRank && searcher.mRank(owner.mForm) >= owner.mRank; // 0x546F9E
+                default:
+                    return false;
+            }
+        }
+
+        // NV 0x502310 with b = 0, as 0x502450 calls it
+        bool ownerPasses(const DoorLock& lock, const Searcher& searcher)
+        {
+            if (!lock.mHasLock)
+                return true; // 0x50232A
+            if (ownedBy(lock.mCellOwner, searcher)) // 0x502359 to 0x5023A9
+                return !lock.mHasDestination || lock.mDestinationOwner.mKind == Owner::Kind::None
+                    || ownedBy(lock.mDestinationOwner, searcher);
+            // 0x502550 with b = 1
+            const Owner& owner = lock.mOwner;
+            if (owner.mKind != Owner::Kind::None)
+            {
+                if (owner.mForm == searcher.mBase) // 0x502581
+                    return true;
+                if (owner.mKind == Owner::Kind::Faction)
+                {
+                    if (searcher.mRank && searcher.mRank(owner.mForm) >= owner.mRank) // 0x502619
+                        return true;
+                }
+                else if (lock.mGlobalSet)
+                    return true;
+            }
+            // 0x5023C6 to 0x50241D
+            return searcher.mNpc && searcher.mGuardClass && searcher.mPackage15;
+        }
+    }
+
+    bool passesLock(const DoorLock& lock, const Searcher& searcher, std::uint32_t bobbyPin, bool& byPicking)
+    {
+        byPicking = false;
+        if (ownerPasses(lock, searcher)) // 0x502474
+            return true;
+        if (!lock.mLocked) // 0x502498
+            return true;
+        if (!searcher.mCarries)
+            return false;
+        if (lock.mKey != 0 && searcher.mCarries(lock.mKey)) // 0x5024B2 to 0x5024E5
+            return true;
+        if (lock.mKeyOnly) // 0x5024F5
+            return false;
+        if (searcher.mCarries(bobbyPin)) // 0x502508 to 0x502530
+        {
+            byPicking = true;
+            return true;
+        }
+        return false;
+    }
 }

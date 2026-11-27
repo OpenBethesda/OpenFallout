@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 namespace
 {
     using namespace FalloutScript;
@@ -81,5 +83,53 @@ namespace
         EXPECT_TRUE(mesh.mDoors.empty());
         for (const NavMeshSearch::Triangle& triangle : mesh.mTriangles)
             EXPECT_EQ(triangle.mFlags & NavMeshSearch::Flag_Door, 0u);
+    }
+
+    TEST(FalloutScriptNavMeshDoorsTest, a_locked_door_lets_through_its_owners_and_who_has_its_key_or_a_pin)
+    {
+        using NavMeshDoors::Owner;
+        constexpr std::uint32_t pin = 0xA;
+        NavMeshDoors::DoorLock lock;
+        lock.mHasLock = true;
+        lock.mLocked = true;
+        lock.mKey = 0x50;
+        std::vector<std::uint32_t> items;
+        NavMeshDoors::Searcher searcher;
+        searcher.mBase = 0x700;
+        searcher.mNpc = true;
+        searcher.mRank = [](std::uint32_t faction) { return faction == 0x900 ? 2 : -1; };
+        searcher.mCarries
+            = [&](std::uint32_t item) { return std::find(items.begin(), items.end(), item) != items.end(); };
+        bool picking = false;
+        EXPECT_FALSE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        items = { pin };
+        EXPECT_TRUE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        EXPECT_TRUE(picking);
+        lock.mKeyOnly = true; // a pin does not open a lock that needs its key (0x5024F5)
+        EXPECT_FALSE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        items = { 0x50 };
+        EXPECT_TRUE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        EXPECT_FALSE(picking);
+        items.clear();
+        // a member of the owning faction with its rank (0x502550), but not one below it
+        lock.mOwner = { Owner::Kind::Faction, 0x900, 2 };
+        EXPECT_TRUE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        lock.mOwner.mRank = 3;
+        EXPECT_FALSE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        // another owner lets it through only with a global that is set
+        lock.mOwner = { Owner::Kind::Npc, 0x800, 0 };
+        EXPECT_FALSE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        lock.mGlobalSet = true;
+        EXPECT_TRUE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        // the owner of the cell passes, and then the door's own owner is not asked (0x5023A9)
+        lock.mGlobalSet = false;
+        lock.mCellOwner = { Owner::Kind::Npc, 0x700, 0 };
+        EXPECT_TRUE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        lock.mHasDestination = true;
+        lock.mDestinationOwner = { Owner::Kind::Npc, 0x800, 0 };
+        EXPECT_FALSE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
+        // a lock that is not locked, or no lock, lets everyone through
+        lock.mLocked = false;
+        EXPECT_TRUE(NavMeshDoors::passesLock(lock, searcher, pin, picking));
     }
 }
