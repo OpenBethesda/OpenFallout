@@ -69,7 +69,40 @@ namespace ESM4
             std::uint32_t unknown;
             ESM::FormId32 doorRef;
         };
+
+        /// A triangle of a Fallout 3 or New Vegas mesh, as the file has it (NVTR, 16 bytes; NV 0x692FE7): its corners,
+        /// a number for each edge (0xffff for none), and its flags, which the path search tests (NV 0x691140)
+        struct PathTriangle
+        {
+            std::uint16_t vertices[3];
+            std::uint16_t edges[3];
+            std::uint32_t flags;
+        };
+
+        /// A door on a triangle of a Fallout 3 or New Vegas mesh (NVDP, 8 bytes; NV 0x692E52)
+        struct DoorLink
+        {
+            ESM::FormId32 door;
+            std::uint16_t triangle;
+            std::uint16_t padding;
+        };
 #pragma pack(pop)
+
+        /// The triangles of a Fallout 3 or New Vegas mesh by where they are (NVGD; NV 0x69DA40): divisor by divisor
+        /// cells of the box, the size of a cell, the box, and the triangles in each cell, row after row
+        struct TriangleGrid
+        {
+            std::uint32_t divisor = 0;
+            float cellX = 0.f;
+            float cellY = 0.f;
+            float minX = 0.f;
+            float minY = 0.f;
+            float minZ = 0.f;
+            float maxX = 0.f;
+            float maxY = 0.f;
+            float maxZ = 0.f;
+            std::vector<std::vector<std::uint16_t>> cells;
+        };
 
         struct NVNMstruct
         {
@@ -98,6 +131,16 @@ namespace ESM4
         };
 
         std::vector<NVNMstruct> mData; // Up to 4 skywind cells in one Morrowind cell
+
+        // Fallout 3 and New Vegas keep a mesh in sub-records of its own (NV 0x692950)
+        std::uint32_t mVersion = 1; // NVER, 1 when it has none (NV 0x692A32); every shipped mesh has 11
+        ESM::FormId mCell; // DATA
+        std::vector<Vertex> mVertices; // NVVX
+        std::vector<PathTriangle> mTriangles; // NVTR
+        std::vector<ExtConnection> mExternal; // NVEX; `unknown` is 0 before version 9
+        std::vector<std::uint16_t> mCover; // NVCA, triangles
+        std::vector<DoorLink> mDoors; // NVDP
+        TriangleGrid mTriangleGrid; // NVGD
 
         ESM::FormId mId; // from the header
         std::uint32_t mFlags; // from the header, see enum type RecordFlag for details
