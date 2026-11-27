@@ -296,7 +296,8 @@ return function(r)
         if speaker ~= wanted then fail('talk', 'the speaker is', hex(speaker), 'not', hex(wanted)) end
         state = h.waitSpoken(o.timeout or 60, 'greeting')
         if not state.active then fail('talk', 'the conversation ended with the greeting') end
-        log('h.talk', 'ok', 'speaker=' .. hex(speaker), 'options=' .. #(state.options or {}), 'topics=' .. topicList(state),
+        log('h.talk', 'ok', 'speaker=' .. hex(speaker), 'greeting=' .. tostring(state.topic) .. '/' .. tostring(state.response),
+            'options=' .. #(state.options or {}), 'topics=' .. topicList(state),
             string.format('real=%.1f', core.getRealTime() - startedAt))
         return state
     end

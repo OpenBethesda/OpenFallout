@@ -1,7 +1,7 @@
 -- Step 4b, a second follower (Fallout 3): Dogmeat, a creature, is recruited through his own dialogue at the scrapyard and follows the
 -- player on his character controller, across the room of the yard and over the border of an exterior cell.
---   R  recruit   GREETING (Dogmeat mourns his master: FFEU255DogmeatMourn), then TakeDogmeat1A, TakeDogmeat2A, TakeDogmeat3A; the
---                last one's result sets Followers.DogmeatHired and DogmeatREF.IsFollowingDefault (FollowersDogmeatFollowPlayerDEFAULT)
+--   R  recruit   the conversation starts at TakeDogmeat2A (a stand-in for his greeting and TakeDogmeat1A, see phase R), then
+--                TakeDogmeat3A; its result sets Followers.DogmeatHired and DogmeatREF.IsFollowingDefault (FollowersDogmeatFollowPlayerDEFAULT)
 --   F  follow    the player goes 700 units away; he closes the gap
 --   C  cell      the player goes 1,500 units on, over the border of the exterior cell; he follows into the other cell
 local FO3 = 'Fallout3.esm'
@@ -34,11 +34,20 @@ return { limit = 700, delay = 4, run = function(r)
     h.check('p-baseline-not-teammate', h.isTeammate(DOGMEAT), false)
 
     phase('R recruit')
-    h.talk(DOGMEAT)
-    for _, topic in ipairs(PICKS) do h.pick{ topic = topic, finish = true } end
+    -- (a stand-in: the one response of TakeDogmeat1A, INFO 0x9D25C, names CrDog 0x1CF9C as its speaker (ANAM), and the engine
+    -- lets only that base say it (DialogueManager::canSay), so his greeting offers LeaveDogmeat1 alone; the conversation is
+    -- started at TakeDogmeat2A with StartConversation instead, and TakeDogmeat3A is picked from it: its own result script hires him)
+    h.command('StartConversation', DOGMEAT, h.player(), { FO3, PICKS[2] })
+    local opened = r.waitFor(function() return r.core.conversation.get().active end, 20, 'conversation opens')
+    if not opened then error('the conversation at TakeDogmeat2A did not open') end
+    local state = h.waitSpoken(60, 'TakeDogmeat2A')
+    r.log(string.format('R conversation at %s/%s, %d option(s)', tostring(state.topic), tostring(state.response),
+        #(state.options or {})))
+    h.pick{ topic = PICKS[3], finish = true }
     h.waitConversationEnd(60)
     r.settle(3, 20)
     r.log(string.format('R teammate %s', tostring(h.isTeammate(DOGMEAT))))
+    h.check('r-teammate', h.isTeammate(DOGMEAT), true)
 
     phase('F follow')
     local start = r.player().position

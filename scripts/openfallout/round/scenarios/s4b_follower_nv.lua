@@ -70,11 +70,24 @@ return { limit = 900, delay = 4, run = function(r)
 
     -------------------------------------------------------------------------------------------------------------- F: follow
     phase('F follow')
-    r.teleport{ cellId = core.getFormId(NV, BARRACKS), pos = { 2230, 1250, 9330 }, yaw = 0, onGround = true, label = 'away from cass' }
+    -- the spot is one the navigator makes a whole path to from where she stands (places of the room on the game's own navmesh,
+    -- NAVM 0x169CE8, 650 to 1240 units from her): a spot it cannot reach would show the mesh, not the follow
+    local SPOTS = { { 2230, 1250 }, { 2410, 811 }, { 2224, 814 }, { 1925, 786 }, { 1707, 813 }, { 2502, 925 }, { 1654, 926 } }
+    local spot = SPOTS[1]
+    for i, s in ipairs(SPOTS) do
+        local p = cass.position
+        local path = r.path({ p.x, p.y, p.z }, { s[1], s[2], 9330 }, 'cass to spot ' .. i)
+        if path ~= nil and path.whole and math.sqrt((s[1] - p.x) ^ 2 + (s[2] - p.y) ^ 2) >= 650 then
+            spot = s
+            break
+        end
+    end
+    r.teleport{ cellId = core.getFormId(NV, BARRACKS), pos = { spot[1], spot[2], 9330 }, yaw = 0, onGround = true, label = 'away from cass' }
     r.wait(1)
     local gapStart = distance(cass, r.player())
     h.waitSeconds(15, 'cass follows')
     local gapEnd = distance(cass, r.player())
+    r.state('cass after the follow', cass)
     r.log(string.format('F gap %.0f at the start, %.0f fifteen seconds later', gapStart, gapEnd))
     h.checkAtLeast('f-start-gap-at-least-600', gapStart, 600)
     h.checkRange('f-follows-within-350-after-15-s', gapEnd, 0, math.min(350, gapStart - 1))

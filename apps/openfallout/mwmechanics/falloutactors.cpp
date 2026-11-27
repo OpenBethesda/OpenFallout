@@ -30,6 +30,7 @@
 #include <osg/Quat>
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/luamanager.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwclass/esm4creature.hpp"
 #include "../mwclass/esm4npc.hpp"
@@ -1632,6 +1633,42 @@ namespace OFMechanics
             return mind.mStuck >= stuckTime ? Walk::Failed : Walk::Moving;
         }
 
+        /// One frame of an actor whose AI a Lua script switched off (`self:enableAI(false)`): the controls the script
+        /// sets
+        /// (`self.controls`) turn it and move it on its character controller, as the player's controls move the player
+        /// (forward and side from -1 to 1, run, a turn in radians for this frame). The speed is the one it walks or
+        /// runs at by the movement rules.
+        void driveByControls(const Frame& frame, FalloutActors::Mind& mind, OFBase::LuaManager::ActorControls& controls)
+        {
+            if (controls.mYawChange != 0.f)
+            {
+                const ESM::Position& position = mind.mPtr.getRefData().getPosition();
+                frame.mWorld.rotateObject(mind.mPtr,
+                    osg::Vec3f(position.rot[0], position.rot[1], position.rot[2] + controls.mYawChange),
+                    OFBase::RotationFlag_none);
+                controls.mYawChange = 0.f;
+            }
+            const OFRender::FalloutActorAnimation* animation = walker(frame.mWorld, mind.mPtr);
+            if (!onController(mind.mPtr) || animation == nullptr
+                || (controls.mMovement == 0.f && controls.mSideMovement == 0.f))
+            {
+                queueVelocity(frame.mWorld, mind.mPtr, osg::Vec3f());
+                return;
+            }
+            const bool running = controls.mRun && animation->canRun();
+            float speed = running ? runSpeed(*animation) : walkSpeed(*animation);
+            if (frame.mScripts != nullptr)
+            {
+                if (const std::optional<double> ruled = frame.mScripts->characterMoveSpeed(mind.mPtr, running))
+                    speed = static_cast<float>(*ruled);
+                else
+                    speed *= static_cast<float>(frame.mScripts->creatureSpeedShare(mind.mPtr));
+            }
+            queueVelocity(frame.mWorld, mind.mPtr,
+                falloutControlVelocity(
+                    mind.mPtr.getRefData().getPosition().rot[2], controls.mMovement, controls.mSideMovement, speed));
+        }
+
         /// What the actor does for a package that is on
         struct Choice
         {
@@ -2325,8 +2362,12 @@ namespace OFMechanics
             }
 
             const osg::Vec3f target = stance.mTarget.getRefData().getPosition().asVec3();
-            const float away = distanceByFloor(mind.position(), target);
             const bool visible = canSee(frame.mWorld, mind.position(), target);
+            // A target it sees is as far as the line between them, whatever the floor: a gunman on a ledge shoots
+            // down at it. One it does not see is gone after, so it is as far as the way to it on its own floor. Not
+            // confirmed in the exe: no combat setting of FalloutNV.exe limits height (they limit sight:
+            // fCombatLineOfSightTimer, fCombatLOSBufferTime), and its ranged-attack decision was not found
+            const float away = visible ? (target - mind.position()).length() : distanceByFloor(mind.position(), target);
             // The reach of a blow and the distance it attacks from are counted between the two bodies, not their
             // middles: two character bodies cannot come nearer than their radii (31 each), more than the 50 units the
             // hands attack from
@@ -2588,6 +2629,21 @@ namespace OFMechanics
                 continue;
             }
             publishMind(frame.mScripts, mind, false);
+
+            // A Lua script switched its AI off (self:enableAI(false)): no package, fight or turn to a speaker; the
+            // script's controls drive it
+            if (OFBase::LuaManager* lua = OFBase::Environment::get().getLuaManager(); lua != nullptr)
+            {
+                if (OFBase::LuaManager::ActorControls* controls = lua->getActorControls(mind.mPtr);
+                    controls != nullptr && controls->mDisableAI)
+                {
+                    if (mind.mWalking)
+                        stopWalking(mind);
+                    mind.mFighting = false;
+                    driveByControls(frame, mind, *controls);
+                    continue;
+                }
+            }
 
             if (facesSpeaker(frame, mind, speaker, duration))
                 continue;

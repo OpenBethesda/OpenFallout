@@ -143,6 +143,11 @@ namespace OFMechanics
     /// The place `distance` from `from` toward `to`, or `to` if it is that close
     osg::Vec3f falloutStepToward(const osg::Vec3f& from, const osg::Vec3f& to, float distance);
 
+    /// The velocity (units a second, on the ground) that the controls of a Lua script ask of an actor whose AI is off:
+    /// forward and side from -1 to 1 (forward is where the heading, from the y axis toward the x axis, points; the side
+    /// is to its right), at most `speed` together
+    osg::Vec3f falloutControlVelocity(float heading, float forward, float side, float speed);
+
     /// How a straight walk is looked at: the height of the floor under a place (the last height is where the feet were
     /// a step before; nothing when there is no floor within reach), and whether the world is in the way between two
     /// points (the knees and the chest of the walker are asked about)

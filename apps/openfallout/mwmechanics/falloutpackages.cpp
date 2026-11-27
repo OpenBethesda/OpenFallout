@@ -155,6 +155,19 @@ namespace OFMechanics
         return from + way * (distance / length);
     }
 
+    osg::Vec3f falloutControlVelocity(float heading, float forward, float side, float speed)
+    {
+        const osg::Vec2f input(std::clamp(side, -1.f, 1.f), std::clamp(forward, -1.f, 1.f));
+        const float amount = std::min(1.f, input.length());
+        if (amount < 1e-3f || speed <= 0.f)
+            return osg::Vec3f();
+        const osg::Vec3f ahead(std::sin(heading), std::cos(heading), 0.f);
+        const osg::Vec3f right(std::cos(heading), -std::sin(heading), 0.f);
+        osg::Vec3f way = ahead * input.y() + right * input.x();
+        way.normalize();
+        return way * (speed * amount);
+    }
+
     bool falloutSegmentBlocked(const osg::Vec3f& from, const osg::Vec3f& to, const FalloutRayProbe& ray,
         std::initializer_list<float> heights)
     {

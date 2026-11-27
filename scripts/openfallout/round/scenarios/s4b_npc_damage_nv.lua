@@ -99,11 +99,25 @@ return { limit = 600, delay = 4, run = function(r)
     r.closeDialogue('gangers')
     heal('F')
     local shooters = {}
+    -- each ganger is put 600 units away where he sees the player (nothing of the world between their eyes, 110 units
+    -- up): the ground around the camp rises and falls, and a ganger behind the lip of a ledge has no shot to take
+    local bearings = { 0.4, 0.8, -0.4, -0.8, 1.6, -1.6, 2.4, -2.4, 3.1 }
+    local used = 0
     for _, id in ipairs(GANGERS.ids) do
         local ok, ganger = pcall(r.lookup, { NV, id })
         if ok and ganger ~= nil then
-            shooters[#shooters + 1] = ganger
-            r.place(ganger, { dist = 600, bearing = #shooters * 0.4, label = string.format('ganger 0x%x', id) })
+            local seen = false
+            while not seen and used < #bearings do
+                used = used + 1
+                r.place(ganger, { dist = 600, bearing = bearings[used], label = string.format('ganger 0x%x', id) })
+                r.wait(0.5)
+                local g, p = ganger.position, player.position
+                local ray = r.ray({ g.x, g.y, g.z + 110 }, { p.x, p.y, p.z + 110 }, string.format('ganger 0x%x sight', id))
+                seen = ray ~= nil and not ray.hit
+                r.log(string.format('ganger 0x%x at bearing %.1f: %.0f units above the player, %s', id, bearings[used],
+                    g.z - p.z, seen and 'sees him' or 'no sight, another place'))
+            end
+            if seen then shooters[#shooters + 1] = ganger end
         end
     end
     h.checkAtLeast('f-gangers-found', #shooters, 1)
@@ -113,6 +127,7 @@ return { limit = 600, delay = 4, run = function(r)
     for _ = 1, 3 do
         for _, ganger in ipairs(shooters) do r.fight(ganger, player, 'ganger -> player') end
         for _, shot in ipairs(watch('gangers', 13, 2 - #shots)) do shots[#shots + 1] = shot end
+        for _, ganger in ipairs(shooters) do r.state('ganger try', ganger) end
         if #shots >= 2 then break end
     end
     for _, ganger in ipairs(shooters) do

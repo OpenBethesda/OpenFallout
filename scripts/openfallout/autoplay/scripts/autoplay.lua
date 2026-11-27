@@ -10,6 +10,7 @@ local core = require('openfallout.core')
 local self = require('openfallout.self')
 local I = require('openfallout.interfaces')
 local config = require('scripts.autoplaygates')
+local hack = require('scripts.autoplayhack')
 
 -- How long (real seconds) a box, a screen or a conversation is left alone before it is answered
 local DELAY = 0.7
@@ -166,30 +167,6 @@ local function answerLock(dt)
     log('lock pick', core.interact.pick())
 end
 
-local function likeness(a, b)
-    local same = 0
-    for i = 1, math.min(#a, #b) do
-        if a:sub(i, i) == b:sub(i, i) then same = same + 1 end
-    end
-    return same
-end
-
--- The place of the word, in the words of a closed terminal, that agrees with every likeness the guesses so far were given, as a
--- player works it out; nil when there is none
-local function hackGuess(terminal)
-    for index, word in ipairs(terminal.words) do
-        local fits = true
-        for _, guess in ipairs(terminal.guesses) do
-            if guess.word == word or likeness(word, guess.word) ~= guess.likeness then
-                fits = false
-                break
-            end
-        end
-        if fits then return index end
-    end
-    return nil
-end
-
 -- A terminal the player has open: a closed one is hacked, a menu is walked through (a line is picked twice at most, then Back,
 -- and then the terminal is left), and one that goes on for too many steps is closed.
 local function answerTerminal(dt)
@@ -212,14 +189,21 @@ local function answerTerminal(dt)
     if terminal.hacking then
         -- Locked out for a while, or no attempts left: the game of hacking goes on when the terminal lets it
         if terminal.lockedOut or terminal.attempts <= 0 then return end
-        local word = hackGuess(terminal)
-        if not word then
+        local move = hack.choose(terminal.words, terminal.guesses, terminal.attempts)
+        if move.close then
             log('hack close', string.format('words=%d guesses=%d', #terminal.words, #terminal.guesses))
             core.interact.closeTerminal()
             return
         end
-        log('hack', string.format('word=%d of %d attempts=%d likeness=%d', word, #terminal.words, terminal.attempts,
-            core.interact.guess(word)))
+        if move.leave then
+            -- One attempt left and more than one word could be the password: the board is left before it locks the
+            -- terminal, and the next time the terminal is opened it lays out a new one
+            log('hack leave', string.format('words=%d guesses=%d left=%d', #terminal.words, #terminal.guesses, move.left))
+            core.interact.closeTerminal()
+            return
+        end
+        log('hack', string.format('word=%d of %d attempts=%d left=%d likeness=%d', move.guess, #terminal.words,
+            terminal.attempts, move.left, core.interact.guess(move.guess)))
         return
     end
     -- Two menus can have the same name, so the lines are part of what tells them apart

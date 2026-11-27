@@ -1,3 +1,4 @@
 GLOBAL: scripts/roundworld.lua
 PLAYER: scripts/roundplayer.lua
 MENU: scripts/s4menu.lua
+CUSTOM: scripts/roundactor.lua

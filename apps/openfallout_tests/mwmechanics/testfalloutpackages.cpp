@@ -393,4 +393,26 @@ namespace
         EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(3500, 0, 0), floor, clear));
         EXPECT_TRUE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(3500, 0, 0), floor, clear, 50.f, 70.f, 4000.f));
     }
+
+    TEST(FalloutPackagesTest, theControlsOfAScriptMoveTheActorWhereItFacesAtMostAtItsSpeed)
+    {
+        // heading 0 faces +y: forward goes along y, the side to the right along +x
+        const osg::Vec3f ahead = falloutControlVelocity(0.f, 1.f, 0.f, 100.f);
+        EXPECT_NEAR(ahead.x(), 0.f, epsilon);
+        EXPECT_NEAR(ahead.y(), 100.f, epsilon);
+        const osg::Vec3f right = falloutControlVelocity(0.f, 0.f, 1.f, 100.f);
+        EXPECT_NEAR(right.x(), 100.f, epsilon);
+        EXPECT_NEAR(right.y(), 0.f, epsilon);
+        // heading a quarter turn faces +x
+        const osg::Vec3f turned = falloutControlVelocity(static_cast<float>(osg::PI_2), 1.f, 0.f, 100.f);
+        EXPECT_NEAR(turned.x(), 100.f, epsilon);
+        EXPECT_NEAR(turned.y(), 0.f, epsilon);
+        // forward and side together are no faster than one alone; half a push is half the speed; beyond 1 is 1
+        EXPECT_NEAR(falloutControlVelocity(0.f, 1.f, 1.f, 100.f).length(), 100.f, epsilon);
+        EXPECT_NEAR(falloutControlVelocity(0.f, 0.5f, 0.f, 100.f).length(), 50.f, epsilon);
+        EXPECT_NEAR(falloutControlVelocity(0.f, 3.f, 0.f, 100.f).length(), 100.f, epsilon);
+        // no push, no speed: it stands
+        EXPECT_EQ(falloutControlVelocity(0.f, 0.f, 0.f, 100.f), osg::Vec3f());
+        EXPECT_EQ(falloutControlVelocity(0.f, 1.f, 0.f, 0.f), osg::Vec3f());
+    }
 }
