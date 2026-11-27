@@ -29,7 +29,12 @@ namespace OFClass
 
     namespace ESM4Impl
     {
-        /// The BSBound of the skeleton of a Fallout character, creature or the player (its model), if it can be read
+        /// The skeleton file of a Fallout character or creature (its model), or of the player, whose class has no model
+        /// (the renderer draws it): the MODL of its record, Characters\_Male\Skeleton.NIF in Fallout 3 and New Vegas
+        VFS::Path::NormalizedView skeletonModel(const OFWorld::ConstPtr& ptr);
+
+        /// The BSBound of the skeleton of a Fallout character, creature or the player (skeletonModel), if it can be
+        /// read
         std::optional<FalloutScript::CharacterBody::Bound> skeletonBound(const OFWorld::ConstPtr& ptr);
 
         /// Puts the character controller of a Fallout character, creature or the player in the physics: the body the

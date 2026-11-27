@@ -444,7 +444,8 @@ namespace OFPhysics
 
         ProjectileConvexCallback resultCallback(
             projectile.mCaster, projectile.mCollisionObject, btFrom, btTo, *projectile.mProjectile);
-        resultCallback.m_collisionFilterMask = CollisionType_AnyPhysical;
+        resultCallback.m_collisionFilterMask
+            = CollisionType_AnyPhysical | CollisionType_Ragdoll; // corpses stop shots too
         resultCallback.m_collisionFilterGroup = CollisionType_Projectile;
 
         const btQuaternion btrot = btQuaternion::getIdentity();

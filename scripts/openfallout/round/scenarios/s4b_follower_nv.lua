@@ -73,7 +73,7 @@ return { limit = 900, delay = 4, run = function(r)
     -- the spot is one the navigator makes a whole path to from where she stands (places of the room on the game's own navmesh,
     -- NAVM 0x169CE8, 650 to 1240 units from her): a spot it cannot reach would show the mesh, not the follow
     local SPOTS = { { 2230, 1250 }, { 2410, 811 }, { 2224, 814 }, { 1925, 786 }, { 1707, 813 }, { 2502, 925 }, { 1654, 926 } }
-    local spot = SPOTS[1]
+    local spot = nil
     for i, s in ipairs(SPOTS) do
         local p = cass.position
         local path = r.path({ p.x, p.y, p.z }, { s[1], s[2], 9330 }, 'cass to spot ' .. i)
@@ -82,6 +82,7 @@ return { limit = 900, delay = 4, run = function(r)
             break
         end
     end
+    if spot == nil then error('setup: no spot of the room has a whole path from cass at 650 units or more') end
     r.teleport{ cellId = core.getFormId(NV, BARRACKS), pos = { spot[1], spot[2], 9330 }, yaw = 0, onGround = true, label = 'away from cass' }
     r.wait(1)
     local gapStart = distance(cass, r.player())

@@ -91,6 +91,7 @@
 #include "../mwrender/vismask.hpp"
 
 #include "../mwclass/door.hpp"
+#include "../mwclass/esm4base.hpp"
 
 #include "../mwphysics/actor.hpp"
 #include "../mwphysics/collisiontype.hpp"
@@ -2893,8 +2894,9 @@ namespace OFWorld
         const OFRender::Animation* animation = bones != nullptr ? bones : mRendering->getAnimation(ptr);
         if (animation == nullptr)
             return false;
-        return mPhysics->startRagdoll(
-            ptr, ptr.getClass().getModel(ptr), [animation](std::string_view name) { return animation->getBone(name); });
+        // the player's class has no model, its skeleton is the MODL of its record
+        return mPhysics->startRagdoll(ptr, OFClass::ESM4Impl::skeletonModel(ptr),
+            [animation](std::string_view name) { return animation->getBone(name); });
     }
 
     void World::stopRagdoll(const OFWorld::Ptr& ptr)

@@ -1788,7 +1788,9 @@ namespace OFScript
         void wakeMind(FalloutScript::FormId actor) { evaluatePackage(actor); }
         /// The character attacks the target with the weapon it holds, as far as its skill allows it to hit. A
         /// weapon that has no ammunition left is put away and the character takes another.
-        FireResult attack(const OFWorld::Ptr& attacker, const OFWorld::Ptr& target);
+        /// `inSight` false: something is between them, and it takes the shot (a gunman fires on for a while after it
+        /// loses sight of the target, FightAI::keepsFiring)
+        FireResult attack(const OFWorld::Ptr& attacker, const OFWorld::Ptr& target, bool inSight = true);
         /// UseWeapon: the character shoots at the target from the place, with the weapon the script names, which it
         /// need not carry and spends no round of. The order is a package that the games make at run time; it is kept
         /// for as long as the attacks are not made, in a cell that is loaded (it is not saved).

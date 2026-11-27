@@ -3922,14 +3922,15 @@ namespace OFScript
         FalloutScript::startFight(mCombat, mActors, self, mPlayer);
     }
 
-    FalloutScripts::FireResult FalloutScripts::attack(const OFWorld::Ptr& attacker, const OFWorld::Ptr& target)
+    FalloutScripts::FireResult FalloutScripts::attack(
+        const OFWorld::Ptr& attacker, const OFWorld::Ptr& target, bool inSight)
     {
         const FalloutScript::FormId self = scriptReferenceOf(attacker);
         if (self == 0)
             return FireResult();
         const WeaponStats weapon = weaponStats(self);
         const double skill = describeWeapon(weapon.mWeapon, self).mSkill;
-        const FireResult result = fire(self, target, -1, FalloutScript::FightAI::hitChance(skill));
+        const FireResult result = fire(self, target, -1, inSight ? FalloutScript::FightAI::hitChance(skill) : 0.0);
         if (result.mOutOfAmmo)
         {
             // The weapon is empty: the character takes another, or fights with its hands

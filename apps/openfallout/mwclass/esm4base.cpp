@@ -37,6 +37,8 @@
 #include "../mwworld/actiontalk.hpp"
 #include "../mwworld/ptr.hpp"
 
+#include "falloutplayer.hpp"
+
 namespace OFClass
 {
     namespace
@@ -52,9 +54,16 @@ namespace OFClass
         }
     }
 
+    VFS::Path::NormalizedView ESM4Impl::skeletonModel(const OFWorld::ConstPtr& ptr)
+    {
+        if (dynamic_cast<const FalloutPlayer*>(&ptr.getClass()) != nullptr)
+            return ptr.get<ESM4::Npc>()->mBase->mModel.getNormalized();
+        return ptr.getClass().getModel(ptr);
+    }
+
     std::optional<FalloutScript::CharacterBody::Bound> ESM4Impl::skeletonBound(const OFWorld::ConstPtr& ptr)
     {
-        const VFS::Path::NormalizedView path = ptr.getClass().getModel(ptr);
+        const VFS::Path::NormalizedView path = skeletonModel(ptr);
         const std::string model(path.value());
         if (model.empty())
             return std::nullopt;

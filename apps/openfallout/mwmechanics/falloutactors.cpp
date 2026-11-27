@@ -2370,7 +2370,10 @@ namespace OFMechanics
             // target detected and in the same space (worldspace or interior, 0x997CF0) and nothing about height; its
             // procedure (0x9D0A30) measures the straight line to the target (0x9D1175) and limits only left and right
             // (withinFiringArc). One it does not see is gone after, so it is as far as the way to it on its own floor.
-            const float away = visible ? (target - mind.position()).length() : distanceByFloor(mind.position(), target);
+            // A melee fighter measures as its walk does (the radius of its path goal, below), or it would stop short of
+            // a target above it, out of reach and never striking.
+            const float away = visible && !stance.mMelee ? (target - mind.position()).length()
+                                                         : distanceByFloor(mind.position(), target);
             // A melee fighter walks to within its distance of the target, middle to middle (stance.mEngage, the radius
             // of the path goal of FalloutNV.exe's melee procedure, 0x9CE7D1)
             const float arrival = !visible ? 0.f
@@ -2452,8 +2455,9 @@ namespace OFMechanics
                         || FalloutScript::FightAI::withinFiringArc(
                             heading - mind.mPtr.getRefData().getPosition().rot[2], stance.mTargetingFov, stance.mAimArc,
                             false, stance.mStationaryArcShare);
-                    const OFScript::FalloutScripts::FireResult shot
-                        = inArc ? scripts.attack(mind.mPtr, stance.mTarget) : OFScript::FalloutScripts::FireResult{};
+                    const OFScript::FalloutScripts::FireResult shot = inArc
+                        ? scripts.attack(mind.mPtr, stance.mTarget, visible)
+                        : OFScript::FalloutScripts::FireResult{};
                     if (!shot.mFired)
                     {
                         // The weapon may have changed without a shot (it was empty, the character took another)
@@ -2559,6 +2563,19 @@ namespace OFMechanics
 
     void FalloutActors::update(float duration, const ProcessLists& tiers)
     {
+        // An actor with nothing to do has no mind until a Lua script switches its AI off: then its controls drive it,
+        // which a mind does
+        if (OFBase::LuaManager* lua = OFBase::Environment::get().getLuaManager(); lua != nullptr)
+        {
+            std::vector<OFWorld::Ptr> driven;
+            for (const auto& entry : mUnminded)
+                if (const OFBase::LuaManager::ActorControls* controls
+                    = entry.second.isEmpty() ? nullptr : lua->getActorControls(entry.second);
+                    controls != nullptr && controls->mDisableAI)
+                    driven.push_back(entry.second);
+            for (const OFWorld::Ptr& ptr : driven)
+                makeMind(ptr);
+        }
         if (mMinds.empty())
             return;
 
