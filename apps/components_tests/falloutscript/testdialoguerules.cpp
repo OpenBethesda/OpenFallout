@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <initializer_list>
 #include <map>
 #include <string>
 #include <vector>
@@ -106,6 +107,17 @@ namespace
         return result;
     }
 
+    // A line that only one character says asks who the speaker is (the games use GetIsID for it; the response's
+    // speaker, ANAM, is only its voice, 0x616FA0): here Touch gives the record of the reference it runs on
+    ESM4::TargetCondition saidBy(FormId base)
+    {
+        ESM4::TargetCondition result{};
+        result.condition = ESM4::CTF_EqualTo;
+        result.comparison = static_cast<float>(base);
+        result.functionIndex = OpTouch - 0x1000;
+        return result;
+    }
+
     ESM4::TargetCondition stageIs(FormId quest, float stage)
     {
         ESM4::TargetCondition result{};
@@ -152,6 +164,13 @@ namespace
                 mRandomCounts.push_back(count);
                 return std::min(mRandomPick, count - 1);
             });
+        }
+
+        /// The record each reference has, for saidBy
+        void know(std::initializer_list<DialogueSpeaker> speakers)
+        {
+            for (const DialogueSpeaker& known : speakers)
+                mTouchValue[known.mReference] = static_cast<double>(known.mBase);
         }
 
         void start()
@@ -371,7 +390,7 @@ namespace
         for (const auto& [who, text] : parts)
         {
             ESM4::DialogInfo& record = setup.mRecords.addInfo(info++, topicA, text);
-            record.mSpeaker = id(who);
+            record.mConditions.push_back(saidBy(who));
             record.mInfoFlags = ESM4::INFO_SayOnce | ESM4::INFO_RunImmediately;
             record.mChoices = { id(topicA) };
         }
@@ -392,6 +411,7 @@ namespace
         constexpr DialogueSpeaker other{ 0x00ff0005, 0x00003005 };
         Harness setup;
         addScene(setup, speaker.mBase, other.mBase);
+        setup.know({ speaker, other });
         setup.start();
 
         const FalloutScript::DialogueView said
@@ -412,6 +432,7 @@ namespace
         constexpr DialogueSpeaker other{ 0x00ff0005, 0x00003005 };
         Harness setup;
         addScene(setup, speaker.mBase, other.mBase);
+        setup.know({ speaker, other });
         setup.start();
 
         // said to the player, or to a character whose record is not known, only the response asked for is said
@@ -419,6 +440,7 @@ namespace
 
         Harness unknown;
         addScene(unknown, speaker.mBase, other.mBase);
+        unknown.know({ speaker, other });
         unknown.start();
         EXPECT_THAT(unknown.texts(unknown.mDialogue.say(speaker, topicA, other.mReference, true, true)),
             ElementsAre("first one"));
@@ -435,16 +457,17 @@ namespace
         // The intercom of the Vault: one character, the other through the intercom, the first again with the goodbye.
         // None is run immediately, each offers a topic.
         ESM4::DialogInfo& first = setup.mRecords.addInfo(0x3001, topicA, "first");
-        first.mSpeaker = id(speaker.mBase);
+        first.mConditions.push_back(saidBy(speaker.mBase));
         first.mChoices = { id(menu), id(topicA) };
         ESM4::DialogInfo& second = setup.mRecords.addInfo(0x3002, topicA, "second");
-        second.mSpeaker = id(other.mBase);
+        second.mConditions.push_back(saidBy(other.mBase));
         second.mChoices = { id(goodbye) };
         ESM4::DialogInfo& last = setup.mRecords.addInfo(0x3003, goodbye, "last");
-        last.mSpeaker = id(speaker.mBase);
+        last.mConditions.push_back(saidBy(speaker.mBase));
         last.mInfoFlags = ESM4::INFO_Goodbye;
         // A menu of topics is for the player to pick from, and is not followed
         setup.mRecords.addInfo(0x3004, menu, "menu answer");
+        setup.know({ speaker, other });
         setup.start();
 
         const FalloutScript::DialogueView said
@@ -634,16 +657,21 @@ namespace
         EXPECT_EQ(setup.mDialogue.responseFor(topicA, speaker)->mId.toUint32(), 0x3001u);
     }
 
-    TEST(FalloutScriptDialogueTest, aResponseForOneSpeakerIsNotSaidByAnother)
+    TEST(FalloutScriptDialogueTest, theSpeakerOfAResponseDoesNotChooseWhoSaysIt)
     {
+        // The exe's choice of a response (0x61A720-0x61B320) never reads ANAM (INFO+0x3C): another character says it
         Harness setup;
         setup.mRecords.addTopic(topicA, "A");
-        setup.mRecords.addInfo(0x3001, topicA, "only for one").mSpeaker = id(0x00004000);
+        setup.mRecords.addInfo(0x3001, topicA, "voiced by another").mSpeaker = id(0x00004000);
         setup.mRecords.addInfo(0x3002, topicA, "for anyone");
         setup.start();
 
-        EXPECT_EQ(setup.mDialogue.responseFor(topicA, speaker)->mId.toUint32(), 0x3002u);
-        EXPECT_EQ(setup.mDialogue.responseFor(topicA, { 0x00ff0002, 0x00004000 })->mId.toUint32(), 0x3001u);
+        EXPECT_EQ(setup.mDialogue.responseFor(topicA, speaker)->mId.toUint32(), 0x3001u);
+        // ... and the line it says carries the voice of the speaker it names
+        const FalloutScript::DialogueView said = setup.mDialogue.say(speaker, topicA);
+        ASSERT_EQ(said.mLines.size(), 1u);
+        EXPECT_EQ(said.mLines[0].mSpeaker, speaker.mReference);
+        EXPECT_EQ(said.mLines[0].mVoiceBase, 0x00004000u);
     }
 
     TEST(FalloutScriptDialogueTest, aResponseSaidOnceIsNotSaidAgain)

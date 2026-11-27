@@ -1053,7 +1053,10 @@ namespace OFRender
         const std::uint64_t revision = scripts->playerBodyRevision();
         // A player who is alive again (revived, or a game loaded) stands: the body that fell is made again
         if (!dead && mPlayerBody->isDown())
+        {
             mPlayerBodyTried.reset();
+            OFBase::Environment::get().getWorld()->stopRagdoll(player);
+        }
         if (!mPlayerBodyTried || *mPlayerBodyTried != revision)
         {
             mPlayerBodyTried = revision;
@@ -1066,7 +1069,12 @@ namespace OFRender
         }
         // The body of a player who has died (by a fall, or a blow) falls, as the death camera looks at it
         if (dead && !mPlayerBody->isDown())
+        {
             mPlayerBody->die();
+            // ... with the ragdoll of its skeleton (NV 0x89F780 is the kill of the player too)
+            if (mPlayerBody->isDown())
+                OFBase::Environment::get().getWorld()->startRagdoll(player, mPlayerBody->animation());
+        }
         // The games do not lie the player down to sleep: the screen fades and the hours pass
         mPlayerBody->setPose(scripts->isPlayerSleeping() ? 0 : scripts->furnitureKindOf(player));
         // The weapon the player holds is in its hand when it is out, and a shot plays the attack of its type

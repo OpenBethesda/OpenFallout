@@ -41,11 +41,10 @@ namespace OFRender
         /// place from one frame to the next
         void setMotionSource(const OFWorld::Ptr& source) { mMotionSource = source; }
 
-        /// The actor is dead: it stops in the pose it has and falls, a person on its back and a creature on its side,
-        /// and lies where it fell (the games have it fall with a ragdoll of Havok, which this does not have). With
-        /// `fallen` it lies there at once: it died before it was in sight.
-        void die(bool fallen);
-        bool isDown() const { return mFall != nullptr; }
+        /// The actor is dead: what it plays stops, and its bones are left to its ragdoll (OFPhysics::Ragdoll), which
+        /// moves them from the pose they have
+        void die();
+        bool isDown() const { return mDown; }
 
         /// The actor takes a weapon in its hands: the model is put on its hand, the animation of the weapon's type
         /// takes it out and then holds it ready. The type is the animation type of the weapon record (0 to 10); a
@@ -116,7 +115,6 @@ namespace OFRender
 
     private:
         class AdvanceCallback;
-        class FallCallback;
         class SoundKeys;
 
         /// What an animation does at a text key that names a sound or a foot coming down (`Sound: <editor id>`, and
@@ -207,7 +205,7 @@ namespace OFRender
 
         osg::ref_ptr<AdvanceCallback> mAdvanceCallback;
         /// The transform that the body falls with, when it has died
-        osg::ref_ptr<osg::MatrixTransform> mFall;
+        bool mDown = false;
 
         /// The weapon in the hands: the model on the hand, the animation type of the record and the move it makes
         osg::ref_ptr<osg::Node> mWeaponNode;

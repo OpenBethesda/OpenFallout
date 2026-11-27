@@ -362,6 +362,8 @@ add_component_dir (falloutscript
     crime standing
     actorstatus
     restrictions
+    characterbody
+    ragdollrules
     )
 
 add_component_dir (misc

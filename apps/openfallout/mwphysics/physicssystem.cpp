@@ -1,7 +1,9 @@
 #include "physicssystem.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
 #include <osg/Group>
@@ -19,6 +21,9 @@
 #include <BulletCollision/CollisionShapes/btStaticPlaneShape.h>
 #include <BulletCollision/CollisionShapes/btTriangleMesh.h>
 
+#include <BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.h>
+#include <BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h>
+
 #include <LinearMath/btQuickprof.h>
 #include <LinearMath/btVector3.h>
 
@@ -26,10 +31,12 @@
 #include <components/esm3/loadgmst.hpp>
 #include <components/esm3/loadmgef.hpp>
 #include <components/falloutscript/movement.hpp>
+#include <components/misc/constants.hpp>
 #include <components/misc/convert.hpp>
 #include <components/misc/resourcehelpers.hpp>
 #include <components/misc/strings/conversion.hpp>
 #include <components/resource/bulletshapemanager.hpp>
+#include <components/resource/niffilemanager.hpp>
 #include <components/resource/resourcesystem.hpp>
 #include <components/settings/values.hpp>
 
@@ -60,6 +67,7 @@
 #include "mtphysics.hpp"
 #include "object.hpp"
 #include "projectile.hpp"
+#include "ragdoll.hpp"
 
 namespace
 {
@@ -102,6 +110,15 @@ namespace OFPhysics
         // DynamicsWorld::updateSingleAabb.
         mCollisionWorld->setForceUpdateAllAabbs(false);
 
+        // The ragdolls have a world of their own, with Havok's gravity (the same as the characters')
+        mRagdollConfiguration = std::make_unique<btDefaultCollisionConfiguration>();
+        mRagdollDispatcher = std::make_unique<btCollisionDispatcher>(mRagdollConfiguration.get());
+        mRagdollBroadphase = std::make_unique<btDbvtBroadphase>();
+        mRagdollSolver = std::make_unique<btSequentialImpulseConstraintSolver>();
+        mRagdollWorld = std::make_unique<btDiscreteDynamicsWorld>(
+            mRagdollDispatcher.get(), mRagdollBroadphase.get(), mRagdollSolver.get(), mRagdollConfiguration.get());
+        mRagdollWorld->setGravity(btVector3(0, 0, -Constants::GravityConst * Constants::UnitsPerMeter));
+
         // Check if a user decided to override a physics system FPS
         if (const char* env = getenv("OPENFALLOUT_PHYSICS_FPS"))
         {
@@ -125,6 +142,11 @@ namespace OFPhysics
             mTaskScheduler->removeCollisionObject(mWaterCollisionObject.get());
         for (const auto& [position, tile] : mWaterTiles)
             mTaskScheduler->removeCollisionObject(tile.mObject.get());
+
+        mRagdolls.clear();
+        for (auto& [source, mirror] : mRagdollMirrors)
+            mRagdollWorld->removeCollisionObject(mirror.mObject.get());
+        mRagdollMirrors.clear();
 
         mTaskScheduler->releaseSharedStates();
         mHeightFields.clear();
@@ -436,6 +458,7 @@ namespace OFPhysics
         {
             mActors.erase(foundActor);
         }
+        mRagdolls.erase(ptr.mRef);
     }
 
     void PhysicsSystem::removeProjectile(const int projectileId)
@@ -673,6 +696,9 @@ namespace OFPhysics
 
         mTimeAccum += dt;
 
+        if (!skipSimulation && dt > 0.f && !mRagdolls.empty())
+            stepRagdolls(dt);
+
         if (skipSimulation)
             mTaskScheduler->resetSimulation(mActors);
         else
@@ -681,6 +707,180 @@ namespace OFPhysics
             prepareSimulation(mTimeAccum >= mPhysicsDt, simulations);
             // modifies mTimeAccum
             mTaskScheduler->applyQueuedMovements(mTimeAccum, simulations, frameStart, frameNumber, stats);
+        }
+    }
+
+    bool PhysicsSystem::startRagdoll(const OFWorld::Ptr& ptr, VFS::Path::NormalizedView model,
+        const std::function<osg::ref_ptr<osg::MatrixTransform>(std::string_view)>& findBone)
+    {
+        if (model.value().empty())
+            return false;
+        const std::string path(model.value());
+        auto data = mRagdollData.find(path);
+        if (data == mRagdollData.end())
+        {
+            std::shared_ptr<const RagdollData> read;
+            try
+            {
+                read = readRagdollData(
+                    mResourceSystem->getNifFileManager()->get(Misc::ResourceHelpers::correctMeshPath(model)));
+            }
+            catch (const std::exception& e)
+            {
+                Log(Debug::Warning) << "Ragdoll: cannot read " << path << ": " << e.what();
+            }
+            data = mRagdollData.emplace(path, std::move(read)).first;
+        }
+        if (data->second == nullptr)
+            return false;
+        std::vector<osg::ref_ptr<osg::MatrixTransform>> bones;
+        for (const RagdollData::Bone& bone : data->second->mBones)
+            bones.push_back(findBone(bone.mName));
+        // The settings of the water of Havok (the plugins', else the executable's)
+        FalloutScript::Ragdoll::WaterSettings water;
+        if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+        {
+            const std::pair<std::uint32_t, const char*> materials[] = { { 0, "fBuoyancyStone" },
+                { 1, "fBuoyancyCloth" }, { 2, "fBuoyancyDirt" }, { 3, "fBuoyancyGlass" }, { 4, "fBuoyancyGrass" },
+                { 5, "fBuoyancyMetal" }, { 6, "fBuoyancyOrganic" }, { 7, "fBuoyancySkin" }, { 8, "fBuoyancyWater" },
+                { 9, "fBuoyancyWood" }, { 24, "fBuoyancyBottle" }, { 25, "fBuoyancySodaCan" } };
+            for (const auto& [material, name] : materials)
+                water.mMaterialBuoyancy[material] = static_cast<float>(scripts->gameSettingValue(name));
+            water.mMultBody = static_cast<float>(scripts->gameSettingValue("fBuoyancyMultBody"));
+            water.mMultExtremity = static_cast<float>(scripts->gameSettingValue("fBuoyancyMultExtremity"));
+            water.mMaxSpeed = static_cast<float>(scripts->gameSettingValue("fSubmergedMaxSpeed"));
+            water.mLinearDampingH = static_cast<float>(scripts->gameSettingValue("fSubmergedLinearDampingH"));
+            water.mLinearDampingV = static_cast<float>(scripts->gameSettingValue("fSubmergedLinearDampingV"));
+            water.mAngularDamping = static_cast<float>(scripts->gameSettingValue("fSubmergedAngularDamping"));
+        }
+        mRagdolls.erase(ptr.mRef);
+        auto ragdoll = std::make_unique<Ragdoll>(data->second, bones, *mRagdollWorld, *mTaskScheduler, water);
+        if (!ragdoll->valid())
+        {
+            Log(Debug::Warning) << "Ragdoll: " << ptr.getCellRef().getRefId() << " has no bones for the bodies of "
+                                << path;
+            return false;
+        }
+        const btVector3 root = ragdoll->rootPosition();
+        Log(Debug::Info) << "Ragdoll: " << ptr.getCellRef().getRefId() << " falls with " << data->second->mBones.size()
+                         << " bodies and " << data->second->mJoints.size() << " constraints of " << path << " at "
+                         << root.x() << " " << root.y() << " " << root.z();
+        mRagdolls.emplace(ptr.mRef, RagdollEntry{ std::move(ragdoll), ptr.getCellRef().getRefId().toDebugString() });
+        return true;
+    }
+
+    void PhysicsSystem::stopRagdoll(const OFWorld::Ptr& ptr)
+    {
+        mRagdolls.erase(ptr.mRef);
+    }
+
+    bool PhysicsSystem::hasRagdoll(const OFWorld::ConstPtr& ptr) const
+    {
+        return mRagdolls.count(ptr.mRef) != 0;
+    }
+
+    std::optional<float> PhysicsSystem::waterHeightAt(const btVector3& position) const
+    {
+        if (mWaterEnabled)
+            return mWaterHeight;
+        for (const auto& [grid, tile] : mWaterTiles)
+        {
+            const float x = static_cast<float>(position.x()) / tile.mSize;
+            const float y = static_cast<float>(position.y()) / tile.mSize;
+            if (static_cast<int>(std::floor(x)) == tile.mX && static_cast<int>(std::floor(y)) == tile.mY)
+                return tile.mHeight;
+        }
+        return std::nullopt;
+    }
+
+    void PhysicsSystem::stepRagdolls(float dt)
+    {
+        // What is near the bodies: the world, the ground, the doors and the living (whose bodies push them). An actor
+        // that is down is its ragdoll and not its controller.
+        struct Near
+        {
+            const btCollisionObject* mSource;
+            const btCollisionShape* mShape;
+            btTransform mTransform;
+            bool mMoves;
+        };
+        std::vector<Near> near;
+        std::unordered_set<const btCollisionObject*> seen;
+        constexpr int solid = CollisionType_World | CollisionType_HeightMap | CollisionType_Door | CollisionType_Actor;
+        for (const auto& [ref, entry] : mRagdolls)
+        {
+            btVector3 min, max;
+            entry.mRagdoll->getAabb(min, max);
+            const btVector3 margin(64, 64, 64);
+            mTaskScheduler->forEachOverlap(min - margin, max + margin, [&](const btCollisionObject& object) {
+                const int group = object.getBroadphaseHandle()->m_collisionFilterGroup;
+                if ((group & solid) == 0 || !seen.insert(&object).second)
+                    return;
+                if (group == CollisionType_Actor)
+                    if (const auto* holder = static_cast<const PtrHolder*>(object.getUserPointer()))
+                        if (mRagdolls.count(holder->getPtr().mRef) != 0)
+                            return;
+                near.push_back({ &object, object.getCollisionShape(), object.getWorldTransform(),
+                    group == CollisionType_Actor || group == CollisionType_Door });
+            });
+        }
+        // A copy of what is no longer near, or has another shape, goes
+        std::unordered_map<const btCollisionObject*, const Near*> wanted;
+        for (const Near& entry : near)
+            wanted.emplace(entry.mSource, &entry);
+        for (auto it = mRagdollMirrors.begin(); it != mRagdollMirrors.end();)
+        {
+            const auto found = wanted.find(it->first);
+            if (found == wanted.end() || found->second->mShape != it->second.mShape)
+            {
+                mRagdollWorld->removeCollisionObject(it->second.mObject.get());
+                it = mRagdollMirrors.erase(it);
+            }
+            else
+                ++it;
+        }
+        for (const Near& entry : near)
+        {
+            auto found = mRagdollMirrors.find(entry.mSource);
+            if (found == mRagdollMirrors.end())
+            {
+                RagdollMirror mirror;
+                mirror.mObject = std::make_unique<btCollisionObject>();
+                mirror.mObject->setCollisionShape(const_cast<btCollisionShape*>(entry.mShape));
+                mirror.mShape = entry.mShape;
+                if (entry.mMoves)
+                    mirror.mObject->setCollisionFlags(
+                        mirror.mObject->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
+                mirror.mObject->setWorldTransform(entry.mTransform);
+                mRagdollWorld->addCollisionObject(mirror.mObject.get(), 2, 1);
+                mRagdollMirrors.emplace(entry.mSource, std::move(mirror));
+            }
+            else if (entry.mMoves)
+            {
+                found->second.mObject->setWorldTransform(entry.mTransform);
+                mRagdollWorld->updateSingleAabb(found->second.mObject.get());
+            }
+        }
+
+        const btVector3 gravity = mRagdollWorld->getGravity();
+        const auto waterAt = [this](const btVector3& position) { return waterHeightAt(position); };
+        for (const auto& [ref, entry] : mRagdolls)
+            entry.mRagdoll->applyWater(waterAt, dt, gravity);
+        mRagdollWorld->stepSimulation(dt, 4, 1.f / 60.f);
+        for (auto& [ref, entry] : mRagdolls)
+        {
+            entry.mRagdoll->sync();
+            entry.mAge += dt;
+            // (for the rounds: a body comes to rest, fallout-rules.md A.K3)
+            if (!entry.mRested && entry.mRagdoll->isAsleep())
+            {
+                entry.mRested = true;
+                const btVector3 root = entry.mRagdoll->rootPosition();
+                Log(Debug::Info) << "Ragdoll: " << entry.mLabel << " comes to rest after " << entry.mAge << " s at "
+                                 << root.x() << " " << root.y() << " " << root.z();
+            }
+            else if (entry.mRested && !entry.mRagdoll->isAsleep())
+                entry.mRested = false;
         }
     }
 
@@ -817,6 +1017,10 @@ namespace OFPhysics
         tile.mObject->setCollisionShape(tile.mShape.get());
         tile.mObject->setWorldTransform(
             btTransform(btQuaternion::getIdentity(), btVector3((gridX + 0.5f) * size, (gridY + 0.5f) * size, height)));
+        tile.mHeight = height;
+        tile.mSize = size;
+        tile.mX = gridX;
+        tile.mY = gridY;
         mTaskScheduler->addCollisionObject(
             tile.mObject.get(), CollisionType_Water, CollisionType_Actor | CollisionType_Projectile);
         mWaterTiles.emplace(std::pair(gridX, gridY), std::move(tile));
@@ -878,6 +1082,7 @@ namespace OFPhysics
         , mMovement(actor.velocity())
         , mWaterlevel(waterlevel)
         , mHalfExtentsZ(actor.getHalfExtents().z())
+        , mStepHeight(actor.getStepHeight())
         , mOldHeight(0)
         , mStuckFrames(0)
         , mFlying(OFBase::Environment::get().getWorld()->isFlying(actor.getPtr()))

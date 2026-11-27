@@ -599,6 +599,10 @@ namespace OFWorld
         DateTimeManager* getTimeManager() override { return mTimeManager.get(); }
 
         void setActorActive(const OFWorld::Ptr& ptr, bool value) override;
+
+        bool startRagdoll(const OFWorld::Ptr& ptr, const OFRender::Animation* bones = nullptr) override;
+        void stopRagdoll(const OFWorld::Ptr& ptr) override;
+        bool hasRagdoll(const OFWorld::ConstPtr& ptr) const override;
     };
 }
 

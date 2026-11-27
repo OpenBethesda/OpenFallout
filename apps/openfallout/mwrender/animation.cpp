@@ -1913,6 +1913,12 @@ namespace OFRender
             return found->second;
     }
 
+    osg::ref_ptr<osg::MatrixTransform> Animation::getBone(std::string_view name) const
+    {
+        const NodeMap::const_iterator found = getNodeMap().find(name);
+        return found != getNodeMap().end() ? found->second : nullptr;
+    }
+
     void Animation::setAlpha(float actorFade, float alpha)
     {
         if ((alpha == mAlpha && actorFade == mActorFade) || !mObjectRoot)

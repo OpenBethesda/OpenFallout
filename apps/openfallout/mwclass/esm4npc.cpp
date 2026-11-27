@@ -33,16 +33,6 @@
 
 namespace OFClass
 {
-    osg::Vec3f npcBodyHalfExtents(float raceHeight)
-    {
-        // A race that is a quarter as tall, or four times, is the limit of what the data has meant
-        constexpr float sSmallest = 0.25f;
-        constexpr float sLargest = 4.f;
-        const float scale
-            = std::isfinite(raceHeight) && raceHeight > 0.f ? std::clamp(raceHeight, sSmallest, sLargest) : 1.f;
-        return osg::Vec3f(31.f, 31.f, 66.22f) * scale;
-    }
-
     std::vector<const ESM4::HeadPart*> expandHeadParts(
         const std::vector<ESM::FormId>& ids, const std::function<const ESM4::HeadPart*(ESM::FormId)>& find)
     {
@@ -385,18 +375,7 @@ namespace OFClass
         OFPhysics::PhysicsSystem& physics) const
     {
         // The character controller, as the player's (the process tier says whether it moves the character)
-        const osg::Vec3f half = getBodyHalfExtents(ptr);
-        OFPhysics::CharacterShape shape;
-        shape.mRadius = half.x();
-        shape.mHalfHeight = half.z();
-        physics.addCharacter(ptr, shape);
-    }
-
-    osg::Vec3f ESM4Npc::getBodyHalfExtents(const OFWorld::Ptr& ptr)
-    {
-        const ESM4::Race* race = getRace(ptr);
-        const float raceHeight = race == nullptr ? 1.f : (isFemale(ptr) ? race->mHeightFemale : race->mHeightMale);
-        return npcBodyHalfExtents(raceHeight);
+        ESM4Impl::insertCharacterBody(ptr, physics);
     }
 
     std::unique_ptr<OFWorld::Action> ESM4Npc::activate(const OFWorld::Ptr& ptr, const OFWorld::Ptr& actor) const

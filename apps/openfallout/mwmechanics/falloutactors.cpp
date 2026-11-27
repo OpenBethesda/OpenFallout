@@ -208,6 +208,7 @@ namespace OFMechanics
         float mShowAfter = 0.f; // seconds until the weapon it holds is drawn, after a shot that used the last one up
         float mWatch = 0.f; // seconds until it looks for the player again, for the sneak meter
         float mHeld = 0.f; // seconds it has stood in range of its target without firing (it says why now and then)
+        float mOutOfSight = 0.f; // seconds since it last had a line of sight to its target in a fight
         float mIdle = 0.f; // seconds a character in a fight has neither shot nor moved far (it says where it stands)
         osg::Vec3f mIdleAt; // where it stood when that began
         bool mOrdered = false; // a script told it to shoot (UseWeapon) the last time it was looked at
@@ -557,20 +558,6 @@ namespace OFMechanics
             return actor != nullptr && actor->hasCharacterController();
         }
 
-        /// The radius of an actor's character body (the scale of the reference in it): the player's from the physics,
-        /// a character's or a creature's from its record
-        float bodyRadius(OFBase::World& world, const OFWorld::Ptr& ptr)
-        {
-            if (ptr == world.getPlayerPtr())
-                return world.getHalfExtents(ptr).x();
-            const float scale = ptr.getCellRef().getScale();
-            if (ptr.getType() == ESM4::Npc::sRecordId)
-                return OFClass::ESM4Npc::getBodyHalfExtents(ptr).x() * scale;
-            if (ptr.getType() == ESM4::Creature::sRecordId)
-                return OFClass::ESM4Creature::getBodyHalfExtents(ptr).x() * scale;
-            return 0.f;
-        }
-
         /// Gives an actor on its character controller a speed in this frame, in units a second along the ground (the
         /// solver takes it in the frame of the actor: turned by its heading)
         void queueVelocity(OFBase::World& world, const OFWorld::Ptr& ptr, osg::Vec3f velocity)
@@ -639,16 +626,21 @@ namespace OFMechanics
             mind.mPathWaitingReported = false;
         }
 
-        /// The body of an actor that died falls, and what walks is no longer stopped by it
+        /// The body of an actor that died falls: its ragdoll moves it from then on (NV 0x89F780 makes the bodies
+        /// dynamic at 0x89F916), and it is no longer its controller that the living meet but the bodies of the ragdoll
         void fall(Frame& frame, FalloutActors::Mind& mind)
         {
             auto* animation = dynamic_cast<OFRender::FalloutActorAnimation*>(frame.mWorld.getAnimation(mind.mPtr));
             // (round 14A: the bodies of two characters that were shot dead stood upright with their weapons out)
             Log(Debug::Info) << mind.mPtr.getCellRef().getRefId() << " dies: "
                              << (animation != nullptr ? "its body falls" : "it has no body of Fallout to fall")
-                             << (mind.mSeenAlive ? "" : ", at once (it was dead when it came into view)");
+                             << (mind.mSeenAlive ? "" : " (it was dead when it came into view)");
             if (animation != nullptr)
-                animation->die(!mind.mSeenAlive);
+            {
+                animation->die();
+                if (!frame.mWorld.startRagdoll(mind.mPtr))
+                    Log(Debug::Info) << mind.mPtr.getCellRef().getRefId() << " has no ragdoll: its body stays as it is";
+            }
             frame.mWorld.setObjectCollision(mind.mPtr, false);
         }
 
@@ -2356,6 +2348,9 @@ namespace OFMechanics
             if (!mind.mFighting)
             {
                 mind.mFighting = true;
+                // A new fight starts with no sight of the target in the past (FalloutNV.exe: the target info starts
+                // with the time at 0, 0x9976A4, and 0x997F33 puts it long ago while there is no target)
+                mind.mOutOfSight = std::numeric_limits<float>::infinity();
                 stopWalking(mind);
                 scripts.prepareFight(mind.mPtr, true);
                 showWeapon(frame, mind, scripts);
@@ -2363,20 +2358,27 @@ namespace OFMechanics
 
             const osg::Vec3f target = stance.mTarget.getRefData().getPosition().asVec3();
             const bool visible = canSee(frame.mWorld, mind.position(), target);
+            mind.mOutOfSight = visible ? 0.f : mind.mOutOfSight + duration;
+            // A gunman holds and fires for a while after it loses sight of its target (FightAI::keepsFiring,
+            // fCombatLOSBufferTime). The engine's fighters detect their target by sight, so the time since it was
+            // detected is the time since it was seen.
+            const bool inSight = stance.mMelee ? visible
+                                               : FalloutScript::FightAI::keepsFiring(visible, mind.mOutOfSight,
+                                                   mind.mOutOfSight, stance.mLosBuffer, stance.mDetectionBuffer);
             // A target it sees is as far as the line between them, whatever the floor: a gunman on a ledge shoots
-            // down at it. One it does not see is gone after, so it is as far as the way to it on its own floor. Not
-            // confirmed in the exe: no combat setting of FalloutNV.exe limits height (they limit sight:
-            // fCombatLineOfSightTimer, fCombatLOSBufferTime), and its ranged-attack decision was not found
+            // down at it. FalloutNV.exe: the ranged attack (CombatActionAttackRanged, made at 0x97AEB0) needs the
+            // target detected and in the same space (worldspace or interior, 0x997CF0) and nothing about height; its
+            // procedure (0x9D0A30) measures the straight line to the target (0x9D1175) and limits only left and right
+            // (withinFiringArc). One it does not see is gone after, so it is as far as the way to it on its own floor.
             const float away = visible ? (target - mind.position()).length() : distanceByFloor(mind.position(), target);
-            // The reach of a blow and the distance it attacks from are counted between the two bodies, not their
-            // middles: two character bodies cannot come nearer than their radii (31 each), more than the 50 units the
-            // hands attack from
-            const float bodies = bodyRadius(frame.mWorld, mind.mPtr) + bodyRadius(frame.mWorld, stance.mTarget);
-            const float between = away < std::numeric_limits<float>::max() ? std::max(0.f, away - bodies) : away;
-            const float arrival = visible ? static_cast<float>(stance.mEngage) * engageShare + bodies : 0.f;
+            // A melee fighter walks to within its distance of the target, middle to middle (stance.mEngage, the radius
+            // of the path goal of FalloutNV.exe's melee procedure, 0x9CE7D1)
+            const float arrival = !visible ? 0.f
+                : stance.mMelee            ? static_cast<float>(stance.mEngage)
+                                           : static_cast<float>(stance.mEngage) * engageShare;
             const float heading = std::atan2(target.x() - mind.position().x(), target.y() - mind.position().y());
             const FalloutScript::FightAI::Move move
-                = FalloutScript::FightAI::decide(between, stance.mEngage, visible, stance.mFlee);
+                = FalloutScript::FightAI::decide(away, stance.mEngage, inSight, stance.mFlee);
             std::optional<Walk> walked;
             bool shotMade = false;
             switch (move)
@@ -2444,7 +2446,14 @@ namespace OFMechanics
                         if (mind.mShowAfter <= 0.f)
                             showWeapon(frame, mind, scripts);
                     }
-                    const OFScript::FalloutScripts::FireResult shot = scripts.attack(mind.mPtr, stance.mTarget);
+                    // A gun is fired only at a target within its arcs left or right of where the character faces now
+                    // (FightAI::withinFiringArc: FalloutNV.exe 0x9D0ADA and 0x9D11A6); it turns toward it meanwhile
+                    const bool inArc = stance.mMelee
+                        || FalloutScript::FightAI::withinFiringArc(
+                            heading - mind.mPtr.getRefData().getPosition().rot[2], stance.mTargetingFov, stance.mAimArc,
+                            false, stance.mStationaryArcShare);
+                    const OFScript::FalloutScripts::FireResult shot
+                        = inArc ? scripts.attack(mind.mPtr, stance.mTarget) : OFScript::FalloutScripts::FireResult{};
                     if (!shot.mFired)
                     {
                         // The weapon may have changed without a shot (it was empty, the character took another)
@@ -2458,8 +2467,9 @@ namespace OFMechanics
                             Log(Debug::Info)
                                 << mind.mPtr.getCellRef().getRefId() << " holds fire at " << static_cast<int>(away)
                                 << " units (engage " << static_cast<int>(stance.mEngage) << ", "
-                                << (visible ? "sees" : "does not see")
-                                << " the target): " << scripts.attackDiagnosis(mind.mPtr);
+                                << (visible ? "sees" : "does not see") << " the target): "
+                                << (inArc ? scripts.attackDiagnosis(mind.mPtr)
+                                          : std::string("the target is outside its firing arc"));
                         }
                         break;
                     }
@@ -2596,9 +2606,10 @@ namespace OFMechanics
                     mind.mFell = true;
                     fall(frame, mind);
                 }
-                // A blow that killed it threw it back, or it died in the air: the body goes on to where the throw takes it
-                // and falls to the ground (a body that is dead takes no damage from the fall)
-                if (mind.mThrown)
+                // A blow that killed it threw it back, or it died in the air: a body that has no ragdoll goes on to
+                // where the throw takes it and falls to the ground (a body that is dead takes no damage from the fall);
+                // the ragdoll moves one that has
+                if (mind.mThrown && !frame.mWorld.hasRagdoll(mind.mPtr))
                     thrown(frame, mind, duration);
                 continue;
             }

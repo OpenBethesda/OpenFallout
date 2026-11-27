@@ -172,9 +172,8 @@ namespace OFMechanics
         bool mSneaking = false;
         bool mRunning = false;
         float mCurrentSpeed = 0.f;
-        // The fall of a body on the controller (updateBody): where it left the ground, the last place it was at
+        // The fall of a body on the controller (updateBody): the height where it left the ground
         std::optional<float> mBodyFallStart;
-        osg::Vec3f mBodyLast;
         bool mBodyKnown = false;
         bool mBodyWasOnGround = true;
     };

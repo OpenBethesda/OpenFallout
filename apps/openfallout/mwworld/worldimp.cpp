@@ -1109,10 +1109,10 @@ namespace OFWorld
         pos.z() = std::max(pos.z(), terrainHeight)
             + 20; // place slightly above terrain. will snap down to ground with code below
 
-        // A dead actor is traced down even in water: it does not swim (no class of Fallout has the persistence of
-        // Morrowind: asking for it threw here, and a new game of Fallout 3 failed)
-        OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
-        bool swims = ptr.getClass().isActor() && isSwimming(ptr) && !(scripts != nullptr && scripts->isDead(ptr));
+        // An actor in water is not put on the ground under it: a living one swims, and the ragdoll of a dead one moves
+        // its body in the water (fallout-rules.md A.K3, NV 0x63017A). No class of Fallout is asked for the persistence
+        // of Morrowind (asking for it threw "class does not support persistence", and a new game of Fallout 3 failed).
+        bool swims = ptr.getClass().isActor() && isSwimming(ptr);
         if (force || !ptr.getClass().isActor() || (!isFlying(ptr) && !swims && isActorCollisionEnabled(ptr)))
         {
             float height = static_cast<float>(ESM::getCellSize(ptr.getCell()->getCell()->getWorldSpace()));
@@ -2334,8 +2334,9 @@ namespace OFWorld
         to.normalize();
         to = from + (to * maxDist);
 
-        int collisionTypes
-            = OFPhysics::CollisionType_World | OFPhysics::CollisionType_HeightMap | OFPhysics::CollisionType_Door;
+        // (the bodies of the dead are in the way of rays as of what walks)
+        int collisionTypes = OFPhysics::CollisionType_World | OFPhysics::CollisionType_HeightMap
+            | OFPhysics::CollisionType_Door | OFPhysics::CollisionType_Ragdoll;
         if (includeWater)
         {
             collisionTypes |= OFPhysics::CollisionType_Water;
@@ -2885,5 +2886,24 @@ namespace OFWorld
     {
         if (OFPhysics::Actor* const actor = mPhysics->getActor(ptr))
             actor->setActive(value);
+    }
+
+    bool World::startRagdoll(const OFWorld::Ptr& ptr, const OFRender::Animation* bones)
+    {
+        const OFRender::Animation* animation = bones != nullptr ? bones : mRendering->getAnimation(ptr);
+        if (animation == nullptr)
+            return false;
+        return mPhysics->startRagdoll(
+            ptr, ptr.getClass().getModel(ptr), [animation](std::string_view name) { return animation->getBone(name); });
+    }
+
+    void World::stopRagdoll(const OFWorld::Ptr& ptr)
+    {
+        mPhysics->stopRagdoll(ptr);
+    }
+
+    bool World::hasRagdoll(const OFWorld::ConstPtr& ptr) const
+    {
+        return mPhysics->hasRagdoll(ptr);
     }
 }

@@ -541,6 +541,13 @@ namespace OFBase
         virtual OFWorld::DateTimeManager* getTimeManager() = 0;
 
         virtual void setActorActive(const OFWorld::Ptr& ptr, bool value) = 0;
+
+        /// The body of an actor that died is moved by the ragdoll of its skeleton file from then on (fallout-rules.md
+        /// A.K3, NV 0x89F780 at 0x89F916). `bones` are the nodes of the body that is drawn, when it is not the actor's
+        /// own animation (the player's body). False when the skeleton has no ragdoll.
+        virtual bool startRagdoll(const OFWorld::Ptr& ptr, const OFRender::Animation* bones = nullptr) = 0;
+        virtual void stopRagdoll(const OFWorld::Ptr& ptr) = 0;
+        virtual bool hasRagdoll(const OFWorld::ConstPtr& ptr) const = 0;
     };
 }
 

@@ -237,8 +237,6 @@ namespace FalloutScript
             if (said != mSaidAt.end() && hours() - said->second < mDailyInterval)
                 return false;
         }
-        if (const FormId only = toId(info.mSpeaker); only != 0 && only != speaker.mBase)
-            return false;
         if (hasFlag(info, ESM4::INFO_SpeechChallenge) && mChallenge && !mChallenge(info))
             return false;
         ConditionContext context;
@@ -364,6 +362,7 @@ namespace FalloutScript
             line.mInfo = id;
             line.mSpeaker = speaker.mReference;
             line.mSpeakerBase = speaker.mBase;
+            line.mVoiceBase = toId(info.mSpeaker);
             line.mNumber = response.mNumber;
             line.mEmotion = response.mEmotionType;
             line.mEmotionValue = response.mEmotionValue;

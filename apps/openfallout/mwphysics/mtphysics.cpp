@@ -640,6 +640,34 @@ namespace OFPhysics
         mCollisionWorld->addCollisionObject(collisionObject, collisionFilterGroup, collisionFilterMask);
     }
 
+    void PhysicsTaskScheduler::moveCollisionObject(btCollisionObject* collisionObject, const btTransform& transform)
+    {
+        MaybeExclusiveLock lock(mCollisionWorldMutex, mLockingPolicy);
+        collisionObject->setWorldTransform(transform);
+        mCollisionWorld->updateSingleAabb(collisionObject);
+    }
+
+    void PhysicsTaskScheduler::forEachOverlap(const btVector3& aabbMin, const btVector3& aabbMax,
+        const std::function<void(const btCollisionObject&)>& function)
+    {
+        struct Callback : btBroadphaseAabbCallback
+        {
+            const std::function<void(const btCollisionObject&)>& mFunction;
+            explicit Callback(const std::function<void(const btCollisionObject&)>& function)
+                : mFunction(function)
+            {
+            }
+            bool process(const btBroadphaseProxy* proxy) override
+            {
+                if (const auto* object = static_cast<const btCollisionObject*>(proxy->m_clientObject))
+                    mFunction(*object);
+                return true;
+            }
+        } callback(function);
+        MaybeSharedLock lock(mCollisionWorldMutex, mLockingPolicy);
+        mCollisionWorld->getBroadphase()->aabbTest(aabbMin, aabbMax, callback);
+    }
+
     void PhysicsTaskScheduler::removeCollisionObject(btCollisionObject* collisionObject)
     {
         MaybeExclusiveLock lock(mCollisionWorldMutex, mLockingPolicy);
@@ -755,7 +783,9 @@ namespace OFPhysics
 
         btCollisionWorld::ClosestRayResultCallback resultCallback(pos1, pos2);
         resultCallback.m_collisionFilterGroup = CollisionType_AnyPhysical;
-        resultCallback.m_collisionFilterMask = CollisionType_World | CollisionType_HeightMap | CollisionType_Door;
+        // (a body that is down is in the way, as LINEOFSIGHT meets BIPED: NV 0xC828F0)
+        resultCallback.m_collisionFilterMask
+            = CollisionType_World | CollisionType_HeightMap | CollisionType_Door | CollisionType_Ragdoll;
 
         MaybeLock lockColWorld(mCollisionWorldMutex, mLockingPolicy);
         mCollisionWorld->rayTest(pos1, pos2, resultCallback);

@@ -23,14 +23,6 @@ namespace OFClass
 {
     class ESM4CreatureCustomData;
 
-    /// The half extents of the character body (the capsule of the character controller) of a creature in game units:
-    /// the radius of the executables (31, the default of bhkCharacterControllerCinfo) and half the height of the box of
-    /// its record (kept within what the data has meant; a creature without a box is as tall as a person), both times
-    /// the scale of the creature's record. The executables' capsule height is not known (spec A, unclear 4): the box
-    /// of the record is the nearest thing to the skeleton's bound that the record has. A creature that is lower than
-    /// it is wide gets a ball as wide as it is high: the radius is then its half height.
-    osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature, float baseScale);
-
     /// A creature of Fallout 3 or New Vegas (CREA). What it looks like and is called comes from its record and, for
     /// the many that take them from a template, the records of its templates (`ESM4::creatureModel`). The skeleton is
     /// its model; the models that hang on it and its animations are found by the rendering.
@@ -67,10 +59,6 @@ namespace OFClass
         /// The AI packages of the creature, in the order of their priority, from its record or its template (null
         /// for a package that no file has a record for)
         static const std::vector<const ESM4::AIPackage*>& getPackages(const OFWorld::Ptr& ptr);
-
-        /// The half extents of the body that a creature of Fallout is solid as (the capsule of its character
-        /// controller: the radius twice, then the half height); none (all 0) for a creature of the games before Fallout
-        static osg::Vec3f getBodyHalfExtents(const OFWorld::Ptr& ptr);
 
     private:
         static ESM4CreatureCustomData& getCustomData(const OFWorld::ConstPtr& ptr);

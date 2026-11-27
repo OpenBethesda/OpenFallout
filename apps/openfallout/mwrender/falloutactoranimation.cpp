@@ -87,44 +87,6 @@ namespace OFRender
         double mLastTime = -1.0;
     };
 
-    /// The body falls over a short time, slowly at first and faster as it goes, as a body does
-    class FalloutActorAnimation::FallCallback : public SceneUtil::NodeCallback<FallCallback, osg::MatrixTransform*>
-    {
-    public:
-        FallCallback(const osg::Vec3f& axis, float lift, bool fallen)
-            : mAxis(axis)
-            , mLift(lift)
-            , mFallen(fallen)
-        {
-        }
-
-        void operator()(osg::MatrixTransform* node, osg::NodeVisitor* nv)
-        {
-            if (!mDone)
-            {
-                constexpr double fallSeconds = 0.7;
-                const double now = nv->getFrameStamp()->getSimulationTime();
-                if (mStart < 0.0)
-                    mStart = now;
-                const float progress = mFallen ? 1.f : static_cast<float>(std::min(1.0, (now - mStart) / fallSeconds));
-                const float eased = progress * progress;
-                // It turns about the point on the ground where it stood, and is lifted by the thickness of its body so
-                // that it does not lie in the ground
-                node->setMatrix(
-                    osg::Matrix::rotate(eased * osg::PI_2, mAxis) * osg::Matrix::translate(0.f, 0.f, eased * mLift));
-                mDone = progress >= 1.f;
-            }
-            traverse(node, nv);
-        }
-
-    private:
-        osg::Vec3f mAxis;
-        float mLift;
-        bool mFallen;
-        bool mDone = false;
-        double mStart = -1.0;
-    };
-
     namespace
     {
         /// Says a thing about a skeleton folder or a file once, whatever number of characters share it: the characters
@@ -361,7 +323,7 @@ namespace OFRender
     void FalloutActorAnimation::playWornSound(int type)
     {
         namespace Steps = FalloutScript::Footsteps;
-        if (mFall != nullptr)
+        if (mDown)
             return;
         OFBase::SoundManager* sound = OFBase::Environment::get().getSoundManager();
         const OFWorld::ESMStore* store = OFBase::Environment::get().getESMStore();
@@ -409,7 +371,7 @@ namespace OFRender
     void FalloutActorAnimation::playCreatureSound(int type)
     {
         namespace Steps = FalloutScript::Footsteps;
-        if (mFall != nullptr || type > static_cast<int>(Steps::EnumKey::Death))
+        if (mDown || type > static_cast<int>(Steps::EnumKey::Death))
             return;
         OFBase::SoundManager* sound = OFBase::Environment::get().getSoundManager();
         const OFWorld::ESMStore* store = OFBase::Environment::get().getESMStore();
@@ -457,7 +419,7 @@ namespace OFRender
 
     void FalloutActorAnimation::playFootstep(int foot)
     {
-        if (mFall != nullptr)
+        if (mDown)
             return;
         const bool playerBody = !mMotionSource.isEmpty() && mMotionSource == OFMechanics::getPlayer();
         OFSound::FootstepRequest request;
@@ -470,43 +432,32 @@ namespace OFRender
         OFSound::playFootstep(request);
     }
 
-    void FalloutActorAnimation::die(bool fallen)
+    void FalloutActorAnimation::die()
     {
-        if (mFall != nullptr || mObjectRoot == nullptr || mObjectRoot->getNumParents() == 0)
+        if (mDown || mObjectRoot == nullptr || mObjectRoot->getNumParents() == 0)
         {
-            if (mFall == nullptr)
+            if (!mDown)
                 Log(Debug::Info) << mPtr.getCellRef().getRefId() << " cannot fall: "
                                  << (mObjectRoot == nullptr ? "its body is not made" : "its body is in no scene");
             return;
         }
         // What it did stops where it is (advance() goes on only for the effects on the body, which run out)
-        // ... and is over: the groups it was playing (a walk, an attack, the reel of the blow that killed it) are taken out
-        // of the list of what it plays, which would show a dead body that goes on with its attack (the pose stays: nothing
-        // is updating the bones any more)
+        // ... and is over: the groups it was playing (a walk, an attack, the reel of the blow that killed it) are taken
+        // out of the list of what it plays, which would show a dead body that goes on with its attack. The bones are
+        // left to the ragdoll (OFPhysics::Ragdoll), which moves them from the pose they have (NV 0x89F916).
         std::vector<std::string> playing;
         for (const auto& state : mStates)
             playing.push_back(state.first);
         for (const std::string& group : playing)
             disable(group);
         mMoveGroup.clear();
-
-        // A person falls on its back, and a creature (a four-legged one, a robot) on its side. The body is as thick
-        // as a fifth of its size across, which keeps it out of the ground.
-        const bool person = mPtr.getType() == ESM4::Npc::sRecordId;
-        const float lift = std::clamp(mObjectRoot->getBound().radius() * 0.2f, 8.f, 40.f);
-        osg::ref_ptr<osg::MatrixTransform> fall = new osg::MatrixTransform;
-        fall->setName("Fall");
-        osg::Group* parent = mObjectRoot->getParent(0);
-        parent->replaceChild(mObjectRoot, fall);
-        fall->addChild(mObjectRoot);
-        fall->addUpdateCallback(new FallCallback(person ? osg::Vec3f(1, 0, 0) : osg::Vec3f(0, 1, 0), lift, fallen));
-        mFall = fall;
+        mDown = true;
     }
 
     void FalloutActorAnimation::advance(float duration)
     {
         // A dead body does nothing more: only the impact or the flash that was on it when it fell runs out
-        if (mFall != nullptr)
+        if (mDown)
         {
             publishActivity();
             updateEffects(duration);

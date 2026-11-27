@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <set>
@@ -65,6 +66,11 @@ namespace OFPhysics
         void setCollisionFilterMask(btCollisionObject* collisionObject, int collisionFilterMask);
         void addCollisionObject(btCollisionObject* collisionObject, int collisionFilterGroup, int collisionFilterMask);
         void removeCollisionObject(btCollisionObject* collisionObject);
+        /// Puts an object that is not of an actor, an object or a projectile somewhere else
+        void moveCollisionObject(btCollisionObject* collisionObject, const btTransform& transform);
+        /// Calls `function` for each object whose box meets the box, under the lock of the world
+        void forEachOverlap(const btVector3& aabbMin, const btVector3& aabbMax,
+            const std::function<void(const btCollisionObject&)>& function);
         void updateSingleAabb(const std::shared_ptr<PtrHolder>& ptr, bool immediate = false);
         bool getLineOfSight(const std::shared_ptr<Actor>& actor1, const std::shared_ptr<Actor>& actor2);
         void debugDraw();

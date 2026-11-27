@@ -125,7 +125,7 @@ namespace ESM4
         std::vector<ESM::FormId> mFollowUps;
 
         std::string mPrompt; // RNAM: replaces the name of the topic in the list the player picks from
-        ESM::FormId mSpeaker; // ANAM: the only character, or creature, that says it
+        ESM::FormId mSpeaker; // ANAM: the character or creature whose voice type says it (not who says it)
         ESM::FormId mChallengeStat; // KNAM: the actor value or perk a speech challenge is on
         std::uint32_t mChallenge = 0; // DNAM: 0 none, 1 very easy ... 5 very hard
 

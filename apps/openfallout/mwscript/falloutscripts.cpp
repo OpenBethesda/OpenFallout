@@ -5,13 +5,13 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
-#include <optional>
 #include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 
-#include <components/falloutscript/worldrules.hpp>
 #include <components/debug/debuglog.hpp>
 #include <components/esm/refid.hpp>
 #include <components/esm/util.hpp>
@@ -27,6 +27,7 @@
 #include <components/esm4/loadcell.hpp>
 #include <components/esm4/loadcont.hpp>
 #include <components/esm4/loadcrea.hpp>
+#include <components/esm4/loadcsty.hpp>
 #include <components/esm4/loaddoor.hpp>
 #include <components/esm4/loadfact.hpp>
 #include <components/esm4/loadflst.hpp>
@@ -61,6 +62,7 @@
 #include <components/falloutscript/hitreactions.hpp>
 #include <components/falloutscript/messagetext.hpp>
 #include <components/falloutscript/playercontrols.hpp>
+#include <components/falloutscript/worldrules.hpp>
 #include <components/misc/convert.hpp>
 #include <components/misc/resourcehelpers.hpp>
 #include <components/misc/strings/algorithm.hpp>
@@ -1229,14 +1231,18 @@ namespace OFScript
             if (mActors.isDead(reference))
                 return;
             const ESM::Position& position = ptr.getRefData().getPosition();
-            // The characters and creatures of Fallout are solid as the capsules of their character bodies (the scale of
-            // the reference on top), which the world does not tell (it gives the bounds of their models); the player is
-            // an actor of the engine
+            // The characters and creatures of Fallout are solid as their character bodies (the body of the executables
+            // from the bound of the skeleton, FalloutScript::CharacterBody::body), which the world does not tell (it
+            // gives the bounds of their models); the player is an actor of the engine
             osg::Vec3f half;
-            if (ptr.getType() == ESM4::Npc::sRecordId)
-                half = OFClass::ESM4Npc::getBodyHalfExtents(ptr) * ptr.getCellRef().getScale();
-            else if (ptr.getType() == ESM4::Creature::sRecordId)
-                half = OFClass::ESM4Creature::getBodyHalfExtents(ptr) * ptr.getCellRef().getScale();
+            if (ptr.getType() == ESM4::Npc::sRecordId || ptr.getType() == ESM4::Creature::sRecordId)
+            {
+                namespace Body = FalloutScript::CharacterBody;
+                const auto bound = OFClass::ESM4Impl::skeletonBound(ptr);
+                const Body::Body shape = bound ? Body::body(*bound, sizeOf(ptr)) : Body::body(Body::noModelBound(), 1);
+                half = osg::Vec3f(static_cast<float>(shape.mHalfWidth), static_cast<float>(shape.mHalfLength),
+                    static_cast<float>(shape.mHeight / 2));
+            }
             else
                 half = world->getHalfExtents(ptr);
             // An actor the physics has no body for yet stands about as tall as a person
@@ -3687,10 +3693,65 @@ namespace OFScript
         const WeaponStats weapon = weaponStats(self);
         stance.mMelee = weapon.mMelee;
         stance.mEngage = FalloutScript::FightAI::engageDistance(weapon.mMelee, weapon.mRange);
+        if (weapon.mMelee)
+        {
+            // A blow is struck from within the two radii and half the reach, middle to middle (FalloutNV.exe 0x9A6830
+            // at 0x9CE7D1, the radius of the path goal of the melee procedure; Fallout3.exe 0x7B8E70), the reach times
+            // the scale of the fighter (0x9A69C0)
+            namespace Body = FalloutScript::CharacterBody;
+            const auto radius = [&](const OFWorld::Ptr& ptr) {
+                const auto bound = OFClass::ESM4Impl::skeletonBound(ptr);
+                return bound ? Body::meleeRadius(*bound, sizeOf(ptr)) : 0.0;
+            };
+            stance.mEngage = Body::meleeDistance(radius(actor), radius(target), weapon.mRange * sizeOf(actor));
+        }
+        else
+        {
+            // How far off where it faces it fires (FalloutNV.exe 0x9D0ADA and 0x9D11A6): the Aim Arc of the weapon
+            // (DNAM +0x64, the weapon at +0x158) and the Max Targeting FOV of its combat style (CSSD +0x30)
+            if (const ESM4::Weapon* record
+                = weapon.mWeapon != 0 ? mStore.get<ESM4::Weapon>().search(refId(weapon.mWeapon)) : nullptr;
+                record != nullptr && record->mHasGameData)
+                stance.mAimArc = record->mGame.mAimArc;
+            stance.mTargetingFov = targetingFov(actor);
+            stance.mStationaryArcShare
+                = gameSettingOr("fCombatFiringArcStationaryTurnMult", FalloutScript::FightAI::stationaryFiringArcShare);
+            stance.mLosBuffer = gameSettingOr("fCombatLOSBufferTime", FalloutScript::FightAI::lineOfSightBuffer);
+            stance.mDetectionBuffer
+                = gameSettingOr("fCombatDetectionBufferTime", FalloutScript::FightAI::detectionBuffer);
+        }
         const double health = mActorValues.permanent(self, AV::health);
         const double share = health > 0 ? std::clamp(mActorValues.current(self, AV::health) / health, 0.0, 1.0) : 1.0;
         stance.mFlee = FalloutScript::FightAI::runsAway(fightTraitsOf(actor).mConfidence, share);
         return stance;
+    }
+
+    double FalloutScripts::targetingFov(const OFWorld::Ptr& actor)
+    {
+        const FalloutScript::FormId reference = scriptReferenceOf(actor);
+        if (reference == 0)
+            return 0;
+        FalloutScript::FormId style = mObjectState.combatStyle(reference);
+        ESM::FormId base;
+        if (style == 0 && baseOf(reference, base) && !base.isZeroOrUnset())
+        {
+            // The combat style is part of the AI data, which a record may take from its template
+            const std::uint32_t seed = OFClass::ESM4Impl::actorSeed(ESM::FormId::fromUint32(reference), base);
+            if (const ESM4::Npc* npc = mStore.get<ESM4::Npc>().search(base))
+                style = templateRecordOf(mStore, *npc, ESM4::Npc::Template_UseAIData, seed, rollOf(reference))
+                            .mCombatStyle.toUint32();
+            else if (const ESM4::Creature* creature = mStore.get<ESM4::Creature>().search(base))
+                style = templateRecordOf(mStore, *creature, ESM4::Creature::Template_UseAIData, seed, rollOf(reference))
+                            .mCombatStyle.toUint32();
+        }
+        const ESM4::CombatStyle* record = style != 0 ? mStore.get<ESM4::CombatStyle>().search(refId(style)) : nullptr;
+        if (record == nullptr)
+            return 0;
+        // Max Targeting FOV is the float at +0x30 of the CSSD subrecord (FalloutNV.exe reads it at +0x48 of the
+        // combat style, whose CSSD is at +0x18: the save and load of 0x5053C0)
+        float fov = 0.f;
+        std::memcpy(&fov, record->mSimple.data() + 0x30, sizeof(fov));
+        return std::isfinite(fov) ? fov : 0.0;
     }
 
     void FalloutScripts::prepareFight(const OFWorld::Ptr& actor, bool say)
@@ -4715,10 +4776,27 @@ namespace OFScript
                 continue;
             plugins.push_back(Misc::StringUtils::lowerCase(mContentFiles[i]));
         }
-        std::string voiceType;
+        // The response's speaker (ANAM) gives the voice type when it has one, and the one who says it otherwise
+        // (0x616FA0 at 0x617049-0x617073, FO3 0x56348B-0x56349F). A character's is its own (VTCK) or that of its race
+        // for its sex (0x6046A0), a creature's its own.
+        FalloutScript::FormId voice = 0;
+        if (const ESM4::Npc* npc = mStore.get<ESM4::Npc>().search(refId(line.mVoiceBase)))
+        {
+            voice = numberOf(npc->mVoice);
+            const bool female = npc->mIsFONV ? (npc->mBaseConfig.fo3.flags & ESM4::Npc::FO3_Female) != 0
+                                             : (npc->mBaseConfig.tes5.flags & ESM4::Npc::TES5_Female) != 0;
+            if (const ESM4::Race* race = mStore.get<ESM4::Race>().search(refId(numberOf(npc->mRace)));
+                voice == 0 && race != nullptr)
+                voice = numberOf(race->mDefaultVoice[female ? 1 : 0]);
+        }
+        else if (const ESM4::Creature* creature = mStore.get<ESM4::Creature>().search(refId(line.mVoiceBase)))
+            voice = numberOf(creature->mVoice);
         FalloutScript::ActorTraits traits;
-        if (traitsOf(speaker, traits) && traits.mVoice != 0)
-            if (const ESM4::VoiceType* type = mStore.get<ESM4::VoiceType>().search(refId(traits.mVoice)))
+        if (voice == 0 && traitsOf(speaker, traits))
+            voice = traits.mVoice;
+        std::string voiceType;
+        if (voice != 0)
+            if (const ESM4::VoiceType* type = mStore.get<ESM4::VoiceType>().search(refId(voice)))
                 voiceType = type->mEditorId;
         return index.find(plugins, voiceType, line.mInfo, line.mNumber);
     }
@@ -5368,6 +5446,17 @@ namespace OFScript
         // (the player by the identity of the scripts: a converted save keeps an old number for its reference)
         const FalloutScript::FormId reference = scriptReferenceOf(actor);
         return reference != 0 && mActors.isDead(reference);
+    }
+
+    bool FalloutScripts::takePlaced(const OFWorld::Ptr& actor)
+    {
+        return mPlaced.erase(scriptReferenceOf(actor)) > 0;
+    }
+
+    bool FalloutScripts::isUnconscious(const OFWorld::Ptr& actor) const
+    {
+        const FalloutScript::FormId reference = scriptReferenceOf(actor);
+        return reference != 0 && mCombat.unconscious(reference);
     }
 
     void FalloutScripts::regenerate(const OFWorld::Ptr& actor, double seconds)
@@ -6628,6 +6717,8 @@ namespace OFScript
         }
         const OFWorld::Ptr moved = world->moveObject(ptr, destination, where.mPosition);
         world->rotateObject(moved, where.mAngle, OFBase::RotationFlag_none);
+        if ((move.mParts & Move::Cell) != 0 && cls.isActor())
+            mPlaced.insert(reference);
         // As the teleport of Lua does: the place a door is moved to is the one it opens and closes from
         if (cls.isDoor())
             moved.getCellRef().setPosition(moved.getRefData().getPosition());

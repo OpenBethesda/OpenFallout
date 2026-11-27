@@ -93,7 +93,7 @@ add_openfallout_dir (mwworld
 
 add_openfallout_dir (mwphysics
     physicssystem trace collisiontype actor convert object heightfield closestnotmerayresultcallback
-    contacttestresultcallback stepper movementsolver projectile
+    contacttestresultcallback stepper movementsolver projectile ragdoll
     actorconvexcallback raycasting mtphysics contacttestwrapper projectileconvexcallback
     )
 

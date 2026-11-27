@@ -95,26 +95,8 @@ namespace OFPhysics
 
         actor->setOnGround(true);
 
-        // Check if we actually found a valid spawn point (use an infinitely thin ray this time).
-        // Required for some broken door destinations in Morrowind.esm, where the spawn point
-        // intersects with other geometry if the actor's base is taken into account
-        btVector3 from = Misc::Convert::toBullet(position);
-        btVector3 to = from - btVector3(0, 0, maxHeight);
-
-        btCollisionWorld::ClosestRayResultCallback resultCallback1(from, to);
-        resultCallback1.m_collisionFilterGroup = CollisionType_AnyPhysical;
-        resultCallback1.m_collisionFilterMask = CollisionType_World | CollisionType_HeightMap;
-
-        collisionWorld->rayTest(from, to, resultCallback1);
-
-        if (resultCallback1.hasHit()
-            && ((Misc::Convert::toOsg(resultCallback1.m_hitPointWorld) - tracer.mEndPos + offset).length2() > 35 * 35
-                || !isWalkableSlope(tracer.mPlaneNormal)))
-        {
-            actor->setOnSlope(!isWalkableSlope(resultCallback1.m_hitNormalWorld));
-            return Misc::Convert::toOsg(resultCallback1.m_hitPointWorld) + osg::Vec3f(0.f, 0.f, sGroundOffset);
-        }
-
+        // (OpenMW's second, thin ray for Morrowind's broken door destinations is gone: the body is put on what its
+        // shape finds)
         actor->setOnSlope(!isWalkableSlope(tracer.mPlaneNormal));
 
         return tracer.mEndPos - offset + osg::Vec3f(0.f, 0.f, sGroundOffset);
@@ -188,7 +170,8 @@ namespace OFPhysics
                 velocity = velocity + actor.mInertia;
         }
 
-        Stepper stepper(collisionWorld, actor.mCollisionObject);
+        // Each body walks up the edges its own shape slides up (CharacterBody::Body::mStepHeight)
+        Stepper stepper(collisionWorld, actor.mCollisionObject, actor.mStepHeight);
         osg::Vec3f origVelocity = velocity;
         osg::Vec3f newPosition = actor.mPosition;
         /*
@@ -249,7 +232,7 @@ namespace OFPhysics
             bool usedStepLogic = false;
             if (!isActor(tracer.mHitObject))
             {
-                if (hitHeight < Constants::sStepSizeUp)
+                if (hitHeight < actor.mStepHeight)
                 {
                     // Try to step up onto it.
                     // NOTE: this modifies newPosition and velocity on its own if successful
@@ -381,7 +364,9 @@ namespace OFPhysics
         if (forceGroundTest || (actor.mInertia.z() <= 0.f && newPosition.z() >= swimlevel))
         {
             osg::Vec3f from = newPosition;
-            auto dropDistance = 2 * sGroundOffset + (actor.mIsOnGround ? sStepSizeDown : 0);
+            // A surface within the keep contact tolerance under the gap holds the body up; there is no step down
+            // (FalloutNV.exe 0xCD4855: the body goes in the air at once)
+            auto dropDistance = 2 * sGroundOffset + sKeepContactTolerance;
             osg::Vec3f to = newPosition - osg::Vec3f(0, 0, dropDistance);
             tracer.doTrace(actor.mCollisionObject, from, to, collisionWorld, actor.mIsOnGround);
             if (tracer.mFraction < 1.0f)

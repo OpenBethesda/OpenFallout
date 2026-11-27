@@ -18,32 +18,6 @@
 
 namespace OFClass
 {
-    osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature, float baseScale)
-    {
-        // The radius of the executables, a person's half height for a creature that does not say, and the limits of
-        // what the data has meant
-        constexpr float sRadius = 31.f;
-        constexpr float sUnknownHalfHeight = 66.22f;
-        constexpr float sSmallestHeight = 8.f;
-        constexpr float sLargestHeight = 250.f;
-        constexpr float sSmallestScale = 0.1f;
-        constexpr float sLargestScale = 10.f;
-
-        const float scale
-            = std::isfinite(baseScale) && baseScale > 0.f ? std::clamp(baseScale, sSmallestScale, sLargestScale) : 1.f;
-        float halfHeight = sUnknownHalfHeight;
-        if (creature.mHasBounds)
-        {
-            const float height = static_cast<float>(std::abs(creature.mBounds.mZ2 - creature.mBounds.mZ1));
-            if (height > 0.f)
-                halfHeight = std::clamp(height / 2.f, sSmallestHeight, sLargestHeight);
-        }
-        // (a creature lower than it is wide is a ball as wide as it is high: the body that collides, which the
-        // half extents tell the scripts and V.A.T.S. too)
-        const float radius = std::min(sRadius, halfHeight);
-        return osg::Vec3f(radius, radius, halfHeight) * scale;
-    }
-
     class ESM4CreatureCustomData : public OFWorld::TypedCustomData<ESM4CreatureCustomData>
     {
     public:
@@ -175,21 +149,7 @@ namespace OFClass
             return;
         }
         // The character controller, as the player's (the process tier says whether it moves the creature)
-        const osg::Vec3f half = getBodyHalfExtents(ptr);
-        OFPhysics::CharacterShape shape;
-        shape.mRadius = half.x();
-        shape.mHalfHeight = half.z();
-        physics.addCharacter(ptr, shape);
+        ESM4Impl::insertCharacterBody(ptr, physics);
     }
 
-    osg::Vec3f ESM4Creature::getBodyHalfExtents(const OFWorld::Ptr& ptr)
-    {
-        if (!isFalloutCreature(ptr))
-            return osg::Vec3f();
-        // The box is the one of the record that has the model
-        const ESM4::Creature* boxOwner = getCustomData(ptr).mModel.mOwner;
-        if (boxOwner == nullptr)
-            boxOwner = ptr.get<ESM4::Creature>()->mBase;
-        return creatureBodyHalfExtents(*boxOwner, ptr.get<ESM4::Creature>()->mBase->mBaseScale);
-    }
 }

@@ -322,7 +322,12 @@ namespace OFRender
     void FalloutPlayerBody::die()
     {
         if (mAnimation != nullptr)
-            mAnimation->die(false);
+            mAnimation->die();
+    }
+
+    const Animation* FalloutPlayerBody::animation() const
+    {
+        return mAnimation.get();
     }
 
     bool FalloutPlayerBody::isDown() const

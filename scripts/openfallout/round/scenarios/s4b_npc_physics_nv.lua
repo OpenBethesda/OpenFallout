@@ -1,8 +1,10 @@
 -- Step 4b, NPC physics (New Vegas): a character of the High tier moves on the character controller, the same body as the player's.
 -- The character is GS Settler AAM (ACHR 0x104F03, persistent, SpeedMult 100, no template), put where each measure needs him.
 --   W  wall    put 100 units from a wall, facing it, his own AI off and driven by his controls (roundactor.lua: self:enableAI(false),
---              self.controls.movement 1): he walks straight into the wall and the solver stops his centre at the capsule radius,
---              31 x scale, from the face
+--              self.controls.movement 1): he walks straight into the wall and the solver stops his centre where his body
+--              touches it: the 18-point hull of the exe (FalloutNV.exe 0xC70DE0), rings of radius r0 = (23.10 + 17.64) / 2 =
+--              20.37 from the human skeleton's BSBound, so between r0 cos 22.5 = 18.82 (a face of the ring ahead) and r0 (a
+--              point of it), less the solver's margin of 0.2 and with a unit for the face of the wall
 --   F  fall    let go 650 units above the ground: he falls under gravity (1.38 s for 650 units at 9.8 x 69.99 u/s^2) and takes
 --              the fall damage of rule F2: 0.025 x (650 - 600)^1.65 = 15.9 (Normal difficulty, an NPC victim)
 --   S  speed   walks after the player (a commanded follow, 450 units, a walk, not a run): rule M12, 84.7 u/s holstered x SpeedMult/100
@@ -13,7 +15,8 @@ local NV = 'FalloutNV.esm'
 local SETTLER = { NV, 0x104F03 }
 local ARENA = { -69660, 1900, 8352 }
 local STAIRS = { x = 22861, y = -16120, z = 10027 }
-local RADIUS = 31 -- the capsule radius of the exe (spec A), x scale 1
+local RING = (23.0977 + 17.6446) / 2 -- r0 of the upright hull (FalloutNV.exe 0xC72CE2), x scale 1
+local TOUCH_NEAR, TOUCH_FAR = RING * math.cos(math.rad(22.5)) - 0.5, RING + 1
 local WALK = 84.7 -- rule M12 at SpeedMult 100, holstered
 local GRAVITY = 9.8 * 69.99
 local DROP = 650
@@ -130,8 +133,8 @@ return { limit = 600, delay = 4, run = function(r)
             best.d, start, midway, stopped))
         h.checkRange('w-put-100-from-the-wall', start, 90, 110)
         h.checkAtLeast('w-he-walked-to-the-wall', start - stopped, 40)
-        h.checkRange('w-capsule-stops-at-its-radius', stopped, RADIUS - 4, RADIUS + 12)
-        h.checkAtLeast('w-stays-out-of-the-wall', math.min(midway, stopped), RADIUS - 4)
+        h.checkRange('w-body-stops-at-its-ring', stopped, TOUCH_NEAR, TOUCH_FAR)
+        h.checkAtLeast('w-stays-out-of-the-wall', math.min(midway, stopped), TOUCH_NEAR)
     end
 
     ---------------------------------------------------------------------------------------------------------------- F: fall

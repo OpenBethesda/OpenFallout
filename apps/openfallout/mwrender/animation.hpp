@@ -469,6 +469,8 @@ namespace OFRender
         /// Return a node with the specified name, or nullptr if not existing.
         /// @note The matching is case-insensitive.
         const osg::Node* getNode(std::string_view name) const;
+        /// A bone by its name, for what moves the bones from outside the animation (a ragdoll); null when there is none
+        osg::ref_ptr<osg::MatrixTransform> getBone(std::string_view name) const;
 
         OFWorld::MovementDirectionFlags getSupportedMovementDirections(
             std::span<const std::string_view> prefixes) const;

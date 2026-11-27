@@ -1,11 +1,14 @@
 #ifndef GAME_MWCLASS_ESM4BASE_H
 #define GAME_MWCLASS_ESM4BASE_H
 
+#include <optional>
+
 #include <components/esm4/inventory.hpp>
 #include <components/esm4/levelled.hpp>
 #include <components/esm4/loadstat.hpp>
 #include <components/esm4/loadtact.hpp>
 #include <components/esm4/loadtree.hpp>
+#include <components/falloutscript/characterbody.hpp>
 #include <components/misc/strings/algorithm.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -26,6 +29,15 @@ namespace OFClass
 
     namespace ESM4Impl
     {
+        /// The BSBound of the skeleton of a Fallout character, creature or the player (its model), if it can be read
+        std::optional<FalloutScript::CharacterBody::Bound> skeletonBound(const OFWorld::ConstPtr& ptr);
+
+        /// Puts the character controller of a Fallout character, creature or the player in the physics: the body the
+        /// executables make from the BSBound of the skeleton and the size of the actor (FalloutNV.exe 0xC72410). A
+        /// skeleton that can not be read is taken for no 3D (the size of 0xC72683, not scaled); every skeleton of a
+        /// character or creature in the archives of Fallout 3 and New Vegas has a BSBound.
+        void insertCharacterBody(const OFWorld::Ptr& ptr, OFPhysics::PhysicsSystem& physics);
+
         void insertObjectRendering(
             const OFWorld::Ptr& ptr, const std::string& model, OFRender::RenderingInterface& renderingInterface);
         void insertObjectPhysics(const OFWorld::Ptr& ptr, const std::string& model, const osg::Quat& rotation,

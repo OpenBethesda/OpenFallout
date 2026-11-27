@@ -36,7 +36,7 @@ namespace OFPhysics
         setCaster(caster);
 
         const int collisionMask = CollisionType_World | CollisionType_HeightMap | CollisionType_Actor
-            | CollisionType_Door | CollisionType_Water | CollisionType_Projectile;
+            | CollisionType_Door | CollisionType_Water | CollisionType_Projectile | CollisionType_Ragdoll;
         mTaskScheduler->addCollisionObject(mCollisionObject.get(), CollisionType_Projectile, collisionMask);
 
         updateCollisionObjectPosition();

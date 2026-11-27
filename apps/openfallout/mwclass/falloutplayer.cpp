@@ -7,25 +7,15 @@
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwscript/falloutscripts.hpp"
 
+#include "esm4base.hpp"
+
 namespace OFClass
 {
     void FalloutPlayer::insertObjectPhysics(const OFWorld::Ptr& ptr, const std::string& model,
         const osg::Quat& rotation, OFPhysics::PhysicsSystem& physics) const
     {
-        // The size of the race (the reference scale is the physics' own, OFPhysics::Actor::updateScaleUnsafe)
-        double height = 1.0;
-        if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
-        {
-            const double scale = ptr.getCellRef().getScale();
-            if (scale > 0.0)
-                height = scripts->sizeOf(ptr) / scale;
-        }
-        if (!std::isfinite(height) || height <= 0.0)
-            height = 1.0;
-        OFPhysics::CharacterShape shape;
-        shape.mRadius *= static_cast<float>(height);
-        shape.mHalfHeight *= static_cast<float>(height);
-        physics.addCharacter(ptr, shape);
+        // The body of the executables from the skeleton's bound and the size of the race (FalloutNV.exe 0xC72410)
+        ESM4Impl::insertCharacterBody(ptr, physics);
     }
 
     std::string_view FalloutPlayer::getName(const OFWorld::ConstPtr& ptr) const

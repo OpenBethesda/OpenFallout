@@ -38,6 +38,8 @@ namespace Resource
 
 namespace OFRender
 {
+    class Animation;
+
     class ESM4NpcAnimation;
     class RenderingManager;
 
@@ -106,6 +108,8 @@ namespace OFRender
 
         /// The player has died: the body falls as a character of the world does, and lies there until it is made again
         void die();
+        /// The animation of the body, whose bones a ragdoll moves when it is down
+        const Animation* animation() const;
         /// Whether the body has fallen
         bool isDown() const;
 

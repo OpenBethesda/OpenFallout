@@ -780,9 +780,10 @@ namespace OFScript
 
     void FalloutScripts::leaveTerminal()
     {
-        // The next board waits for a time from the closing of the screen of the last one: iHackingRetryMilliseconds, a
-        // setting of FalloutNV.exe only (Fallout3.exe has no such setting, and neither game's plugins carry it), so a
-        // game without it lays out the next board at once
+        // The next board waits for a time from the closing of the screen of the last one. FalloutNV.exe: the hacking
+        // screen, as it closes, keeps the time plus iHackingRetryMilliseconds (default 10000, setting 0x11D0B90) at
+        // 0x7659C3..0x7659D6. Fallout3.exe has no such setting, and its hacking screen closes with the same steps
+        // but keeps no time (0x6421E0, 0x64231C..0x642343): the next board is laid out at once.
         if (mTerminal && (mTerminal->mPuzzle || mTerminal->mLockedOut))
             mHackGate = gameSettingOr("iHackingRetryMilliseconds", 0.0) / 1000.0;
         mTerminal.reset();
