@@ -268,6 +268,7 @@ namespace
                             standingOn = ptrHolder->getPtr();
                     }
                     actor->setStandingOnPtr(standingOn);
+                    actor->setTouchedActor(frameData.mTouchedActor);
                     // the "on ground" state of an actor might have been updated by a traceDown, don't overwrite the
                     // change
                     if (actor->getOnGround() == frameData.mWasOnGround)

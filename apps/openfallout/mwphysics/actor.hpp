@@ -148,6 +148,9 @@ namespace OFPhysics
         void setStandingOnPtr(const OFWorld::Ptr& ptr);
 
         unsigned int getStuckFrames() const { return mStuckFrames; }
+        /// It ran into another actor in its last step of the solver
+        bool touchedActor() const { return mTouchedActor; }
+        void setTouchedActor(bool touched) { mTouchedActor = touched; }
         void setStuckFrames(unsigned int frames) { mStuckFrames = frames; }
 
         const osg::Vec3f& getLastStuckPosition() const { return mLastStuckPosition; }
@@ -202,6 +205,7 @@ namespace OFPhysics
         mutable std::mutex mPositionMutex;
 
         unsigned int mStuckFrames;
+        bool mTouchedActor = false;
         osg::Vec3f mLastStuckPosition;
 
         osg::Vec3f mForce;

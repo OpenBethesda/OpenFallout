@@ -106,6 +106,7 @@ namespace OFPhysics
     {
         // Reset per-frame data
         actor.mWalkingOnWater = false;
+        actor.mTouchedActor = false;
         // Anything to collide with?
         if (actor.mSkipCollisionDetection)
         {
@@ -230,7 +231,9 @@ namespace OFPhysics
             // We hit something. Check if we can step up.
             float hitHeight = tracer.mHitPoint.z() - tracer.mEndPos.z() + actor.mHalfExtentsZ;
             bool usedStepLogic = false;
-            if (!isActor(tracer.mHitObject))
+            if (isActor(tracer.mHitObject))
+                actor.mTouchedActor = true;
+            else
             {
                 if (hitHeight < actor.mStepHeight)
                 {

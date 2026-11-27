@@ -368,6 +368,8 @@ namespace OFBase
         virtual bool isUnderwater(const OFWorld::CellStore* cell, const osg::Vec3f& pos) const = 0;
         virtual bool isUnderwater(const OFWorld::ConstPtr& object, const float heightRatio) const = 0;
         virtual bool isOnGround(const OFWorld::Ptr& ptr) const = 0;
+        /// The actor's body ran into another actor in its last step of the physics
+        virtual bool touchedActor(const OFWorld::Ptr& ptr) const = 0;
 
         /// The Havok material of what an actor stands on (the index of the executables' tables of the sounds of steps:
         /// 0 stone, 2 dirt, 4 grass, 5 metal, 8 water, 9 wood and so on): that of the collision shape of the object

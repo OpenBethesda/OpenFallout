@@ -2066,6 +2066,12 @@ namespace OFWorld
         return mPhysics->isOnGround(ptr);
     }
 
+    bool World::touchedActor(const OFWorld::Ptr& ptr) const
+    {
+        const OFPhysics::Actor* actor = mPhysics->getActor(ptr);
+        return actor != nullptr && actor->touchedActor();
+    }
+
     void World::togglePOV(bool force)
     {
         mRendering->getCamera()->toggleViewMode(force);

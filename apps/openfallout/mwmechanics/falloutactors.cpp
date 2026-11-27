@@ -1437,6 +1437,8 @@ namespace OFMechanics
             actor.mHasLeft = animation.hasPlainMove(OFRender::FalloutDirection::Left);
             actor.mHasRight = animation.hasPlainMove(OFRender::FalloutDirection::Right);
             actor.mForwardEnd = animation.forwardEnd();
+            // NV 0x9E4E59 to 0x9E4EF6: what its controller ran into in the last step is another actor ([ctrl+0x638])
+            actor.mBlockedByActor = frame.mWorld.touchedActor(mind.mPtr);
             // NV 0x8B7100: what its movement animation moved it, by its size (0x567400, the update at 0x493260); the
             // height is left out (0x494640 to 0x494682)
             if (animation.hasRootMotion())

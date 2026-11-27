@@ -117,6 +117,9 @@ namespace OFPhysics
         const float mStepHeight;
         float mOldHeight;
         unsigned int mStuckFrames;
+        /// It ran into another actor in its last step (as the character proxy's characterInteraction of FalloutNV.exe,
+        /// 0xC6F500, which the controller update 0xC73170 clears first)
+        bool mTouchedActor = false;
         const bool mFlying;
         const bool mWasOnGround;
         const bool mWaterCollision;
