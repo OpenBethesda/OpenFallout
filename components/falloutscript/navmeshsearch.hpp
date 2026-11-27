@@ -151,6 +151,12 @@ namespace FalloutScript::NavMeshSearch
         /// +0x94 (getter NV 0x69E390): a step to a triangle's middle costs 1 + the sum of their avoidCost there more
         /// (NV 0x6A74AD to 0x6A7516, the sum 0x6DC990)
         std::vector<AvoidObject> mAvoidObjects;
+        /// +0x9B, on by default (NV 0x6E2420; read by 0x6A9560): the smoother takes no straight leg through a small
+        /// circle (one round an actor) but from the start (NV 0x6B2C00)
+        bool mRefuseSmallCircles = true;
+        /// +0x99 and +0x8C: the heading the actor is to face at the end (NV 0x505C00, 0x507E10); off by default
+        bool mHasHeading = false;
+        float mHeading = 0.f;
     };
 
     /// One triangle of a path, and the edge of the one before that leads to it (0xffff for the first)
