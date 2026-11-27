@@ -58,8 +58,12 @@ namespace FalloutScript::PathFollower
         /// The movement word its owner asks for (ActorMover +0x34, owner vfunc 0x1C): 0x100 walk, 0x200 run, and the
         /// way in the low bits (1 forward); a package asks for 0x101, or 0x201 to run (NV 0x8DA950)
         std::uint32_t mRequested = 0x101;
-        /// The owner's goal point (+0x73 with +0x4 to +0xC, NV 0x8B3D10): it faces it while it walks
+        /// The owner's goal point (+0x73 with +0x4 to +0xC, NV 0x8B3D10): it faces it while it walks. Set by a script's
+        /// Look with its integer (0x5C988B, 0x8EF4E3), by combat (0x9817E4, 0x981892) and by the UseWeapon and Guard
+        /// packages
         std::optional<Point> mGoalPoint;
+        /// Its life state is Unconscious (3) or Restrained (5): no movement (NV 0x9E2AAF to 0x9E2ACD)
+        bool mHeld = false;
         /// Its plain set of animations has the groups Backward, Left and Right (NV 0x494710 with 4, 5 and 6)
         bool mHasBackward = false;
         bool mHasLeft = false;

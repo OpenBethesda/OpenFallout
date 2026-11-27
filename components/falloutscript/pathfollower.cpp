@@ -453,6 +453,11 @@ namespace FalloutScript::PathFollower
 
     void Follower::chooseMove(const Actor& actor, float dt)
     {
+        if (actor.mHeld) // 0x9E2AAF to 0x9E2ACD
+        {
+            mMove = 0;
+            return;
+        }
         const std::uint32_t old = mMove;
         if (mTurnInPlace) // 0x9E2AEA to 0x9E2B2F
         {

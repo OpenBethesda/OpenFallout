@@ -2173,6 +2173,12 @@ namespace OFScript
         /// The size factor of the executables: the reference scale times the height of the race (or the scale of the
         /// record of a creature)
         double sizeOf(const OFWorld::Ptr& ptr);
+        /// Its life state is Unconscious (3, SetUnconscious, NV 0x8ACE10) or Restrained (5, SetRestrained, 0x8ACE50):
+        /// the path handler gives it no movement (NV 0x9E2AAF to 0x9E2ACD)
+        bool heldStill(const OFWorld::Ptr& actor) const;
+        /// Where what a script's Look told it to face is (NV process +0x2AC, its position each frame, 0x8EF49A to
+        /// 0x8EF4E3); none when it faces nothing or that is not in the world
+        std::optional<osg::Vec3f> facingPoint(const OFWorld::Ptr& actor);
         /// The height of a jump of the actor (rule C.J1: fJumpHeightMin times its size, twice that swimming)
         double jumpHeight(const OFWorld::Ptr& ptr, bool swimming);
         /// Whether the actor is a teammate of the player (a follower: the third test of the tier rule, A.T2)

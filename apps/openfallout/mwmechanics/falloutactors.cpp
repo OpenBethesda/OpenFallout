@@ -1439,6 +1439,12 @@ namespace OFMechanics
             actor.mForwardEnd = animation.forwardEnd();
             // NV 0x9E4E59 to 0x9E4EF6: what its controller ran into in the last step is another actor ([ctrl+0x638])
             actor.mBlockedByActor = frame.mWorld.touchedActor(mind.mPtr);
+            if (frame.mScripts != nullptr)
+            {
+                actor.mHeld = frame.mScripts->heldStill(mind.mPtr);
+                if (const std::optional<osg::Vec3f> point = frame.mScripts->facingPoint(mind.mPtr))
+                    actor.mGoalPoint = toPoint(*point);
+            }
             // NV 0x8B7100: what its movement animation moved it, by its size (0x567400, the update at 0x493260); the
             // height is left out (0x494640 to 0x494682)
             if (animation.hasRootMotion())

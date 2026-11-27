@@ -855,7 +855,8 @@ namespace OFPhysics
                 mRagdollWorld->addCollisionObject(mirror.mObject.get(), 2, 1);
                 mRagdollMirrors.emplace(entry.mSource, std::move(mirror));
             }
-            else if (entry.mMoves)
+            // a script can move any object, not only actors and doors
+            else if (!(found->second.mObject->getWorldTransform() == entry.mTransform))
             {
                 found->second.mObject->setWorldTransform(entry.mTransform);
                 mRagdollWorld->updateSingleAabb(found->second.mObject.get());

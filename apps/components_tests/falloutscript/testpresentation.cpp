@@ -170,6 +170,12 @@ namespace
         run.call(OpLook, guard, {});
         run.call(OpLook, 0, { clerk });
         EXPECT_EQ(run.mPresentation.lookingAt(guard), 0u);
+        // With the integer not 0 it faces the target as it walks (NV 0x5C9863), until StopLook
+        run.call(OpLook, guard, { clerk, 1 });
+        EXPECT_EQ(run.mPresentation.facing(guard), clerk);
+        EXPECT_EQ(run.mPresentation.lookingAt(guard), 0u);
+        run.call(OpStopLook, guard);
+        EXPECT_EQ(run.mPresentation.facing(guard), 0u);
     }
 
     TEST(FalloutScriptPresentationTest, achievements_are_handed_to_the_host_and_abs_drops_the_sign)

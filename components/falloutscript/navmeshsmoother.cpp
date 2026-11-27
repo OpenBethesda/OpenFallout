@@ -1039,7 +1039,8 @@ namespace FalloutScript::NavMeshSearch
             }
             if (mRequest.mHasHeading && !out.mPoints.empty())
             {
-                // NV 0x6AFCC0 at its end: an end that faces away from the heading asked for faces it
+                // NV 0x6AFCC0 at its end: an end within 90 degrees of the heading asked for is turned to face it
+                // (0x6B04CC falls through to the snap only when |diff| < pi / 2)
                 Point& v = out.mPoints.back().mTangent;
                 float diff = mRequest.mHeading - std::atan2(v[0], v[1]);
                 while (diff > pi)
