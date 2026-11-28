@@ -167,6 +167,10 @@ namespace FalloutScript::NavMeshSearch
         /// +0x99 and +0x8C: the heading the actor is to face at the end (NV 0x505C00, 0x507E10); off by default
         bool mHasHeading = false;
         float mHeading = 0.f;
+        /// +0xA0 and +0x90: the heading the actor faces at the start (set with the actor's for every request of the
+        /// actor wrappers, 0x6E2BB0 from 0x6E29F0; cleared by a new request of the avoidance, 0x9E16C0); off by default
+        bool mHasStartHeading = false;
+        float mStartHeading = 0.f;
     };
 
     /// One triangle of a path, and the edge of the one before that leads to it (0xffff for the first)

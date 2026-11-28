@@ -154,4 +154,32 @@ namespace
         fixture.mWorld.mClear = [](const Point&, const Point&) { return false; };
         EXPECT_FALSE(NavMeshPather::findPath(fixture.mWorld, {}, fixture.at(20.f, 50.f), fixture.at(250.f, 300.f)));
     }
+
+    TEST(FalloutScriptNavMeshPatherTest, the_start_of_a_path_gets_a_tangent_along_the_start_heading)
+    {
+        Fixture fixture(grid(1, 3, 1));
+        NavMeshSearch::Request request;
+        request.mHasStartHeading = true;
+        request.mStartHeading = std::acos(0.f); // east
+        request.mHasHeading = true;
+        request.mHeading = request.mStartHeading;
+        const auto path
+            = NavMeshPather::findPath(fixture.mWorld, request, fixture.at(20.f, 50.f), fixture.at(280.f, 50.f));
+        ASSERT_TRUE(path);
+        ASSERT_GE(path->mPoints.size(), 2u);
+        // 0x6D99A0: 256 along the heading, less 1.2 radii (35)
+        EXPECT_NEAR(path->mPoints.front().mTangent[0], 256.f - 42.f, 0.01f);
+        EXPECT_NEAR(path->mPoints.front().mTangent[1], 0.f, 0.01f);
+        // 0x6DA420 never runs here: the smoother's last arrival point (0x6B03CF) and the goal chain (0x6CC318) both
+        // write the goal, so the last two points are not 64 apart (0x6CA408)
+        EXPECT_FLOAT_EQ(path->mPoints[path->mPoints.size() - 2].mLocation.mPoint[0], 280.f);
+        EXPECT_FLOAT_EQ(path->mPoints.back().mTangent[0], 0.f);
+        // a heading back past the second point gives none (0x6DA156: the dot under -0.7)
+        request.mHasHeading = false;
+        request.mStartHeading = -request.mStartHeading;
+        const auto back
+            = NavMeshPather::findPath(fixture.mWorld, request, fixture.at(20.f, 50.f), fixture.at(280.f, 50.f));
+        ASSERT_TRUE(back);
+        EXPECT_FLOAT_EQ(back->mPoints.front().mTangent[0], 0.f);
+    }
 }

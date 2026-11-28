@@ -1527,12 +1527,15 @@ namespace OFMechanics
             return world;
         }
 
-        /// The path request of an actor (NV 0x6E2420 and 0x6E2A55): 0.6 of the width of its bounds by its scale
+        /// The path request of an actor (NV 0x6E2420 and 0x6E29F0): 0.6 of the width of its bounds by its scale
         /// (0x885140)
         NavMeshSearch::Request requestOf(const Frame& frame, const FalloutActors::Mind& mind, float arrival)
         {
             NavMeshSearch::Request request;
             request.mRadius = 0.6f * 2.f * frame.mWorld.getHalfExtents(mind.mPtr).x();
+            // 0x6E2AE4: the start heading is the actor's heading (0x6E2BB0)
+            request.mHasStartHeading = true;
+            request.mStartHeading = mind.mPtr.getRefData().getPosition().rot[2];
             if (arrival > 0.f)
                 request.mGoalRadius = arrival;
             return request;

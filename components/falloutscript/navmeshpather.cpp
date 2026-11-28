@@ -138,6 +138,128 @@ namespace FalloutScript::NavMeshPather
         };
 
         /// One stretch of the route, and how the pather goes along it
+        // NV 0x6D74C0: the walk on the map from `from` toward `b`, edge after edge (0x698060 with 0x6B9E90), to the
+        // triangle of `goal`, or with none to the triangle that holds `b`. `out` (outLoc, a copy of `from` first,
+        // 0x6D74E8): at a crossing it may not take, the point on that edge at the height of the middle of the
+        // triangle it leaves, on that mesh with no triangle (0x6D77F0, 0x6D7821); at the goal `b` on the goal's
+        // triangle (0x6DD010 at 0x6D78EC); with no goal `b` on the mesh it ends on; else `from`. The filter is asked
+        // at each crossing the links allow (0x6D763E to 0x6D76AA), and its no stops the walk
+        bool walkOn(const World& world, Spot start, const Point& b, const Spot* goal, bool strict, bool large,
+            Spot* out, const Crossing* filter)
+        {
+            if (out != nullptr)
+                *out = start;
+            if (!resolve(world, start))
+                return goal == nullptr; // 0x6D750B to 0x6D751A
+            if (!hasTriangle(world, start))
+                return false; // 0x6D7545
+            Place place{ start.mMesh, *start.mTriangle };
+            Point a = start.mPoint;
+            int skip = -1;
+            const auto blocked = [&](const Point& x) {
+                if (out != nullptr)
+                {
+                    const Mesh& mesh = *world.mMeshes(place.mMesh);
+                    *out = world.mSpotOfMesh(place.mMesh);
+                    out->mPoint = { x[0], x[1], mesh.centroid(place.mTriangle)[2] };
+                    out->mMesh = place.mMesh;
+                    out->mTriangle.reset(); // 0x6DD482
+                }
+                return false;
+            };
+            // shortcut: the exe walks with no limit (0x6D74C0); a cycle of float errors would hang the game, so the
+            // walk gives up after more crossings than any loaded mesh has triangles, never in the data
+            for (int guard = 0; guard < 65536; ++guard)
+            {
+                const Mesh& mesh = *world.mMeshes(place.mMesh);
+                const Triangle& triangle = mesh.mTriangles[place.mTriangle];
+                // NV 0x698060 with 0x6B9E90: the first edge the line crosses properly, past the one it came in by
+                int exit = -1;
+                Point x{};
+                for (int e = 0; e < 3 && exit < 0; ++e)
+                {
+                    if (e == skip)
+                        continue;
+                    const Point& p0 = mesh.mVertices[triangle.mVertices[e]];
+                    const Point& p1 = mesh.mVertices[triangle.mVertices[(e + 1) % 3]];
+                    const float c4 = cross(b, p0, p1);
+                    const float c8 = cross(a, p0, p1);
+                    if (!(c4 * c8 < 0.f)) // 0x6B9F06
+                        continue;
+                    const float c10 = cross(p0, a, b);
+                    float c12 = c10 + c8 - c4;
+                    if (!(std::abs(c12) >= 0.001f)) // 0x6B9F67
+                        c12 = cross(p1, a, b);
+                    if (!(c10 * c12 < 0.f)) // 0x6B9FAF
+                        continue;
+                    const float t = c10 / (c10 - c12);
+                    x = { p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t, 0.f };
+                    exit = e;
+                }
+                if (exit < 0)
+                {
+                    if (goal == nullptr) // 0x6D7490: it ends where `b` is
+                    {
+                        if (out != nullptr)
+                        {
+                            *out = world.mSpotOfMesh(place.mMesh);
+                            out->mPoint = b;
+                            out->mMesh = place.mMesh;
+                            out->mTriangle.reset();
+                        }
+                        return true;
+                    }
+                    if (!(place == Place{ goal->mMesh, *goal->mTriangle }))
+                        return false; // 0x6D795A: out stays the start
+                    if (out != nullptr)
+                        *out = onTriangle(world, b, goal->mMesh, *goal->mTriangle);
+                    return true;
+                }
+                const auto next = NavMeshSearch::across(world.mMeshes, place, static_cast<unsigned>(exit));
+                if (!next)
+                    return blocked(x);
+                if (strict)
+                {
+                    const std::uint32_t flags
+                        = world.mMeshes(next->first.mMesh)->mTriangles[next->first.mTriangle].mFlags;
+                    if ((flags & NavMeshSearch::Flag_Water) != 0
+                        || (large && (flags & NavMeshSearch::Flag_NoLargeActors) != 0)
+                        || (flags & NavMeshSearch::Flag_Stuck) != 0 || (flags & NavMeshSearch::Flag_Door) != 0)
+                        return blocked(x);
+                }
+                if (filter != nullptr && *filter && !(*filter)(place, next->first))
+                    return blocked(x);
+                if ((triangle.mFlags & (1u << exit)) != 0 && mesh.mExternal[triangle.mEdges[exit]].mType == 1)
+                    return blocked(x); // 0x6D76D8
+                if (next->first.mMesh != place.mMesh)
+                {
+                    // NV 0x6BA3D0: where the line meets the edge it came in by, or that edge's nearer end
+                    const Mesh& other = *world.mMeshes(next->first.mMesh);
+                    const Triangle& in = other.mTriangles[next->first.mTriangle];
+                    const Point& e0 = other.mVertices[in.mVertices[next->second]];
+                    const Point& e1 = other.mVertices[in.mVertices[(next->second + 1) % 3]];
+                    const float cc = cross(e1, x, b);
+                    const float c1c = cross(e0, x, b);
+                    const float c14 = cross(x, e0, e1);
+                    const float c10 = c14 + c1c - cc;
+                    const float t = c14 / (c14 - c10);
+                    const Point hit{ x[0] + (b[0] - x[0]) * t, x[1] + (b[1] - x[1]) * t, 0.f };
+                    if (cc * c1c <= 0.f)
+                        x = hit;
+                    else
+                    {
+                        const Point d0 = minus(hit, e0);
+                        const Point d1 = minus(hit, e1);
+                        x = length2Across(d1) <= length2Across(d0) ? e1 : e0; // 0x6BA502
+                    }
+                }
+                place = next->first;
+                skip = next->second;
+                a = x;
+            }
+            return false;
+        }
+
         class Pather
         {
         public:
@@ -490,95 +612,137 @@ namespace FalloutScript::NavMeshPather
 
             // NV 0x6D7350 with 0x6D74C0: a straight line on the map from one place to the other crosses edge after
             // edge to the goal's triangle; `strict`: not into water, a door, a mark of a stuck actor or, for a large
-            // actor, a triangle for small ones (the edge test 0x6CD5C0)
-            bool straight(const Spot& from, const Spot& to, bool strict) const
+            // actor, a triangle for small ones (the edge test 0x6CD5C0); `out` as 0x6D74C0 leaves its outLoc
+            bool straight(const Spot& from, const Spot& to, bool strict, Spot* out = nullptr) const
             {
+                if (out != nullptr)
+                    *out = from; // 0x6D7375
                 Spot goal = to;
-                Spot start = from;
                 if (!resolve(goal))
-                    return !resolve(start); // 0x6D7391 to 0x6D73B2
-                const bool goalOn = hasTriangle(mWorld, goal);
-                if (!resolve(start))
-                    return !goalOn; // 0x6D750B
-                if (!hasTriangle(mWorld, start))
-                    return false; // 0x6D7545
-                const bool large = mRequest.mRadius > mRequest.mLargeActorRadius; // 0x6CD22E
-                Place place{ start.mMesh, *start.mTriangle };
-                Point a = start.mPoint;
-                const Point& b = to.mPoint;
-                int skip = -1;
-                // shortcut: the exe walks with no limit (0x6D74C0); a cycle of float errors would hang the game, so
-                // the walk gives up after more crossings than any loaded mesh has triangles, never in the data
-                for (int guard = 0; guard < 65536; ++guard)
                 {
-                    const Mesh& mesh = *mWorld.mMeshes(place.mMesh);
-                    const Triangle& triangle = mesh.mTriangles[place.mTriangle];
-                    // NV 0x698060 with 0x6B9E90: the first edge the line crosses properly, past the one it came in by
-                    int exit = -1;
-                    Point x{};
-                    for (int e = 0; e < 3 && exit < 0; ++e)
-                    {
-                        if (e == skip)
-                            continue;
-                        const Point& p0 = mesh.mVertices[triangle.mVertices[e]];
-                        const Point& p1 = mesh.mVertices[triangle.mVertices[(e + 1) % 3]];
-                        const float c4 = cross(b, p0, p1);
-                        const float c8 = cross(a, p0, p1);
-                        if (!(c4 * c8 < 0.f)) // 0x6B9F06
-                            continue;
-                        const float c10 = cross(p0, a, b);
-                        float c12 = c10 + c8 - c4;
-                        if (!(std::abs(c12) >= 0.001f)) // 0x6B9F67
-                            c12 = cross(p1, a, b);
-                        if (!(c10 * c12 < 0.f)) // 0x6B9FAF
-                            continue;
-                        const float t = c10 / (c10 - c12);
-                        x = { p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t, 0.f };
-                        exit = e;
-                    }
-                    if (exit < 0)
-                        return !goalOn || place == Place{ goal.mMesh, *goal.mTriangle }; // 0x6D75FD, 0x6D78BB
-                    const auto next = NavMeshSearch::across(mWorld.mMeshes, place, static_cast<unsigned>(exit));
-                    if (!next)
-                        return false;
-                    if (strict)
-                    {
-                        const std::uint32_t flags
-                            = mWorld.mMeshes(next->first.mMesh)->mTriangles[next->first.mTriangle].mFlags;
-                        if ((flags & NavMeshSearch::Flag_Water) != 0
-                            || (large && (flags & NavMeshSearch::Flag_NoLargeActors) != 0)
-                            || (flags & NavMeshSearch::Flag_Stuck) != 0 || (flags & NavMeshSearch::Flag_Door) != 0)
-                            return false;
-                    }
-                    if ((triangle.mFlags & (1u << exit)) != 0 && mesh.mExternal[triangle.mEdges[exit]].mType == 1)
-                        return false; // 0x6D76D8
-                    if (next->first.mMesh != place.mMesh)
-                    {
-                        // NV 0x6BA3D0: where the line meets the edge it came in by, or that edge's nearer end
-                        const Mesh& other = *mWorld.mMeshes(next->first.mMesh);
-                        const Triangle& in = other.mTriangles[next->first.mTriangle];
-                        const Point& e0 = other.mVertices[in.mVertices[next->second]];
-                        const Point& e1 = other.mVertices[in.mVertices[(next->second + 1) % 3]];
-                        const float cc = cross(e1, x, b);
-                        const float c1c = cross(e0, x, b);
-                        const float c14 = cross(x, e0, e1);
-                        const float c10 = c14 + c1c - cc;
-                        const float t = c14 / (c14 - c10);
-                        const Point hit{ x[0] + (b[0] - x[0]) * t, x[1] + (b[1] - x[1]) * t, 0.f };
-                        if (cc * c1c <= 0.f)
-                            x = hit;
-                        else
-                        {
-                            const Point d0 = minus(hit, e0);
-                            const Point d1 = minus(hit, e1);
-                            x = length2Across(d1) <= length2Across(d0) ? e1 : e0; // 0x6BA502
-                        }
-                    }
-                    place = next->first;
-                    skip = next->second;
-                    a = x;
+                    Spot start = from;
+                    return !resolve(start); // 0x6D7391 to 0x6D73B2
                 }
-                return false;
+                const bool large = mRequest.mRadius > mRequest.mLargeActorRadius; // 0x6CD22E
+                return walkOn(
+                    mWorld, from, to.mPoint, hasTriangle(mWorld, goal) ? &goal : nullptr, strict, large, out, nullptr);
+            }
+
+            // NV 0x53D1A0 with (0, 0, 1): the unit vector a quarter turn clockwise of `d` on the map, times `r`
+            static Point side(const Point& d, float r)
+            {
+                const Point c{ d[1], -d[0], 0.f };
+                const float l = length(c);
+                return l > 1e-6f ? times(c, r / l) : Point{}; // 0x1017CF8
+            }
+
+            // NV 0x6D7490 from a place to a point; `out` the point it got to
+            bool toPoint(const Spot& from, const Point& to, Point& out) const
+            {
+                Spot stop;
+                const bool ok = walkOn(mWorld, from, to, nullptr, false, false, &stop, nullptr);
+                out = stop.mPoint;
+                return ok;
+            }
+
+            // NV 0x6D7350 between places at two points by `base`; `out` the point it got to
+            bool between(const Point& a, const Point& b, const Spot& base, Point& out) const
+            {
+                Spot stop;
+                const bool ok = straight(near(a, base), near(b, base), false, &stop);
+                out = stop.mPoint;
+                return ok;
+            }
+
+            // NV 0x6D9AC2 to 0x6D9D09 and 0x6DA527 to 0x6DA73C: the end point pulled in where a line a radius to
+            // either side of the way from `p` to it runs into a wall
+            void clipSides(const Point& p, const Spot& base, Point& e) const
+            {
+                const Point d = minus(e, p);
+                const float d2 = dot(d, d);
+                const Point n = side(d, mRequest.mRadius);
+                for (const float sign : { -1.f, 1.f })
+                {
+                    const Point from = plus(p, times(n, sign));
+                    Point stop;
+                    if (!between(from, plus(e, times(n, sign)), base, stop))
+                    {
+                        const Point gone = minus(stop, from);
+                        if (d2 > dot(gone, gone))
+                            e = stop;
+                    }
+                }
+            }
+
+            // NV 0x6D99A0: the tangent of the first point, along the start heading for up to 256 and clipped by the
+            // walls, less 1.2 radii; none when the second point is not reached from there or is too far behind
+            Point startTangent(float heading, const Spot& first, const Spot& second) const
+            {
+                const Point dir{ std::sin(heading), std::cos(heading), 0.f }; // 0x4A0C90 with (0, 1, 0)
+                const Point& p0 = first.mPoint;
+                const Point& p1 = second.mPoint;
+                Point e = plus(p0, times(dir, 256.f)); // 0x1032ADC
+                Point stop;
+                if (!toPoint(first, e, stop))
+                    e = stop;
+                const Point n = side(minus(e, p0), mRequest.mRadius);
+                clipSides(p0, first, e);
+                e = minus(e, times(dir, mRequest.mRadius * 1.2f)); // 0x1018204
+                if (!toPoint(second, e, stop))
+                    return {}; // 0x6D9DA7
+                // 0x6D9E99 to 0x6DA04E: the lines beside, with the first side vector
+                if (!between(minus(p1, n), minus(e, n), second, stop)
+                    || !between(plus(p1, n), plus(e, n), second, stop))
+                    return {};
+                const Point u = minus(p1, p0);
+                const float l = length(u);
+                const float c = l > 0.f ? dot(times(u, 1.f / l), dir) : 0.f;
+                if (c < -0.7f) // 0x106CBC8
+                    return {};
+                if (c < 0.f && l < 64.f) // 0x10240C0
+                    return {};
+                return minus(e, p0);
+            }
+
+            // NV 0x6DA420: the tangent of the last point, along the end heading into it, from up to 256 behind and
+            // clipped by the walls
+            Point endTangent(float heading, const Spot& last) const
+            {
+                const Point dir{ std::sin(heading), std::cos(heading), 0.f };
+                const Point& p = last.mPoint;
+                Point e = minus(p, times(dir, 256.f));
+                Point stop;
+                if (!toPoint(last, e, stop))
+                    e = stop;
+                clipSides(p, last, e);
+                return minus(p, e);
+            }
+
+            Spot spotOf(const WayPoint& point) const
+            {
+                Spot spot = mWorld.mSpotOfMesh(point.mLocation.mPlace.mMesh);
+                spot.mPoint = point.mLocation.mPoint;
+                spot.mMesh = point.mLocation.mPlace.mMesh;
+                spot.mTriangle = point.mLocation.mPlace.mTriangle;
+                return spot;
+            }
+
+            // NV 0x6CA1A9 to 0x6CA46F: the tangents of the ends of the path (the others stay 0, 0x69F920 with
+            // 0x11F426C)
+            void tangents(bool found)
+            {
+                std::vector<WayPoint>& points = mPath.mPoints;
+                if (points.size() < 2)
+                    return;
+                const auto apart = [](const WayPoint& a, const WayPoint& b) {
+                    const Point d = minus(a.mLocation.mPoint, b.mLocation.mPoint);
+                    return dot(d, d) > 4096.f; // 0x1017A10
+                };
+                if (mRequest.mHasStartHeading && mFirst == 0 && apart(points[0], points[1]))
+                    points[0].mTangent = startTangent(mRequest.mStartHeading, spotOf(points[0]), spotOf(points[1]));
+                if (found && mRequest.mHasHeading && mLast + 1 == mRoute.size()
+                    && apart(points[points.size() - 2], points.back()))
+                    points.back().mTangent = endTangent(mRequest.mHeading, spotOf(points.back()));
             }
 
             // NV 0x6CD1F0: the straight way, and the two lines beside it a radius to each side
@@ -926,6 +1090,11 @@ namespace FalloutScript::NavMeshPather
         return true;
     }
 
+    bool walk(const World& world, const Spot& from, const Point& to, Spot* out, const Crossing& filter)
+    {
+        return walkOn(world, from, to, nullptr, false, false, out, &filter);
+    }
+
     std::optional<Path> findPath(const World& world, const Request& request, Spot start, Spot goal)
     {
         // NV 0x6C8E2C: the triangles of the request's places are found again (0x6DDBE0)
@@ -1008,6 +1177,7 @@ namespace FalloutScript::NavMeshPather
         pather.mFirst = 0;
         pather.mLast = last - 1;
         const bool ok = pather.stretches();
+        pather.tangents(ok);
         // the actor mover keeps a path that stops short when the request lets it (0x9DD84C to 0x9DD884)
         if (ok || (pather.mPath.mPartial && request.mPartial && !pather.mPath.mPoints.empty()))
             return pather.mPath;

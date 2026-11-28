@@ -72,6 +72,13 @@ namespace FalloutScript::NavMeshPather
         bool mPartial = false;
     };
 
+    /// Asked at a crossing of a walk from one triangle to the next (NV 0x6D74C0's filter, 0x6D763E): no stops it
+    using Crossing = std::function<bool(const NavMeshSearch::Place& from, const NavMeshSearch::Place& to)>;
+
+    /// NV 0x6D7490: the walk on the map from a place to a point; true when nothing stops it before the triangle that
+    /// holds the point. `out` gets where it stopped (0x6D74C0's outLoc)
+    bool walk(const World& world, const Spot& from, const Point& to, Spot* out, const Crossing& filter);
+
     /// NV 0x6DD6F0: the mesh of a place and, when there is one, its triangle under the place; false when it is on no
     /// usable mesh
     bool resolve(const World& world, Spot& spot);
