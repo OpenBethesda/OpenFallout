@@ -117,24 +117,27 @@ namespace OFScript
             found->second, mPerks.apply(FalloutScript::EntryPoint::ignoreBrokenLock, mPlayer, 0.0));
     }
 
-    FalloutScript::NavMeshSearch::Door FalloutScripts::doorRule(const OFWorld::Ptr& actor, const OFWorld::Ptr& door)
+    FalloutScript::NavMeshSearch::Door FalloutScripts::doorRule(
+        const OFWorld::Ptr& actor, FalloutScript::FormId reference)
     {
         namespace NavMeshDoors = FalloutScript::NavMeshDoors;
         using Door = FalloutScript::NavMeshSearch::Door;
-        const FalloutScript::FormId reference = referenceOf(door);
-        const FalloutScript::FormId user = scriptReferenceOf(actor);
-        const ESM4::Reference* record
-            = reference != 0 ? mStore.get<ESM4::Reference>().search(ESM::FormId::fromUint32(reference)) : nullptr;
-        if (record == nullptr || door.getCell() == nullptr)
+        const OFWorld::Ptr door = findReference(reference);
+        if (door.isEmpty() || door.getCell() == nullptr)
             return Door::Open; // 0x6A71FF: no reference
+        const FalloutScript::FormId user = scriptReferenceOf(actor);
+        // a door made while the game runs has no record of a plugin: its lock and owners are its state alone
+        const ESM4::Reference* record = mStore.get<ESM4::Reference>().search(ESM::FormId::fromUint32(reference));
+        const ESM4::Reference blank{};
+        const ESM4::Reference& placed = record != nullptr ? *record : blank;
         const ESM4::Door* base = door.getType() == ESM4::Door::sRecordId ? door.get<ESM4::Door>()->mBase : nullptr;
         // 0x57B460: a door whose reference has the flag 0x100
-        if (base != nullptr && (record->mFlags & 0x100) != 0)
+        if (base != nullptr && (placed.mFlags & 0x100) != 0)
             return Door::Closed;
 
-        const ESM4::Reference* partner = record->mDoor.destDoor.isZeroOrUnset()
+        const ESM4::Reference* partner = placed.mDoor.destDoor.isZeroOrUnset()
             ? nullptr
-            : mStore.get<ESM4::Reference>().search(record->mDoor.destDoor);
+            : mStore.get<ESM4::Reference>().search(placed.mDoor.destDoor);
         const auto cellOf = [this](const OFWorld::CellStore* cell) -> const ESM4::Cell* {
             const ESM::FormId* id = cell != nullptr ? cell->getCell()->getId().getIf<ESM::FormId>() : nullptr;
             return id != nullptr ? mStore.get<ESM4::Cell>().search(*id) : nullptr;
@@ -177,14 +180,14 @@ namespace OFScript
 
         const ESM4::Cell* cell = cellOf(door.getCell());
         NavMeshDoors::DoorLock lock;
-        // 0x569160: its own lock, else its teleport partner's
-        const ESM4::Reference* locked = record->mIsLocked ? record
-            : partner != nullptr && partner->mIsLocked    ? partner
-                                                          : nullptr;
+        // 0x569160: its own lock (from its record, or one a script gave it), else its teleport partner's
+        const ESM4::Reference* locked = placed.mIsLocked || mReferenceState.isLocked(reference) ? &placed
+            : partner != nullptr && partner->mIsLocked                                          ? partner
+                                                                                                : nullptr;
         lock.mHasLock = locked != nullptr;
         if (locked != nullptr)
         {
-            const FalloutScript::FormId lockRef = locked->mId.toUint32();
+            const FalloutScript::FormId lockRef = locked == &placed ? reference : locked->mId.toUint32();
             lock.mLocked = mReferenceState.isLocked(lockRef);
             lock.mKey = locked->mKey.toUint32();
             const Interaction::Setting setting
@@ -196,7 +199,7 @@ namespace OFScript
         lock.mCellOwner = cellOwner(cell);
         if (partner != nullptr) // ctx+4, the far cell of a load door
         {
-            const OFWorld::Ptr far = OFBase::Environment::get().getWorldModel()->getPtr(record->mDoor.destDoor);
+            const OFWorld::Ptr far = OFBase::Environment::get().getWorldModel()->getPtr(placed.mDoor.destDoor);
             lock.mHasDestination = !far.isEmpty() && far.getCell() != nullptr;
             if (lock.mHasDestination)
                 lock.mDestinationOwner = cellOwner(cellOf(far.getCell()));
@@ -208,13 +211,13 @@ namespace OFScript
         if (owner == 0)
             owner = lock.mCellOwner.mForm;
         // 0x5679F0: its own rank, its partner's, its zone's (not -1), its cell's, else 0
-        int rank = record->mFactionRank;
+        int rank = placed.mFactionRank;
         if (rank == -1 && partner != nullptr)
             rank = partner->mFactionRank;
         if (rank == -1)
         {
-            const ESM4::EncounterZone* zone = !record->mEncounterZone.isZeroOrUnset()
-                ? mStore.get<ESM4::EncounterZone>().search(record->mEncounterZone)
+            const ESM4::EncounterZone* zone = !placed.mEncounterZone.isZeroOrUnset()
+                ? mStore.get<ESM4::EncounterZone>().search(placed.mEncounterZone)
                 : zoneOfCell(cell);
             if (zone != nullptr)
                 rank = zone->mData.mRank;
@@ -223,7 +226,7 @@ namespace OFScript
             rank = cell->mFactionRank;
         lock.mOwner = ownerOf(owner, rank);
         // 0x567960: its own global, its partner's, its cell's; one that is there and not 0 (0x5025B9 to 0x5025E8)
-        ESM::FormId global = record->mGlobal;
+        ESM::FormId global = placed.mGlobal;
         if (global.isZeroOrUnset() && partner != nullptr)
             global = partner->mGlobal;
         if (global.isZeroOrUnset() && cell != nullptr)

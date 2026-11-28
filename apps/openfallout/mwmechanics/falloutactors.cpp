@@ -1520,11 +1520,7 @@ namespace OFMechanics
             };
             // NV 0x6A71A8 to 0x6A7299, for the actor the request is for (0x6C9900)
             world.mDoors = [&frame, actor](std::uint32_t door) {
-                const OFWorld::Ptr ref
-                    = OFBase::Environment::get().getWorldModel()->getPtr(ESM::FormId::fromUint32(door));
-                if (ref.isEmpty() || frame.mScripts == nullptr)
-                    return NavMeshSearch::Door::Open; // 0x6A71FF: no reference
-                return frame.mScripts->doorRule(actor, ref);
+                return frame.mScripts != nullptr ? frame.mScripts->doorRule(actor, door) : NavMeshSearch::Door::Open;
             };
             // shortcut: no teleport door is read for the coarse route; that is the load door step
             world.mRouteDoors = [](std::uint32_t) { return std::optional<FalloutScript::NavMeshRoute::Door>{}; };
@@ -1770,8 +1766,9 @@ namespace OFMechanics
                 PathFollower::Start start;
                 start.mRadius = request.mRadius;
                 start.mGoalRadius = request.mGoalRadius;
+                start.mPartial = mind.mPartial; // path byte +0x40: it ends 40 short (0x9E063D)
                 if (mind.mFollower.start(std::move(*path), start, actor) == PathFollower::Result::Arrived)
-                    return Walk::Arrived;
+                    return mind.mPartial ? Walk::Waiting : Walk::Arrived;
             }
 
             PathFollower::Frame out;
@@ -1803,6 +1800,13 @@ namespace OFMechanics
                 case PathFollower::Result::Moving:
                     return Walk::Moving;
                 case PathFollower::Result::Arrived:
+                    // the end of a path that stops short is no arrival: the mover is finished and the package asks
+                    // for a new path from where the actor stands (NV 0x9DCD40, 0x8ED9F2)
+                    if (mind.mPartial)
+                    {
+                        mind.mFollower.stop();
+                        return Walk::Waiting;
+                    }
                     return Walk::Arrived;
                 case PathFollower::Result::Stuck:
                     // NV 0x9E5282 to 0x9E540D: the waypoint is marked on its triangle, and the path is made again (the
