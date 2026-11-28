@@ -72,6 +72,7 @@
 #include <components/falloutscript/messagecommands.hpp>
 #include <components/falloutscript/movement.hpp>
 #include <components/falloutscript/music.hpp>
+#include <components/falloutscript/navmeshsearch.hpp>
 #include <components/falloutscript/objectcommands.hpp>
 #include <components/falloutscript/objects.hpp>
 #include <components/falloutscript/objectstate.hpp>
@@ -923,6 +924,10 @@ namespace OFScript
         /// opened and the activation goes on; else the screen of the lock opens (or the player is told that only a key
         /// opens it) and the activation stops: true.
         bool lockStops(const OFWorld::Ptr& object, const OFWorld::Ptr& actor);
+        /// What a door on the meshes is to an actor's path search (NV 0x6A71A8 to 0x6A7299): closed when its reference
+        /// has the flag 0x100 (0x57B460) or the actor does not pass its lock (0x502450), costly when its base has the
+        /// flag Minimal Use (0x518000), else open
+        FalloutScript::NavMeshSearch::Door doorRule(const OFWorld::Ptr& actor, const OFWorld::Ptr& door);
         /// The lock the player has in front of it: what it is, how hard, and what the player has to open it
         struct LockScreen
         {

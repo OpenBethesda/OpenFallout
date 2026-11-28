@@ -92,6 +92,9 @@ void ESM4::Reference::load(ESM4::Reader& reader)
             case ESM::fourCC("XRNK"):
                 reader.get(mFactionRank);
                 break;
+            case ESM::fourCC("XEZN"):
+                reader.getFormId(mEncounterZone);
+                break;
             case ESM::fourCC("XESP"):
             {
                 reader.getFormId(mEsp.parent);
@@ -377,7 +380,6 @@ void ESM4::Reference::load(ESM4::Reader& reader)
             case ESM::fourCC("XCVL"):
             case ESM::fourCC("XCZA"):
             case ESM::fourCC("XCZC"):
-            case ESM::fourCC("XEZN"):
             case ESM::fourCC("XFVC"):
             case ESM::fourCC("XHTW"):
             case ESM::fourCC("XIS2"):

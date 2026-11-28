@@ -1396,8 +1396,8 @@ namespace OFMechanics
             return { p[0], p[1], p[2] };
         }
 
-        /// What the pather reads of the loaded world (NV 0x6C8D30)
-        NavMeshPather::World patherWorld(const Frame& frame)
+        /// What the pather reads of the loaded world for an actor (NV 0x6C8D30)
+        NavMeshPather::World patherWorld(const Frame& frame, const OFWorld::Ptr& actor)
         {
             FalloutNavMeshes& meshes = *frame.mNavMeshes;
             const OFPhysics::RayCastingInterface* rays = frame.mWorld.getRayCasting();
@@ -1434,8 +1434,14 @@ namespace OFMechanics
                     return std::nullopt;
                 return toPoint(hit.mHitPos);
             };
-            // shortcut: every door triangle is open to the search; the door rule (0x5180B0) is the in-cell door step
-            world.mDoors = [](std::uint32_t) { return NavMeshSearch::Door::Open; };
+            // NV 0x6A71A8 to 0x6A7299, for the actor the request is for (0x6C9900)
+            world.mDoors = [&frame, actor](std::uint32_t door) {
+                const OFWorld::Ptr ref
+                    = OFBase::Environment::get().getWorldModel()->getPtr(ESM::FormId::fromUint32(door));
+                if (ref.isEmpty() || frame.mScripts == nullptr)
+                    return NavMeshSearch::Door::Open; // 0x6A71FF: no reference
+                return frame.mScripts->doorRule(actor, ref);
+            };
             // shortcut: no teleport door is read for the coarse route; that is the load door step
             world.mRouteDoors = [](std::uint32_t) { return std::optional<FalloutScript::NavMeshRoute::Door>{}; };
             return world;
@@ -1458,7 +1464,7 @@ namespace OFMechanics
         {
             mind.mPartial = false;
             mind.mPathStatus.clear();
-            const NavMeshPather::World world = patherWorld(frame);
+            const NavMeshPather::World world = patherWorld(frame, mind.mPtr);
             NavMeshPather::Spot start = spotOf(frame, mind.mPtr, mind.position());
             // NV 0x8E1A37: a package puts the start of its path on the nearest triangle and keeps the point moved
             // there (0x6DDC00)
@@ -1721,7 +1727,7 @@ namespace OFMechanics
                     {
                         // (0x9E520F: the triangle under the waypoint, 0x6DD6F0, or no mark)
                         NavMeshPather::Spot at = spotOf(frame, mind.mPtr, toVec(out.mStuckAt));
-                        if (NavMeshPather::resolve(patherWorld(frame), at) && at.mTriangle)
+                        if (NavMeshPather::resolve(patherWorld(frame, mind.mPtr), at) && at.mTriangle)
                             if (NavMeshSearch::Mesh* mesh = frame.mNavMeshes->find(at.mMesh))
                                 NavMeshSearch::markStuck(
                                     *mesh, *at.mTriangle, out.mStuckAt, requestOf(frame, mind, arrival).mRadius);

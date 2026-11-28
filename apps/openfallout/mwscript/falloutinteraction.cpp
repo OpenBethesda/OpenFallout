@@ -15,10 +15,12 @@
 #include <components/esm4/loadarmo.hpp>
 #include <components/esm4/loadbook.hpp>
 #include <components/esm4/loadcell.hpp>
+#include <components/esm4/loadclas.hpp>
 #include <components/esm4/loadcont.hpp>
 #include <components/esm4/loadcrea.hpp>
 #include <components/esm4/loaddehy.hpp>
 #include <components/esm4/loaddoor.hpp>
+#include <components/esm4/loadeczn.hpp>
 #include <components/esm4/loadfact.hpp>
 #include <components/esm4/loadflst.hpp>
 #include <components/esm4/loadfurn.hpp>
@@ -41,6 +43,7 @@
 #include <components/falloutscript/interaction.hpp>
 #include <components/falloutscript/lockpick.hpp>
 #include <components/falloutscript/messagetext.hpp>
+#include <components/falloutscript/navmeshdoors.hpp>
 #include <components/misc/strings/lower.hpp>
 #include <components/resource/resourcesystem.hpp>
 #include <components/vfs/manager.hpp>
@@ -56,6 +59,7 @@
 #include "../mwworld/datetimemanager.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/refdata.hpp"
+#include "../mwworld/worldmodel.hpp"
 
 namespace OFScript
 {
@@ -111,6 +115,146 @@ namespace OFScript
         // The perk entry point 32 of the player decides whether one failed forcing is enough (0x430AE0)
         return FalloutScript::Lockpick::lockBroken(
             found->second, mPerks.apply(FalloutScript::EntryPoint::ignoreBrokenLock, mPlayer, 0.0));
+    }
+
+    FalloutScript::NavMeshSearch::Door FalloutScripts::doorRule(const OFWorld::Ptr& actor, const OFWorld::Ptr& door)
+    {
+        namespace NavMeshDoors = FalloutScript::NavMeshDoors;
+        using Door = FalloutScript::NavMeshSearch::Door;
+        const FalloutScript::FormId reference = referenceOf(door);
+        const FalloutScript::FormId user = scriptReferenceOf(actor);
+        const ESM4::Reference* record
+            = reference != 0 ? mStore.get<ESM4::Reference>().search(ESM::FormId::fromUint32(reference)) : nullptr;
+        if (record == nullptr || door.getCell() == nullptr)
+            return Door::Open; // 0x6A71FF: no reference
+        const ESM4::Door* base = door.getType() == ESM4::Door::sRecordId ? door.get<ESM4::Door>()->mBase : nullptr;
+        // 0x57B460: a door whose reference has the flag 0x100
+        if (base != nullptr && (record->mFlags & 0x100) != 0)
+            return Door::Closed;
+
+        const ESM4::Reference* partner = record->mDoor.destDoor.isZeroOrUnset()
+            ? nullptr
+            : mStore.get<ESM4::Reference>().search(record->mDoor.destDoor);
+        const auto cellOf = [this](const OFWorld::CellStore* cell) -> const ESM4::Cell* {
+            const ESM::FormId* id = cell != nullptr ? cell->getCell()->getId().getIf<ESM::FormId>() : nullptr;
+            return id != nullptr ? mStore.get<ESM4::Cell>().search(*id) : nullptr;
+        };
+        // 0x546C20: the cell's zone, outside its world space's (XEZN, [ws+0xD0])
+        const auto zoneOfCell = [this](const ESM4::Cell* cell) -> const ESM4::EncounterZone* {
+            if (cell == nullptr)
+                return nullptr;
+            ESM::FormId zone = cell->mEncounterZone;
+            if (zone.isZeroOrUnset() && cell->isExterior())
+                if (const ESM4::World* world = mStore.get<ESM4::World>().search(cell->mParent))
+                    zone = world->mEncounterZone;
+            return zone.isZeroOrUnset() ? nullptr : mStore.get<ESM4::EncounterZone>().search(zone);
+        };
+        const auto ownerOf = [this](FalloutScript::FormId form, int rank) {
+            NavMeshDoors::Owner owner;
+            owner.mForm = form;
+            owner.mRank = rank < 0 ? 0 : rank;
+            if (form == 0)
+                owner.mKind = NavMeshDoors::Owner::Kind::None;
+            else if (mStore.get<ESM4::Npc>().search(ESM::FormId::fromUint32(form)) != nullptr)
+                owner.mKind = NavMeshDoors::Owner::Kind::Npc;
+            else if (mStore.get<ESM4::Faction>().search(ESM::FormId::fromUint32(form)) != nullptr)
+                owner.mKind = NavMeshDoors::Owner::Kind::Faction;
+            else
+                owner.mKind = NavMeshDoors::Owner::Kind::Other;
+            return owner;
+        };
+        // 0x546A40 and 0x546AC0: a cell's owner (its own, else its zone's) with the rank of the cell
+        const auto cellOwner = [&](const ESM4::Cell* cell) {
+            if (cell == nullptr)
+                return NavMeshDoors::Owner{};
+            const ESM::FormId* id = cell->mId.getIf<ESM::FormId>();
+            FalloutScript::FormId owner = id != nullptr ? mObjectState.cellOwner(id->toUint32()) : 0;
+            if (owner == 0)
+                if (const ESM4::EncounterZone* zone = zoneOfCell(cell))
+                    owner = zone->mData.mOwner;
+            return ownerOf(owner, cell->mFactionRank);
+        };
+
+        const ESM4::Cell* cell = cellOf(door.getCell());
+        NavMeshDoors::DoorLock lock;
+        // 0x569160: its own lock, else its teleport partner's
+        const ESM4::Reference* locked = record->mIsLocked ? record
+            : partner != nullptr && partner->mIsLocked    ? partner
+                                                          : nullptr;
+        lock.mHasLock = locked != nullptr;
+        if (locked != nullptr)
+        {
+            const FalloutScript::FormId lockRef = locked->mId.toUint32();
+            lock.mLocked = mReferenceState.isLocked(lockRef);
+            lock.mKey = locked->mKey.toUint32();
+            const Interaction::Setting setting
+                = [this](std::string_view name, double fallback) { return gameSettingOr(name, fallback); };
+            const int level = Interaction::lockLevel(
+                mReferenceState.lockLevel(lockRef), (locked->mLockFlags & 0x04) != 0, mProgress.level(), setting);
+            lock.mKeyOnly = Interaction::lockClass(level, setting) == Interaction::LockClass::Impossible; // 0x430B40
+        }
+        lock.mCellOwner = cellOwner(cell);
+        if (partner != nullptr) // ctx+4, the far cell of a load door
+        {
+            const OFWorld::Ptr far = OFBase::Environment::get().getWorldModel()->getPtr(record->mDoor.destDoor);
+            lock.mHasDestination = !far.isEmpty() && far.getCell() != nullptr;
+            if (lock.mHasDestination)
+                lock.mDestinationOwner = cellOwner(cellOf(far.getCell()));
+        }
+        // 0x567790: its own owner, its partner's, its cell's (a door takes no zone owner of its own)
+        FalloutScript::FormId owner = mObjectState.owner(reference);
+        if (owner == 0 && partner != nullptr)
+            owner = mObjectState.owner(partner->mId.toUint32());
+        if (owner == 0)
+            owner = lock.mCellOwner.mForm;
+        // 0x5679F0: its own rank, its partner's, its zone's (not -1), its cell's, else 0
+        int rank = record->mFactionRank;
+        if (rank == -1 && partner != nullptr)
+            rank = partner->mFactionRank;
+        if (rank == -1)
+        {
+            const ESM4::EncounterZone* zone = !record->mEncounterZone.isZeroOrUnset()
+                ? mStore.get<ESM4::EncounterZone>().search(record->mEncounterZone)
+                : zoneOfCell(cell);
+            if (zone != nullptr)
+                rank = zone->mData.mRank;
+        }
+        if (rank == -1 && cell != nullptr)
+            rank = cell->mFactionRank;
+        lock.mOwner = ownerOf(owner, rank);
+        // 0x567960: its own global, its partner's, its cell's; one that is there and not 0 (0x5025B9 to 0x5025E8)
+        ESM::FormId global = record->mGlobal;
+        if (global.isZeroOrUnset() && partner != nullptr)
+            global = partner->mGlobal;
+        if (global.isZeroOrUnset() && cell != nullptr)
+            global = cell->mGlobal;
+        double value = 0.0;
+        lock.mGlobalSet = !global.isZeroOrUnset() && getGlobal(global.toUint32(), value) && value != 0.0;
+
+        // 0x502670: the searcher
+        NavMeshDoors::Searcher searcher;
+        ESM::FormId actorBase;
+        if (user != 0 && baseOf(user, actorBase))
+            searcher.mBase = actorBase.toUint32();
+        const ESM4::Npc* npc = mStore.get<ESM4::Npc>().search(actorBase);
+        searcher.mNpc = npc != nullptr;
+        if (npc != nullptr)
+            if (const ESM4::Class* type = mStore.get<ESM4::Class>().search(npc->mClass))
+                searcher.mGuardClass = (type->mFo3Flags & 0x02) != 0;
+        searcher.mRank = [this, user](std::uint32_t faction) { return mActors.factionRank(user, faction); };
+        searcher.mCarries = [this, user](std::uint32_t item) { return mActors.itemCount(user, item) > 0; };
+        // +8 (0x8A61B0): a package of the type 0x15, which the games make only while they run (no plugin package
+        // has it); the engine makes none
+        searcher.mPackage15 = false;
+        bool picking = false;
+        if (!NavMeshDoors::passesLock(lock, searcher, masterForm(0xA), picking)) // MISC 0xA: Bobby Pin
+            return Door::Closed;
+        // 0x518000: the base flag Minimal Use (FNAM 0x08), or what SetMinimalUse made it
+        // shortcut: SetMinimalUse 0 on a base whose record has the flag does not clear it; keep a set/unset state when
+        // a script needs that
+        if (base != nullptr && ((base->mDoorFlags & 0x08) != 0 || mWorldState.minimalUse(base->mId.toUint32())))
+            return Door::Costly;
+        return Door::Open;
     }
 
     bool FalloutScripts::lockStops(const OFWorld::Ptr& object, const OFWorld::Ptr& actor)

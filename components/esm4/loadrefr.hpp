@@ -114,6 +114,8 @@ namespace ESM4
         float mScale = 1.0f;
         ESM::FormId mOwner;
         ESM::FormId mGlobal;
+        /// Fallout, XEZN: its own encounter zone (NV extra data 0x74, 0x567D20), none when it takes its cell's
+        ESM::FormId mEncounterZone;
         std::int32_t mFactionRank = -1;
 
         bool mIsMapMarker = false;
