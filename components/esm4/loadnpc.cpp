@@ -86,6 +86,12 @@ void ESM4::Npc::load(ESM4::Reader& reader)
         const ESM4::SubRecordHeader& subHdr = reader.subRecordHeader();
         switch (subHdr.typeId)
         {
+            case ESM::fourCC("OBND"):
+                if (subHdr.dataSize == sizeof(mBounds))
+                    reader.get(mBounds);
+                else
+                    reader.skipSubRecordData();
+                break;
             case ESM::fourCC("EDID"):
                 reader.getZString(mEditorId);
                 break;
@@ -344,7 +350,6 @@ void ESM4::Npc::load(ESM4::Reader& reader)
             case ESM::fourCC("NAM8"):
             case ESM::fourCC("NAM9"):
             case ESM::fourCC("NAMA"):
-            case ESM::fourCC("OBND"):
             case ESM::fourCC("PRKR"):
             case ESM::fourCC("PRKZ"):
             case ESM::fourCC("QNAM"):

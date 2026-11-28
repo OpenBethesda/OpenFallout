@@ -10,10 +10,29 @@
 
 #include <components/debug/debuglog.hpp>
 #include <components/esm/util.hpp>
+#include <components/esm4/loadacti.hpp>
+#include <components/esm4/loadalch.hpp>
+#include <components/esm4/loadammo.hpp>
+#include <components/esm4/loadarmo.hpp>
+#include <components/esm4/loadbook.hpp>
+#include <components/esm4/loadcont.hpp>
 #include <components/esm4/loadcrea.hpp>
+#include <components/esm4/loaddoor.hpp>
+#include <components/esm4/loadflor.hpp>
 #include <components/esm4/loadfurn.hpp>
+#include <components/esm4/loadimod.hpp>
+#include <components/esm4/loadingr.hpp>
+#include <components/esm4/loadligh.hpp>
+#include <components/esm4/loadmisc.hpp>
+#include <components/esm4/loadmstt.hpp>
 #include <components/esm4/loadnpc.hpp>
 #include <components/esm4/loadpack.hpp>
+#include <components/esm4/loadscol.hpp>
+#include <components/esm4/loadstat.hpp>
+#include <components/esm4/loadtact.hpp>
+#include <components/esm4/loadterm.hpp>
+#include <components/esm4/loadtree.hpp>
+#include <components/esm4/loadweap.hpp>
 #include <components/esm4/packageschedule.hpp>
 #include <components/falloutscript/actorstatus.hpp>
 #include <components/falloutscript/aimemory.hpp>
@@ -1219,6 +1238,53 @@ namespace OFMechanics
             return true;
         }
 
+        template <class... T>
+        const ESM4::ObjectBounds* boundsAmong(const OFWorld::Ptr& ptr)
+        {
+            const ESM4::ObjectBounds* found = nullptr;
+            ((ptr.getType() == T::sRecordId ? (found = &ptr.get<T>()->mBase->mBounds, true) : false) || ...);
+            return found;
+        }
+
+        /// What the TRAVEL done test reads of the reference a package goes to (FalloutNV.exe 0x676140, 0x6768D0 step
+        /// I)
+        FalloutTravelTarget travelTargetOf(const Frame& frame, const OFWorld::Ptr& ref)
+        {
+            using Kind = FalloutTravelTarget::Kind;
+            FalloutTravelTarget target;
+            if (ref.isEmpty())
+                return target;
+            // 0x571600: half the largest size of the base's bounds (OBND)
+            if (const ESM4::ObjectBounds* b
+                = boundsAmong<ESM4::Static, ESM4::Light, ESM4::Activator, ESM4::Potion, ESM4::Ammunition, ESM4::Armor,
+                    ESM4::Book, ESM4::Container, ESM4::Door, ESM4::Flora, ESM4::Ingredient, ESM4::ItemMod,
+                    ESM4::TalkingActivator, ESM4::Terminal, ESM4::Tree, ESM4::MiscItem, ESM4::MovableStatic,
+                    ESM4::Weapon, ESM4::Furniture, ESM4::Creature, ESM4::Npc, ESM4::StaticCollection>(ref))
+                target.mHalfSize
+                    = 0.5f * static_cast<float>(std::max({ b->mX2 - b->mX1, b->mY2 - b->mY1, b->mZ2 - b->mZ1 }));
+            const unsigned type = ref.getType();
+            if (type == ESM4::Npc::sRecordId || type == ESM4::Creature::sRecordId)
+            {
+                target.mKind = Kind::Actor;
+                // [actor+0x1AC] 9: asleep (the kinds of entry 1 to 9 lie)
+                const int kind = frame.mScripts != nullptr ? frame.mScripts->furnitureKindOf(ref) : 0;
+                target.mAsleep = kind >= 1 && kind <= 9;
+            }
+            else if (type == ESM4::Furniture::sRecordId)
+                target.mKind = Kind::Furniture;
+            else if (type == ESM4::Static::sRecordId
+                && (ref.get<ESM4::Static>()->mBase->mId == ESM::FormId::fromUint32(0x34)
+                    || ref.get<ESM4::Static>()->mBase->mId == ESM::FormId::fromUint32(0x3B)))
+                target.mKind = Kind::Marker; // 0x11CA248, 0x11CA244 (0x46B63F, 0x46B53A)
+            else
+            {
+                target.mKind = Kind::Other;
+                target.mNoMargin = type == ESM4::Activator::sRecordId || type == ESM4::Container::sRecordId
+                    || type == ESM4::Static::sRecordId || type == ESM4::StaticCollection::sRecordId;
+            }
+            return target;
+        }
+
         /// Where the package sends the actor: false when it cannot be done here (the reference it names is not in a
         /// cell that is loaded, or is not where the actor can go)
         bool makeGoal(const Frame& frame, const FalloutActors::Mind& mind, const ESM4::AIPackage& package,
@@ -1317,6 +1383,24 @@ namespace OFMechanics
                         return true;
                     }
                     goal.mCenter = reference.getRefData().getPosition().asVec3();
+                    if (goal.mBehaviour == ESM4::PackageBehaviour::Stay)
+                    {
+                        // NV 0x6768D0 for the done test, and the same chain for the request's goal radius (0x678670,
+                        // 0x8E76B9); a request to furniture has fAIFurnitureDestinationRadius (0x11CDD0C, 0x8E65C2)
+                        const FalloutTravelTarget target = travelTargetOf(frame, reference);
+                        const double minimum = frame.mScripts != nullptr
+                            ? frame.mScripts->gameSetting("iAIDistanceRadiusMinLocation").value_or(100.0)
+                            : 100.0;
+                        goal.mTravel = true;
+                        goal.mFurnitureTarget = target.mKind == FalloutTravelTarget::Kind::Furniture;
+                        goal.mDoneRadius = falloutTravelRadius(
+                            package.mLocation.radius, target, static_cast<std::int32_t>(minimum), goal.mPlain);
+                        goal.mRadius = goal.mFurnitureTarget
+                            ? static_cast<float>(frame.mScripts != nullptr
+                                    ? frame.mScripts->gameSetting("fAIFurnitureDestinationRadius").value_or(5.0)
+                                    : 5.0)
+                            : static_cast<float>(goal.mDoneRadius);
+                    }
                     // A character that goes to a piece of furniture goes to the place of its marker where it sits down,
                     // which is beside the furniture, not to the middle of it
                     if (frame.mScripts != nullptr && reference.getType() == ESM4::Furniture::sRecordId)
@@ -1626,10 +1710,10 @@ namespace OFMechanics
         /// One frame of walking to the place, as the path handler of the executables walks it (NV 0x9E0470, 0x9E0A00).
         /// The actor is there within `arrival` units of the place (0: the request's goal radius) and may run.
         Walk walkTo(const Frame& frame, FalloutActors::Mind& mind, const osg::Vec3f& destination, float duration,
-            float arrival = 0.f, bool run = false)
+            float arrival = 0.f, bool run = false, bool nearEnough = true)
         {
             // A character that is there already has arrived, whether it could walk or not
-            if (arrival > 0.f && isNear(mind.position(), destination, arrival))
+            if (nearEnough && arrival > 0.f && isNear(mind.position(), destination, arrival))
             {
                 mind.mFollower.stop();
                 return Walk::Arrived;
@@ -2108,12 +2192,56 @@ namespace OFMechanics
             finishTravel(frame, mind);
         }
 
+        /// NV 0x6768D0, the done test of a TRAVEL package, for a Stay goal near a reference (the dispatcher 0x90B029
+        /// asks it on every update)
+        bool travelDone(const Frame& frame, const FalloutActors::Mind& mind)
+        {
+            const FalloutGoal& goal = mind.mGoal;
+            const osg::Vec3f feet = mind.position();
+            // steps B, H and L: an actor that sits (4) or sleeps (9, the kinds 1 to 9) going with no radius of its own
+            // to furniture is there asleep, or seated within 100 across (0x676D9B to 0x676DC0)
+            const int kind = frame.mScripts != nullptr ? frame.mScripts->furnitureKindOf(mind.mPtr) : 0;
+            const bool ownRadius = mind.mPackage != nullptr && mind.mPackage->mLocation.radius > 0;
+            if (kind != 0 && !ownRadius && goal.mFurnitureTarget)
+            {
+                if (kind <= 9)
+                    return true;
+                const osg::Vec2f across(feet.x() - goal.mCenter.x(), feet.y() - goal.mCenter.y());
+                return across.length() < 100.f;
+            }
+            // no controller: a slack of 32 (0x8B30B0)
+            float radius = 0.f;
+            bool lying = false;
+            frame.mWorld.getBodyRadius(mind.mPtr, radius, lying);
+            // 0x8853A0: the height of its bounds by its scale
+            const float height = 2.f * frame.mWorld.getHalfExtents(mind.mPtr).z();
+            return falloutTravelDone(
+                feet, height, goal.mCenter, static_cast<float>(goal.mDoneRadius), goal.mPlain, radius, lying);
+        }
+
         /// One frame of going to the place of the package; true when the character has got there
         bool goToPlace(const Frame& frame, FalloutActors::Mind& mind, float duration)
         {
-            switch (walkTo(frame, mind, mind.mGoal.mCenter, duration, mind.mGoal.mRadius))
+            const bool travel = mind.mGoal.mTravel;
+            const auto arrive = [&] {
+                mind.mAtGoal = true;
+                mind.mRestPlace = mind.position();
+                mind.mFailures = 0;
+                stopWalking(mind);
+                return true;
+            };
+            if (travel && travelDone(frame, mind))
+                return arrive();
+            // a TRAVEL package is done only by its done test: at the end of a path short of it the actor mover is
+            // finished and the package asks for a new path from where it stands (NV 0x8ED9F2, 0x8EDB62)
+            switch (walkTo(frame, mind, mind.mGoal.mCenter, duration, mind.mGoal.mRadius, false, !travel))
             {
                 case Walk::Arrived:
+                    if (travel && !travelDone(frame, mind))
+                    {
+                        stopWalking(mind);
+                        return false;
+                    }
                     mind.mAtGoal = true;
                     mind.mRestPlace = mind.position();
                     mind.mFailures = 0;

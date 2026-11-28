@@ -203,6 +203,9 @@ namespace FalloutScript::PathFollower
         mStuckTime = 0.f;
         mLast = actor.mPosition; // 0x9E0572
         mTurnTime = -1.f; // 0x9E05A9
+        // a new handler has no door (the copy 0x9E3380 does not carry +0xD4 or +0xD8)
+        mDoorStep = 0;
+        mOpening = 0;
         if (mPath.size() < 2) // 0x9E05B8
         {
             mWaypoint = actor.mPosition;
@@ -545,6 +548,49 @@ namespace FalloutScript::PathFollower
         mMove = lo | hi;
     }
 
+    int Follower::doors(const Actor& actor)
+    {
+        const auto stateOf = [&](std::uint32_t door) { return actor.mDoorState ? actor.mDoorState(door) : 0; };
+        switch (mDoorStep)
+        {
+            case 0: // 0x9E20F4 to 0x9E21F9
+                // (0x9E20C0 also asks the reference's vfunc 0xF0, which every reference answers true)
+                if (actor.mDoor == 0 || stateOf(actor.mDoor) != 3 || mRequest.mNoDoors)
+                    return 0;
+                if (!actor.mDoorOnWay || !actor.mDoorOnWay(actor.mDoor))
+                    return 0;
+                if (!actor.mOpenDoor || !actor.mOpenDoor(actor.mDoor))
+                    mDoorStep = 2; // 0x9E21B1
+                else
+                {
+                    mOpening = actor.mDoor;
+                    mDoorStep = 1; // 0x9E21DF
+                }
+                return mDoorStep;
+            case 1: // 0x9E2205 to 0x9E2283
+            {
+                if (mOpening == 0)
+                {
+                    mDoorStep = 2;
+                    return 2;
+                }
+                const int state = stateOf(mOpening);
+                if (state == 1)
+                {
+                    mOpening = 0;
+                    mDoorStep = 0;
+                    return 0;
+                }
+                return state == 2 ? 1 : 0;
+            }
+            case 2:
+                return 2; // 0x9E2289
+            default:
+                mDoorStep = 0;
+                return 0;
+        }
+    }
+
     Result Follower::update(const Actor& actor, float dt, Frame& out)
     {
         out = Frame{};
@@ -599,6 +645,12 @@ namespace FalloutScript::PathFollower
         {
             cleanup();
             return Result::Moving;
+        }
+        // 0x9E0ECE: it waits while a door it opened opens, and the path fails on one it may not open
+        if (const int door = doors(actor); door != 0)
+        {
+            cleanup();
+            return door == 1 ? Result::Moving : Result::Door;
         }
         chooseMove(actor, dt); // 0x9E0F1C
         out.mMove = mMove;

@@ -33,6 +33,57 @@ namespace OFMechanics
             static_cast<float>(std::max(locationRadius, 0)), falloutSmallestArrival, falloutLargestArrival);
     }
 
+    int falloutTravelRadius(
+        std::int32_t locationRadius, const FalloutTravelTarget& target, std::int32_t minimum, bool& plain)
+    {
+        using Kind = FalloutTravelTarget::Kind;
+        plain = false;
+        int r = locationRadius;
+        if (r == 0) // 0x676B1F
+        {
+            switch (target.mKind)
+            {
+                case Kind::Marker:
+                case Kind::Furniture:
+                    r = 20; // 0x676BB8
+                    plain = true;
+                    break;
+                case Kind::Actor:
+                    if (target.mAsleep)
+                    {
+                        r = 90; // 0x676C1A
+                        plain = true;
+                    }
+                    else
+                        r = static_cast<int>(target.mHalfSize) + 20; // 0x676C37 to 0x676C47
+                    break;
+                case Kind::Other:
+                    r = std::max(static_cast<int>(target.mHalfSize) + (target.mNoMargin ? 0 : 20), 0); // 0x676C8C
+                    break;
+                case Kind::None:
+                    break;
+            }
+        }
+        // 0x676CD2 to 0x676D02: a marker with a radius of its own of up to 20 takes no slack either
+        if (target.mKind == Kind::Marker && locationRadius >= 0 && locationRadius <= 20)
+            plain = true;
+        if (r == 0)
+            r = minimum; // 0x676D06 to 0x676D18
+        return r;
+    }
+
+    bool falloutTravelDone(const osg::Vec3f& feet, float height, const osg::Vec3f& place, float radius, bool plain,
+        float bodyRadius, bool lying)
+    {
+        osg::Vec3f d = feet - place; // 0x8B2FD0
+        const float h = height == 0.f ? 128.f : height; // 0x8B3001 to 0x8B3017
+        if (feet.z() - 30.f < place.z() && place.z() < feet.z() + h + 30.f) // 0x8B3038 to 0x8B305B
+            d.z() = 0.f;
+        if (!plain)
+            radius += std::max(bodyRadius * (lying ? 2.f : 1.f), 32.f); // 0x8B3086 to 0x8B30CA
+        return d.length2() <= radius * radius; // 0x4B5470
+    }
+
     int falloutChooseCandidate(
         const std::vector<FalloutCandidate>& candidates, const osg::Vec3f& center, float radius, const osg::Vec3f& from)
     {

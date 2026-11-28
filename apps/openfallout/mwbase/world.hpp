@@ -513,6 +513,10 @@ namespace OFBase
         /// Return physical or rendering half extents of the given actor.
         virtual osg::Vec3f getHalfExtents(const OFWorld::ConstPtr& actor, bool rendering = false) const = 0;
 
+        /// The radius of the body of an actor's character controller in game units and whether it lies (FalloutNV.exe
+        /// 0xC6E280, bit 1 of [ctrl+0x414]); false when it has none
+        virtual bool getBodyRadius(const OFWorld::ConstPtr& actor, float& radius, bool& lying) const = 0;
+
         /// Export scene graph to a file and return the filename.
         /// \param ptr object to export scene graph for (if empty, export entire scene graph)
         virtual std::filesystem::path exportSceneGraph(const OFWorld::Ptr& ptr) = 0;

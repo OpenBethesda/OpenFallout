@@ -81,6 +81,12 @@ namespace OFPhysics
          */
         osg::Vec3f getHalfExtents() const;
 
+        /// The radius of the body of the character controller in game units (FalloutNV.exe 0xC6E280 times 6.9991: the
+        /// capsule's, else [ctrl+0x5F0], the hull's r0 at 0xC72F1F), and whether the body lies (bit 1 of
+        /// [ctrl+0x414], 0xC72706)
+        float getBodyRadius() const { return mBodyRadius; }
+        bool isLying() const { return mLying; }
+
         /**
          * Returns the half extents of the collision body (not scaled)
          */
@@ -188,6 +194,8 @@ namespace OFPhysics
         CharacterShape mCharacterShape;
         float mBuiltScale = 0.f;
         float mStepHeight = 0.f;
+        float mBodyRadius = 0.f;
+        bool mLying = false;
         std::unique_ptr<btCollisionShape> mShape;
         /// The parts of a body that is the union of several capsules (a btCompoundShape keeps no ownership)
         std::vector<std::unique_ptr<btCollisionShape>> mParts;

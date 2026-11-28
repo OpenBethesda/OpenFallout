@@ -36,6 +36,8 @@
 
 #include "destruction.hpp"
 
+#include "objectbounds.hpp"
+
 namespace ESM4
 {
     class Reader;
@@ -58,6 +60,7 @@ namespace ESM4
         std::uint32_t mFlags; // from the header, see above for details
 
         std::string mEditorId;
+        ObjectBounds mBounds; // OBND
         std::string mFullName;
 
         ESM::Path mModel;

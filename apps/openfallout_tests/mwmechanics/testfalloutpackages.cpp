@@ -17,6 +17,47 @@ namespace
 
     constexpr float epsilon = 0.001f;
 
+    TEST(FalloutPackagesTest, theTravelRadiusIsThePackagesOrOneFromItsTarget)
+    {
+        using Kind = FalloutTravelTarget::Kind;
+        bool plain = true;
+        FalloutTravelTarget target;
+        // the location's own radius, with the slack
+        EXPECT_EQ(falloutTravelRadius(300, target, 100, plain), 300);
+        EXPECT_FALSE(plain);
+        // none and no target: iAIDistanceRadiusMinLocation
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 100);
+        // a marker: 20 and no slack, also with a radius of its own up to 20 (0x676CD2)
+        target.mKind = Kind::Marker;
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 20);
+        EXPECT_TRUE(plain);
+        EXPECT_EQ(falloutTravelRadius(15, target, 100, plain), 15);
+        EXPECT_TRUE(plain);
+        EXPECT_EQ(falloutTravelRadius(21, target, 100, plain), 21);
+        EXPECT_FALSE(plain);
+        // an actor: half its size and 20, or 90 asleep
+        target = { Kind::Actor, false, false, 40.7f };
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 60);
+        target.mAsleep = true;
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 90);
+        EXPECT_TRUE(plain);
+        // a static: half its size only
+        target = { Kind::Other, false, true, 64.f };
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 64);
+    }
+
+    TEST(FalloutPackagesTest, theTravelIsDoneWithinTheRadiusAndTheSlackIgnoringHeightNearTheBody)
+    {
+        const osg::Vec3f feet(0.f, 0.f, 0.f);
+        // 0x8B2F90: within the band of the body the height does not count
+        EXPECT_TRUE(falloutTravelDone(feet, 128.f, osg::Vec3f(100.f, 0.f, 150.f), 100.f, true, 20.f, false));
+        EXPECT_FALSE(falloutTravelDone(feet, 128.f, osg::Vec3f(100.f, 0.f, 200.f), 100.f, true, 20.f, false));
+        // the slack is the body's radius, at least 32, doubled for a lying body
+        EXPECT_TRUE(falloutTravelDone(feet, 128.f, osg::Vec3f(132.f, 0.f, 0.f), 100.f, false, 20.f, false));
+        EXPECT_FALSE(falloutTravelDone(feet, 128.f, osg::Vec3f(133.f, 0.f, 0.f), 100.f, false, 20.f, false));
+        EXPECT_TRUE(falloutTravelDone(feet, 128.f, osg::Vec3f(160.f, 0.f, 0.f), 100.f, false, 30.f, true));
+    }
+
     TEST(FalloutPackagesTest, aGoalThatRoamsGetsTheRadiusOfThePackageWithinLimits)
     {
         const auto roam = ESM4::PackageBehaviour::Roam;

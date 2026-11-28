@@ -42,6 +42,12 @@ void ESM4::Ingredient::load(ESM4::Reader& reader)
         const ESM4::SubRecordHeader& subHdr = reader.subRecordHeader();
         switch (subHdr.typeId)
         {
+            case ESM::fourCC("OBND"):
+                if (subHdr.dataSize == sizeof(mBounds))
+                    reader.get(mBounds);
+                else
+                    reader.skipSubRecordData();
+                break;
             case ESM::fourCC("EDID"):
                 reader.getZString(mEditorId);
                 break;
@@ -101,7 +107,6 @@ void ESM4::Ingredient::load(ESM4::Reader& reader)
             case ESM::fourCC("MODF"): // Model data end
             case ESM::fourCC("EFID"):
             case ESM::fourCC("EFIT"):
-            case ESM::fourCC("OBND"):
             case ESM::fourCC("KSIZ"):
             case ESM::fourCC("KWDA"):
             case ESM::fourCC("VMAD"):

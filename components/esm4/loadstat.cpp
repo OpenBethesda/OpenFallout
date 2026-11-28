@@ -41,6 +41,12 @@ void ESM4::Static::load(ESM4::Reader& reader)
         const ESM4::SubRecordHeader& subHdr = reader.subRecordHeader();
         switch (subHdr.typeId)
         {
+            case ESM::fourCC("OBND"):
+                if (subHdr.dataSize == sizeof(mBounds))
+                    reader.get(mBounds);
+                else
+                    reader.skipSubRecordData();
+                break;
             case ESM::fourCC("EDID"):
                 reader.getZString(mEditorId);
                 break;
@@ -87,7 +93,6 @@ void ESM4::Static::load(ESM4::Reader& reader)
             case ESM::fourCC("MODC"): // More model data
             case ESM::fourCC("MODS"):
             case ESM::fourCC("MODF"): // Model data end
-            case ESM::fourCC("OBND"):
             case ESM::fourCC("DNAM"):
             case ESM::fourCC("BRUS"): // FONV
             case ESM::fourCC("RNAM"): // FONV

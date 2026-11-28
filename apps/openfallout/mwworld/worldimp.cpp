@@ -2792,6 +2792,16 @@ namespace OFWorld
             return mPhysics->getHalfExtents(object);
     }
 
+    bool World::getBodyRadius(const ConstPtr& actor, float& radius, bool& lying) const
+    {
+        const OFPhysics::Actor* body = mPhysics->getActor(actor);
+        if (body == nullptr)
+            return false;
+        radius = body->getBodyRadius();
+        lying = body->isLying();
+        return true;
+    }
+
     std::filesystem::path World::exportSceneGraph(const Ptr& ptr)
     {
         auto file = mUserDataPath / "openfallout.osgt";

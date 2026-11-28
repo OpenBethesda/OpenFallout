@@ -63,6 +63,10 @@ namespace OFPhysics
         const double scale
             = mCharacterShape.mHasModel ? static_cast<double>(referenceScale) * mCharacterShape.mSize : 1.0;
         const Body::Body body = Body::body(mCharacterShape.mBound, scale > 0 ? scale : 1.0);
+        mLying = body.mKind != Body::Kind::Upright;
+        // shortcut: a body with legs is a list shape, so the exe reads [ctrl+0x5F0] for it as for the hull; the value
+        // the builder stores there for it is not read, so it takes the body's capsule; read 0xC72834 to 0xC72F1F
+        mBodyRadius = static_cast<float>(mLying ? body.mCapsules.front().mRadius : body.mHalfWidth);
         // The solver keeps the middle of the shape half its height over the feet
         const double middle = body.mHeight / 2;
         const auto at = [&](const Body::Point& point) {

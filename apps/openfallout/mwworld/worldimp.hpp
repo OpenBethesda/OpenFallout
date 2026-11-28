@@ -568,6 +568,7 @@ namespace OFWorld
 
         /// Return physical or rendering half extents of the given actor.
         osg::Vec3f getHalfExtents(const OFWorld::ConstPtr& actor, bool rendering = false) const override;
+        bool getBodyRadius(const OFWorld::ConstPtr& actor, float& radius, bool& lying) const override;
 
         /// Export scene graph to a file and return the filename.
         /// \param ptr object to export scene graph for (if empty, export entire scene graph)

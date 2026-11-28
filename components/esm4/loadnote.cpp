@@ -41,6 +41,12 @@ void ESM4::Note::load(ESM4::Reader& reader)
         const ESM4::SubRecordHeader& subHdr = reader.subRecordHeader();
         switch (subHdr.typeId)
         {
+            case ESM::fourCC("OBND"):
+                if (subHdr.dataSize == sizeof(mBounds))
+                    reader.get(mBounds);
+                else
+                    reader.skipSubRecordData();
+                break;
             case ESM::fourCC("EDID"):
                 reader.getZString(mEditorId);
                 break;
@@ -85,7 +91,6 @@ void ESM4::Note::load(ESM4::Reader& reader)
             case ESM::fourCC("ONAM"):
             case ESM::fourCC("SNAM"):
             case ESM::fourCC("XNAM"):
-            case ESM::fourCC("OBND"):
             case ESM::fourCC("VMAD"):
             case ESM::fourCC("DNAM"): // FO4
             case ESM::fourCC("PNAM"): // FO4

@@ -4,6 +4,7 @@
 #include "navmeshsmoother.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -73,6 +74,14 @@ namespace FalloutScript::PathFollower
         /// What its movement animation moved it this frame, in its own frame (x right, y forward; NV 0x8B7100 with
         /// 0x494390); none when it has no 3D, and then it goes at its gait (0x9E3520)
         std::optional<Point> mRootMotion;
+        /// The door the probe in front of it found last (ActorMover +0x2C, NV 0x8E51B0 with 0x8B3CB0), 0 for none
+        std::uint32_t mDoor = 0;
+        /// A door's state (NV 0x47B250): 0 none, 1 open, 2 opening, 3 closed, 4 closing
+        std::function<int(std::uint32_t door)> mDoorState;
+        /// The door is on the way it walks (NV 0x9E22D0)
+        std::function<bool(std::uint32_t door)> mDoorOnWay;
+        /// It activates the door (NV 0x573170 with (actor, 0, 0, 1)); false when the door does not let it
+        std::function<bool(std::uint32_t door)> mOpenDoor;
     };
 
     /// What the path request says to the follower (NV PathingRequest)
@@ -85,6 +94,8 @@ namespace FalloutScript::PathFollower
         std::optional<float> mGoalHeading; // +0x8C when +0x99 (0x507E10, 0x505C00)
         /// The search did not get to the goal (path byte +0x40, 0x6C9FA0)
         bool mPartial = false;
+        /// +0x98: no door at all (NV 0x73CB80)
+        bool mNoDoors = false;
     };
 
     /// What the follower does this frame
@@ -137,6 +148,7 @@ namespace FalloutScript::PathFollower
         bool startTurn(const Actor& actor, float heading); // NV 0x9E7610 with both flags clear
         float turnStep(const Actor& actor, float dt); // NV 0x9E7D70
         void chooseMove(const Actor& actor, float dt); // NV 0x9E2AA0
+        int doors(const Actor& actor); // NV 0x9E20C0
 
         Path mPath;
         Start mRequest;
@@ -164,6 +176,8 @@ namespace FalloutScript::PathFollower
         float mDecisionTime = 1.f; // +0x8C
         bool mTurnInPlace = false; // +0xE1
         float mTurnInPlaceTime = 0.f; // +0xB8
+        int mDoorStep = 0; // +0xD4
+        std::uint32_t mOpening = 0; // +0xD8, the door it opened
     };
 }
 
