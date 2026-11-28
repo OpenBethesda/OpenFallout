@@ -4,8 +4,10 @@
 #include <components/esm/formid.hpp>
 #include <components/esm/refid.hpp>
 #include <components/falloutscript/navmeshdoors.hpp>
+#include <components/falloutscript/navmeshpather.hpp>
 #include <components/falloutscript/navmeshsmoother.hpp>
 
+#include <limits>
 #include <map>
 #include <set>
 #include <unordered_map>
@@ -36,8 +38,19 @@ namespace OFMechanics
         FalloutScript::NavMeshSearch::Mesh* find(std::uint32_t id);
         /// The meshes of a loaded cell, where a point in it may be (NV PathingLocation 0x6DD280)
         std::vector<FalloutScript::NavMeshSearch::Candidate> candidates(ESM::FormId cell) const;
-        /// The height of the land under a point of a mesh's cell (NV 0x45CBC0): lowest() in an interior
-        FalloutScript::NavMeshSearch::LandHeight land() const;
+        /// The height of the water of a loaded cell (NV 0x45CBC0), lowest() when it has none or is not loaded
+        float waterOf(ESM::FormId cell) const;
+
+        /// The navigation data of every mesh, loaded or not (NAVI, NV 0x6B5FAD), for the coarse route
+        FalloutScript::NavMeshRoute::Infos infos() const;
+        /// The cell and world space of a loaded mesh, the cell 0 when it is not loaded
+        FalloutScript::NavMeshPather::Spot placeOf(std::uint32_t mesh) const;
+        /// NV 0x6D8A00: the meshes of a place's interior cell, or outside those of the loaded cells of the 3 by 3
+        /// around its cell whose square meets the square of `distance` round the place (0x6D8B64 to 0x6D8C41)
+        std::vector<const FalloutScript::NavMeshSearch::Mesh*> near(
+            const FalloutScript::NavMeshPather::Spot& spot, float distance) const;
+        /// Every loaded mesh (NV 0x6D91D0)
+        std::vector<std::uint32_t> loadedMeshes() const;
 
         /// An in-cell door over the meshes (NV 0x6C3640): one that is not open marks the triangles under the boxes of
         /// its bodies (0x6C5190, 0x6997E0), an open one takes its marks off (0x6C4FB0, 0x699A30). `worldspace` is that
@@ -59,7 +72,10 @@ namespace OFMechanics
             bool mDisabled = false;
             int mGridX = 0; // of an exterior cell
             int mGridY = 0;
+            float mWater = std::numeric_limits<float>::lowest(); // the cell's height of water (NV 0x5471E0)
+            std::uint32_t mWorld = 0; // the world space's form, 0 in an interior
         };
+        std::map<std::uint32_t, FalloutScript::NavMeshRoute::Info> mInfos;
         /// The meshes each closed door marked
         std::map<std::uint32_t, std::vector<std::uint32_t>> mDoorMarks;
         bool mMeshesAdded = false;

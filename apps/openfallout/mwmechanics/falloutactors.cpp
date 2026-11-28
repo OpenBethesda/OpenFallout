@@ -35,6 +35,8 @@
 #include "../mwbase/world.hpp"
 #include "../mwclass/esm4creature.hpp"
 #include "../mwclass/esm4npc.hpp"
+#include "../mwphysics/collisiontype.hpp"
+#include "../mwphysics/raycasting.hpp"
 #include "../mwrender/falloutactoranimation.hpp"
 #include "../mwscript/falloutscripts.hpp"
 #include "../mwworld/cellstore.hpp"
@@ -1345,41 +1347,98 @@ namespace OFMechanics
             return { v.x(), v.y(), v.z() };
         }
 
-        /// The loaded cell a place is in: the actor's own in an interior, the exterior cell under it outside (NV
-        /// PathingLocation 0x6DD280)
-        const OFWorld::CellStore* cellAt(const Frame& frame, const OFWorld::Ptr& ptr, const osg::Vec3f& position)
+        namespace NavMeshPather = FalloutScript::NavMeshPather;
+
+        /// A place at a point (NV PathingLocation 0x6DD280): in the cell of the place `near` when that is an interior,
+        /// outside in the loaded exterior cell under the point of its world space
+        NavMeshPather::Spot spotAt(
+            const Frame& frame, const NavMeshSearch::Point& point, const NavMeshPather::Spot& near)
         {
-            const OFWorld::CellStore* cell = ptr.getCell();
-            if (cell == nullptr || !cell->isExterior())
-                return cell;
-            const ESM::ExteriorCellLocation index
-                = ESM::positionToExteriorCellLocation(position.x(), position.y(), cell->getCell()->getWorldSpace());
+            NavMeshPather::Spot spot;
+            spot.mPoint = point;
+            spot.mWorld = near.mWorld;
+            if (near.mWorld == 0)
+            {
+                spot.mCell = near.mCell;
+                return spot;
+            }
             for (const OFWorld::CellStore* active : frame.mWorld.getActiveCells())
-                if (active->isExterior() && active->getCell()->getExteriorCellLocation() == index)
-                    return active;
-            return nullptr;
+            {
+                const OFWorld::Cell& cell = *active->getCell();
+                const ESM::FormId* world = cell.getWorldSpace().getIf<ESM::FormId>();
+                if (!active->isExterior() || world == nullptr || world->toUint32() != near.mWorld)
+                    continue;
+                if (cell.getExteriorCellLocation()
+                    == ESM::positionToExteriorCellLocation(point[0], point[1], cell.getWorldSpace()))
+                    if (const ESM::FormId* id = cell.getId().getIf<ESM::FormId>())
+                        spot.mCell = id->toUint32();
+            }
+            return spot;
         }
 
-        /// The triangle a place is on and the place on it, as the game finds the start and the end of a path (NV
-        /// 0x6DD6F0, then 0x6DDC00 when that finds none)
-        std::optional<std::pair<NavMeshSearch::Place, NavMeshSearch::Point>> placeOnMesh(
-            const Frame& frame, const OFWorld::Ptr& ptr, const osg::Vec3f& position, bool nearest = true)
+        /// The place of an actor's point: its own cell inside, outside the exterior cell under the point
+        NavMeshPather::Spot spotOf(const Frame& frame, const OFWorld::Ptr& ptr, const osg::Vec3f& position)
         {
-            const OFWorld::CellStore* cell = cellAt(frame, ptr, position);
-            if (cell == nullptr)
-                return std::nullopt;
-            const ESM::FormId* id = cell->getCell()->getId().getIf<ESM::FormId>();
-            if (id == nullptr)
-                return std::nullopt;
-            const std::vector<NavMeshSearch::Candidate> candidates = frame.mNavMeshes->candidates(*id);
-            // the height of the land there (NV 0x45CBC0): none in an interior
-            const float land = cell->isExterior()
-                ? frame.mWorld.getTerrainHeightAt(position, cell->getCell()->getWorldSpace())
-                : std::numeric_limits<float>::lowest();
-            const NavMeshSearch::Point point = toPoint(position);
-            if (auto found = NavMeshSearch::locate(candidates, point, land); found || !nearest)
-                return found;
-            return NavMeshSearch::locateNearest(candidates, point, land);
+            NavMeshPather::Spot near;
+            if (const OFWorld::CellStore* cell = ptr.getCell())
+            {
+                if (const ESM::FormId* id = cell->getCell()->getId().getIf<ESM::FormId>())
+                    near.mCell = id->toUint32();
+                if (cell->isExterior())
+                    if (const ESM::FormId* world = cell->getCell()->getWorldSpace().getIf<ESM::FormId>())
+                        near.mWorld = world->toUint32();
+            }
+            return spotAt(frame, toPoint(position), near);
+        }
+
+        osg::Vec3f toVec(const NavMeshSearch::Point& p)
+        {
+            return { p[0], p[1], p[2] };
+        }
+
+        /// What the pather reads of the loaded world (NV 0x6C8D30)
+        NavMeshPather::World patherWorld(const Frame& frame)
+        {
+            FalloutNavMeshes& meshes = *frame.mNavMeshes;
+            const OFPhysics::RayCastingInterface* rays = frame.mWorld.getRayCasting();
+            // NV 0x6E6C00 casts in the layer 38 (PATHPICK), which hits the static world, the land, doors and water and
+            // not clutter, bipeds or character controllers
+            // shortcut: the engine keeps clutter in its World group, so these rays hit it; split clutter off into its
+            // own group when the physics has one
+            constexpr int mask = OFPhysics::CollisionType_World | OFPhysics::CollisionType_HeightMap
+                | OFPhysics::CollisionType_Door | OFPhysics::CollisionType_Water;
+            NavMeshPather::World world;
+            world.mMeshes = meshes.meshes();
+            world.mInfos = meshes.infos();
+            world.mCandidates
+                = [&meshes](std::uint32_t cell) { return meshes.candidates(ESM::FormId::fromUint32(cell)); };
+            world.mSpotAt = [&frame](const NavMeshSearch::Point& point, const NavMeshPather::Spot& near) {
+                return spotAt(frame, point, near);
+            };
+            world.mSpotOfMesh = [&meshes](std::uint32_t mesh) { return meshes.placeOf(mesh); };
+            world.mNear
+                = [&meshes](const NavMeshPather::Spot& spot, float distance) { return meshes.near(spot, distance); };
+            world.mLoaded = [&meshes] { return meshes.loadedMeshes(); };
+            world.mWater = [&meshes](std::uint32_t cell, const NavMeshSearch::Point&) {
+                return meshes.waterOf(ESM::FormId::fromUint32(cell));
+            };
+            world.mClear = [rays](const NavMeshSearch::Point& from, const NavMeshSearch::Point& to) {
+                return !rays->castRay(toVec(from), toVec(to), mask).mHit;
+            };
+            world.mDown
+                = [rays](const NavMeshSearch::Point& from, float length) -> std::optional<NavMeshSearch::Point> {
+                const osg::Vec3f start = toVec(from);
+                const OFPhysics::RayCastingResult hit
+                    = rays->castRay(start, start - osg::Vec3f(0.f, 0.f, length), mask);
+                if (!hit.mHit)
+                    return std::nullopt;
+                return toPoint(hit.mHitPos);
+            };
+            // shortcut: every door triangle is open to the search; the door rule (0x5180B0) is the in-cell door step
+            world.mDoors = [](std::uint32_t) { return NavMeshSearch::Door::Open; };
+            // shortcut: no teleport door is read for the coarse route; that is the load door step
+            world.mRouteDoors = [](std::uint32_t) { return std::optional<FalloutScript::NavMeshRoute::Door>{}; };
+            return world;
         }
 
         /// The path request of an actor (NV 0x6E2420 and 0x6E2A55): 0.6 of the width of its bounds by its scale
@@ -1393,37 +1452,29 @@ namespace OFMechanics
             return request;
         }
 
-        /// The way from where the actor is to the place on the meshes of the cells that are loaded: the search's
-        /// triangles (NV 0x6A6B70) and the smoother's way along them (NV 0x6AD770)
+        /// The way from where the actor is to the place, by the pather (NV 0x6C8E10)
         std::optional<PathFollower::Path> findPath(const Frame& frame, FalloutActors::Mind& mind,
             const NavMeshSearch::Request& request, const osg::Vec3f& destination)
         {
             mind.mPartial = false;
             mind.mPathStatus.clear();
-            const auto from = placeOnMesh(frame, mind.mPtr, mind.position());
-            const auto to = placeOnMesh(frame, mind.mPtr, destination);
-            if (!from || !to)
+            const NavMeshPather::World world = patherWorld(frame);
+            NavMeshPather::Spot start = spotOf(frame, mind.mPtr, mind.position());
+            // NV 0x8E1A37: a package puts the start of its path on the nearest triangle and keeps the point moved
+            // there (0x6DDC00)
+            if (start.mCell != 0)
+                if (const auto nearest = NavMeshSearch::locateNearest(
+                        world.mCandidates(start.mCell), start.mPoint, world.mWater(start.mCell, start.mPoint)))
+                    start.mPoint = nearest->second;
+            std::optional<NavMeshPather::Path> path
+                = NavMeshPather::findPath(world, request, start, spotAt(frame, toPoint(destination), start));
+            if (!path || path->mPoints.empty())
             {
-                mind.mPathStatus = !from ? "no navmesh under the actor" : "no navmesh under the place";
+                mind.mPathStatus = start.mCell == 0 ? "the actor is in no loaded cell" : "the pather found no way";
                 return std::nullopt;
             }
-            const NavMeshSearch::Meshes meshes = frame.mNavMeshes->meshes();
-            // shortcut: the doors on the meshes are not filled yet (the in-cell door step), so none is asked about
-            const auto steps = NavMeshSearch::search(
-                meshes, from->first, to->first, request, [](std::uint32_t) { return NavMeshSearch::Door::Open; });
-            if (!steps)
-            {
-                mind.mPathStatus = "the search found no way";
-                return std::nullopt;
-            }
-            NavMeshSearch::Smoothed way
-                = NavMeshSearch::smooth(meshes, request, *steps, from->second, to->second, frame.mNavMeshes->land());
-            if (!way.mFound)
-            {
-                mind.mPathStatus = "the smoother found no way along the triangles";
-                return std::nullopt;
-            }
-            return std::move(way.mPoints);
+            mind.mPartial = path->mPartial;
+            return std::move(path->mPoints);
         }
 
         /// The boxes of the bodies of a door's model that the obstacle manager reads (NV 0x6C2210: a body in the layer
@@ -1669,11 +1720,11 @@ namespace OFMechanics
                     if (out.mMarkStuck)
                     {
                         // (0x9E520F: the triangle under the waypoint, 0x6DD6F0, or no mark)
-                        if (const auto at = placeOnMesh(
-                                frame, mind.mPtr, osg::Vec3f(out.mStuckAt[0], out.mStuckAt[1], out.mStuckAt[2]), false))
-                            if (NavMeshSearch::Mesh* mesh = frame.mNavMeshes->find(at->first.mMesh))
+                        NavMeshPather::Spot at = spotOf(frame, mind.mPtr, toVec(out.mStuckAt));
+                        if (NavMeshPather::resolve(patherWorld(frame), at) && at.mTriangle)
+                            if (NavMeshSearch::Mesh* mesh = frame.mNavMeshes->find(at.mMesh))
                                 NavMeshSearch::markStuck(
-                                    *mesh, at->first.mTriangle, out.mStuckAt, requestOf(frame, mind, arrival).mRadius);
+                                    *mesh, *at.mTriangle, out.mStuckAt, requestOf(frame, mind, arrival).mRadius);
                         Log(Debug::Info) << mind.mPtr.getCellRef().getRefId() << " is stuck on its way at "
                                          << out.mStuckAt[0] << "," << out.mStuckAt[1] << "," << out.mStuckAt[2]
                                          << ": the place is marked and the path is made again";

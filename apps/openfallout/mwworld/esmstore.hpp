@@ -138,6 +138,7 @@ namespace ESM4
     struct MovableStatic;
     struct Music;
     struct NavMesh;
+    struct Navigation;
     struct Note;
     struct Npc;
     struct Outfit;
@@ -209,13 +210,13 @@ namespace OFWorld
             Store<ESM4::LevelledNpc>, Store<ESM4::Light>, Store<ESM4::LightingTemplate>, Store<ESM4::LoadScreen>,
             Store<ESM4::LoadScreenType>, Store<ESM4::MagicEffect>, Store<ESM4::MediaLocationController>,
             Store<ESM4::MediaSet>, Store<ESM4::Message>, Store<ESM4::MiscItem>, Store<ESM4::MovableStatic>,
-            Store<ESM4::Music>, Store<ESM4::NavMesh>, Store<ESM4::Note>, Store<ESM4::Npc>, Store<ESM4::Outfit>,
-            Store<ESM4::Perk>, Store<ESM4::Potion>, Store<ESM4::Projectile>, Store<ESM4::Quest>, Store<ESM4::Race>,
-            Store<ESM4::Recipe>, Store<ESM4::RecipeCategory>, Store<ESM4::Reference>, Store<ESM4::Region>,
-            Store<ESM4::Reputation>, Store<ESM4::Script>, Store<ESM4::Sound>, Store<ESM4::SoundReference>,
-            Store<ESM4::Spell>, Store<ESM4::Static>, Store<ESM4::StaticCollection>, Store<ESM4::TalkingActivator>,
-            Store<ESM4::Terminal>, Store<ESM4::TextureSet>, Store<ESM4::Tree>, Store<ESM4::VoiceType>,
-            Store<ESM4::Water>, Store<ESM4::Weapon>, Store<ESM4::Weather>, Store<ESM4::World>,
+            Store<ESM4::Music>, Store<ESM4::Navigation>, Store<ESM4::NavMesh>, Store<ESM4::Note>, Store<ESM4::Npc>,
+            Store<ESM4::Outfit>, Store<ESM4::Perk>, Store<ESM4::Potion>, Store<ESM4::Projectile>, Store<ESM4::Quest>,
+            Store<ESM4::Race>, Store<ESM4::Recipe>, Store<ESM4::RecipeCategory>, Store<ESM4::Reference>,
+            Store<ESM4::Region>, Store<ESM4::Reputation>, Store<ESM4::Script>, Store<ESM4::Sound>,
+            Store<ESM4::SoundReference>, Store<ESM4::Spell>, Store<ESM4::Static>, Store<ESM4::StaticCollection>,
+            Store<ESM4::TalkingActivator>, Store<ESM4::Terminal>, Store<ESM4::TextureSet>, Store<ESM4::Tree>,
+            Store<ESM4::VoiceType>, Store<ESM4::Water>, Store<ESM4::Weapon>, Store<ESM4::Weather>, Store<ESM4::World>,
             Store<ESM4::DehydrationStage>, Store<ESM4::HungerStage>, Store<ESM4::SleepDeprivationStage>,
             Store<ESM4::Class>>;
 

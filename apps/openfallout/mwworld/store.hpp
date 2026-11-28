@@ -24,11 +24,12 @@
 #include <components/esm4/loadamef.hpp>
 #include <components/esm4/loadccrd.hpp>
 #include <components/esm4/loadcdck.hpp>
-#include <components/esm4/loadchal.hpp>
 #include <components/esm4/loadcell.hpp>
+#include <components/esm4/loadchal.hpp>
 #include <components/esm4/loadcmny.hpp>
 #include <components/esm4/loadcsno.hpp>
 #include <components/esm4/loadland.hpp>
+#include <components/esm4/loadnavi.hpp>
 #include <components/esm4/loadrefr.hpp>
 #include <components/misc/rng.hpp>
 #include <components/misc/strings/algorithm.hpp>
@@ -314,6 +315,19 @@ namespace OFWorld
 
         const ESM4::Land* search(ESM::ExteriorCellLocation cellLocation) const;
         const std::unordered_map<ESM::ExteriorCellLocation, const ESM4::Land*>& getLands() const { return mLands; }
+    };
+
+    /// The navigation data of every content file (NV 0x6B5FAD to 0x6B6321): each file has the same NAVI form with the
+    /// meshes it adds or changes; a later file's NVMI and NVCI of a mesh replace the earlier ones (the lookup 0x693D70,
+    /// the copy 0x6B5AB0 at 0x6B613A, the lists resized by 0x6B51A0 at 0x6B51F4)
+    template <>
+    class Store<ESM4::Navigation> : public StoreBase
+    {
+        std::unordered_map<ESM::FormId, ESM4::Navigation::FalloutInfo> mInfos;
+
+    public:
+        void insertStatic(const ESM4::Navigation& navigation);
+        const ESM4::Navigation::FalloutInfo* search(ESM::FormId navMesh) const;
     };
 
     template <>

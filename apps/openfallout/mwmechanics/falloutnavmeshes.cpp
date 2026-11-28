@@ -6,7 +6,9 @@
 
 #include <components/debug/debuglog.hpp>
 
+#include <components/esm4/loadnavi.hpp>
 #include <components/esm4/loadnavm.hpp>
+#include <components/esm4/loadwrld.hpp>
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
@@ -76,7 +78,27 @@ namespace OFMechanics
         if (!mIndexed)
         {
             for (const ESM4::NavMesh& record : store.get<ESM4::NavMesh>())
+            {
                 mByCell[record.mCell].push_back(&record);
+                // its NVMI and NVCI (NV 0x6B4B50, 0x6B51A0)
+                const ESM4::Navigation::FalloutInfo* data = store.get<ESM4::Navigation>().search(record.mId);
+                if (data == nullptr)
+                    continue;
+                FalloutScript::NavMeshRoute::Info& info = mInfos[record.mId.toUint32()];
+                info.mId = record.mId.toUint32();
+                info.mFlags = data->mFlags;
+                // the world space it is in (0x690800: +0x1C as a TESWorldSpace), 0 in an interior
+                if (store.get<ESM4::World>().search(ESM::RefId(data->mSpace)) != nullptr)
+                    info.mWorld = data->mSpace.toUint32();
+                info.mCentre = { data->mCentre[0], data->mCentre[1], data->mCentre[2] };
+                info.mCost = data->mCost;
+                for (const ESM::FormId& id : data->mNeighbours)
+                    info.mNeighbours.push_back(id.toUint32());
+                for (const ESM::FormId& id : data->mNeighboursToo)
+                    info.mNeighboursToo.push_back(id.toUint32());
+                for (const ESM::FormId& id : data->mDoors)
+                    info.mDoors.push_back(id.toUint32());
+            }
             mIndexed = true;
         }
         std::set<ESM::FormId> active;
@@ -101,8 +123,13 @@ namespace OFMechanics
                 if (cell.isExterior())
                 {
                     loaded.mWorldspace = cell.getWorldSpace();
+                    if (const ESM::FormId* world = loaded.mWorldspace.getIf<ESM::FormId>())
+                        loaded.mWorld = world->toUint32();
                     loaded.mGridX = cell.getGridX();
                     loaded.mGridY = cell.getGridY();
+                    // NV 0x5471E0: an exterior cell with the flag of water has its height of water or its world's
+                    if (cell.hasWater())
+                        loaded.mWater = cell.getWaterHeight();
                 }
                 // the closed doors mark it as they mark the others (marking a mesh again adds nothing, 0x699990)
                 mMeshesAdded = true;
@@ -151,17 +178,75 @@ namespace OFMechanics
         return result;
     }
 
-    NavMeshSearch::LandHeight FalloutNavMeshes::land() const
+    float FalloutNavMeshes::waterOf(ESM::FormId cell) const
     {
-        return [this](std::uint32_t mesh, const NavMeshSearch::Point& p) {
-            const auto found = mLoaded.find(mesh);
-            if (found == mLoaded.end())
-                return std::numeric_limits<float>::max(); // no cell: as the game (0x6AD7D0)
-            if (found->second.mWorldspace.empty())
-                return std::numeric_limits<float>::lowest(); // an interior (0x45CBC0, 0x1015F5C)
-            return OFBase::Environment::get().getWorld()->getTerrainHeightAt(
-                osg::Vec3f(p[0], p[1], p[2]), found->second.mWorldspace);
+        const auto found = mCells.find(cell);
+        if (found == mCells.end() || found->second.empty())
+            return std::numeric_limits<float>::lowest();
+        // NV 0x5471E0 gives an interior no water: it has only placed water (0x547250)
+        // shortcut: placed water (0x547250's water objects, here and in the cells around, 0x45CC8E) is not read;
+        // read it with the placed water objects
+        return mLoaded.at(found->second.front()).mWater;
+    }
+
+    FalloutScript::NavMeshRoute::Infos FalloutNavMeshes::infos() const
+    {
+        return [this](std::uint32_t mesh) -> const FalloutScript::NavMeshRoute::Info* {
+            const auto found = mInfos.find(mesh);
+            return found != mInfos.end() ? &found->second : nullptr;
         };
+    }
+
+    FalloutScript::NavMeshPather::Spot FalloutNavMeshes::placeOf(std::uint32_t mesh) const
+    {
+        FalloutScript::NavMeshPather::Spot spot;
+        const auto found = mLoaded.find(mesh);
+        if (found == mLoaded.end())
+            return spot;
+        spot.mCell = found->second.mCell.toUint32();
+        spot.mWorld = found->second.mWorld;
+        return spot;
+    }
+
+    std::vector<const NavMeshSearch::Mesh*> FalloutNavMeshes::near(
+        const FalloutScript::NavMeshPather::Spot& spot, float distance) const
+    {
+        std::vector<const NavMeshSearch::Mesh*> result;
+        const Loaded* own = nullptr;
+        for (const auto& [id, loaded] : mLoaded)
+            if (loaded.mCell.toUint32() == spot.mCell)
+                own = &loaded;
+        if (own == nullptr)
+            return result;
+        constexpr float cellSize = 4096.f; // 0x1017A10
+        constexpr float big = std::numeric_limits<float>::max();
+        const NavMeshSearch::Point low{ spot.mPoint[0] - distance, spot.mPoint[1] - distance, -big };
+        const NavMeshSearch::Point high{ spot.mPoint[0] + distance, spot.mPoint[1] + distance, big };
+        for (const auto& [id, loaded] : mLoaded)
+        {
+            if (spot.mWorld == 0 || own->mWorld == 0)
+            {
+                if (loaded.mCell == own->mCell) // an interior: its own cell (0x425FD0)
+                    result.push_back(&loaded.mMesh);
+                continue;
+            }
+            if (loaded.mWorld != own->mWorld || std::abs(loaded.mGridX - own->mGridX) > 1
+                || std::abs(loaded.mGridY - own->mGridY) > 1)
+                continue;
+            const NavMeshSearch::Point cellLow{ loaded.mGridX * cellSize, loaded.mGridY * cellSize, -big };
+            const NavMeshSearch::Point cellHigh{ cellLow[0] + cellSize, cellLow[1] + cellSize, big };
+            if (FalloutScript::NavMeshDoors::overlaps(cellLow, cellHigh, low, high)) // 0x6D93D0
+                result.push_back(&loaded.mMesh);
+        }
+        return result;
+    }
+
+    std::vector<std::uint32_t> FalloutNavMeshes::loadedMeshes() const
+    {
+        std::vector<std::uint32_t> result;
+        for (const auto& [id, loaded] : mLoaded)
+            result.push_back(id);
+        return result;
     }
 
     void FalloutNavMeshes::setDoor(std::uint32_t door, ESM::FormId cell, const ESM::RefId& worldspace,

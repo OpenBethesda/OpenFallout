@@ -136,7 +136,7 @@ namespace FalloutScript::NavMeshSearch
         return height;
     }
 
-    std::optional<std::uint16_t> triangleAt(const Mesh& mesh, const Point& point, float landHeight)
+    std::optional<std::uint16_t> triangleAt(const Mesh& mesh, const Point& point, float waterHeight)
     {
         // The square of the grid (NV 0x69D370): none outside the box of the grid, the last one on the far sides
         const Grid& grid = mesh.mGrid;
@@ -151,11 +151,11 @@ namespace FalloutScript::NavMeshSearch
         const std::uint32_t y = square(point[1] - grid.mMin[1], grid.mCellY);
 
         // NV 0x696A50
-        constexpr float aboveLand = 50.f; // 0x101E2C0
+        constexpr float aboveWater = 50.f; // 0x101E2C0
         constexpr float lowest = -180.f; // 0x106B160
         constexpr float highest = 64.f; // 0x10240C0
         constexpr float closeEnough = 40.f; // 0x1035810
-        const bool onLand = point[2] < landHeight + aboveLand; // 0x696AE4
+        const bool nearWater = point[2] < waterHeight + aboveWater; // 0x696AE4
         std::optional<std::uint16_t> best;
         float bestHeight = std::numeric_limits<float>::max();
         for (const std::uint16_t triangle : grid.mCells[y * grid.mDivisor + x])
@@ -163,7 +163,7 @@ namespace FalloutScript::NavMeshSearch
             if (triangle >= mesh.mTriangles.size() || (mesh.mTriangles[triangle].mFlags & Flag_Covered) != 0)
                 continue;
             const std::optional<float> height = heightAbove(mesh, triangle, point);
-            if (!height || (!onLand && *height < lowest) || *height > highest) // 0x696B85, 0x696B9A
+            if (!height || (!nearWater && *height < lowest) || *height > highest) // 0x696B85, 0x696B9A
                 continue;
             const float distance = std::abs(*height);
             if (distance >= bestHeight)
@@ -273,12 +273,12 @@ namespace FalloutScript::NavMeshSearch
     }
 
     std::optional<std::pair<Place, Point>> locate(
-        const std::vector<Candidate>& candidates, const Point& point, float landHeight)
+        const std::vector<Candidate>& candidates, const Point& point, float waterHeight)
     {
         // NV 0x6DD74C: the one mesh of the place, whatever its flags; the point is not moved
         if (candidates.size() == 1)
         {
-            const auto triangle = triangleAt(*candidates.front().mMesh, point, landHeight);
+            const auto triangle = triangleAt(*candidates.front().mMesh, point, waterHeight);
             if (!triangle)
                 return std::nullopt;
             return std::make_pair(Place{ candidates.front().mMesh->mId, *triangle }, point);
@@ -286,13 +286,13 @@ namespace FalloutScript::NavMeshSearch
         // NV 0x6DD80C
         for (const Candidate& candidate : candidates)
             if (!candidate.mDisabled)
-                if (const auto triangle = triangleAt(*candidate.mMesh, point, landHeight))
+                if (const auto triangle = triangleAt(*candidate.mMesh, point, waterHeight))
                     return std::make_pair(Place{ candidate.mMesh->mId, *triangle }, point);
-        return locateNearest(candidates, point, landHeight);
+        return locateNearest(candidates, point, waterHeight);
     }
 
     std::optional<std::pair<Place, Point>> locateNearest(
-        const std::vector<Candidate>& candidates, const Point& point, float landHeight)
+        const std::vector<Candidate>& candidates, const Point& point, float waterHeight)
     {
         // NV 0x6DDC00
         if (candidates.size() == 1)
@@ -304,10 +304,10 @@ namespace FalloutScript::NavMeshSearch
             return std::make_pair(Place{ mesh.mId, nearest->mTriangle },
                 nearest->mInside ? point : moveOnto(mesh, nearest->mTriangle, point));
         }
-        constexpr float nearLand = 25.f; // 0x104F2F0
+        constexpr float nearWaterLine = 25.f; // 0x104F2F0
         constexpr float above = 180.f; // 0x104ED58
         constexpr float below = -64.f; // 0x106B9F0
-        const bool low = point[2] < landHeight + nearLand;
+        const bool low = point[2] < waterHeight + nearWaterLine;
         const Mesh* bestMesh = nullptr;
         std::uint16_t bestTriangle = 0;
         float bestDistance = std::numeric_limits<float>::max();
@@ -377,8 +377,9 @@ namespace FalloutScript::NavMeshSearch
         return std::nullopt;
     }
 
-    std::optional<std::vector<Step>> search(
-        const Meshes& meshes, const Place& start, const Place& goal, const Request& request, const DoorRule& doors)
+    std::optional<std::vector<Step>> search(const Meshes& meshes, const Place& start, const Place& goal,
+        const Request& request, const DoorRule& doors, const std::vector<std::uint32_t>* filter,
+        std::vector<Step>* partial)
     {
         const Mesh* startMesh = meshes(start.mMesh);
         const Mesh* goalMesh = meshes(goal.mMesh);
@@ -406,6 +407,20 @@ namespace FalloutScript::NavMeshSearch
         first.mPoint = startMesh->centroid(start.mTriangle);
         first.mH = length(minus(first.mPoint, goalPoint)) * goalWeight;
         push(first);
+        // The node nearest the goal by the estimate, the start first (NV 0x6A80A0; a lower one wins, 0x6A81E4)
+        Place best = start;
+        const auto chain = [&](const Node& last) {
+            std::vector<Step> path;
+            for (const Node* node = &last;;)
+            {
+                path.push_back(Step{ node->mPlace, node->mParentEdge });
+                if (!node->mHasParent)
+                    break;
+                node = &nodes[node->mParent];
+            }
+            std::reverse(path.begin(), path.end());
+            return path;
+        };
 
         while (!open.empty())
         {
@@ -423,18 +438,7 @@ namespace FalloutScript::NavMeshSearch
             const bool nearEnough = request.mRadius > 100.f
                 && across2 < 0.25f * request.mGoalRadius * request.mGoalRadius && across2 > toGoal[2] * toGoal[2];
             if (place == goal || nearEnough)
-            {
-                std::vector<Step> path;
-                for (const Node* node = &current;;)
-                {
-                    path.push_back(Step{ node->mPlace, node->mParentEdge });
-                    if (!node->mHasParent)
-                        break;
-                    node = &nodes[node->mParent];
-                }
-                std::reverse(path.begin(), path.end());
-                return path;
-            }
+                return chain(current);
 
             const Mesh& mesh = *meshes(place.mMesh);
             const Triangle& here = mesh.mTriangles[place.mTriangle];
@@ -442,6 +446,11 @@ namespace FalloutScript::NavMeshSearch
             {
                 const auto next = across(meshes, place, edge);
                 if (!next)
+                    continue;
+                // The mesh filter (NV 0x6A6FFB to 0x6A7068): over an external edge only into a mesh of the list
+                if (filter != nullptr && (here.mFlags & (1u << edge)) != 0
+                    && std::find(filter->begin(), filter->end(), mesh.mExternal[here.mEdges[edge]].mMesh)
+                        == filter->end())
                     continue;
                 // An external connection of type 1 is no way (NV 0x6A70B0 to 0x6A70C6)
                 if ((here.mFlags & (1u << edge)) != 0 && mesh.mExternal[here.mEdges[edge]].mType == 1)
@@ -543,8 +552,13 @@ namespace FalloutScript::NavMeshSearch
                 node.mHasParent = true;
                 node.mClosed = false;
                 push(node);
+                if (node.mH < nodes[best].mH)
+                    best = to;
             }
         }
+        // NV 0x6A6B70 asks for the way to the nearest node when there is none to the goal (0x6A6E78, 0x6A7DB9)
+        if (partial != nullptr)
+            *partial = chain(nodes[best]);
         return std::nullopt;
     }
 }

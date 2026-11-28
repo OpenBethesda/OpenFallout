@@ -50,10 +50,10 @@ namespace
         }
     };
 
-    // Outdoors on low land: the smoother is simple
-    const LandHeight lowLand = [](std::uint32_t, const Point&) { return 0.f; };
+    // Outdoors with the water low: the smoother is simple
+    const WaterHeight lowWater = [](std::uint32_t, const Point&) { return 0.f; };
     // An interior: the full smoother
-    const LandHeight interior = [](std::uint32_t, const Point&) { return std::numeric_limits<float>::lowest(); };
+    const WaterHeight interior = [](std::uint32_t, const Point&) { return std::numeric_limits<float>::lowest(); };
 
     TEST(FalloutScriptNavMeshSmootherTest, the_tangents_of_two_circles)
     {
@@ -112,9 +112,9 @@ namespace
         world.mMeshes[1] = grid(1, 3, 1);
         const std::vector<Step> corridor{ { { 1, 1 }, 0xffff }, { { 1, 0 }, 0 }, { { 1, 3 }, 1 }, { { 1, 2 }, 0 },
             { { 1, 5 }, 1 }, { { 1, 4 }, 0 } };
-        for (const LandHeight* land : { &lowLand, &interior })
+        for (const WaterHeight* water : { &lowWater, &interior })
         {
-            const Smoothed way = smooth(world.meshes(), Request{}, corridor, { 20, 50, 0 }, { 280, 50, 0 }, *land);
+            const Smoothed way = smooth(world.meshes(), Request{}, corridor, { 20, 50, 0 }, { 280, 50, 0 }, *water);
             ASSERT_TRUE(way.mFound);
             ASSERT_EQ(way.mPoints.size(), 2u);
             EXPECT_NEAR(way.mPoints[0].mLocation.mPoint[0], 20.f, 1e-3f);
@@ -164,7 +164,7 @@ namespace
             { { 1, 4 }, 1 }, { { 1, 5 }, 0 } };
         Request request;
         request.mRadius = 20.f;
-        const Smoothed way = smooth(world.meshes(), request, corridor, { 170, 30, 0 }, { 30, 170, 0 }, lowLand);
+        const Smoothed way = smooth(world.meshes(), request, corridor, { 170, 30, 0 }, { 30, 170, 0 }, lowWater);
         ASSERT_TRUE(way.mFound);
         ASSERT_GE(way.mPoints.size(), 3u);
         // every point is on the mesh, and none is in the square that is cut off

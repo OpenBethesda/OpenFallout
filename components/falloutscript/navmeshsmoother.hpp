@@ -58,15 +58,18 @@ namespace FalloutScript::NavMeshSearch
         std::vector<WayPoint> mPoints;
         /// The doors on the triangles of the way (NV 0x6AD770 at its end, output +0x30)
         std::vector<std::uint32_t> mDoors;
+        /// When it did not get there (NV 0x6ADB3B): the edges between the triangles of the way that are narrower than
+        /// the actor (NV 0x6B2FC0), for the next search to stay off (Request::mAvoid)
+        std::vector<std::pair<Place, unsigned>> mNarrow;
     };
 
-    /// The height of the land under a point of a mesh's cell (NV 0x45CBC0): lowest() in an interior, max() when the
-    /// mesh has no cell
-    using LandHeight = std::function<float(std::uint32_t mesh, const Point& point)>;
+    /// The height of the water at a point of a mesh's cell (NV 0x45CBC0: the cell's water, 0x547250 and 0x5471E0):
+    /// lowest() in an interior, max() when the mesh has no cell
+    using WaterHeight = std::function<float(std::uint32_t mesh, const Point& point)>;
 
     /// The way along `corridor` (a search's triangles) from `start` to `end`
     Smoothed smooth(const Meshes& meshes, const Request& request, const std::vector<Step>& corridor, Point start,
-        Point end, const LandHeight& land);
+        Point end, const WaterHeight& water);
 }
 
 #endif

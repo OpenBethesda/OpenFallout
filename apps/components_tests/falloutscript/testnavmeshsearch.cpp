@@ -267,7 +267,7 @@ namespace
         // 150 above the upper floor: more than 40 off, so the nearest, but nothing more than 180 below (0x106B160)
         EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 250.f }), std::optional<std::uint16_t>(2));
         EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 400.f }), std::nullopt);
-        // ...unless the point is near the land
+        // ...unless the point is near the water
         EXPECT_EQ(triangleAt(mesh, { 70.f, 20.f, 400.f }, 360.f), std::optional<std::uint16_t>(2));
         // Outside the box of the grid
         EXPECT_EQ(triangleAt(mesh, { 120.f, 20.f, 10.f }), std::nullopt);

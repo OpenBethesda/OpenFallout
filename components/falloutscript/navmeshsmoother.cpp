@@ -355,6 +355,8 @@ namespace FalloutScript::NavMeshSearch
             float mCost = 1.f;
             unsigned mIndex = 0xffffffff; // +0x3C
             unsigned mPartner = 0xffffffff; // +0x40
+            /// +0x14 of a corner: the crossing of the corridor it came from, a triangle and its edge (NV 0x6AE370)
+            std::pair<Place, unsigned> mPortal{};
         };
 
         struct Node
@@ -375,13 +377,13 @@ namespace FalloutScript::NavMeshSearch
         {
         public:
             Smoother(const Meshes& meshes, const Request& request, const std::vector<Step>& corridor, Point start,
-                Point end, const LandHeight& land)
+                Point end, const WaterHeight& water)
                 : mMeshes(meshes)
                 , mRequest(request)
                 , mCorridor(corridor)
                 , mStart(start)
                 , mEnd(end)
-                , mLand(land)
+                , mWaterHeight(water)
             {
             }
 
@@ -393,7 +395,7 @@ namespace FalloutScript::NavMeshSearch
             const std::vector<Step>& mCorridor;
             Point mStart;
             Point mEnd;
-            const LandHeight& mLand;
+            const WaterHeight& mWaterHeight;
             bool mSimple = false;
             std::vector<Pov> mPovs;
             std::vector<std::size_t> mLeft;
@@ -437,12 +439,13 @@ namespace FalloutScript::NavMeshSearch
             {
                 Vertex mVertex;
                 Place mPlace;
+                unsigned mEdge = 0; // with mPlace, the crossing it came from
                 unsigned mOther = 0; // the length of the other chain when it was added (+0x14)
                 unsigned mCorner = 0xffffffff; // +0x1C
             };
             std::vector<Element> chains[2]; // left, right
-            const auto add = [&](int side, const Vertex& v, const Place& place) {
-                chains[side].push_back({ v, place, static_cast<unsigned>(chains[1 - side].size()) });
+            const auto add = [&](int side, const Vertex& v, const Place& place, unsigned edge) {
+                chains[side].push_back({ v, place, edge, static_cast<unsigned>(chains[1 - side].size()) });
             };
             for (std::size_t i = 0; i + 1 < mCorridor.size(); ++i)
             {
@@ -461,26 +464,26 @@ namespace FalloutScript::NavMeshSearch
                     const Point w = minus(pa, mStart);
                     if (u[0] * w[1] - u[1] * w[0] > 0.f)
                     {
-                        add(0, b, place);
-                        add(1, a, place);
+                        add(0, b, place, edge);
+                        add(1, a, place, edge);
                     }
                     else
                     {
-                        add(0, a, place);
-                        add(1, b, place);
+                        add(0, a, place, edge);
+                        add(1, b, place, edge);
                     }
                     continue;
                 }
                 const Vertex& lastLeft = chains[0].back().mVertex;
                 const Vertex& lastRight = chains[1].back().mVertex;
                 if (a == lastLeft)
-                    add(1, b, place);
+                    add(1, b, place, edge);
                 else if (a == lastRight)
-                    add(0, b, place);
+                    add(0, b, place, edge);
                 else if (b == lastLeft)
-                    add(1, a, place);
+                    add(1, a, place, edge);
                 else if (b == lastRight)
-                    add(0, a, place);
+                    add(0, a, place, edge);
                 else
                 {
                     // NV 0x6AE66E: the crossing before, seen from this triangle
@@ -491,13 +494,13 @@ namespace FalloutScript::NavMeshSearch
                     const Vertex c0{ place.mMesh, n.mVertices[back->second] };
                     const Vertex c1{ place.mMesh, n.mVertices[(back->second + 1) % 3] };
                     if (a == c0)
-                        add(1, b, back->first);
+                        add(1, b, back->first, back->second);
                     else if (a == c1)
-                        add(0, b, back->first);
+                        add(0, b, back->first, back->second);
                     else if (b == c0)
-                        add(1, a, back->first);
+                        add(1, a, back->first, back->second);
                     else if (b == c1)
-                        add(0, a, back->first);
+                        add(0, a, back->first, back->second);
                 }
             }
             for (int side = 0; side < 2; ++side)
@@ -508,8 +511,13 @@ namespace FalloutScript::NavMeshSearch
                 std::vector<unsigned> kept(chain.size(), 0xffffffff);
                 for (std::size_t k = 0; k < chain.size(); ++k)
                     corner(chain, k, side == 0, kept);
+                const std::vector<std::size_t>& list = side == 0 ? mLeft : mRight;
                 for (std::size_t k = 0; k < chain.size(); ++k)
+                {
                     chains[side][k].mCorner = kept[k];
+                    if (kept[k] != 0xffffffff)
+                        mPovs[list[kept[k]]].mPortal = { chains[side][k].mPlace, chains[side][k].mEdge };
+                }
             }
             // NV 0x6AE890: each corner's first kept corner of the other side added at or after it
             for (int side = 0; side < 2; ++side)
@@ -670,7 +678,7 @@ namespace FalloutScript::NavMeshSearch
                     continue;
                 if (circle.mType == 5 && index != b)
                 {
-                    if (mRequest.mRefuseSmallCircles && a.mType != 2)
+                    if (mRequest.mPartial && a.mType != 2)
                         return false;
                     out *= 10.f; // 0x1020758
                 }
@@ -801,7 +809,8 @@ namespace FalloutScript::NavMeshSearch
                 const Mesh& arrivalMesh = mesh(leg.mEnd.mPlace);
                 const float z = heightOn(arrivalMesh, leg.mEnd.mPlace.mTriangle, p, maxFloat, maxFloat).value_or(p[2]);
                 const float dz = z - pb.mPoint[2];
-                if ((p[2] >= mLand(leg.mEnd.mPlace.mMesh, p) && dz <= -64.f) || dz >= 180.f) // 0x106B9F0, 0x104ED58
+                if ((p[2] >= mWaterHeight(leg.mEnd.mPlace.mMesh, p) && dz <= -64.f)
+                    || dz >= 180.f) // 0x106B9F0, 0x104ED58
                 {
                     ++failures;
                     continue;
@@ -854,14 +863,14 @@ namespace FalloutScript::NavMeshSearch
             Smoothed out;
             if (mCorridor.empty())
                 return out;
-            // NV 0x6AD7D0 to 0x6AD9B1: an end high above the land is brought down onto the mesh, and the smoother is
+            // NV 0x6AD7D0 to 0x6AD9B1: an end high above the water is brought down onto the mesh, and the smoother is
             // simple only when neither needed it
             bool simple = true;
             for (const bool isStart : { true, false })
             {
                 Point& p = isStart ? mStart : mEnd;
                 const Place& place = isStart ? mCorridor.front().mPlace : mCorridor.back().mPlace;
-                if (p[2] < mLand(place.mMesh, p) + 50.f) // 0x101E2C0
+                if (p[2] < mWaterHeight(place.mMesh, p) + 50.f) // 0x101E2C0
                     continue;
                 simple = false;
                 const Mesh& m = mesh(place);
@@ -943,7 +952,26 @@ namespace FalloutScript::NavMeshSearch
             std::reverse(path.begin(), path.end());
             out.mFound = found >= 0;
             if (!out.mFound)
+            {
                 fallback(path);
+                // NV 0x6B2FC0: each edge from one triangle of the way to the next whose 3D length squared is under
+                // 4 R² (0x101DB80, 0x6B30A3)
+                for (std::size_t i = 1; i < mCorridor.size(); ++i)
+                {
+                    const Place& from = mCorridor[i - 1].mPlace;
+                    const unsigned edge = mCorridor[i].mEdge;
+                    const Mesh& m = mesh(from);
+                    const Triangle& triangle = m.mTriangles[from.mTriangle];
+                    const Point side
+                        = minus(m.mVertices[triangle.mVertices[edge]], m.mVertices[triangle.mVertices[(edge + 1) % 3]]);
+                    if (4.f * mRequest.mRadius * mRequest.mRadius > dot(side, side))
+                        out.mNarrow.emplace_back(from, edge);
+                }
+                // NV 0x6ADB5B to 0x6ADBBC: and the crossing of the corner the way ends at
+                const Pov& lastPov = mPovs[mNodes[path.back()].mPov];
+                if (lastPov.mType == 0 || lastPov.mType == 1)
+                    out.mNarrow.push_back(lastPov.mPortal);
+            }
             write(path, !out.mFound, out);
             // NV 0x6AD770 at its end: the doors on the triangles of the way
             for (const Step& step : mCorridor)
@@ -987,7 +1015,7 @@ namespace FalloutScript::NavMeshSearch
                 return;
             Location arrival = leg.mEnd;
             if (mSimple)
-                arrival.mPoint[2] = std::max(arrival.mPoint[2], mLand(arrival.mPlace.mMesh, arrival.mPoint));
+                arrival.mPoint[2] = std::max(arrival.mPoint[2], mWaterHeight(arrival.mPlace.mMesh, arrival.mPoint));
             // it stops two radii short of the end
             arrival.mPoint
                 = minus(arrival.mPoint, times(unit(minus(target, departure->mPoint)), 2.f * mRequest.mRadius));
@@ -1028,7 +1056,7 @@ namespace FalloutScript::NavMeshSearch
                 const float l = length(minus(arrival.mPoint, departure.mPoint));
                 if (mSimple)
                     departure.mPoint[2]
-                        = std::max(departure.mPoint[2], mLand(departure.mPlace.mMesh, departure.mPoint));
+                        = std::max(departure.mPoint[2], mWaterHeight(departure.mPlace.mMesh, departure.mPoint));
                 bool emit = true;
                 float th = 0.f;
                 if (i > 1)
@@ -1045,7 +1073,7 @@ namespace FalloutScript::NavMeshSearch
                     out.mPoints.push_back({ departure, scaled(perpendicular(node.mA, before.mSide), s, l) });
                 }
                 if (mSimple && (i + 1 == path.size() || failed))
-                    arrival.mPoint[2] = std::max(arrival.mPoint[2], mLand(arrival.mPlace.mMesh, arrival.mPoint));
+                    arrival.mPoint[2] = std::max(arrival.mPoint[2], mWaterHeight(arrival.mPlace.mMesh, arrival.mPoint));
                 slopes(departure, arrival.mPoint, out); // 0x6B028B
                 const float rNext = mPovs[node.mPov].mRadius;
                 float thNext = 0.f;
@@ -1114,9 +1142,10 @@ namespace FalloutScript::NavMeshSearch
                         && !out.mPoints.empty() && far(*x, out.mPoints.back().mLocation.mPoint))
                     {
                         Point point = *x;
-                        // 0x6B0956 to 0x6B09A9: not below the land, by the cell of the point before
+                        // 0x6B0956 to 0x6B09A9: not below the water, by the cell of the point before
                         if (mSimple)
-                            point[2] = std::max(point[2], mLand(out.mPoints.back().mLocation.mPlace.mMesh, point));
+                            point[2]
+                                = std::max(point[2], mWaterHeight(out.mPoints.back().mLocation.mPlace.mMesh, point));
                         out.mPoints.push_back({ Location{ at, -1, point }, times(way, mRequest.mRadius) });
                     }
                 }
@@ -1261,9 +1290,9 @@ namespace FalloutScript::NavMeshSearch
     }
 
     Smoothed smooth(const Meshes& meshes, const Request& request, const std::vector<Step>& corridor, Point start,
-        Point end, const LandHeight& land)
+        Point end, const WaterHeight& water)
     {
-        Smoother smoother(meshes, request, corridor, start, end, land);
+        Smoother smoother(meshes, request, corridor, start, end, water);
         return smoother.run();
     }
 }

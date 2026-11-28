@@ -152,9 +152,18 @@ namespace FalloutScript::NavMeshSearch
         /// +0x94 (getter NV 0x69E390): a step to a triangle's middle costs 1 + the sum of their avoidCost there more
         /// (NV 0x6A74AD to 0x6A7516, the sum 0x6DC990)
         std::vector<AvoidObject> mAvoidObjects;
-        /// +0x9B, on by default (NV 0x6E2420; read by 0x6A9560): the smoother takes no straight leg through a small
-        /// circle (one round an actor) but from the start (NV 0x6B2C00)
-        bool mRefuseSmallCircles = true;
+        /// +0x9B, on by default (NV 0x6E2420; read by 0x6A9560): a path that stops short of the goal may stand (the
+        /// pather, NV 0x6CCB03, 0x6CCC26, 0x6CCF6D; the actor mover, 0x9DD868), and the smoother takes no straight leg
+        /// through a small circle (one round an actor) but from the start (NV 0x6B2C00)
+        bool mPartial = true;
+        /// +0xA1 (setter 0x8DF1C0): a stretch the search finds no way along is walked point to point (NV 0x6CA850)
+        bool mStraightWhenLost = false;
+        /// +0xA3 (setter 0x9DEFF0): the last try keeps the triangles of a search that the smoother found no way along
+        /// (NV 0x6CCD08)
+        bool mKeepTriangles = false;
+        /// +0xA8: how many times the pather searches, 1 to 10 (NV 0x6CC698): 3 (0x6E2594), more by one for each time
+        /// the actor mover starts again (0x9DB6AA)
+        int mPasses = 3;
         /// +0x99 and +0x8C: the heading the actor is to face at the end (NV 0x505C00, 0x507E10); off by default
         bool mHasHeading = false;
         float mHeading = 0.f;
@@ -181,10 +190,10 @@ namespace FalloutScript::NavMeshSearch
 
     /// The triangle of `mesh` under `point` (NV 0x696A50): one of the triangles of the point's square of the grid that
     /// has the point inside it on the map and is at most 64 above it, and, unless the point is no more than 50 above
-    /// `landHeight` (the height of the land there, lowest() in an interior), at most 180 below it; the first that is
-    /// within 40, otherwise the nearest
+    /// `waterHeight` (the height of the water there, NV 0x547250 at 0x696AC3; lowest() where there is none), at most
+    /// 180 below it; the first that is within 40, otherwise the nearest
     std::optional<std::uint16_t> triangleAt(
-        const Mesh& mesh, const Point& point, float landHeight = std::numeric_limits<float>::lowest());
+        const Mesh& mesh, const Point& point, float waterHeight = std::numeric_limits<float>::lowest());
 
     /// The triangle of `mesh` nearest `point` (NV 0x696CF0): the first of the point's square of the grid (of all the
     /// triangles when the point is outside the grid) that has it inside on the map, at most 180 above it and 64 below,
@@ -212,24 +221,27 @@ namespace FalloutScript::NavMeshSearch
     /// mesh, its triangle under the point (triangleAt) or nothing; with more, the first not disabled that has one,
     /// otherwise locateNearest
     std::optional<std::pair<Place, Point>> locate(
-        const std::vector<Candidate>& candidates, const Point& point, float landHeight);
+        const std::vector<Candidate>& candidates, const Point& point, float waterHeight);
 
     /// The triangle nearest a point and the point moved onto it, which the game uses when locate finds nothing and for
     /// the start of a path (NV 0x6DDC00, its callers 0x8E1A37 and 0x6D0C36): with one mesh, its nearestTriangle; with
     /// more, the first mesh's triangle that has the point inside, or else the one with the nearest middle among those
-    /// the point is less than 64 below and, unless it is below `landHeight` + 25, at most 180 above, or else the
+    /// the point is less than 64 below and, unless it is below `waterHeight` + 25, at most 180 above, or else the
     /// nearest at all
     std::optional<std::pair<Place, Point>> locateNearest(
-        const std::vector<Candidate>& candidates, const Point& point, float landHeight);
+        const std::vector<Candidate>& candidates, const Point& point, float waterHeight);
 
     /// The mark of an actor stuck on its way to `waypoint` on `triangle` (NV 0x9E5282 to 0x9E540D): each mark of the
     /// triangle that has the waypoint inside it (in 3D) doubles its radius while that is at most 128, otherwise ten
     /// times its cost; when none has, a new mark of `radius` (the request's) and cost 1 (NV 0x691510)
     void markStuck(Mesh& mesh, std::uint16_t triangle, const Point& waypoint, float radius);
 
-    /// The way from `start` to `goal`, triangle after triangle, or nothing when there is none
-    std::optional<std::vector<Step>> search(
-        const Meshes& meshes, const Place& start, const Place& goal, const Request& request, const DoorRule& doors);
+    /// The way from `start` to `goal`, triangle after triangle, or nothing when there is none. `filter` (NV search
+    /// +0x2088): when given, an external edge leads only into the meshes it lists; an empty one keeps the search on the
+    /// start's mesh. `partial`: when there is no way, the way to the triangle nearest the goal by the estimate
+    std::optional<std::vector<Step>> search(const Meshes& meshes, const Place& start, const Place& goal,
+        const Request& request, const DoorRule& doors, const std::vector<std::uint32_t>* filter = nullptr,
+        std::vector<Step>* partial = nullptr);
 }
 
 #endif

@@ -1095,6 +1095,18 @@ namespace OFWorld
     // ESM4 Land
     //=========================================================================
     // Needed to avoid include of ESM4::Land in header
+    void Store<ESM4::Navigation>::insertStatic(const ESM4::Navigation& navigation)
+    {
+        for (const ESM4::Navigation::FalloutInfo& info : navigation.mFalloutInfo)
+            mInfos[info.mNavMesh] = info;
+    }
+
+    const ESM4::Navigation::FalloutInfo* Store<ESM4::Navigation>::search(ESM::FormId navMesh) const
+    {
+        const auto it = mInfos.find(navMesh);
+        return it == mInfos.end() ? nullptr : &it->second;
+    }
+
     Store<ESM4::Land>::Store() {}
 
     void Store<ESM4::Land>::updateLandPositions(const Store<ESM4::Cell>& cells)

@@ -368,6 +368,7 @@ add_component_dir (falloutscript
     navmeshdoors
     navmeshroute
     navmeshsmoother
+    navmeshpather
     pathfollower
     )
 

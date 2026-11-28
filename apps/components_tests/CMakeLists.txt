@@ -249,6 +249,7 @@ file(GLOB UNITTEST_SRC_FILES
     falloutscript/testnavmeshdoors.cpp
     falloutscript/testnavmeshroute.cpp
     falloutscript/testnavmeshsmoother.cpp
+    falloutscript/testnavmeshpather.cpp
     falloutscript/testpathfollower.cpp
     falloutscript/testformlists.cpp
     falloutscript/testlevelledlists.cpp
