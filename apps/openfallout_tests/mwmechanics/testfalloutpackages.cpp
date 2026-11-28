@@ -17,6 +17,47 @@ namespace
 
     constexpr float epsilon = 0.001f;
 
+    TEST(FalloutPackagesTest, theTravelRadiusIsThePackagesOrOneFromItsTarget)
+    {
+        using Kind = FalloutTravelTarget::Kind;
+        bool plain = true;
+        FalloutTravelTarget target;
+        // the location's own radius, with the slack
+        EXPECT_EQ(falloutTravelRadius(300, target, 100, plain), 300);
+        EXPECT_FALSE(plain);
+        // none and no target: iAIDistanceRadiusMinLocation
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 100);
+        // a marker: 20 and no slack, also with a radius of its own up to 20 (0x676CD2)
+        target.mKind = Kind::Marker;
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 20);
+        EXPECT_TRUE(plain);
+        EXPECT_EQ(falloutTravelRadius(15, target, 100, plain), 15);
+        EXPECT_TRUE(plain);
+        EXPECT_EQ(falloutTravelRadius(21, target, 100, plain), 21);
+        EXPECT_FALSE(plain);
+        // an actor: half its size and 20, or 90 asleep
+        target = { Kind::Actor, false, false, 40.7f };
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 60);
+        target.mAsleep = true;
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 90);
+        EXPECT_TRUE(plain);
+        // a static: half its size only
+        target = { Kind::Other, false, true, 64.f };
+        EXPECT_EQ(falloutTravelRadius(0, target, 100, plain), 64);
+    }
+
+    TEST(FalloutPackagesTest, theTravelIsDoneWithinTheRadiusAndTheSlackIgnoringHeightNearTheBody)
+    {
+        const osg::Vec3f feet(0.f, 0.f, 0.f);
+        // 0x8B2F90: within the band of the body the height does not count
+        EXPECT_TRUE(falloutTravelDone(feet, 128.f, osg::Vec3f(100.f, 0.f, 150.f), 100.f, true, 20.f, false));
+        EXPECT_FALSE(falloutTravelDone(feet, 128.f, osg::Vec3f(100.f, 0.f, 200.f), 100.f, true, 20.f, false));
+        // the slack is the body's radius, at least 32, doubled for a lying body
+        EXPECT_TRUE(falloutTravelDone(feet, 128.f, osg::Vec3f(132.f, 0.f, 0.f), 100.f, false, 20.f, false));
+        EXPECT_FALSE(falloutTravelDone(feet, 128.f, osg::Vec3f(133.f, 0.f, 0.f), 100.f, false, 20.f, false));
+        EXPECT_TRUE(falloutTravelDone(feet, 128.f, osg::Vec3f(160.f, 0.f, 0.f), 100.f, false, 30.f, true));
+    }
+
     TEST(FalloutPackagesTest, aGoalThatRoamsGetsTheRadiusOfThePackageWithinLimits)
     {
         const auto roam = ESM4::PackageBehaviour::Roam;
@@ -120,67 +161,6 @@ namespace
         EXPECT_NEAR(falloutTurnToward(0.5f, 0.6f, 1.f), 0.6f, epsilon);
         EXPECT_NEAR(falloutTurnToward(pi - 0.05f, -pi + 0.05f, 1.f), -pi + 0.05f, epsilon);
         EXPECT_NEAR(falloutTurnToward(0.f, 0.f, 0.5f), 0.f, epsilon);
-    }
-
-    TEST(FalloutPackagesTest, aStepGoesTowardThePlaceAndNoFarther)
-    {
-        const osg::Vec3f from(0.f, 0.f, 0.f);
-        const osg::Vec3f to(30.f, 40.f, 0.f);
-        const osg::Vec3f step = falloutStepToward(from, to, 25.f);
-        EXPECT_NEAR(step.x(), 15.f, epsilon);
-        EXPECT_NEAR(step.y(), 20.f, epsilon);
-        EXPECT_EQ(falloutStepToward(from, to, 50.f), to);
-        EXPECT_EQ(falloutStepToward(from, to, 100.f), to);
-        EXPECT_EQ(falloutStepToward(to, to, 5.f), to);
-        const osg::Vec3f rising = falloutStepToward(from, osg::Vec3f(0.f, 3.f, 4.f), 2.5f);
-        EXPECT_NEAR(rising.y(), 1.5f, epsilon);
-        EXPECT_NEAR(rising.z(), 2.f, epsilon);
-    }
-
-    TEST(FalloutPackagesTest, anActorWaitsForThePlayerInItsWayForAWhileAndThenWalksPast)
-    {
-        FalloutYield state;
-        // Nothing in the way: it walks, and does not count the time
-        EXPECT_FALSE(falloutYields(state, false, false, 1.f, 4.f));
-        EXPECT_FLOAT_EQ(state.mWaited, 0.f);
-        // The player stands in the way: it waits for 4 s
-        EXPECT_TRUE(falloutYields(state, true, true, 1.f, 4.f));
-        EXPECT_TRUE(falloutYields(state, true, true, 2.f, 4.f));
-        EXPECT_TRUE(falloutYields(state, true, true, 0.5f, 4.f));
-        EXPECT_FALSE(state.mPassing);
-        // ... and then walks past, and keeps on, while the player is near
-        EXPECT_FALSE(falloutYields(state, true, true, 0.5f, 4.f));
-        EXPECT_TRUE(state.mPassing);
-        EXPECT_FALSE(falloutYields(state, true, true, 0.1f, 4.f));
-        EXPECT_FALSE(falloutYields(state, true, false, 0.1f, 4.f));
-        // Away from the player it waits for it again
-        EXPECT_FALSE(falloutYields(state, false, false, 0.1f, 4.f));
-        EXPECT_FALSE(state.mPassing);
-        EXPECT_FLOAT_EQ(state.mWaited, 0.f);
-        EXPECT_TRUE(falloutYields(state, true, true, 0.1f, 4.f));
-    }
-
-    TEST(FalloutPackagesTest, anActorThatIsNotInTheWayKeepsWhatItWaitedUntilThePlayerIsFarAway)
-    {
-        FalloutYield state;
-        EXPECT_TRUE(falloutYields(state, true, true, 3.f, 4.f));
-        // The player stepped aside for a moment: the wait is not lost
-        EXPECT_FALSE(falloutYields(state, true, false, 1.f, 4.f));
-        EXPECT_FLOAT_EQ(state.mWaited, 3.f);
-        EXPECT_TRUE(falloutYields(state, true, true, 0.5f, 4.f));
-        EXPECT_FALSE(falloutYields(state, true, true, 0.6f, 4.f));
-        EXPECT_TRUE(state.mPassing);
-    }
-
-    TEST(FalloutPackagesTest, anActorHeldUpAtTheEdgeOfTheDistanceAlsoWaitsAndThenWalksPast)
-    {
-        FalloutYield state;
-        // It is not near the player yet, but its next step is: it stops there, and the wait adds up
-        EXPECT_TRUE(falloutYields(state, false, true, 1.f, 4.f));
-        EXPECT_TRUE(falloutYields(state, false, true, 2.f, 4.f));
-        EXPECT_FLOAT_EQ(state.mWaited, 3.f);
-        EXPECT_FALSE(falloutYields(state, false, true, 1.5f, 4.f));
-        EXPECT_TRUE(state.mPassing);
     }
 
     TEST(FalloutPackagesTest, aFollowerKeepsTheDistanceOfThePackageWithinLimits)
@@ -300,97 +280,25 @@ namespace
         EXPECT_EQ(falloutFirstPlugin({ "x.esl" }), 0);
     }
 
-    TEST(FalloutPackagesTest, aStraightWalkOnLevelFloorWithNothingInTheWayCanBeWalked)
+    TEST(FalloutPackagesTest, theControlsOfAScriptMoveTheActorWhereItFacesAtMostAtItsSpeed)
     {
-        const auto floor = [](float, float, float) -> std::optional<float> { return 0.f; };
-        const auto clear = [](const osg::Vec3f&, const osg::Vec3f&) { return false; };
-        EXPECT_TRUE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(1000, 0, 0), floor, clear));
-        EXPECT_TRUE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(30, 40, 0), floor, clear));
-        // a place that is the same place
-        EXPECT_TRUE(falloutStraightWalkable(osg::Vec3f(5, 5, 0), osg::Vec3f(5, 5, 90), floor, clear));
-    }
-
-    TEST(FalloutPackagesTest, aThinWallBetweenTwoProbesOfAStraightWalkIsNotMissed)
-    {
-        // A wall across +x at `wall`: the distance from a start to it, as the world would give it
-        const auto probeFor = [](float wall) {
-            return [wall](const osg::Vec3f& start, const osg::Vec3f& direction, float longest) {
-                if (direction.x() <= 0.f)
-                    return longest;
-                const float hit = (wall - start.x()) / direction.x();
-                return hit >= 0.f && hit < longest ? hit : longest;
-            };
-        };
-        // Probes 50 units apart, as the walk takes them; every wall between the first and the last unit of the line
-        // is met by one of them (the last unit is the tolerance at the end, where the target may stand against a wall)
-        for (float wall = 2.f; wall <= 148.5f; wall += 0.25f)
-        {
-            bool met = false;
-            for (float from = 0.f; from < 150.f; from += 50.f)
-                met = met
-                    || falloutSegmentBlocked(osg::Vec3f(from, 0, 0), osg::Vec3f(from + 50.f, 0, 0), probeFor(wall),
-                        { 35.f, 100.f });
-            EXPECT_TRUE(met) << "a wall at " << wall << " was not met";
-        }
-        // The walk ends with what is left of a step: a wall in a short last segment is met (a route of 100.5 units, a wall
-        // at 99.25, where the probe of 50 to 100 reaches no further than 99)
-        {
-            const auto floor = [](float, float, float) -> std::optional<float> { return 0.f; };
-            const auto blocked = [&probeFor](const osg::Vec3f& from, const osg::Vec3f& to) {
-                return falloutSegmentBlocked(from, to, probeFor(99.25f), { 35.f, 100.f });
-            };
-            EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(100.5f, 0, 0), floor, blocked));
-        }
-        // Nothing in the way, and a segment that is no longer than a unit
-        EXPECT_FALSE(falloutSegmentBlocked(
-            osg::Vec3f(0, 0, 0), osg::Vec3f(50, 0, 0), [](const osg::Vec3f&, const osg::Vec3f&, float longest) { return longest; },
-            { 35.f }));
-        EXPECT_FALSE(falloutSegmentBlocked(
-            osg::Vec3f(0, 0, 0), osg::Vec3f(0.5f, 0, 0), probeFor(0.2f), { 35.f }));
-    }
-
-    TEST(FalloutPackagesTest, aStraightWalkEndsOnTheFloorOfItsDestination)
-    {
-        const auto floor = [](float, float, float) -> std::optional<float> { return 0.f; };
-        const auto clear = [](const osg::Vec3f&, const osg::Vec3f&) { return false; };
-        // the destination is a floor above the one that the line follows: it is not reached by walking this line
-        EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(400, 0, 300), floor, clear));
-        EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(400, 0, -300), floor, clear));
-        // a destination a little above the floor (a target's height, a step) is on it
-        EXPECT_TRUE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(400, 0, 40), floor, clear));
-    }
-
-    TEST(FalloutPackagesTest, aStraightWalkIsNotMadeWhereThereIsNoFloorOrTheFloorJumps)
-    {
-        const auto clear = [](const osg::Vec3f&, const osg::Vec3f&) { return false; };
-        // a hole between 400 and 500 on the way
-        const auto hole = [](float x, float, float) -> std::optional<float> {
-            if (x > 400.f && x < 500.f)
-                return std::nullopt;
-            return 0.f;
-        };
-        EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(1000, 0, 0), hole, clear));
-        // a wall of floor that rises 100 units
-        const auto wall = [](float x, float, float) -> std::optional<float> { return x > 400.f ? 100.f : 0.f; };
-        EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(1000, 0, 0), wall, clear));
-        // a slope that rises 30 units for every 50 is walked, and one of 80 for every 50 is not
-        const auto gentle = [](float x, float, float) -> std::optional<float> { return x * 0.6f; };
-        EXPECT_TRUE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(1000, 0, 600), gentle, clear));
-        const auto steep = [](float x, float, float) -> std::optional<float> { return x * 1.6f; };
-        EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(1000, 0, 1600), steep, clear));
-        // nothing under where the walker starts
-        const auto none = [](float, float, float) -> std::optional<float> { return std::nullopt; };
-        EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(100, 0, 0), none, clear));
-    }
-
-    TEST(FalloutPackagesTest, aStraightWalkIsNotMadeThroughAWallOrOverTheLimit)
-    {
-        const auto floor = [](float, float, float) -> std::optional<float> { return 0.f; };
-        const auto wall = [](const osg::Vec3f& from, const osg::Vec3f& to) { return from.x() < 600.f && to.x() >= 600.f; };
-        EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(1000, 0, 0), floor, wall));
-        EXPECT_TRUE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(500, 0, 0), floor, wall));
-        const auto clear = [](const osg::Vec3f&, const osg::Vec3f&) { return false; };
-        EXPECT_FALSE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(3500, 0, 0), floor, clear));
-        EXPECT_TRUE(falloutStraightWalkable(osg::Vec3f(0, 0, 0), osg::Vec3f(3500, 0, 0), floor, clear, 50.f, 70.f, 4000.f));
+        // heading 0 faces +y: forward goes along y, the side to the right along +x
+        const osg::Vec3f ahead = falloutControlVelocity(0.f, 1.f, 0.f, 100.f);
+        EXPECT_NEAR(ahead.x(), 0.f, epsilon);
+        EXPECT_NEAR(ahead.y(), 100.f, epsilon);
+        const osg::Vec3f right = falloutControlVelocity(0.f, 0.f, 1.f, 100.f);
+        EXPECT_NEAR(right.x(), 100.f, epsilon);
+        EXPECT_NEAR(right.y(), 0.f, epsilon);
+        // heading a quarter turn faces +x
+        const osg::Vec3f turned = falloutControlVelocity(static_cast<float>(osg::PI_2), 1.f, 0.f, 100.f);
+        EXPECT_NEAR(turned.x(), 100.f, epsilon);
+        EXPECT_NEAR(turned.y(), 0.f, epsilon);
+        // forward and side together are no faster than one alone; half a push is half the speed; beyond 1 is 1
+        EXPECT_NEAR(falloutControlVelocity(0.f, 1.f, 1.f, 100.f).length(), 100.f, epsilon);
+        EXPECT_NEAR(falloutControlVelocity(0.f, 0.5f, 0.f, 100.f).length(), 50.f, epsilon);
+        EXPECT_NEAR(falloutControlVelocity(0.f, 3.f, 0.f, 100.f).length(), 100.f, epsilon);
+        // no push, no speed: it stands
+        EXPECT_EQ(falloutControlVelocity(0.f, 0.f, 0.f, 100.f), osg::Vec3f());
+        EXPECT_EQ(falloutControlVelocity(0.f, 1.f, 0.f, 0.f), osg::Vec3f());
     }
 }

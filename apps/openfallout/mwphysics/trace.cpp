@@ -3,7 +3,10 @@
 #include <components/misc/convert.hpp>
 
 #include <BulletCollision/CollisionDispatch/btCollisionWorld.h>
+#include <BulletCollision/CollisionShapes/btCompoundShape.h>
 #include <BulletCollision/CollisionShapes/btConvexShape.h>
+
+#include <optional>
 
 #include "actor.hpp"
 #include "actorconvexcallback.hpp"
@@ -22,19 +25,35 @@ namespace OFPhysics
         transTo.setOrigin(to);
 
         const btCollisionShape* shape = actor->getCollisionShape();
-        assert(shape->isConvex());
 
         const btVector3 motion
             = from - to; // FIXME: this is backwards; means ActorConvexCallback is doing dot product tests backwards too
-        ActorConvexCallback traceCallback(actor, motion, btScalar(0.0), world);
-        // Inherit the actor's collision group and mask
-        traceCallback.m_collisionFilterGroup = actor->getBroadphaseHandle()->m_collisionFilterGroup;
-        traceCallback.m_collisionFilterMask = actor->getBroadphaseHandle()->m_collisionFilterMask;
-        if (actorFilter)
-            traceCallback.m_collisionFilterMask &= ~CollisionType_Actor;
+        const auto sweep = [&](const btConvexShape* part, const btTransform& partFrom, const btTransform& partTo) {
+            ActorConvexCallback traceCallback(actor, motion, btScalar(0.0), world);
+            // Inherit the actor's collision group and mask
+            traceCallback.m_collisionFilterGroup = actor->getBroadphaseHandle()->m_collisionFilterGroup;
+            traceCallback.m_collisionFilterMask = actor->getBroadphaseHandle()->m_collisionFilterMask;
+            if (actorFilter)
+                traceCallback.m_collisionFilterMask &= ~CollisionType_Actor;
+            world->convexSweepTest(part, partFrom, partTo, traceCallback);
+            return traceCallback;
+        };
+        if (!shape->isCompound())
+            return sweep(static_cast<const btConvexShape*>(shape), transFrom, transTo);
 
-        world->convexSweepTest(static_cast<const btConvexShape*>(shape), transFrom, transTo, traceCallback);
-        return traceCallback;
+        // A body that is the union of several capsules (a lying creature with legs, FalloutNV.exe 0xC72834): each part
+        // is swept, and the nearest hit of any part stops the body
+        const auto* compound = static_cast<const btCompoundShape*>(shape);
+        std::optional<ActorConvexCallback> nearest;
+        for (int i = 0; i < compound->getNumChildShapes(); ++i)
+        {
+            const btTransform& child = compound->getChildTransform(i);
+            ActorConvexCallback result = sweep(
+                static_cast<const btConvexShape*>(compound->getChildShape(i)), transFrom * child, transTo * child);
+            if (!nearest || (result.hasHit() && result.m_closestHitFraction < nearest->m_closestHitFraction))
+                nearest.emplace(result);
+        }
+        return *nearest;
     }
 
     void ActorTracer::doTrace(const btCollisionObject* actor, const osg::Vec3f& start, const osg::Vec3f& end,

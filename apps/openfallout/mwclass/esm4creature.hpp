@@ -23,11 +23,6 @@ namespace OFClass
 {
     class ESM4CreatureCustomData;
 
-    /// The half extents of the solid body of a creature in game units, from the box of its record: a cylinder as wide
-    /// as the smaller side of the box and as tall as the box, kept within what the data has meant. A creature without a
-    /// box is as big as a person.
-    osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature);
-
     /// A creature of Fallout 3 or New Vegas (CREA). What it looks like and is called comes from its record and, for
     /// the many that take them from a template, the records of its templates (`ESM4::creatureModel`). The skeleton is
     /// its model; the models that hang on it and its animations are found by the rendering.
@@ -64,10 +59,6 @@ namespace OFClass
         /// The AI packages of the creature, in the order of their priority, from its record or its template (null
         /// for a package that no file has a record for)
         static const std::vector<const ESM4::AIPackage*>& getPackages(const OFWorld::Ptr& ptr);
-
-        /// The half extents of the body that a creature of Fallout is solid as (the cylinder of its physics body), from
-        /// the box of its record; none (all 0) for a creature of the games before Fallout
-        static osg::Vec3f getBodyHalfExtents(const OFWorld::Ptr& ptr);
 
     private:
         static ESM4CreatureCustomData& getCustomData(const OFWorld::ConstPtr& ptr);

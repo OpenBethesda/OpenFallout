@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <exception>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -334,5 +335,194 @@ namespace
         EXPECT_EQ(loadFailure(plugin, 2), "NVNM ends inside an array");
         // the indices of the last segment, and half of its count, are cut
         EXPECT_EQ(loadFailure(plugin, 6), "NVNM ends inside a field");
+    }
+
+    // The corners of a packed triangle, by value
+    std::vector<int> corners(const ESM4::NavMesh::PathTriangle& triangle)
+    {
+        return { triangle.vertices[0], triangle.vertices[1], triangle.vertices[2] };
+    }
+
+    std::vector<int> edges(const ESM4::NavMesh::PathTriangle& triangle)
+    {
+        return { triangle.edges[0], triangle.edges[1], triangle.edges[2] };
+    }
+
+    // Bytes written as pairs of hex digits
+    std::string hex(std::string_view digits)
+    {
+        std::string data;
+        for (std::size_t i = 0; i + 1 < digits.size(); i += 2)
+            data += static_cast<char>(std::stoi(std::string(digits.substr(i, 2)), nullptr, 16));
+        return data;
+    }
+
+    // The sub-records of NAVM 0014F130 in FalloutNV.esm, as the game ships them: version 11, four vertices, two
+    // triangles, a door on the second one, one cell of grid and one external connection
+    std::string newVegasMesh()
+    {
+        return subRecord("NVER", hex("0b000000"))
+            + subRecord("DATA", hex("4a4308000400000002000000010000000000000001000000"))
+            + subRecord("NVVX",
+                hex("0050c546000000c777fcfb450068c646006800c7f6fbfb450088c646000000c776fafb450020c546004c00c74ffffb45"))
+            + subRecord("NVTR", hex("0000010002000100ffff000004080000030001000000ffff0000ffff000c0000"))
+            + subRecord("NVDP", hex("e2ed140001000000"))
+            + subRecord(
+                "NVGD", hex("01000000000034430000d0420020c546006800c776fafb450088c646000000c74ffffb45020000000100"))
+            + subRecord("NVEX", hex("00000000812d15000000"));
+    }
+
+    // NAVM 0007E5A9 in Fallout3.esm, which has a cover triangle too
+    std::string fallout3Mesh()
+    {
+        return subRecord("NVER", hex("0b000000"))
+            + subRecord("DATA", hex("b0de01000600000004000000010000000100000001000000"))
+            + subRecord("NVVX",
+                hex("75b9f94054a22f4572b3fa45e0fabebf925b2045a0d1fa4599eaef42015f37452ac2fa4504d700436983194538c9fa45e0"
+                    "7aaec052d918451feefa45bc3a5241d5663745c3b1fa45"))
+            + subRecord("NVTR",
+                hex("000001000200ffff01000300000801000100030002000200ffff000000084000010004000300ffff0000010002080400"
+                    "020005000000ffffffff0000000c0100"))
+            + subRecord("NVCA", hex("0200")) + subRecord("NVDP", hex("e2df010003000000"))
+            + subRecord("NVGD",
+                hex("01000000db4a0643186cf443e07aaec052d91845c3b1fa4504d70043d56637451feefa4504000000010002000300"))
+            + subRecord("NVEX", hex("02000000aae507001e00"));
+    }
+
+    TEST(ESM4NavMeshTest, readsARealNewVegasMesh)
+    {
+        const std::vector<ESM4::NavMesh> records = load(navmesh(newVegasMesh(), 0x14f130));
+
+        ASSERT_EQ(records.size(), 1u);
+        const ESM4::NavMesh& mesh = records[0];
+        EXPECT_THAT(mesh.mData, IsEmpty());
+        EXPECT_EQ(mesh.mVersion, 11u);
+        EXPECT_EQ(mesh.mCell.toUint32(), 0x8434au);
+
+        ASSERT_EQ(mesh.mVertices.size(), 4u);
+        EXPECT_EQ(+mesh.mVertices[0].x, 25256.f);
+        EXPECT_EQ(+mesh.mVertices[0].y, -32768.f);
+        EXPECT_EQ(+mesh.mVertices[3].x, 25232.f);
+
+        ASSERT_EQ(mesh.mTriangles.size(), 2u);
+        EXPECT_THAT(corners(mesh.mTriangles[0]), ElementsAre(0, 1, 2));
+        EXPECT_THAT(edges(mesh.mTriangles[0]), ElementsAre(1, 0xffff, 0));
+        EXPECT_EQ(+mesh.mTriangles[0].flags, 0x804u);
+        EXPECT_THAT(corners(mesh.mTriangles[1]), ElementsAre(3, 1, 0));
+        EXPECT_THAT(edges(mesh.mTriangles[1]), ElementsAre(0xffff, 0, 0xffff));
+        EXPECT_EQ(+mesh.mTriangles[1].flags, 0xc00u);
+
+        EXPECT_THAT(mesh.mCover, IsEmpty());
+        ASSERT_EQ(mesh.mDoors.size(), 1u);
+        EXPECT_EQ(+mesh.mDoors[0].door, 0x14ede2u);
+        EXPECT_EQ(+mesh.mDoors[0].triangle, 1);
+
+        const ESM4::NavMesh::TriangleGrid& grid = mesh.mTriangleGrid;
+        EXPECT_EQ(grid.divisor, 1u);
+        EXPECT_EQ(grid.cellX, 180.f);
+        EXPECT_EQ(grid.cellY, 104.f);
+        EXPECT_EQ(grid.minX, 25232.f);
+        EXPECT_EQ(grid.minY, -32872.f);
+        EXPECT_EQ(grid.maxX, 25412.f);
+        EXPECT_EQ(grid.maxY, -32768.f);
+        ASSERT_EQ(grid.cells.size(), 1u);
+        EXPECT_THAT(grid.cells[0], ElementsAre(0, 1));
+
+        ASSERT_EQ(mesh.mExternal.size(), 1u);
+        EXPECT_EQ(+mesh.mExternal[0].unknown, 0u);
+        EXPECT_EQ(+mesh.mExternal[0].navMesh, 0x152d81u);
+        EXPECT_EQ(+mesh.mExternal[0].triangleIndex, 0);
+    }
+
+    TEST(ESM4NavMeshTest, readsARealFallout3MeshWithCover)
+    {
+        const std::vector<ESM4::NavMesh> records = load(navmesh(fallout3Mesh(), 0x7e5a9));
+
+        ASSERT_EQ(records.size(), 1u);
+        const ESM4::NavMesh& mesh = records[0];
+        EXPECT_EQ(mesh.mCell.toUint32(), 0x1deb0u);
+        EXPECT_EQ(mesh.mVertices.size(), 6u);
+        ASSERT_EQ(mesh.mTriangles.size(), 4u);
+        EXPECT_THAT(corners(mesh.mTriangles[3]), ElementsAre(2, 5, 0));
+        EXPECT_EQ(+mesh.mTriangles[3].flags, 0x10c00u);
+        EXPECT_THAT(mesh.mCover, ElementsAre(2));
+        ASSERT_EQ(mesh.mDoors.size(), 1u);
+        EXPECT_EQ(+mesh.mDoors[0].door, 0x1dfe2u);
+        EXPECT_EQ(+mesh.mDoors[0].triangle, 3);
+        ASSERT_EQ(mesh.mTriangleGrid.cells.size(), 1u);
+        EXPECT_THAT(mesh.mTriangleGrid.cells[0], ElementsAre(0, 1, 2, 3));
+        ASSERT_EQ(mesh.mExternal.size(), 1u);
+        EXPECT_EQ(+mesh.mExternal[0].unknown, 2u);
+        EXPECT_EQ(+mesh.mExternal[0].navMesh, 0x7e5aau);
+        EXPECT_EQ(+mesh.mExternal[0].triangleIndex, 30);
+    }
+
+    // No shipped mesh is older than version 11, so the older layouts of the external connections are built here
+    TEST(ESM4NavMeshTest, readsTheExternalConnectionsOfEveryVersion)
+    {
+        std::string old = bytePattern(46, 0x80);
+        old.replace(4, 4, hex("44332200"));
+        old.replace(44, 2, hex("0700"));
+        std::string middle;
+        append<std::uint32_t>(middle, 0x00667788);
+        append<std::uint16_t>(middle, 9);
+
+        for (const std::uint32_t version : { 1u, 4u })
+        {
+            SCOPED_TRACE(version);
+            std::string data;
+            append(data, version);
+            const std::vector<ESM4::NavMesh> records
+                = load(navmesh(subRecord("NVER", data) + subRecord("NVEX", old + old)));
+            ASSERT_EQ(records.size(), 1u);
+            ASSERT_EQ(records[0].mExternal.size(), 2u);
+            EXPECT_EQ(+records[0].mExternal[1].unknown, 0u);
+            EXPECT_EQ(+records[0].mExternal[1].navMesh, 0x00223344u);
+            EXPECT_EQ(+records[0].mExternal[1].triangleIndex, 7);
+        }
+        for (const std::uint32_t version : { 5u, 8u })
+        {
+            SCOPED_TRACE(version);
+            std::string data;
+            append(data, version);
+            const std::vector<ESM4::NavMesh> records
+                = load(navmesh(subRecord("NVER", data) + subRecord("NVEX", middle + middle + middle)));
+            ASSERT_EQ(records.size(), 1u);
+            ASSERT_EQ(records[0].mExternal.size(), 3u);
+            EXPECT_EQ(+records[0].mExternal[2].unknown, 0u);
+            EXPECT_EQ(+records[0].mExternal[2].navMesh, 0x00667788u);
+            EXPECT_EQ(+records[0].mExternal[2].triangleIndex, 9);
+        }
+
+        // without NVER the version is 1, as in the game
+        const std::vector<ESM4::NavMesh> records = load(navmesh(subRecord("NVEX", old)));
+        ASSERT_EQ(records.size(), 1u);
+        EXPECT_EQ(records[0].mVersion, 1u);
+        ASSERT_EQ(records[0].mExternal.size(), 1u);
+        EXPECT_EQ(+records[0].mExternal[0].navMesh, 0x00223344u);
+    }
+
+    TEST(ESM4NavMeshTest, readsAMeshWithNoSubRecords)
+    {
+        // Broken Steel and The Pitt ship meshes that are a header and nothing else
+        const std::vector<ESM4::NavMesh> records = load(navmesh(""));
+
+        ASSERT_EQ(records.size(), 1u);
+        EXPECT_EQ(records[0].mVersion, 1u);
+        EXPECT_THAT(records[0].mTriangles, IsEmpty());
+        EXPECT_THAT(records[0].mTriangleGrid.cells, IsEmpty());
+    }
+
+    TEST(ESM4NavMeshTest, rejectsBrokenFallout3SubRecords)
+    {
+        EXPECT_EQ(
+            loadFailure(navmesh(subRecord("NVTR", bytePattern(17, 1)))), "NVTR is not a whole number of elements");
+        EXPECT_EQ(
+            loadFailure(navmesh(subRecord("NVEX", bytePattern(11, 1)))), "NVEX is not a whole number of elements");
+        std::string grid;
+        append<std::uint32_t>(grid, 3);
+        EXPECT_EQ(loadFailure(navmesh(subRecord("NVGD", grid + bytePattern(32, 1) + bytePattern(10, 0)))),
+            "NVGD cells end before the square of divisor");
+        EXPECT_EQ(loadFailure(navmesh(subRecord("DATA", hex("0102")))), "DATA ends inside a field");
     }
 }

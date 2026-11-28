@@ -429,6 +429,7 @@ namespace OFWorld
         bool isUnderwater(const OFWorld::ConstPtr& object, const float heightRatio) const override;
         bool isWading(const OFWorld::ConstPtr& object) const override;
         bool isOnGround(const OFWorld::Ptr& ptr) const override;
+        bool touchedActor(const OFWorld::Ptr& ptr) const override;
         int getFloorMaterial(const OFWorld::ConstPtr& actor, bool& stairs) const override;
 
         osg::Matrixf getActorHeadTransform(const OFWorld::ConstPtr& actor) const override;
@@ -567,6 +568,7 @@ namespace OFWorld
 
         /// Return physical or rendering half extents of the given actor.
         osg::Vec3f getHalfExtents(const OFWorld::ConstPtr& actor, bool rendering = false) const override;
+        bool getBodyRadius(const OFWorld::ConstPtr& actor, float& radius, bool& lying) const override;
 
         /// Export scene graph to a file and return the filename.
         /// \param ptr object to export scene graph for (if empty, export entire scene graph)
@@ -599,6 +601,10 @@ namespace OFWorld
         DateTimeManager* getTimeManager() override { return mTimeManager.get(); }
 
         void setActorActive(const OFWorld::Ptr& ptr, bool value) override;
+
+        bool startRagdoll(const OFWorld::Ptr& ptr, const OFRender::Animation* bones = nullptr) override;
+        void stopRagdoll(const OFWorld::Ptr& ptr) override;
+        bool hasRagdoll(const OFWorld::ConstPtr& ptr) const override;
     };
 }
 

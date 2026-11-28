@@ -257,6 +257,13 @@ namespace OFRender
         }
     }
 
+    bool hasFalloutPlainMove(
+        std::string_view folder, FalloutDirection direction, bool female, const std::vector<std::string>& files)
+    {
+        return !folder.empty()
+            && !findMoveFile(folder, "mt" + std::string(directionName(direction)), female, files).empty();
+    }
+
     std::string chooseFalloutMove(std::string_view folder, std::string_view prefix, bool sneak,
         FalloutDirection direction, bool run, bool female, const std::vector<std::string>& files, bool hurt)
     {

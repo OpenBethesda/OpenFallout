@@ -1,6 +1,8 @@
 #include "actor.hpp"
 
-#include <BulletCollision/CollisionShapes/btCapsuleShape.h>
+#include <BulletCollision/CollisionShapes/btCompoundShape.h>
+#include <BulletCollision/CollisionShapes/btConvexHullShape.h>
+#include <BulletCollision/CollisionShapes/btMultiSphereShape.h>
 
 #include <components/debug/debuglog.hpp>
 #include <components/misc/convert.hpp>
@@ -23,8 +25,7 @@ namespace OFPhysics
         , mStandingOnPtr(nullptr)
         , mCanWaterWalk(false)
         , mWalkingOnWater(false)
-        , mMeshTranslation(0.f, 0.f, shape.mHalfHeight)
-        , mOriginalHalfExtents(shape.mRadius, shape.mRadius, shape.mHalfHeight)
+        , mCharacterShape(shape)
         , mStuckFrames(0)
         , mLastStuckPosition{ 0, 0, 0 }
         , mForce(0.f, 0.f, 0.f)
@@ -35,34 +36,89 @@ namespace OFPhysics
         , mActive(false)
         , mTaskScheduler(scheduler)
     {
-        // The capsule: its cylinder is the height less the two half spheres (a radius larger than the half height
-        // makes a sphere). It turns with nothing, and the navigator takes it for the cylinder of the same size.
-        const float cylinder = std::max(0.f, 2.f * (shape.mHalfHeight - shape.mRadius));
-        const float radius = std::min(shape.mRadius, shape.mHalfHeight);
-        mShape = std::make_unique<btCapsuleShapeZ>(radius, cylinder);
-        mRotationallyInvariant = true;
+        // The body turns with the character (a lying body has a length, and the exe turns the offset of the
+        // controller with it, SetPosition 0xC6E390); the navigator takes it for a cylinder of its half extents
+        mRotationallyInvariant = false;
         mCollisionShapeType = DetourNavigator::CollisionShapeType::Cylinder;
-
-        mConvexShape = static_cast<btConvexShape*>(mShape.get());
-        mConvexShape->setMargin(0.001); // make sure bullet isn't using the huge default convex shape margin of 0.04
 
         mCollisionObject = std::make_unique<btCollisionObject>();
         mCollisionObject->setCollisionFlags(btCollisionObject::CF_KINEMATIC_OBJECT);
         mCollisionObject->setActivationState(DISABLE_DEACTIVATION);
-        mCollisionObject->setCollisionShape(mShape.get());
         mCollisionObject->setUserPointer(this);
 
         updateScaleUnsafe();
 
-        if (!mRotationallyInvariant)
-        {
-            const SceneUtil::PositionAttitudeTransform* baseNode = mPtr.getRefData().getBaseNode();
-            if (baseNode)
-                mRotation = baseNode->getAttitude();
-        }
+        const SceneUtil::PositionAttitudeTransform* baseNode = mPtr.getRefData().getBaseNode();
+        if (baseNode)
+            mRotation = baseNode->getAttitude();
 
         addCollisionMask(getCollisionMask());
         updateCollisionObjectPositionUnsafe();
+    }
+
+    void Actor::buildShape(float referenceScale)
+    {
+        namespace Body = FalloutScript::CharacterBody;
+        // (a body without a model is not scaled, FalloutNV.exe 0xC72683)
+        const double scale
+            = mCharacterShape.mHasModel ? static_cast<double>(referenceScale) * mCharacterShape.mSize : 1.0;
+        const Body::Body body = Body::body(mCharacterShape.mBound, scale > 0 ? scale : 1.0);
+        mLying = body.mKind != Body::Kind::Upright;
+        // shortcut: a body with legs is a list shape, so the exe reads [ctrl+0x5F0] for it as for the hull; the value
+        // the builder stores there for it is not read, so it takes the body's capsule; read 0xC72834 to 0xC72F1F
+        mBodyRadius = static_cast<float>(mLying ? body.mCapsules.front().mRadius : body.mHalfWidth);
+        // The solver keeps the middle of the shape half its height over the feet
+        const double middle = body.mHeight / 2;
+        const auto at = [&](const Body::Point& point) {
+            return btVector3(static_cast<btScalar>(point.mX), static_cast<btScalar>(point.mY),
+                static_cast<btScalar>(point.mZ - middle));
+        };
+        const auto capsule = [&](const Body::Capsule& part) {
+            const btVector3 ends[2] = { at(part.mA), at(part.mB) };
+            const btScalar radii[2] = { static_cast<btScalar>(part.mRadius), static_cast<btScalar>(part.mRadius) };
+            return std::make_unique<btMultiSphereShape>(ends, radii, 2);
+        };
+
+        std::unique_ptr<btCollisionShape> shape;
+        std::vector<std::unique_ptr<btCollisionShape>> parts;
+        if (body.mKind == Body::Kind::Upright)
+        {
+            auto hull = std::make_unique<btConvexHullShape>();
+            for (const Body::Point& point : body.mHull)
+                hull->addPoint(at(point), false);
+            hull->recalcLocalAabb();
+            hull->setMargin(0.001); // make sure bullet isn't using the huge default convex shape margin of 0.04
+            shape = std::move(hull);
+        }
+        else if (body.mCapsules.size() == 1)
+            shape = capsule(body.mCapsules.front());
+        else
+        {
+            // The union of the capsules (a list shape in the exe); the sweeps of the solver take each part
+            auto compound = std::make_unique<btCompoundShape>();
+            for (const Body::Capsule& part : body.mCapsules)
+            {
+                parts.push_back(capsule(part));
+                compound->addChildShape(btTransform::getIdentity(), parts.back().get());
+            }
+            shape = std::move(compound);
+        }
+
+        const float safeScale = referenceScale > 0.f ? referenceScale : 1.f;
+        const float halfHeight = static_cast<float>(middle) / safeScale;
+        mMeshTranslation = osg::Vec3f(0.f, 0.f, halfHeight);
+        mOriginalHalfExtents = osg::Vec3f(static_cast<float>(body.mHalfWidth) / safeScale,
+            static_cast<float>(body.mHalfLength) / safeScale, halfHeight);
+        mCollisionObject->setCollisionShape(shape.get());
+        // A sweep of a worker thread may still hold the shape it replaces (a SetScale): it is kept until the end
+        if (mShape)
+            mRetired.push_back(std::move(mShape));
+        for (auto& part : mParts)
+            mRetired.push_back(std::move(part));
+        mShape = std::move(shape);
+        mParts = std::move(parts);
+        mBuiltScale = referenceScale;
+        mStepHeight = static_cast<float>(body.mStepHeight);
     }
 
     Actor::~Actor()
@@ -96,7 +152,8 @@ namespace OFPhysics
 
     int Actor::getCollisionMask() const
     {
-        int collisionMask = CollisionType_World | CollisionType_HeightMap;
+        // (the bodies of the dead stop the living: CHARCONTROLLER and BIPED collide, NV 0xC828F0)
+        int collisionMask = CollisionType_World | CollisionType_HeightMap | CollisionType_Ragdoll;
         if (mExternalCollisionMode)
             collisionMask |= CollisionType_Actor | CollisionType_Projectile | CollisionType_Door;
         if (mCanWaterWalk)
@@ -140,7 +197,7 @@ namespace OFPhysics
 
     void Actor::updateCollisionObjectPositionUnsafe()
     {
-        mShape->setLocalScaling(Misc::Convert::toBullet(mScale));
+        // (the shape is made at the scale of the reference, buildShape)
         osg::Vec3f newPosition = getScaledMeshTranslation() + mPosition;
 
         auto& trans = mCollisionObject->getWorldTransform();
@@ -205,6 +262,8 @@ namespace OFPhysics
     void Actor::updateScaleUnsafe()
     {
         float scale = mPtr.getCellRef().getScale();
+        if (!mShape || scale != mBuiltScale)
+            buildShape(scale);
         osg::Vec3f scaleVec(scale, scale, scale);
 
         mPtr.getClass().adjustScale(mPtr, scaleVec, false);

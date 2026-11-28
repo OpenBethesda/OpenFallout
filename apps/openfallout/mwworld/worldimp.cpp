@@ -91,6 +91,7 @@
 #include "../mwrender/vismask.hpp"
 
 #include "../mwclass/door.hpp"
+#include "../mwclass/esm4base.hpp"
 
 #include "../mwphysics/actor.hpp"
 #include "../mwphysics/collisiontype.hpp"
@@ -1109,10 +1110,10 @@ namespace OFWorld
         pos.z() = std::max(pos.z(), terrainHeight)
             + 20; // place slightly above terrain. will snap down to ground with code below
 
-        // We still should trace down dead persistent actors - they do not use the "swimdeath" animation.
-        OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
-        bool swims = ptr.getClass().isActor() && isSwimming(ptr)
-            && !(ptr.getClass().isPersistent(ptr) && scripts != nullptr && scripts->isDead(ptr));
+        // An actor in water is not put on the ground under it: a living one swims, and the ragdoll of a dead one moves
+        // its body in the water (fallout-rules.md A.K3, NV 0x63017A). No class of Fallout is asked for the persistence
+        // of Morrowind (asking for it threw "class does not support persistence", and a new game of Fallout 3 failed).
+        bool swims = ptr.getClass().isActor() && isSwimming(ptr);
         if (force || !ptr.getClass().isActor() || (!isFlying(ptr) && !swims && isActorCollisionEnabled(ptr)))
         {
             float height = static_cast<float>(ESM::getCellSize(ptr.getCell()->getCell()->getWorldSpace()));
@@ -2065,6 +2066,12 @@ namespace OFWorld
         return mPhysics->isOnGround(ptr);
     }
 
+    bool World::touchedActor(const OFWorld::Ptr& ptr) const
+    {
+        const OFPhysics::Actor* actor = mPhysics->getActor(ptr);
+        return actor != nullptr && actor->touchedActor();
+    }
+
     void World::togglePOV(bool force)
     {
         mRendering->getCamera()->toggleViewMode(force);
@@ -2334,8 +2341,9 @@ namespace OFWorld
         to.normalize();
         to = from + (to * maxDist);
 
-        int collisionTypes
-            = OFPhysics::CollisionType_World | OFPhysics::CollisionType_HeightMap | OFPhysics::CollisionType_Door;
+        // (the bodies of the dead are in the way of rays as of what walks)
+        int collisionTypes = OFPhysics::CollisionType_World | OFPhysics::CollisionType_HeightMap
+            | OFPhysics::CollisionType_Door | OFPhysics::CollisionType_Ragdoll;
         if (includeWater)
         {
             collisionTypes |= OFPhysics::CollisionType_Water;
@@ -2784,6 +2792,16 @@ namespace OFWorld
             return mPhysics->getHalfExtents(object);
     }
 
+    bool World::getBodyRadius(const ConstPtr& actor, float& radius, bool& lying) const
+    {
+        const OFPhysics::Actor* body = mPhysics->getActor(actor);
+        if (body == nullptr)
+            return false;
+        radius = body->getBodyRadius();
+        lying = body->isLying();
+        return true;
+    }
+
     std::filesystem::path World::exportSceneGraph(const Ptr& ptr)
     {
         auto file = mUserDataPath / "openfallout.osgt";
@@ -2840,6 +2858,10 @@ namespace OFWorld
     DetourNavigator::AgentBounds World::getPathfindingAgentBounds(const OFWorld::ConstPtr& actor) const
     {
         const OFPhysics::Actor* physicsActor = mPhysics->getActor(actor);
+        // The games have one navigation mesh for all: the characters and creatures go by the mesh of the player's
+        // size (an interior has that one only), whatever the size of their own character bodies
+        if (physicsActor != nullptr && actor != getPlayerConstPtr())
+            physicsActor = mPhysics->getActor(getPlayerConstPtr());
         if (physicsActor == nullptr || !actor.isInCell() || actor.getCell()->isExterior())
             return DetourNavigator::AgentBounds{ Settings::game().mActorCollisionShapeType,
                 Settings::game().mDefaultActorPathfindHalfExtents };
@@ -2881,5 +2903,25 @@ namespace OFWorld
     {
         if (OFPhysics::Actor* const actor = mPhysics->getActor(ptr))
             actor->setActive(value);
+    }
+
+    bool World::startRagdoll(const OFWorld::Ptr& ptr, const OFRender::Animation* bones)
+    {
+        const OFRender::Animation* animation = bones != nullptr ? bones : mRendering->getAnimation(ptr);
+        if (animation == nullptr)
+            return false;
+        // the player's class has no model, its skeleton is the MODL of its record
+        return mPhysics->startRagdoll(ptr, OFClass::ESM4Impl::skeletonModel(ptr),
+            [animation](std::string_view name) { return animation->getBone(name); });
+    }
+
+    void World::stopRagdoll(const OFWorld::Ptr& ptr)
+    {
+        mPhysics->stopRagdoll(ptr);
+    }
+
+    bool World::hasRagdoll(const OFWorld::ConstPtr& ptr) const
+    {
+        return mPhysics->hasRagdoll(ptr);
     }
 }

@@ -1375,6 +1375,45 @@ namespace OFRender
         return velocity;
     }
 
+    float Animation::getCycleSpeed(std::string_view group) const
+    {
+        if (!mAccumRoot)
+            return 0.f;
+        for (auto source = mAnimSources.rbegin(); source != mAnimSources.rend(); ++source)
+        {
+            const SceneUtil::TextKeyMap& keys = (*source)->getTextKeys();
+            if (!keys.hasGroupStart(group))
+                continue;
+            const AnimSource::ControllerMap& controllers = (*source)->mControllerMap[0];
+            float start = 0.f;
+            float stop = 0.f;
+            bool hasStart = false;
+            bool hasStop = false;
+            for (const auto& [time, text] : keys)
+            {
+                if (text.size() == group.size() + 7 && text.starts_with(group) && text.ends_with(": start"))
+                {
+                    start = time;
+                    hasStart = true;
+                }
+                else if (text.size() == group.size() + 6 && text.starts_with(group) && text.ends_with(": stop"))
+                {
+                    stop = time;
+                    hasStop = true;
+                }
+            }
+            if (!hasStart || !hasStop || !(stop > start))
+                return 0.f;
+            for (const auto& [node, controller] : controllers)
+                if (Misc::StringUtils::ciEqual(node, mAccumRoot->getName()))
+                    // NV 0x494018 to 0x4940C5: (the root at the end - at the start) / the time between, in 3D
+                    return (controller->getTranslation(stop) - controller->getTranslation(start)).length()
+                        / (stop - start);
+            return 0.f;
+        }
+        return 0.f;
+    }
+
     void Animation::updatePosition(float oldtime, float newtime, osg::Vec3f& position)
     {
         // Get the difference from the last update, and move the position
@@ -1911,6 +1950,12 @@ namespace OFRender
             return nullptr;
         else
             return found->second;
+    }
+
+    osg::ref_ptr<osg::MatrixTransform> Animation::getBone(std::string_view name) const
+    {
+        const NodeMap::const_iterator found = getNodeMap().find(name);
+        return found != getNodeMap().end() ? found->second : nullptr;
     }
 
     void Animation::setAlpha(float actorFade, float alpha)

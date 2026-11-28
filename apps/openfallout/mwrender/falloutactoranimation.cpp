@@ -87,44 +87,6 @@ namespace OFRender
         double mLastTime = -1.0;
     };
 
-    /// The body falls over a short time, slowly at first and faster as it goes, as a body does
-    class FalloutActorAnimation::FallCallback : public SceneUtil::NodeCallback<FallCallback, osg::MatrixTransform*>
-    {
-    public:
-        FallCallback(const osg::Vec3f& axis, float lift, bool fallen)
-            : mAxis(axis)
-            , mLift(lift)
-            , mFallen(fallen)
-        {
-        }
-
-        void operator()(osg::MatrixTransform* node, osg::NodeVisitor* nv)
-        {
-            if (!mDone)
-            {
-                constexpr double fallSeconds = 0.7;
-                const double now = nv->getFrameStamp()->getSimulationTime();
-                if (mStart < 0.0)
-                    mStart = now;
-                const float progress = mFallen ? 1.f : static_cast<float>(std::min(1.0, (now - mStart) / fallSeconds));
-                const float eased = progress * progress;
-                // It turns about the point on the ground where it stood, and is lifted by the thickness of its body so
-                // that it does not lie in the ground
-                node->setMatrix(
-                    osg::Matrix::rotate(eased * osg::PI_2, mAxis) * osg::Matrix::translate(0.f, 0.f, eased * mLift));
-                mDone = progress >= 1.f;
-            }
-            traverse(node, nv);
-        }
-
-    private:
-        osg::Vec3f mAxis;
-        float mLift;
-        bool mFallen;
-        bool mDone = false;
-        double mStart = -1.0;
-    };
-
     namespace
     {
         /// Says a thing about a skeleton folder or a file once, whatever number of characters share it: the characters
@@ -361,7 +323,7 @@ namespace OFRender
     void FalloutActorAnimation::playWornSound(int type)
     {
         namespace Steps = FalloutScript::Footsteps;
-        if (mFall != nullptr)
+        if (mDown)
             return;
         OFBase::SoundManager* sound = OFBase::Environment::get().getSoundManager();
         const OFWorld::ESMStore* store = OFBase::Environment::get().getESMStore();
@@ -409,7 +371,7 @@ namespace OFRender
     void FalloutActorAnimation::playCreatureSound(int type)
     {
         namespace Steps = FalloutScript::Footsteps;
-        if (mFall != nullptr || type > static_cast<int>(Steps::EnumKey::Death))
+        if (mDown || type > static_cast<int>(Steps::EnumKey::Death))
             return;
         OFBase::SoundManager* sound = OFBase::Environment::get().getSoundManager();
         const OFWorld::ESMStore* store = OFBase::Environment::get().getESMStore();
@@ -457,7 +419,7 @@ namespace OFRender
 
     void FalloutActorAnimation::playFootstep(int foot)
     {
-        if (mFall != nullptr)
+        if (mDown)
             return;
         const bool playerBody = !mMotionSource.isEmpty() && mMotionSource == OFMechanics::getPlayer();
         OFSound::FootstepRequest request;
@@ -470,50 +432,53 @@ namespace OFRender
         OFSound::playFootstep(request);
     }
 
-    void FalloutActorAnimation::die(bool fallen)
+    void FalloutActorAnimation::die()
     {
-        if (mFall != nullptr || mObjectRoot == nullptr || mObjectRoot->getNumParents() == 0)
+        if (mDown || mObjectRoot == nullptr || mObjectRoot->getNumParents() == 0)
         {
-            if (mFall == nullptr)
+            if (!mDown)
                 Log(Debug::Info) << mPtr.getCellRef().getRefId() << " cannot fall: "
                                  << (mObjectRoot == nullptr ? "its body is not made" : "its body is in no scene");
             return;
         }
         // What it did stops where it is (advance() goes on only for the effects on the body, which run out)
-        // ... and is over: the groups it was playing (a walk, an attack, the reel of the blow that killed it) are taken out
-        // of the list of what it plays, which would show a dead body that goes on with its attack (the pose stays: nothing
-        // is updating the bones any more)
+        // ... and is over: the groups it was playing (a walk, an attack, the reel of the blow that killed it) are taken
+        // out of the list of what it plays, which would show a dead body that goes on with its attack. The bones are
+        // left to the ragdoll (OFPhysics::Ragdoll), which moves them from the pose they have (NV 0x89F916).
         std::vector<std::string> playing;
         for (const auto& state : mStates)
             playing.push_back(state.first);
         for (const std::string& group : playing)
             disable(group);
         mMoveGroup.clear();
-
-        // A person falls on its back, and a creature (a four-legged one, a robot) on its side. The body is as thick
-        // as a fifth of its size across, which keeps it out of the ground.
-        const bool person = mPtr.getType() == ESM4::Npc::sRecordId;
-        const float lift = std::clamp(mObjectRoot->getBound().radius() * 0.2f, 8.f, 40.f);
-        osg::ref_ptr<osg::MatrixTransform> fall = new osg::MatrixTransform;
-        fall->setName("Fall");
-        osg::Group* parent = mObjectRoot->getParent(0);
-        parent->replaceChild(mObjectRoot, fall);
-        fall->addChild(mObjectRoot);
-        fall->addUpdateCallback(new FallCallback(person ? osg::Vec3f(1, 0, 0) : osg::Vec3f(0, 1, 0), lift, fallen));
-        mFall = fall;
+        mDown = true;
     }
 
     void FalloutActorAnimation::advance(float duration)
     {
         // A dead body does nothing more: only the impact or the flash that was on it when it fell runs out
-        if (mFall != nullptr)
+        if (mDown)
         {
             publishActivity();
             updateEffects(duration);
             return;
         }
         updateGait(duration);
-        runAnimation(duration);
+        mRootMotion = runAnimation(duration);
+        // NV 0x4943A8 to 0x4945E7: walking a way, a part of the step more than four times the cycle's step at this rate
+        // is taken as that step (a jump of the root, as at the end of a loop)
+        if (mPathDriven && mGait != FalloutGait::Idle && !mMoveGroup.empty())
+        {
+            const float cycle = getCycleSpeed(mMoveGroup);
+            const float whole = std::trunc(cycle);
+            if (whole != 0.f)
+            {
+                const float most = cycle * (mPathSpeed / whole) * duration;
+                for (int i = 0; i < 3; ++i)
+                    if (std::abs(mRootMotion[i]) > 4.f * most) // 0x101DB80
+                        mRootMotion[i] = mRootMotion[i] > 0.f ? most : -most;
+            }
+        }
         publishActivity();
         watchPose(duration);
         logPose(duration);
@@ -840,12 +805,84 @@ namespace OFRender
 
         // A character in a piece of furniture does not walk: its place changes by a few units when it is put on its
         // seat, which would play the walk over the pose of its seat
+        mPathDriven = false;
+        if (const auto path = std::exchange(mPathMovement, std::nullopt); path && mPoseKind == 0)
+        {
+            // NV 0x896B7B to 0x896CF4: the group of the word. A way with the run bit runs, one with another gait bit
+            // walks, one with none stands; with no way the turn bits turn it on the spot. Under a speed of 1 it stands
+            // (0x896D05 to 0x896D51)
+            const auto [word, speed] = *path;
+            FalloutGait gait = FalloutGait::Idle;
+            FalloutDirection direction = FalloutDirection::Forward;
+            mPathTurn = 0;
+            if ((word & 0xFu) != 0)
+            {
+                if ((word & 0x200u) != 0)
+                    gait = FalloutGait::Run;
+                else if ((word & 0xFF00u) != 0)
+                    gait = FalloutGait::Walk;
+                direction = (word & 1u) != 0 ? FalloutDirection::Forward
+                    : (word & 2u) != 0       ? FalloutDirection::Backward
+                    : (word & 4u) != 0       ? FalloutDirection::Left
+                                             : FalloutDirection::Right;
+            }
+            else if ((word & 0x10u) != 0)
+                mPathTurn = 4; // TurnLeft
+            else if ((word & 0x20u) != 0)
+                mPathTurn = 5; // TurnRight
+            if (gait == FalloutGait::Run && !mGaits.mHasRun)
+                gait = FalloutGait::Walk;
+            if (!(speed >= 1.f))
+                gait = FalloutGait::Idle;
+            mPathDriven = true;
+            mPathSpeed = speed;
+            setGait(gait);
+            mDirection = direction;
+            updateMovement();
+            return;
+        }
         setGait(mPoseKind != 0 ? FalloutGait::Idle : chooseFalloutGait(mSpeed, mGait, mGaits));
         // A character of the world faces where it goes (it turns as it walks, so for a while the way it goes is to its
         // side or behind it: round 14F saw walking backward and sideways); only the player's body strafes and steps back
         mDirection = mMotionSource.isEmpty() ? FalloutDirection::Forward
                                               : chooseFalloutDirection(mForwardSpeed, mSideSpeed, mDirection);
         updateMovement();
+    }
+
+    void FalloutActorAnimation::setPathMovement(std::uint32_t word, float speed)
+    {
+        mPathMovement = std::make_pair(word, speed);
+    }
+
+    bool FalloutActorAnimation::hasPlainMove(FalloutDirection direction) const
+    {
+        return hasFalloutPlainMove(
+            mMoveFolder, direction, mFemale, animationFilesOf(*mResourceSystem->getVFS(), mMoveFolder));
+    }
+
+    float FalloutActorAnimation::forwardEnd() const
+    {
+        // NV 0x897910: the Forward group for how it moves now (sneaking) and the weapon in its hands
+        const std::string_view prefix = mDrawn ? falloutWeaponPrefix(mWeaponType) : std::string_view();
+        const std::string file = chooseFalloutMove(mMoveFolder, prefix, mSneaking, FalloutDirection::Forward, false,
+            mFemale, animationFilesOf(*mResourceSystem->getVFS(), mMoveFolder), false);
+        if (file.empty())
+            return 0.f;
+        const std::string group(VFS::Path::Normalized(file).stem());
+        std::vector<const SceneUtil::TextKeyMap*> maps;
+        getTextKeyMaps(maps);
+        for (auto source = maps.rbegin(); source != maps.rend(); ++source)
+        {
+            const SceneUtil::TextKeyMap& keys = **source;
+            if (!keys.hasGroupStart(group))
+                continue;
+            // the text keys of the sequence come along in lower case (nifloader.cpp)
+            for (const auto& [time, text] : keys)
+                if (text == "end")
+                    return time;
+            return 0.f; // 0x5F2519: the time of a key that is not there stays 0
+        }
+        return 0.f;
     }
 
     void FalloutActorAnimation::setGait(FalloutGait gait)
@@ -932,7 +969,13 @@ namespace OFRender
         // and a moment more, so that a short turn is not a flicker
         constexpr float turnFrom = 0.5f;
         constexpr float turnHold = 0.35f;
-        if (special == 0 && mPoseKind == 0 && mGait == FalloutGait::Idle && !isDown() && !mFirstPerson)
+        if (mPathDriven)
+        {
+            // the path handler says when it turns on the spot
+            mTurning = special == 0 && mGait == FalloutGait::Idle ? mPathTurn : 0;
+            mTurnLeft = 0.f;
+        }
+        else if (special == 0 && mPoseKind == 0 && mGait == FalloutGait::Idle && !isDown() && !mFirstPerson)
         {
             if (std::abs(mTurnRate) > turnFrom)
             {
@@ -1048,7 +1091,21 @@ namespace OFRender
         }
 
         // The feet keep up with the ground: the animation plays as much faster or slower as the actor is
-        if (!mMoveGroup.empty() && mGait != FalloutGait::Idle && special == 0)
+        if (mPathDriven && !mMoveGroup.empty())
+        {
+            // NV 0x896FA8 to 0x897136: the speed of the rules over the cycle's speed cut to a whole number, and the
+            // groups that turn on the spot at the turn scale of the pathing (0x897020: fAITurnSpeedScale 1.5,
+            // fCreatureTurnSpeedScale 1.25)
+            if (special == 4 || special == 5)
+                adjustSpeedMult(mMoveGroup, mPtr.getType() == ESM4::Creature::sRecordId ? 1.25f : 1.5f);
+            else if (mGait != FalloutGait::Idle && special == 0)
+            {
+                const float cycle = std::trunc(getCycleSpeed(mMoveGroup));
+                if (cycle != 0.f)
+                    adjustSpeedMult(mMoveGroup, mPathSpeed / cycle);
+            }
+        }
+        else if (!mMoveGroup.empty() && mGait != FalloutGait::Idle && special == 0)
             adjustSpeedMult(mMoveGroup, falloutAnimationSpeed(mSpeed, getVelocity(mMoveGroup)));
     }
 

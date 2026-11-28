@@ -243,6 +243,14 @@ file(GLOB UNITTEST_SRC_FILES
     falloutscript/testhitreactions.cpp
     falloutscript/testequipment.cpp
     falloutscript/testfightai.cpp
+    falloutscript/testcharacterbody.cpp
+    falloutscript/testragdollrules.cpp
+    falloutscript/testnavmeshsearch.cpp
+    falloutscript/testnavmeshdoors.cpp
+    falloutscript/testnavmeshroute.cpp
+    falloutscript/testnavmeshsmoother.cpp
+    falloutscript/testnavmeshpather.cpp
+    falloutscript/testpathfollower.cpp
     falloutscript/testformlists.cpp
     falloutscript/testlevelledlists.cpp
     falloutscript/testspawncommands.cpp

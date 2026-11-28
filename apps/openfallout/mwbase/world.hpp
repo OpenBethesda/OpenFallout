@@ -368,6 +368,8 @@ namespace OFBase
         virtual bool isUnderwater(const OFWorld::CellStore* cell, const osg::Vec3f& pos) const = 0;
         virtual bool isUnderwater(const OFWorld::ConstPtr& object, const float heightRatio) const = 0;
         virtual bool isOnGround(const OFWorld::Ptr& ptr) const = 0;
+        /// The actor's body ran into another actor in its last step of the physics
+        virtual bool touchedActor(const OFWorld::Ptr& ptr) const = 0;
 
         /// The Havok material of what an actor stands on (the index of the executables' tables of the sounds of steps:
         /// 0 stone, 2 dirt, 4 grass, 5 metal, 8 water, 9 wood and so on): that of the collision shape of the object
@@ -511,6 +513,10 @@ namespace OFBase
         /// Return physical or rendering half extents of the given actor.
         virtual osg::Vec3f getHalfExtents(const OFWorld::ConstPtr& actor, bool rendering = false) const = 0;
 
+        /// The radius of the body of an actor's character controller in game units and whether it lies (FalloutNV.exe
+        /// 0xC6E280, bit 1 of [ctrl+0x414]); false when it has none
+        virtual bool getBodyRadius(const OFWorld::ConstPtr& actor, float& radius, bool& lying) const = 0;
+
         /// Export scene graph to a file and return the filename.
         /// \param ptr object to export scene graph for (if empty, export entire scene graph)
         virtual std::filesystem::path exportSceneGraph(const OFWorld::Ptr& ptr) = 0;
@@ -541,6 +547,13 @@ namespace OFBase
         virtual OFWorld::DateTimeManager* getTimeManager() = 0;
 
         virtual void setActorActive(const OFWorld::Ptr& ptr, bool value) = 0;
+
+        /// The body of an actor that died is moved by the ragdoll of its skeleton file from then on (fallout-rules.md
+        /// A.K3, NV 0x89F780 at 0x89F916). `bones` are the nodes of the body that is drawn, when it is not the actor's
+        /// own animation (the player's body). False when the skeleton has no ragdoll.
+        virtual bool startRagdoll(const OFWorld::Ptr& ptr, const OFRender::Animation* bones = nullptr) = 0;
+        virtual void stopRagdoll(const OFWorld::Ptr& ptr) = 0;
+        virtual bool hasRagdoll(const OFWorld::ConstPtr& ptr) const = 0;
     };
 }
 

@@ -1095,6 +1095,18 @@ namespace OFWorld
     // ESM4 Land
     //=========================================================================
     // Needed to avoid include of ESM4::Land in header
+    void Store<ESM4::Navigation>::insertStatic(const ESM4::Navigation& navigation)
+    {
+        for (const ESM4::Navigation::FalloutInfo& info : navigation.mFalloutInfo)
+            mInfos[info.mNavMesh] = info;
+    }
+
+    const ESM4::Navigation::FalloutInfo* Store<ESM4::Navigation>::search(ESM::FormId navMesh) const
+    {
+        const auto it = mInfos.find(navMesh);
+        return it == mInfos.end() ? nullptr : &it->second;
+    }
+
     Store<ESM4::Land>::Store() {}
 
     void Store<ESM4::Land>::updateLandPositions(const Store<ESM4::Cell>& cells)
@@ -1186,6 +1198,7 @@ template class OFWorld::TypedDynamicStore<ESM4::Cell>;
 template class OFWorld::TypedDynamicStore<ESM4::Climate>;
 template class OFWorld::TypedDynamicStore<ESM4::GlobalVariable>;
 template class OFWorld::TypedDynamicStore<ESM4::Clothing>;
+template class OFWorld::TypedDynamicStore<ESM4::CombatStyle>;
 template class OFWorld::TypedDynamicStore<ESM4::Container>;
 template class OFWorld::TypedDynamicStore<ESM4::Creature>;
 template class OFWorld::TypedDynamicStore<ESM4::DefaultObj>;
@@ -1226,6 +1239,7 @@ template class OFWorld::TypedDynamicStore<ESM4::Message>;
 template class OFWorld::TypedDynamicStore<ESM4::MiscItem>;
 template class OFWorld::TypedDynamicStore<ESM4::MovableStatic>;
 template class OFWorld::TypedDynamicStore<ESM4::Music>;
+template class OFWorld::TypedDynamicStore<ESM4::NavMesh>;
 template class OFWorld::TypedDynamicStore<ESM4::Note>;
 template class OFWorld::TypedDynamicStore<ESM4::Npc>;
 template class OFWorld::TypedDynamicStore<ESM4::Outfit>;

@@ -30,11 +30,6 @@ namespace ESM4
 
 namespace OFClass
 {
-    /// The half extents of the body that a person is solid as, in game units: a human is 40 units wide and 128 tall
-    /// (the box of the placeholder skeleton of the player), and a race that is raceHeight times as tall is that much
-    /// taller and wider. A height that is not a positive number (a record without data has none) counts as 1.
-    osg::Vec3f npcBodyHalfExtents(float raceHeight);
-
     /// The head parts of a character: those it names and, after each, the extra parts that it names in turn (a head
     /// part can be only a name for others, as a beard of several pieces is). A part is listed once whatever names it,
     /// so records that name each other end the walk. A part that `find` does not have is left out, and so are its extra
@@ -157,9 +152,6 @@ namespace OFClass
         /// The character wears these pieces of armor (and nothing else) in place of what its record dresses it in: what
         /// the body of the player shows of the armor the player has put on. The records must outlive the character.
         static void setWornArmor(const OFWorld::Ptr& ptr, const std::vector<const ESM4::Armor*>& armor);
-        /// The half extents of the body that the character is solid as (the cylinder of its physics body), from the
-        /// height of its race
-        static osg::Vec3f getBodyHalfExtents(const OFWorld::Ptr& ptr);
         static const std::vector<const ESM4::Armor*>& getEquippedArmor(const OFWorld::Ptr& ptr);
         static const std::vector<const ESM4::Clothing*>& getEquippedClothing(const OFWorld::Ptr& ptr);
         /// The AI packages of a character of Fallout, in the order of their priority (the first is the highest):

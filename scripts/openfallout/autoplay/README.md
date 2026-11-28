@@ -46,7 +46,10 @@ the run stopped.
 The tool also answers the screens that the quests after the intro come to. A lock screen (a door or container that is locked) is
 picked with bobby pins until it opens (`AUTOPLAY lock`, `lock pick` with the result of each pin; the screen is left when only a key
 opens the lock, the pins are gone or after forty tries: `lock close`). A terminal that is closed is hacked the way a player does
-it, guessing a word that agrees with every likeness so far (`hack`, `hack close` when no word fits); a menu is walked through, each
+it (`autoplayhack.lua`): of the words that agree with every likeness so far it guesses the one that leaves the fewest in the
+worst case (`hack`, with `left`, the words that could still be it), and with one attempt left and more than one word left it
+leaves the board instead of risking the lock, so that the next opening lays out a new one (`hack leave`; `hack close` when no
+word fits). `test_autoplay_hack.py` plays random boards against it and checks that it never locks a terminal. A menu is walked through, each
 line twice at most, then Back and then out (`terminal line`, `terminal back`, `terminal close`). The screen that asks how long to
 wait or sleep is answered with one hour (`rest`). The screen of a level up, which stops the world until it is left, gets the skill
 points of the level spent on the skills in the order of the list, as many as each can take, and the first perk the player qualifies

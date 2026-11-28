@@ -2,9 +2,6 @@
 #define OPENFALLOUT_MWMECHANICS_FALLOUTPACKAGES_H
 
 #include <cstdint>
-#include <functional>
-#include <initializer_list>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,6 +31,12 @@ namespace OFMechanics
         /// the door that leads there (the center), and is at the place, whose reference this is, when it has gone
         /// through
         ESM::FormId mThrough;
+        /// A Stay goal near a reference: the radius of the TRAVEL done test (FalloutNV.exe 0x6768D0), whether that
+        /// takes no slack, and whether the target is furniture (the test of a seated or sleeping actor, 0x676D9B)
+        bool mTravel = false;
+        int mDoneRadius = 0;
+        bool mPlain = false;
+        bool mFurnitureTarget = false;
     };
 
     /// The smallest and largest distances from the center of the place, in game units, at which a character has
@@ -49,6 +52,43 @@ namespace OFMechanics
     /// furniture names the radius it looks in, not the one it arrives at: the character goes to the entry of the
     /// marker.
     float falloutGoalRadius(std::int32_t locationRadius, ESM4::PackageBehaviour behaviour);
+
+    /// What the done test of a TRAVEL package (FalloutNV.exe 0x6768D0) reads of the reference it goes to (0x676140)
+    struct FalloutTravelTarget
+    {
+        enum class Kind
+        {
+            None,
+            Marker, // the base is the static XMarker or XMarkerHeading (forms 0x3B and 0x34; 0x11CA244, 0x11CA248)
+            Furniture, // form type 0x27 (0x568680)
+            Actor, // vfunc 0x100
+            Other,
+        };
+        Kind mKind = Kind::None;
+        /// An actor asleep in a bed ([actor+0x1AC] 9, 0x920D00)
+        bool mAsleep = false;
+        /// The base is an activator, a container, a static or a static collection (form types 0x15, 0x1B, 0x20, 0x21):
+        /// no margin on its size (the byte table 0x676E2C)
+        bool mNoMargin = false;
+        /// Half the largest size of the bounds of its base (0x571600)
+        float mHalfSize = 0.f;
+    };
+
+    /// The radius of the done test (0x6768D0 steps H to K): the location's radius (PLDT, 0 for a cell, 0x67F1C0);
+    /// when that is 0, 20 for a marker or furniture, 90 for an actor asleep, else half the target's size and 20
+    /// (activators, containers and statics nothing), and `minimum` (iAIDistanceRadiusMinLocation, 0x11CDE98) when
+    /// still 0. `plain` when the test takes no slack: a marker (with any radius up to 20, 0x676CD2), furniture, a
+    /// sleeper (0x676BB8, 0x676C1A).
+    int falloutTravelRadius(
+        std::int32_t locationRadius, const FalloutTravelTarget& target, std::int32_t minimum, bool& plain);
+
+    /// The distance test of the done test (actor vfunc 0x2CC, 0x8B2F90 with its z band): the place is within
+    /// `radius` of the actor's feet, in 3D but with no height when the place is between 30 below the feet and 30 over
+    /// the head (`height`, 128 when unknown, 0x8B3001); `slack` is added to the radius unless `plain`: the radius of
+    /// the body of its character controller in game units (0xC6E280; the hull's at 0xC72F1F), doubled for a lying body
+    /// (bit 1 of [ctrl+0x414], 0xC72706), at least 32 (0x8B30A3)
+    bool falloutTravelDone(const osg::Vec3f& feet, float height, const osg::Vec3f& place, float radius, bool plain,
+        float bodyRadius, bool lying);
 
     /// A piece of furniture (or anything else) that a Find or Use Item At package may take
     struct FalloutCandidate
@@ -140,48 +180,10 @@ namespace OFMechanics
     /// target than the angle is, by the shorter way round
     float falloutTurnToward(float angle, float target, float change);
 
-    /// The place `distance` from `from` toward `to`, or `to` if it is that close
-    osg::Vec3f falloutStepToward(const osg::Vec3f& from, const osg::Vec3f& to, float distance);
-
-    /// How a straight walk is looked at: the height of the floor under a place (the last height is where the feet were
-    /// a step before; nothing when there is no floor within reach), and whether the world is in the way between two
-    /// points (the knees and the chest of the walker are asked about)
-    using FalloutFloorProbe = std::function<std::optional<float>(float x, float y, float lastHeight)>;
-    using FalloutWayProbe = std::function<bool(const osg::Vec3f& from, const osg::Vec3f& to)>;
-
-    /// The distance from a start along a direction to the first thing the world has there, or `longest` when there is
-    /// nothing within it
-    using FalloutRayProbe = std::function<float(const osg::Vec3f& start, const osg::Vec3f& direction, float longest)>;
-
-    /// Whether the world is in the way between two points at the height of the walker's knees and chest (the heights
-    /// are above the points). A ray starts one unit before the point it leaves and a hit counts when it is before the
-    /// end less one unit, so the unit that the tolerance of an end leaves is the start of the next segment's ray: a
-    /// thin wall between two probes is not missed.
-    bool falloutSegmentBlocked(const osg::Vec3f& from, const osg::Vec3f& to, const FalloutRayProbe& ray,
-        std::initializer_list<float> heights);
-
-    /// Whether an actor can walk the straight line from one place to another when the navigator has no path for it (a
-    /// vault whose mesh has holes and islands, a target that stands where the mesh is not): there is floor under every
-    /// `step` units of the line, the floor does not rise or fall more than `stepHeight` between two of those, and the
-    /// way between two of them is clear. A line longer than `longest` is not tried.
-    bool falloutStraightWalkable(const osg::Vec3f& from, const osg::Vec3f& to, const FalloutFloorProbe& floor,
-        const FalloutWayProbe& blocked, float step = 50.f, float stepHeight = 70.f, float longest = 3000.f);
-
-    /// What an actor that meets the player on its way remembers: how long it has waited for the player to move, and
-    /// whether it has waited long enough and goes on
-    struct FalloutYield
-    {
-        float mWaited = 0.f;
-        bool mPassing = false;
-    };
-
-    /// Whether the actor waits where it is this frame. It waits when its next step would bring it nearer to the player
-    /// than it is allowed (`inTheWay`), for `patience` seconds; a player that does not move in that time (autoplay
-    /// puts it somewhere and waits, a person who left the keyboard) is walked past. The actor waits again once it is
-    /// not near the player any more and its next step would not bring it near either (`nearPlayer` and `inTheWay`
-    /// false), which a step past the player brings about. An actor held up at the edge of the distance (not near yet,
-    /// its next step is in the way) counts the time as well.
-    bool falloutYields(FalloutYield& state, bool nearPlayer, bool inTheWay, float duration, float patience);
+    /// The velocity (units a second, on the ground) that the controls of a Lua script ask of an actor whose AI is off:
+    /// forward and side from -1 to 1 (forward is where the heading, from the y axis toward the x axis, points; the side
+    /// is to its right), at most `speed` together
+    osg::Vec3f falloutControlVelocity(float heading, float forward, float side, float speed);
 }
 
 #endif

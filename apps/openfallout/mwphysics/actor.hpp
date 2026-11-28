@@ -3,17 +3,18 @@
 
 #include <memory>
 #include <mutex>
+#include <vector>
 
 #include "ptrholder.hpp"
 
 #include <components/detournavigator/collisionshapetype.hpp>
+#include <components/falloutscript/characterbody.hpp>
 
 #include <osg/Quat>
 #include <osg/Vec3f>
 
 class btCollisionShape;
 class btCollisionWorld;
-class btConvexShape;
 
 namespace Resource
 {
@@ -25,13 +26,15 @@ namespace OFPhysics
     class PhysicsTaskScheduler;
 
     /// The body of a character on character physics, as the executables make it (rule A.C2 of
-    /// docs/openfallout/fallout-rules.md): an upright capsule of the radius of the controller (31 units in both exes,
-    /// times the size of the actor) and the height of the human skeleton's bound (half height 66.22), standing on the
-    /// position of the actor
+    /// docs/openfallout/fallout-rules.md, FalloutScript::CharacterBody::body): from the BSBound of its skeleton and
+    /// its size (the height of its race, or the base scale of a creature; the scale of the reference is the physics'
+    /// own, OFPhysics::Actor::updateScaleUnsafe)
     struct CharacterShape
     {
-        float mRadius = 31.f;
-        float mHalfHeight = 66.22f;
+        FalloutScript::CharacterBody::Bound mBound = FalloutScript::CharacterBody::noModelBound();
+        float mSize = 1.f;
+        /// False for a character without a skeleton the engine can read: the size of no 3D, not scaled
+        bool mHasModel = true;
     };
 
     class Actor final : public PtrHolder
@@ -50,8 +53,6 @@ namespace OFPhysics
         void enableCollisionMode(bool collision);
 
         bool getCollisionMode() const { return mInternalCollisionMode; }
-
-        btConvexShape* getConvexShape() const { return mConvexShape; }
 
         /**
          * Enables or disables the *external* collision body. If disabled, other actors will not collide with this
@@ -80,10 +81,19 @@ namespace OFPhysics
          */
         osg::Vec3f getHalfExtents() const;
 
+        /// The radius of the body of the character controller in game units (FalloutNV.exe 0xC6E280 times 6.9991: the
+        /// capsule's, else [ctrl+0x5F0], the hull's r0 at 0xC72F1F), and whether the body lies (bit 1 of
+        /// [ctrl+0x414], 0xC72706)
+        float getBodyRadius() const { return mBodyRadius; }
+        bool isLying() const { return mLying; }
+
         /**
          * Returns the half extents of the collision body (not scaled)
          */
         osg::Vec3f getOriginalHalfExtents() const;
+
+        /// How high an edge the body walks up, in units (CharacterBody::Body::mStepHeight)
+        float getStepHeight() const { return mStepHeight; }
 
         /**
          * Returns the position of the collision body
@@ -144,6 +154,9 @@ namespace OFPhysics
         void setStandingOnPtr(const OFWorld::Ptr& ptr);
 
         unsigned int getStuckFrames() const { return mStuckFrames; }
+        /// It ran into another actor in its last step of the solver
+        bool touchedActor() const { return mTouchedActor; }
+        void setTouchedActor(bool touched) { mTouchedActor = touched; }
         void setStuckFrames(unsigned int frames) { mStuckFrames = frames; }
 
         const osg::Vec3f& getLastStuckPosition() const { return mLastStuckPosition; }
@@ -174,8 +187,19 @@ namespace OFPhysics
 
         DetourNavigator::CollisionShapeType mCollisionShapeType;
 
+        /// Builds the body at the scale of the reference times the size (the constants of the exe's shape do not
+        /// scale, so the shape is made again when the scale changes)
+        void buildShape(float referenceScale);
+
+        CharacterShape mCharacterShape;
+        float mBuiltScale = 0.f;
+        float mStepHeight = 0.f;
+        float mBodyRadius = 0.f;
+        bool mLying = false;
         std::unique_ptr<btCollisionShape> mShape;
-        btConvexShape* mConvexShape;
+        /// The parts of a body that is the union of several capsules (a btCompoundShape keeps no ownership)
+        std::vector<std::unique_ptr<btCollisionShape>> mParts;
+        std::vector<std::unique_ptr<btCollisionShape>> mRetired;
 
         osg::Vec3f mMeshTranslation;
         osg::Vec3f mOriginalHalfExtents;
@@ -189,6 +213,7 @@ namespace OFPhysics
         mutable std::mutex mPositionMutex;
 
         unsigned int mStuckFrames;
+        bool mTouchedActor = false;
         osg::Vec3f mLastStuckPosition;
 
         osg::Vec3f mForce;

@@ -114,6 +114,8 @@ namespace ESM4
         float mScale = 1.0f;
         ESM::FormId mOwner;
         ESM::FormId mGlobal;
+        /// Fallout, XEZN: its own encounter zone (NV extra data 0x74, 0x567D20), none when it takes its cell's
+        ESM::FormId mEncounterZone;
         std::int32_t mFactionRank = -1;
 
         bool mIsMapMarker = false;
@@ -143,6 +145,10 @@ namespace ESM4
         RadioStationData mRadio;
 
         TeleportDest mDoor;
+        /// Fallout, XNDP: the navigation mesh at the door and its triangle there (NV 0x4148B9 stores the 8 bytes as the
+        /// extra data of type 0x5A, 0x42E2C0); the search over meshes goes to the mesh at the linked door (0x6B89D7)
+        ESM::FormId mNavMeshDoorMesh;
+        std::uint16_t mNavMeshDoorTriangle = 0;
         bool mIsLocked = false;
         std::int8_t mLockLevel = 0;
         /// The flags of the lock (XLOC, 4 bytes after the key): 0x04 is a leveled lock

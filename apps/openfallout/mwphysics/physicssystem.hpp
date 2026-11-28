@@ -8,6 +8,8 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <variant>
 
@@ -42,6 +44,8 @@ namespace Resource
 }
 
 class btCollisionWorld;
+class btDiscreteDynamicsWorld;
+class btSequentialImpulseConstraintSolver;
 class btBroadphaseInterface;
 class btDefaultCollisionConfiguration;
 class btCollisionDispatcher;
@@ -55,9 +59,16 @@ namespace ESMTerrain
     class LandObject;
 }
 
+namespace osg
+{
+    class MatrixTransform;
+}
+
 namespace OFPhysics
 {
     class HeightField;
+    class Ragdoll;
+    struct RagdollData;
     class Object;
     class Actor;
     struct CharacterShape;
@@ -103,8 +114,12 @@ namespace OFPhysics
         osg::Vec3f mLastStuckPosition;
         const float mWaterlevel;
         const float mHalfExtentsZ;
+        const float mStepHeight;
         float mOldHeight;
         unsigned int mStuckFrames;
+        /// It ran into another actor in its last step (as the character proxy's characterInteraction of FalloutNV.exe,
+        /// 0xC6F500, which the controller update 0xC73170 clears first)
+        bool mTouchedActor = false;
         const bool mFlying;
         const bool mWasOnGround;
         const bool mWaterCollision;
@@ -167,14 +182,17 @@ namespace OFPhysics
 
         void addObject(const OFWorld::Ptr& ptr, VFS::Path::NormalizedView mesh, osg::Quat rotation,
             int collisionType = CollisionType_World);
-        /// The player's body on character physics (moved by the movement solver)
+        /// The character body of the player, a character or a creature (the capsule of the character controller, moved
+        /// by the movement solver while the actor is active)
         void addCharacter(const OFWorld::Ptr& ptr, const CharacterShape& shape);
 
-        /// A solid body for a person whose class has no creature stats, so it is not an actor of the physics: an
-        /// upright cylinder that stands on the position of the object (the half extents are those of its box). It
-        /// collides as an actor does, so the player walks around it, can not step onto it and walks out of it when
-        /// they start inside it, and a ray or a projectile that meets it finds the object.
-        void addActorBody(const OFWorld::Ptr& ptr, const osg::Vec3f& halfExtents, osg::Quat rotation);
+        /// The ragdoll of a body that is down (fallout-rules.md A.K3): the rigid bodies and constraints of the
+        /// skeleton file `model`, started from the pose of the bones that `findBone` gives by name. False when the file
+        /// has none.
+        bool startRagdoll(const OFWorld::Ptr& ptr, VFS::Path::NormalizedView model,
+            const std::function<osg::ref_ptr<osg::MatrixTransform>(std::string_view)>& findBone);
+        void stopRagdoll(const OFWorld::Ptr& ptr);
+        bool hasRagdoll(const OFWorld::ConstPtr& ptr) const;
 
         int addProjectile(
             const OFWorld::Ptr& caster, const osg::Vec3f& position, VFS::Path::NormalizedView mesh, bool computeRadius);
@@ -304,6 +322,10 @@ namespace OFPhysics
         void updateWater();
 
         void prepareSimulation(bool willSimulate, std::vector<Simulation>& simulations);
+        /// One step of the ragdolls: what is near them is copied into their world, the water pushes them, they move,
+        /// and the bones follow
+        void stepRagdolls(float dt);
+        std::optional<float> waterHeightAt(const btVector3& position) const;
 
         std::unique_ptr<btBroadphaseInterface> mBroadphase;
         std::unique_ptr<btDefaultCollisionConfiguration> mCollisionConfiguration;
@@ -345,8 +367,38 @@ namespace OFPhysics
             std::unique_ptr<btTriangleMesh> mMesh;
             std::unique_ptr<btCollisionShape> mShape;
             std::unique_ptr<btCollisionObject> mObject;
+            float mHeight = 0.f;
+            float mSize = 0.f;
+            int mX = 0;
+            int mY = 0;
         };
         std::map<std::pair<int, int>, WaterTile> mWaterTiles;
+
+        // The world of the ragdolls (destroyed after them: they are declared after it)
+        std::unique_ptr<btDefaultCollisionConfiguration> mRagdollConfiguration;
+        std::unique_ptr<btCollisionDispatcher> mRagdollDispatcher;
+        std::unique_ptr<btBroadphaseInterface> mRagdollBroadphase;
+        std::unique_ptr<btSequentialImpulseConstraintSolver> mRagdollSolver;
+        std::unique_ptr<btDiscreteDynamicsWorld> mRagdollWorld;
+        std::map<std::string, std::shared_ptr<const RagdollData>, std::less<>> mRagdollData;
+        struct RagdollEntry
+        {
+            std::unique_ptr<Ragdoll> mRagdoll;
+            std::string mLabel;
+            float mAge = 0.f;
+            bool mRested = false;
+            /// Where the reference was, and its heading, when the bodies last went with it
+            osg::Vec3f mAt;
+            float mHeading = 0.f;
+        };
+        std::unordered_map<const OFWorld::LiveCellRefBase*, RagdollEntry> mRagdolls;
+        /// The copies of what is near the ragdolls, by the object of the world of the living they copy
+        struct RagdollMirror
+        {
+            std::unique_ptr<btCollisionObject> mObject;
+            const btCollisionShape* mShape = nullptr;
+        };
+        std::unordered_map<const btCollisionObject*, RagdollMirror> mRagdollMirrors;
 
         std::unique_ptr<OFRender::DebugDrawer> mDebugDrawer;
 

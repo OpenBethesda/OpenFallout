@@ -50,17 +50,22 @@ namespace FalloutScript
         /// Lets the modifiers that have a duration run down
         void update(double seconds);
 
-        /// The actor looks at the target until told to stop
-        void look(FormId actor, FormId target);
+        /// The actor looks at the target until told to stop. With `faces` (Look's integer not 0, NV 0x5C9863) it faces
+        /// the target as it walks instead: the target is its goal point (0x5C988B, and each frame 0x8EF4E3)
+        void look(FormId actor, FormId target, bool faces = false);
+        /// StopLook (NV 0x5C98E0): both end (0x5C9950, 0x5C996A)
         void stopLooking(FormId actor);
         /// What the actor looks at, 0 for nothing
         FormId lookingAt(FormId actor);
+        /// What the actor faces as it walks, 0 for nothing
+        FormId facing(FormId actor);
 
     private:
         std::mutex mMutex;
         /// The seconds left, 0 or less for the ones that do not end by themselves
         std::map<FormId, double> mImageSpaces;
         std::map<FormId, FormId> mLooks;
+        std::map<FormId, FormId> mFaces;
     };
 
     /// Gives the commands PlaySound, PlaySound3D, IsSoundPlaying, IsMusicPlaying, PlayMusic, ForceWeather,

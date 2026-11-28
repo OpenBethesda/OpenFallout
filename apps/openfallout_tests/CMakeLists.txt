@@ -20,7 +20,6 @@ file(GLOB UNITTEST_SRC_FILES
     mwworld/testcellwater.cpp
     mwworld/testworldspacestart.cpp
 
-    mwclass/testesm4npcbody.cpp
     mwclass/testesm4npcparts.cpp
 
 

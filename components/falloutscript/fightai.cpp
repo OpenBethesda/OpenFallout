@@ -60,6 +60,33 @@ namespace FalloutScript::FightAI
         return Move::Hold;
     }
 
+    bool withinFiringArc(double offHeading, double targetingFov, double aimArc, bool moving, double stationaryShare)
+    {
+        constexpr double pi = 3.14159265358979323846;
+        constexpr double degree = pi / 180.0;
+        // (the exe turns the difference into -π to π and takes its size, 0x4B15E0 and 0x408840)
+        double off = std::fmod(offHeading, 2.0 * pi);
+        if (off > pi)
+            off -= 2.0 * pi;
+        else if (off < -pi)
+            off += 2.0 * pi;
+        off = std::abs(off);
+        if (targetingFov > 0 && off > targetingFov * degree * 0.5)
+            return false;
+        if (aimArc > 0)
+        {
+            const double arc = aimArc * degree * (moving ? 1.0 : stationaryShare);
+            if (off > arc * 0.5)
+                return false;
+        }
+        return true;
+    }
+
+    bool keepsFiring(bool inSight, double sinceSight, double sinceDetected, double losBuffer, double detectionBuffer)
+    {
+        return inSight || (sinceSight < losBuffer && sinceDetected < detectionBuffer);
+    }
+
     FormId bestWeapon(const std::vector<WeaponCandidate>& candidates)
     {
         FormId best = 0;

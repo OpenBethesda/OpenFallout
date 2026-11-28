@@ -79,7 +79,7 @@ message(STATUS "Configuring OpenFallout...")
 set(OPENFALLOUT_VERSION_MAJOR 0)
 set(OPENFALLOUT_VERSION_MINOR 1)
 set(OPENFALLOUT_VERSION_RELEASE 1)
-set(OPENFALLOUT_LUA_API_REVISION 197)
+set(OPENFALLOUT_LUA_API_REVISION 198)
 set(OPENFALLOUT_POSTPROCESSING_API_REVISION 5)
 
 set(OPENFALLOUT_VERSION_COMMITHASH "")
@@ -325,7 +325,7 @@ if(OPENFALLOUT_USE_SYSTEM_BULLET)
 
     # First, try BulletConfig-float64.cmake which comes with Debian derivatives.
     # This file does not define the Bullet version in a CMake-friendly way.
-    find_package(Bullet CONFIGS BulletConfig-float64.cmake QUIET COMPONENTS BulletCollision LinearMath)
+    find_package(Bullet CONFIGS BulletConfig-float64.cmake QUIET COMPONENTS BulletDynamics BulletCollision LinearMath)
     if (BULLET_FOUND)
         string(REPLACE "." "" _bullet_version_num ${BULLET_VERSION_STRING})
         if (_bullet_version_num VERSION_LESS REQUIRED_BULLET_VERSION)
@@ -336,11 +336,11 @@ if(OPENFALLOUT_USE_SYSTEM_BULLET)
         include(FindPackageMessage)
         find_package_message(Bullet "Found Bullet: ${BULLET_LIBRARIES} ${BULLET_VERSION_STRING}" "${BULLET_VERSION_STRING}-float64")
     else()
-        find_package(Bullet ${REQUIRED_BULLET_VERSION} REQUIRED COMPONENTS BulletCollision LinearMath)
+        find_package(Bullet ${REQUIRED_BULLET_VERSION} REQUIRED COMPONENTS BulletDynamics BulletCollision LinearMath)
     endif()
 
     # Only link the Bullet libraries that we need:
-    string(REGEX MATCHALL "((optimized|debug);)?[^;]*(BulletCollision|LinearMath)[^;]*" BULLET_LIBRARIES "${BULLET_LIBRARIES}")
+    string(REGEX MATCHALL "((optimized|debug);)?[^;]*(BulletDynamics|BulletCollision|LinearMath)[^;]*" BULLET_LIBRARIES "${BULLET_LIBRARIES}")
 
     include(cmake/CheckBulletPrecision.cmake)
     if (HAS_DOUBLE_PRECISION_BULLET)

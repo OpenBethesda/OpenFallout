@@ -7,11 +7,14 @@
 #include <vector>
 
 #include <components/esm/formid.hpp>
+#include <components/esm/position.hpp>
+#include <components/esm/refid.hpp>
 #include <components/esm3/refnum.hpp>
 
 #include <osg/Vec3f>
 
 #include "../mwworld/ptr.hpp"
+#include "falloutnavmeshes.hpp"
 namespace OFWorld
 {
     class CellStore;
@@ -73,6 +76,9 @@ namespace OFMechanics
         /// The package the actor follows now: the id of the record, unset for an actor that follows none (or has no
         /// mind)
         ESM::FormId currentPackage(const OFWorld::Ptr& ptr) const;
+        /// Whether a blow threw the actor and it is not on its feet again (it is moved by the force of the blow, not by
+        /// its character controller)
+        bool isThrown(const OFWorld::Ptr& ptr) const;
         /// SetPackDuration: the package that the actor follows is done once this many hundredths of a game hour have gone
         /// (0 for no limit), counted from now; nothing happens for an actor that follows none
         void setPackageDuration(const OFWorld::Ptr& ptr, double hundredths);
@@ -90,6 +96,17 @@ namespace OFMechanics
         /// a character that stands by and sees what the player does), that are within `radius` units of `position` (the same
         /// space is for the caller to check)
         void getObjectsInRange(const osg::Vec3f& position, float radius, std::vector<OFWorld::Ptr>& objects) const;
+
+        /// The player goes through a load door, from where it stands now to `destination` in `cell`. The characters
+        /// and creatures of the cell it leaves that follow it (a Follow package or a script's command) come through the
+        /// same door after it: the executables have them walk to the door and use it ("PATHFINDING: Actor %s used
+        /// teleport door %s"), here each comes out where the player came out after the time it takes it to walk to
+        /// where the player went through.
+        void playerUsesDoor(const OFWorld::Ptr& player, ESM::RefId cell, const ESM::Position& destination);
+        /// The followers that come through a door when their time is up (each frame, whatever the cell they are in)
+        void updateArrivals(float duration);
+        /// The followers that are on their way through a door come out now (a save game does not keep the arrivals)
+        void finishArrivals();
 
         /// What the game keeps of one actor
         struct Mind;
@@ -111,6 +128,18 @@ namespace OFMechanics
         /// The characters of the cells that are loaded and that have no mind: they are there to be seen, and to see
         std::map<const OFWorld::LiveCellRefBase*, OFWorld::Ptr> mUnminded;
         std::map<ESM::RefNum, Command> mCommands;
+        /// The navmeshes of the cells that are loaded, with what the actors marked on them
+        FalloutNavMeshes mNavMeshes;
+
+        /// A follower on its way through a door after the player
+        struct Arrival
+        {
+            ESM::RefNum mRef;
+            ESM::RefId mCell;
+            ESM::Position mPosition;
+            float mWait = 0.f;
+        };
+        std::vector<Arrival> mArrivals;
     };
 }
 

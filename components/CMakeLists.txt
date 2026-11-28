@@ -362,6 +362,14 @@ add_component_dir (falloutscript
     crime standing
     actorstatus
     restrictions
+    characterbody
+    ragdollrules
+    navmeshsearch
+    navmeshdoors
+    navmeshroute
+    navmeshsmoother
+    navmeshpather
+    pathfollower
     )
 
 add_component_dir (misc

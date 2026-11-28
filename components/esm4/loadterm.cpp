@@ -100,6 +100,12 @@ void ESM4::Terminal::load(ESM4::Reader& reader)
 
         switch (subHdr.typeId)
         {
+            case ESM::fourCC("OBND"):
+                if (subHdr.dataSize == sizeof(mBounds))
+                    reader.get(mBounds);
+                else
+                    reader.skipSubRecordData();
+                break;
             case ESM::fourCC("EDID"):
                 reader.getZString(mEditorId);
                 break;
@@ -207,7 +213,6 @@ void ESM4::Terminal::load(ESM4::Reader& reader)
             case ESM::fourCC("SCTX"):
             case ESM::fourCC("SCVR"):
             case ESM::fourCC("SLSD"):
-            case ESM::fourCC("OBND"):
             case ESM::fourCC("VMAD"):
             case ESM::fourCC("KSIZ"):
             case ESM::fourCC("KWDA"):

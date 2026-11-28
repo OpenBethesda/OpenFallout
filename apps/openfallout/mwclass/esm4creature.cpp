@@ -7,6 +7,7 @@
 #include <components/esm4/loadpack.hpp>
 #include <components/esm4/packageschedule.hpp>
 
+#include "../mwphysics/actor.hpp"
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwworld/customdata.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -17,26 +18,6 @@
 
 namespace OFClass
 {
-    osg::Vec3f creatureBodyHalfExtents(const ESM4::Creature& creature)
-    {
-        // The size of a person's body, for a creature that does not say; and the limits of what the data has meant
-        const osg::Vec3f sUnknown(20.f, 20.f, 64.f);
-        constexpr float sSmallestRadius = 8.f;
-        constexpr float sLargestRadius = 160.f;
-        constexpr float sSmallestHeight = 8.f;
-        constexpr float sLargestHeight = 250.f;
-
-        if (!creature.mHasBounds)
-            return sUnknown;
-        const ESM4::ObjectBounds& box = creature.mBounds;
-        const float width = static_cast<float>(std::min(std::abs(box.mX2 - box.mX1), std::abs(box.mY2 - box.mY1)));
-        const float height = static_cast<float>(std::abs(box.mZ2 - box.mZ1));
-        if (width <= 0.f || height <= 0.f)
-            return sUnknown;
-        const float radius = std::clamp(width / 2.f, sSmallestRadius, sLargestRadius);
-        return osg::Vec3f(radius, radius, std::clamp(height / 2.f, sSmallestHeight, sLargestHeight));
-    }
-
     class ESM4CreatureCustomData : public OFWorld::TypedCustomData<ESM4CreatureCustomData>
     {
     public:
@@ -167,17 +148,8 @@ namespace OFClass
             ESM4Impl::insertObjectPhysics(ptr, model, rotation, physics);
             return;
         }
-        physics.addActorBody(ptr, getBodyHalfExtents(ptr), rotation);
+        // The character controller, as the player's (the process tier says whether it moves the creature)
+        ESM4Impl::insertCharacterBody(ptr, physics);
     }
 
-    osg::Vec3f ESM4Creature::getBodyHalfExtents(const OFWorld::Ptr& ptr)
-    {
-        if (!isFalloutCreature(ptr))
-            return osg::Vec3f();
-        // The box is the one of the record that has the model
-        const ESM4::Creature* boxOwner = getCustomData(ptr).mModel.mOwner;
-        if (boxOwner == nullptr)
-            boxOwner = ptr.get<ESM4::Creature>()->mBase;
-        return creatureBodyHalfExtents(*boxOwner);
-    }
 }

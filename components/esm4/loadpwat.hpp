@@ -35,6 +35,8 @@
 #include <components/esm/defs.hpp>
 #include <components/esm/formid.hpp>
 
+#include "objectbounds.hpp"
+
 namespace ESM4
 {
     class Reader;
@@ -46,6 +48,7 @@ namespace ESM4
         std::uint32_t mFlags; // from the header, see enum type RecordFlag for details
 
         std::string mEditorId;
+        ObjectBounds mBounds; // OBND
 
         void load(ESM4::Reader& reader);
         // void save(ESM4::Writer& writer) const;

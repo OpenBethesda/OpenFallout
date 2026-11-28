@@ -15,6 +15,7 @@ namespace Nif
 {
     struct bhkShape;
     struct HavokFilter;
+    struct NIFFile;
 }
 
 namespace NifBullet
@@ -48,6 +49,22 @@ namespace NifBullet
     /// nothing).
     std::string convertHavokShape(
         const Nif::bhkShape& shape, const osg::Matrixf& transform, std::vector<HavokPiece>& pieces);
+
+    /// A rigid body of a model and the box of its shape in its own frame, in game units, with the model at rest (each
+    /// node's own transform); what FalloutNV.exe reads of the bodies of a door's 3D (0x6C2210, 0x6C2650)
+    struct HavokBodyBox
+    {
+        /// The layer of its filter (filter & 0x7F, NV 0x43B4D0)
+        std::uint8_t mLayer = 0;
+        /// From the body's frame to the model's: a turn and a translation
+        osg::Matrixf mTransform;
+        osg::Vec3f mMin;
+        osg::Vec3f mMax;
+    };
+
+    /// Every collision object of the model's nodes that has a rigid body with a shape that is read, the first switch
+    /// child only
+    std::vector<HavokBodyBox> havokBodyBoxes(const Nif::NIFFile& file);
 
     /// The Havok material of a shape (the number that the executables' table of the sounds of steps is indexed by: 0 is
     /// stone, 2 dirt, 4 grass, 5 metal, 8 water, 9 wood, and so on): that of the first piece that has one. A packed

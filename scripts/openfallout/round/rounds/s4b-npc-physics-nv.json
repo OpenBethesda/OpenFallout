@@ -1,0 +1,17 @@
+{
+  "name": "s4b-npc-physics-nv",
+  "game": "nv",
+  "save": "latest",
+  "scenario": "../scenarios/s4b_npc_physics_nv.lua",
+  "resolution": [1280, 720],
+  "framerate": 30,
+  "limit": 600,
+  "settings": { "Sound": { "master volume": "0" } },
+  "env": { "OPENFALLOUT_HEADLESS_SOUND": "1" },
+  "forbid_log": [
+    "ROUND\\terror",
+    "A script of a response cannot be run",
+    "unknown GUI (mode|window) '"
+  ],
+  "variants": [ { "name": "plain" } ]
+}

@@ -1,10 +1,13 @@
 #ifndef OPENFALLOUT_MWRENDER_FALLOUTACTORANIMATION_H
 #define OPENFALLOUT_MWRENDER_FALLOUTACTORANIMATION_H
 
+#include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <osg/MatrixTransform>
@@ -41,11 +44,10 @@ namespace OFRender
         /// place from one frame to the next
         void setMotionSource(const OFWorld::Ptr& source) { mMotionSource = source; }
 
-        /// The actor is dead: it stops in the pose it has and falls, a person on its back and a creature on its side,
-        /// and lies where it fell (the games have it fall with a ragdoll of Havok, which this does not have). With
-        /// `fallen` it lies there at once: it died before it was in sight.
-        void die(bool fallen);
-        bool isDown() const { return mFall != nullptr; }
+        /// The actor is dead: what it plays stops, and its bones are left to its ragdoll (OFPhysics::Ragdoll), which
+        /// moves them from the pose they have
+        void die();
+        bool isDown() const { return mDown; }
 
         /// The actor takes a weapon in its hands: the model is put on its hand, the animation of the weapon's type
         /// takes it out and then holds it ready. The type is the animation type of the weapon record (0 to 10); a
@@ -57,6 +59,25 @@ namespace OFRender
         /// The weapon goes out of the hands
         void holsterWeapon();
         bool isWeaponDrawn() const { return mDrawn; }
+        /// Nothing plays over the animation it moves with: no idle a script plays, no pose in furniture, no fall. The
+        /// executables ask whether the strongest animation is the movement one in the groups Forward to DodgeRight (NV
+        /// 0x495BE0), which for a walker follows what it is told to do; here the walk follows how fast it goes, so a
+        /// walker held against a wall would stand in its idle, and the walk it is told to do is taken as playing.
+        bool movementLeads() const { return !mDown && mPoseKind == 0 && !mScriptIdleWasPlaying; }
+
+        /// For the next advance: the movement word of the path handler and the speed of the rules it goes at (NV
+        /// 0x895110 reads the word at 0x895509). The group follows the word, not how its place changes, and plays at
+        /// the speed over the speed of the group's cycle (0x896FA8 to 0x897136)
+        void setPathMovement(std::uint32_t word, float speed);
+        /// What the movement animation moved the root in the last advance, in the actor's own frame and size (NV
+        /// 0x494390 before the actor's scale)
+        const osg::Vec3f& rootMotion() const { return mRootMotion; }
+        /// It has a root the animations move (the accumulation root, "Bip01"); without one the handler goes at the gait
+        bool hasRootMotion() const { return mAccumRoot != nullptr; }
+        /// Its plain set of animations, the files with no weapon's letters, has the way (NV 0x494710 with 4, 5 and 6)
+        bool hasPlainMove(FalloutDirection direction) const;
+        /// The time of the text key "End" of the Forward walk it would play now (NV 0x897B50(3)), 0 for none
+        float forwardEnd() const;
 
         /// One attack with what it holds: a gun fires, a melee weapon or the hands swing in turn left and right. A gun
         /// whose projectile has a muzzle flash (the record's flash model and the seconds it lasts) flashes at its muzzle.
@@ -116,7 +137,6 @@ namespace OFRender
 
     private:
         class AdvanceCallback;
-        class FallCallback;
         class SoundKeys;
 
         /// What an animation does at a text key that names a sound or a foot coming down (`Sound: <editor id>`, and
@@ -207,7 +227,7 @@ namespace OFRender
 
         osg::ref_ptr<AdvanceCallback> mAdvanceCallback;
         /// The transform that the body falls with, when it has died
-        osg::ref_ptr<osg::MatrixTransform> mFall;
+        bool mDown = false;
 
         /// The weapon in the hands: the model on the hand, the animation type of the record and the move it makes
         osg::ref_ptr<osg::Node> mWeaponNode;
@@ -304,6 +324,12 @@ namespace OFRender
         float mSpeed = 0.f;
         osg::Vec3f mLastPosition;
         bool mHasLastPosition = false;
+        /// What the path handler said for this advance, and what it made of it
+        std::optional<std::pair<std::uint32_t, float>> mPathMovement;
+        bool mPathDriven = false;
+        int mPathTurn = 0;
+        float mPathSpeed = 0.f;
+        osg::Vec3f mRootMotion;
     };
 }
 

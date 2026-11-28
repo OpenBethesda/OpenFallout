@@ -101,6 +101,85 @@ namespace OFMechanics
             process->mKnockState = state;
     }
 
+    bool Actor::hasCharacterController() const
+    {
+        const auto* process = dynamic_cast<const MiddleHighProcess*>(mProcess.get());
+        return process != nullptr && process->mCharacterController;
+    }
+
+    void Actor::setCharacterController(bool on)
+    {
+        if (auto* process = dynamic_cast<MiddleHighProcess*>(mProcess.get()))
+            process->mCharacterController = on;
+    }
+
+    void Actor::updateBody(float duration, bool paused, bool held)
+    {
+        const OFBase::Environment& env = OFBase::Environment::get();
+        OFBase::World& world = *env.getWorld();
+        OFScript::FalloutScripts* scripts = env.getFalloutScripts();
+        const OFWorld::Ptr& ptr = getPtr();
+        const ProcessLevel level = getProcessLevel();
+        // (an actor without a character body, one whose model has no collision, is moved as before: put in place)
+        // FalloutNV.exe lets the ragdoll move a body that is dying, dead or unconscious, or knocked down or thrown
+        // (life states 1, 2 and 6, knock states 1 to 5: 0x8AAD40, which 0x930DB3 asks when the actor's Havok is made,
+        // the bodies dynamic then at 0x931337; the kill 0x89F780 makes them dynamic at 0x89F916), and makes no
+        // controller for one in furniture (0x930D8B); the thrown one is moved by FalloutActors here (held)
+        const bool wanted = (level == ProcessLevel::High || level == ProcessLevel::MiddleHigh) && ptr.isInCell()
+            && ptr.getRefData().getBaseNode() != nullptr && ptr.getRefData().isEnabled() && !held
+            && world.isActorCollisionEnabled(ptr)
+            && !(scripts != nullptr
+                && (scripts->isDead(ptr) || scripts->isUnconscious(ptr) || scripts->usesFurniture(ptr)));
+        world.setActorActive(ptr, wanted);
+        const bool had = hasCharacterController();
+        setCharacterController(wanted);
+        if (!wanted)
+        {
+            mBodyFallStart.reset();
+            mBodyKnown = false;
+            return;
+        }
+        // It stands still unless its packages or its fight give it a speed in this frame
+        world.queueMovement(ptr, osg::Vec3f());
+        if (paused || duration <= 0.f)
+            return;
+
+        const osg::Vec3f position = ptr.getRefData().getPosition().asVec3();
+        const bool onGround = world.isOnGround(ptr);
+        // A new controller has no fall (FalloutNV.exe measures one only while its start, controller +0x544, is set:
+        // 0xC70550). A script's MoveTo puts the start where the body is put (0x5CCB20 calls 0x573800 at 0x5CCE38,
+        // which sets it to the new height at 0x573881).
+        if (!had || !mBodyKnown)
+        {
+            mBodyFallStart.reset();
+            mBodyWasOnGround = true;
+            mBodyKnown = true;
+        }
+        if (scripts != nullptr && scripts->takePlaced(ptr))
+        {
+            mBodyFallStart = position.z();
+            mBodyWasOnGround = onGround;
+        }
+        // Water ends a fall without a landing, as the player's (C.F4)
+        if (world.isSwimming(ptr))
+        {
+            mBodyFallStart.reset();
+            mBodyWasOnGround = onGround;
+            return;
+        }
+        // The start is where the body is when it leaves the ground (0xCD4855, from its position 0x812B00)
+        if (!onGround && mBodyWasOnGround && !mBodyFallStart)
+            mBodyFallStart = position.z();
+        if (onGround && mBodyFallStart)
+        {
+            const float lost = *mBodyFallStart - position.z();
+            mBodyFallStart.reset();
+            if (scripts != nullptr && lost > 0.f)
+                scripts->fell(ptr, lost);
+        }
+        mBodyWasOnGround = onGround;
+    }
+
     void PlayerCharacter::teleported()
     {
         mFallStart.reset();

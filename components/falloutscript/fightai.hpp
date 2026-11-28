@@ -69,6 +69,33 @@ namespace FalloutScript::FightAI
     /// it runs away
     Move decide(double distance, double engage, bool visible, bool flee);
 
+    /// fCombatFiringArcStationaryTurnMult, the share of its weapon's aim arc within which a character that stands still
+    /// fires (FalloutNV.exe default 0.75, setting 0x11CFB84, made at 0xF5EBC0)
+    constexpr double stationaryFiringArcShare = 0.75;
+
+    /// Whether a character fires its ranged weapon at a target that is `offHeading` radians to the left or the right of
+    /// where it faces (FalloutNV.exe, the update of CombatProcedureAttackRanged 0x9D0A30, with the test 0x9A6D70):
+    /// - a target more than half the Max Targeting FOV of its combat style off (`targetingFov`, degrees, CSSD +0x30;
+    ///   0 or less for no limit) is "outside targeting FOV" (0x9D0ADA), and the attack does not go on;
+    /// - a target more than half the Aim Arc of its weapon off (`aimArc`, degrees, DNAM +0x64; 0 or less for no limit)
+    ///   is outside its firing arc and it does not fire (0x9D11A6); a character that stands still (not `moving`) has
+    ///   that arc times `stationaryShare` (fCombatFiringArcStationaryTurnMult, 0x9D11E2).
+    /// Up or down never counts: the exe passes 2π (0x9D0B09) and the largest float (0x9D1215) for the vertical limit,
+    /// so a character fires at a target above or below it.
+    bool withinFiringArc(double offHeading, double targetingFov, double aimArc, bool moving, double stationaryShare);
+
+    /// fCombatLOSBufferTime and fCombatDetectionBufferTime (FalloutNV.exe defaults 5 and 10 seconds)
+    constexpr double lineOfSightBuffer = 5.0;
+    constexpr double detectionBuffer = 10.0;
+
+    /// Whether a character goes on firing its ranged weapon at its target (FalloutNV.exe, the update of
+    /// CombatProcedureAttackRanged at 0x9D1267): when it has a line of sight to it now (`inSight`, the flag +0x71 of
+    /// its target info, the line of sight 0x97FD60 of the detection 0x8A0D10, copied in by 0x9887B0 from 0x997DBC), or
+    /// it had one less than `losBuffer` seconds ago (`sinceSight`, the time +0x98 that 0x997E52 sets while it has, read
+    /// by 0x998980) and the target was detected less than `detectionBuffer` seconds ago (`sinceDetected`, +0x94, read
+    /// by 0x97EE90)
+    bool keepsFiring(bool inSight, double sinceSight, double sinceDetected, double losBuffer, double detectionBuffer);
+
     /// A weapon a character carries, for choosing the one to hold
     struct WeaponCandidate
     {

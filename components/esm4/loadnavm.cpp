@@ -27,7 +27,10 @@
 #include "loadnavm.hpp"
 
 #include <cstring>
+#include <initializer_list>
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 #include <components/debug/debuglog.hpp>
 
@@ -36,16 +39,17 @@
 
 namespace
 {
-    // The data of an NVNM sub-record is fields and counted arrays, and the counts come straight from the file. Every
-    // read goes through the bytes the sub-record has left (at most 65535, the size in a sub-record header has 16
-    // bits), so a count that promises more than the sub-record holds ends the load with an error before anything is
-    // allocated, and so does a record that ends inside a field.
+    // The data of an NVNM sub-record, and of the sub-records of a Fallout 3 or New Vegas mesh, is fields and arrays,
+    // and the counts come straight from the file. Every read goes through the bytes the sub-record has left (at most
+    // 65535, the size in a sub-record header has 16 bits), so a count that promises more than the sub-record holds
+    // ends the load with an error before anything is allocated, and so does a record that ends inside a field.
     class NvnmBytes
     {
     public:
-        explicit NvnmBytes(ESM4::Reader& reader)
+        explicit NvnmBytes(ESM4::Reader& reader, std::string name = "NVNM")
             : mReader(reader)
             , mRemaining(reader.subRecordHeader().dataSize)
+            , mName(std::move(name))
         {
         }
 
@@ -55,36 +59,80 @@ namespace
         void get(T& value)
         {
             if (mRemaining < sizeof(T) || !mReader.getExact(value))
-                throw std::runtime_error("NVNM ends inside a field");
+                throw std::runtime_error(mName + " ends inside a field");
             mRemaining -= sizeof(T);
         }
 
         void getFormId(ESM::FormId& id)
         {
             if (mRemaining < sizeof(std::uint32_t) || !mReader.getFormId(id))
-                throw std::runtime_error("NVNM ends inside a field");
+                throw std::runtime_error(mName + " ends inside a field");
             mRemaining -= sizeof(std::uint32_t);
         }
 
-        // A 32-bit count and then that many elements.
-        template <class T>
+        // A count and then that many elements.
+        template <class Count = std::uint32_t, class T>
         void getArray(std::vector<T>& out)
         {
-            std::uint32_t count;
+            Count count;
             get(count);
             if (count > mRemaining / sizeof(T))
-                throw std::runtime_error("NVNM array is longer than the rest of the sub-record");
+                throw std::runtime_error(mName + " array is longer than the rest of the sub-record");
+            getElements(out, count);
+        }
 
-            out.resize(count);
-            if (count != 0 && !mReader.get(out.data(), static_cast<std::size_t>(count) * sizeof(T)))
-                throw std::runtime_error("NVNM ends inside an array");
-            mRemaining -= static_cast<std::size_t>(count) * sizeof(T);
+        // As many elements as the rest of the sub-record holds, which has to be a whole number of them.
+        template <class T>
+        void getAll(std::vector<T>& out)
+        {
+            if (mRemaining % sizeof(T) != 0)
+                throw std::runtime_error(mName + " is not a whole number of elements");
+            getElements(out, mRemaining / sizeof(T));
+        }
+
+        // The reader goes on from the end of the sub-record, whatever is left in it.
+        void skipRest()
+        {
+            if (mRemaining != 0)
+                mReader.skipSubRecordData(static_cast<std::uint32_t>(mRemaining));
+            mRemaining = 0;
         }
 
     private:
+        template <class T>
+        void getElements(std::vector<T>& out, std::size_t count)
+        {
+            out.resize(count);
+            if (count != 0 && !mReader.get(out.data(), count * sizeof(T)))
+                throw std::runtime_error(mName + " ends inside an array");
+            mRemaining -= count * sizeof(T);
+        }
+
         ESM4::Reader& mReader;
         std::size_t mRemaining;
+        std::string mName;
     };
+
+    // An external connection of a Fallout 3 or New Vegas mesh. Its size and layout depend on the version of the mesh
+    // (NV 0x693145): 46 bytes with the mesh at 4 and the triangle at 44 before version 5 (0x6931D5, 0x693223,
+    // 0x693240), the mesh and the triangle in 6 bytes up to version 8 (0x69D240, 0x69E051, size 0x693D10), and a
+    // 32-bit number before those from version 9 (0x69D1D0, size 0x693CD0).
+    std::size_t extConnectionSize(std::uint32_t version)
+    {
+        return version < 5 ? 46 : version < 9 ? 6 : 10;
+    }
+
+    ESM4::NavMesh::ExtConnection readExtConnection(const unsigned char* data, std::uint32_t version)
+    {
+        ESM4::NavMesh::ExtConnection result{};
+        const std::size_t mesh = version < 5 ? 4 : version < 9 ? 0 : 4;
+        const std::size_t triangle = version < 5 ? 44 : mesh + 4;
+        if (version >= 9)
+            std::memcpy(&result.unknown, data, sizeof(result.unknown));
+        std::memcpy(&result.navMesh, data + mesh, sizeof(result.navMesh));
+        std::memcpy(&result.triangleIndex, data + triangle, sizeof(result.triangleIndex));
+        return result;
+    }
 }
 
 void ESM4::NavMesh::NVNMstruct::load(ESM4::Reader& reader)
@@ -181,8 +229,7 @@ void ESM4::NavMesh::NVNMstruct::load(ESM4::Reader& reader)
         throw std::runtime_error("Triangle segments size is not the square of divisor");
 
     // The reader goes on from the end of the sub-record, whatever follows the segments in it
-    if (bytes.remaining() != 0)
-        reader.skipSubRecordData(static_cast<std::uint32_t>(bytes.remaining()));
+    bytes.skipRest();
 #if 0
     if (triSegments.size() != divisor*divisor)
         std::cout << "divisor " << std::dec << divisor << ", segments " << triSegments.size() << //std::endl;
@@ -225,17 +272,80 @@ void ESM4::NavMesh::load(ESM4::Reader& reader)
                 mData.push_back(std::move(nvnm)); // FIXME try swap
                 break;
             }
+            // Fallout 3 and New Vegas, in the order of NV 0x692950
+            case ESM::fourCC("NVER"):
+            {
+                NvnmBytes bytes(reader, "NVER");
+                bytes.get(mVersion);
+                bytes.skipRest();
+                break;
+            }
+            case ESM::fourCC("DATA"):
+            {
+                // the cell, and the counts of the arrays, which the sizes of their sub-records give too
+                NvnmBytes bytes(reader, "DATA");
+                bytes.getFormId(mCell);
+                bytes.skipRest();
+                break;
+            }
+            case ESM::fourCC("NVVX"):
+                NvnmBytes(reader, "NVVX").getAll(mVertices);
+                break;
+            case ESM::fourCC("NVTR"):
+                NvnmBytes(reader, "NVTR").getAll(mTriangles);
+                break;
+            case ESM::fourCC("NVCA"):
+                NvnmBytes(reader, "NVCA").getAll(mCover);
+                break;
+            case ESM::fourCC("NVDP"):
+                NvnmBytes(reader, "NVDP").getAll(mDoors);
+                for (DoorLink& link : mDoors)
+                {
+                    ESM::FormId32 door = link.door; // a packed field takes no reference
+                    reader.adjustFormId(door);
+                    link.door = door;
+                }
+                break;
+            case ESM::fourCC("NVGD"):
+            {
+                NvnmBytes bytes(reader, "NVGD");
+                TriangleGrid& grid = mTriangleGrid;
+                bytes.get(grid.divisor);
+                for (float* value : { &grid.cellX, &grid.cellY, &grid.minX, &grid.minY, &grid.minZ, &grid.maxX,
+                         &grid.maxY, &grid.maxZ })
+                    bytes.get(*value);
+                // divisor squared cells, each a 16-bit count and that many triangles (NV 0x69DC4C)
+                const std::size_t cellCount = static_cast<std::size_t>(grid.divisor) * grid.divisor;
+                if (cellCount > bytes.remaining() / sizeof(std::uint16_t))
+                    throw std::runtime_error("NVGD cells end before the square of divisor");
+                grid.cells.resize(cellCount);
+                for (std::vector<std::uint16_t>& cell : grid.cells)
+                    bytes.getArray<std::uint16_t>(cell);
+                bytes.skipRest();
+                break;
+            }
+            case ESM::fourCC("NVEX"):
+            {
+                // NVER comes before it, and the version is 1 until it does, as in the game
+                const std::size_t size = extConnectionSize(mVersion);
+                std::vector<unsigned char> data;
+                NvnmBytes(reader, "NVEX").getAll(data);
+                if (data.size() % size != 0)
+                    throw std::runtime_error("NVEX is not a whole number of elements");
+                mExternal.clear();
+                for (std::size_t offset = 0; offset < data.size(); offset += size)
+                {
+                    ExtConnection connection = readExtConnection(data.data() + offset, mVersion);
+                    ESM::FormId32 mesh = connection.navMesh;
+                    reader.adjustFormId(mesh);
+                    connection.navMesh = mesh;
+                    mExternal.push_back(connection);
+                }
+                break;
+            }
             case ESM::fourCC("ONAM"):
             case ESM::fourCC("PNAM"):
             case ESM::fourCC("NNAM"):
-            case ESM::fourCC("NVER"): // FO3
-            case ESM::fourCC("DATA"): // FO3
-            case ESM::fourCC("NVVX"): // FO3
-            case ESM::fourCC("NVTR"): // FO3
-            case ESM::fourCC("NVCA"): // FO3
-            case ESM::fourCC("NVDP"): // FO3
-            case ESM::fourCC("NVGD"): // FO3
-            case ESM::fourCC("NVEX"): // FO3
             case ESM::fourCC("EDID"): // FO3
             case ESM::fourCC("MNAM"): // FO4
                 reader.skipSubRecordData();

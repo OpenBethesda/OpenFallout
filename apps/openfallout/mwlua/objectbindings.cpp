@@ -129,6 +129,10 @@ namespace OFLua
             }
             if (placeOnGround)
                 world->adjustPosition(newPtr, true);
+            // A body that is put somewhere does not fall from where it was (as a script's MoveTo, 0x573881)
+            if (cls.isActor())
+                if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts())
+                    scripts->notePlaced(newPtr);
             if (cls.isDoor())
             { // Change "original position and rotation" because without it teleported animated doors don't work
               // properly.

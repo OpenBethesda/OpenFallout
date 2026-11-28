@@ -1151,6 +1151,13 @@ namespace OFWorld
     {
         if (ptr.isEmpty() || ptr.getRefData().getBaseNode() == nullptr)
             return;
+        // A character or creature keeps its character body: without collision nothing else is stopped by it (a body
+        // that died), and it gets it back as it was
+        if (OFPhysics::Actor* actor = mPhysics->getActor(ptr))
+        {
+            actor->enableCollisionBody(enabled);
+            return;
+        }
         const auto object = mPhysics->getObject(ptr);
         if (enabled == (object != nullptr))
             return;

@@ -150,7 +150,7 @@ namespace ESM4
         };
         std::vector<CreatureSoundGroup> mSoundGroups;
         float mBaseScale;
-        float mTurningSpeed;
+        float mTurningSpeed = 0.f;
         float mFootWeight;
         std::string mBloodSpray;
         std::string mBloodDecal;

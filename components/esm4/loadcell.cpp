@@ -216,6 +216,9 @@ void ESM4::Cell::load(ESM4::Reader& reader)
             case ESM::fourCC("XEZN"):
                 reader.getFormId(mEncounterZone);
                 break;
+            case ESM::fourCC("XRNK"):
+                reader.get(mFactionRank);
+                break;
             case ESM::fourCC("TVDT"):
             case ESM::fourCC("MHDT"):
             case ESM::fourCC("XCGD"):
@@ -227,7 +230,6 @@ void ESM4::Cell::load(ESM4::Reader& reader)
             case ESM::fourCC("XCIM"):
             case ESM::fourCC("XWEM"):
             case ESM::fourCC("XILL"):
-            case ESM::fourCC("XRNK"):
             case ESM::fourCC("XCET"): // FO3
             case ESM::fourCC("IMPF"): // FO3 Zeta
             case ESM::fourCC("CNAM"): // FO4

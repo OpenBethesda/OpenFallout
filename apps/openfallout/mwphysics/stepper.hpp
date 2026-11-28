@@ -18,11 +18,12 @@ namespace OFPhysics
     private:
         const btCollisionWorld* mColWorld;
         const btCollisionObject* mColObj;
+        const float mStepHeight;
 
         ActorTracer mTracer, mUpStepper, mDownStepper;
 
     public:
-        Stepper(const btCollisionWorld* colWorld, const btCollisionObject* colObj);
+        Stepper(const btCollisionWorld* colWorld, const btCollisionObject* colObj, float stepHeight);
 
         bool step(osg::Vec3f& position, osg::Vec3f& velocity, float& remainingTime, const bool& onGround,
             bool firstIteration);

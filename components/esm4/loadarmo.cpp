@@ -41,6 +41,12 @@ void ESM4::Armor::load(ESM4::Reader& reader)
         const ESM4::SubRecordHeader& subHdr = reader.subRecordHeader();
         switch (subHdr.typeId)
         {
+            case ESM::fourCC("OBND"):
+                if (subHdr.dataSize == sizeof(mBounds))
+                    reader.get(mBounds);
+                else
+                    reader.skipSubRecordData();
+                break;
             case ESM::fourCC("EDID"):
                 reader.getZString(mEditorId);
                 break;
@@ -243,7 +249,6 @@ void ESM4::Armor::load(ESM4::Reader& reader)
             case ESM::fourCC("MO3T"):
             case ESM::fourCC("MO4T"):
             case ESM::fourCC("MO4S"):
-            case ESM::fourCC("OBND"):
             case ESM::fourCC("RNAM"): // race formid
             case ESM::fourCC("KSIZ"):
             case ESM::fourCC("KWDA"):

@@ -52,6 +52,7 @@
 -- @field [parent=#COLLISION_TYPE] #number AnyPhysical World+Door+Actor+HeightMap+Projectile+Water
 -- @field [parent=#COLLISION_TYPE] #number Camera Objects that should collide only with camera
 -- @field [parent=#COLLISION_TYPE] #number VisualOnly Objects that were not intended to be part of the physics world
+-- @field [parent=#COLLISION_TYPE] #number Ragdoll The bodies of a character that is down, moved by its ragdoll; shots meet them
 
 ---
 -- Collision types that are used in `castRay`.

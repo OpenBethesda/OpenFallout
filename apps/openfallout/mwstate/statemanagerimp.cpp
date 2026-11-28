@@ -233,6 +233,10 @@ void OFState::StateManager::saveGame(std::string_view description, const Slot* s
 
     try
     {
+        // (a save game does not keep the followers that are on their way through a door: they come out first; a door
+        // whose cell is not found fails the save, as any other error of it does)
+        OFBase::Environment::get().getMechanicsManager()->finishFollowerArrivals();
+
         const auto start = std::chrono::steady_clock::now();
 
         if (!character)

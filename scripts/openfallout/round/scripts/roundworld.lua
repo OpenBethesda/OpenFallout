@@ -147,6 +147,10 @@ function r.eye(label) return ask('eye', { label = label }) end
 -- The height of the ground (rays down from above the eye) at the eye and at the given offsets ({ { dx, dy }, ... })
 function r.ground(label, offsets) return ask('ground', { label = label, offsets = offsets }) end
 
+-- One ray from `from` to `to` ({ x, y, z }) against the walls and the ground (or the collision kinds in `types`): { hit, x, y, z }
+function r.path(from, to, label) return ask('path', { from = from, to = to, label = label }) end
+function r.ray(from, to, label, types) return ask('ray', { from = from, to = to, label = label, types = types }) end
+
 -- The characters near the player: record id, distance, whether dead, up to `count` of them
 function r.actors(label, radius, count) return ask('actors', { label = label, radius = radius, count = count }) end
 

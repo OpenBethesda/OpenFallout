@@ -151,6 +151,35 @@ function handlers.ground(args)
     return { heights = heights }
 end
 
+-- One ray between two points ({ x, y, z } each) against the kinds of collision named in `types` (World and HeightMap by default:
+-- the walls and the ground, not the characters); gives whether it hit and where
+function handlers.ray(args)
+    local mask = 0
+    for _, name in ipairs(args.types or { 'World', 'HeightMap' }) do mask = mask + nearby.COLLISION_TYPE[name] end
+    local from = util.vector3(args.from[1], args.from[2], args.from[3])
+    local to = util.vector3(args.to[1], args.to[2], args.to[3])
+    local result = nearby.castRay(from, to, { ignore = self, collisionType = mask })
+    local hit = result.hit and result.hitPos or nil
+    log('ray', tostring(args.label or '-'), string.format('from=%.0f,%.0f,%.0f to=%.0f,%.0f,%.0f', from.x, from.y, from.z, to.x, to.y,
+        to.z), hit and string.format('hit=%.1f,%.1f,%.1f', hit.x, hit.y, hit.z) or 'no hit')
+    if hit == nil then return { hit = false } end
+    return { hit = true, x = hit.x, y = hit.y, z = hit.z }
+end
+
+-- Whether the navigator makes a whole path between two points ({ x, y, z } each), with the default size of a character: gives the
+-- status, the number of points and how far the end of the path is from the place
+function handlers.path(args)
+    local from = util.vector3(args.from[1], args.from[2], args.from[3])
+    local to = util.vector3(args.to[1], args.to[2], args.to[3])
+    local status, points = nearby.findPath(from, to)
+    local last = points[#points]
+    local short = last and (util.vector2(last.x, last.y) - util.vector2(to.x, to.y)):length() or -1
+    local whole = status == nearby.FIND_PATH_STATUS.Success and last ~= nil and short <= 64
+    log('path', tostring(args.label or '-'), string.format('from=%.0f,%.0f,%.0f to=%.0f,%.0f,%.0f', from.x, from.y, from.z, to.x, to.y,
+        to.z), string.format('status=%s points=%d short=%.0f whole=%s', tostring(status), #points, short, tostring(whole)))
+    return { whole = whole, points = #points, short = short }
+end
+
 function handlers.actors(args)
     local radius = args.radius or 2000
     local list = {}
@@ -530,7 +559,7 @@ local function sample(entry)
         try('inCombat', function() return core.combat.inCombat(id) end)
         try('target', function()
             local t = core.combat.target(id)
-            return t == formOf(self.object) and 'player' or (t == '' and '-' or 'other')
+            return t == formOf(self.object) and 'player' or (t == '' and '-' or ('other:' .. tostring(t)))
         end)
     end
     log(table.unpack(parts))

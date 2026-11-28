@@ -96,6 +96,23 @@ namespace OFScript
         return carriedWeightOf(actor) > maxCarryWeight(actor);
     }
 
+    bool FalloutScripts::heldStill(const OFWorld::Ptr& actor) const
+    {
+        const FalloutScript::FormId reference = scriptReferenceOf(actor);
+        return reference != 0 && (mCombat.unconscious(reference) || mCombat.restrained(reference));
+    }
+
+    std::optional<osg::Vec3f> FalloutScripts::facingPoint(const OFWorld::Ptr& actor)
+    {
+        const FalloutScript::FormId target = mPresentation.facing(scriptReferenceOf(actor));
+        if (target == 0)
+            return std::nullopt;
+        const OFWorld::Ptr found = findReference(target);
+        if (found.isEmpty())
+            return std::nullopt; // 0x901360: a target taken out of the world is let go
+        return found.getRefData().getPosition().asVec3(); // vfunc 0x1F4
+    }
+
     double FalloutScripts::sizeOf(const OFWorld::Ptr& ptr)
     {
         // The size factor of the executables (FalloutNV.exe 0x567400): the scale of the reference times the height of

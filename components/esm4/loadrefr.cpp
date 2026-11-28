@@ -92,12 +92,28 @@ void ESM4::Reference::load(ESM4::Reader& reader)
             case ESM::fourCC("XRNK"):
                 reader.get(mFactionRank);
                 break;
+            case ESM::fourCC("XEZN"):
+                reader.getFormId(mEncounterZone);
+                break;
             case ESM::fourCC("XESP"):
             {
                 reader.getFormId(mEsp.parent);
                 reader.get(mEsp.flags);
                 // std::cout << "REFR  parent: " << formIdToString(mEsp.parent) << " ref " << formIdToString(mFormId)
                 // << ", 0x" << std::hex << (mEsp.flags & 0xff) << std::endl;// FIXME
+                break;
+            }
+            case ESM::fourCC("XNDP"):
+            {
+                if (subHdr.dataSize != 8)
+                {
+                    reader.skipSubRecordData();
+                    break;
+                }
+                std::uint16_t unused = 0;
+                reader.getFormId(mNavMeshDoorMesh);
+                reader.get(mNavMeshDoorTriangle);
+                reader.get(unused);
                 break;
             }
             case ESM::fourCC("XTEL"):
@@ -364,7 +380,6 @@ void ESM4::Reference::load(ESM4::Reader& reader)
             case ESM::fourCC("XCVL"):
             case ESM::fourCC("XCZA"):
             case ESM::fourCC("XCZC"):
-            case ESM::fourCC("XEZN"):
             case ESM::fourCC("XFVC"):
             case ESM::fourCC("XHTW"):
             case ESM::fourCC("XIS2"):
@@ -376,7 +391,6 @@ void ESM4::Reference::load(ESM4::Reader& reader)
             case ESM::fourCC("XMBO"):
             case ESM::fourCC("XMBP"):
             case ESM::fourCC("XMBR"):
-            case ESM::fourCC("XNDP"):
             case ESM::fourCC("XOCP"):
             case ESM::fourCC("XPOD"):
             case ESM::fourCC("XPTL"):

@@ -108,10 +108,35 @@ namespace
         EXPECT_FALSE(lineOfFireBlocked(shooter, shooter, { { 0, 0 }, { 5, 5 } }));
     }
 
+    TEST(FalloutScriptFightAiTest, a_gun_fires_within_its_arcs_left_and_right_only)
+    {
+        constexpr double degree = 3.14159265358979323846 / 180.0;
+        // no limits: anywhere around
+        EXPECT_TRUE(withinFiringArc(170 * degree, 0, 0, false, stationaryFiringArcShare));
+        // a targeting view of 90 degrees takes 45 to each side
+        EXPECT_TRUE(withinFiringArc(44 * degree, 90, 0, false, stationaryFiringArcShare));
+        EXPECT_FALSE(withinFiringArc(-46 * degree, 90, 0, false, stationaryFiringArcShare));
+        // an aim arc of 20 degrees: 10 to each side when moving, three quarters of that standing still
+        EXPECT_TRUE(withinFiringArc(9 * degree, 0, 20, true, stationaryFiringArcShare));
+        EXPECT_FALSE(withinFiringArc(9 * degree, 0, 20, false, stationaryFiringArcShare));
+        EXPECT_TRUE(withinFiringArc(7 * degree, 0, 20, false, stationaryFiringArcShare));
+        // the difference goes round: 355 degrees off is 5 degrees off
+        EXPECT_TRUE(withinFiringArc(355 * degree, 0, 20, false, stationaryFiringArcShare));
+        EXPECT_TRUE(withinFiringArc(-355 * degree, 0, 20, false, stationaryFiringArcShare));
+    }
+
     TEST(FalloutScriptFightAiTest, the_chance_to_hit_follows_the_skill_between_limits)
     {
         EXPECT_DOUBLE_EQ(hitChance(0), 0.3);
         EXPECT_DOUBLE_EQ(hitChance(60), 0.6);
         EXPECT_DOUBLE_EQ(hitChance(200), 0.95);
+    }
+
+    TEST(FalloutScriptFightAITest, a_gunman_fires_for_5_seconds_after_it_lost_sight_of_a_target_it_detected)
+    {
+        EXPECT_TRUE(keepsFiring(true, 100, 100, lineOfSightBuffer, detectionBuffer));
+        EXPECT_TRUE(keepsFiring(false, 4.9, 4.9, lineOfSightBuffer, detectionBuffer));
+        EXPECT_FALSE(keepsFiring(false, 5.0, 5.0, lineOfSightBuffer, detectionBuffer));
+        EXPECT_FALSE(keepsFiring(false, 1, 10.0, lineOfSightBuffer, detectionBuffer));
     }
 }

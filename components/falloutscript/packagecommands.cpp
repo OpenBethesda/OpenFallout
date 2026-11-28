@@ -2,8 +2,33 @@
 
 #include "arguments.hpp"
 
+#include <algorithm>
+
 namespace FalloutScript
 {
+    void addScriptPackage(ScriptPackages& packages, FormId actor, FormId package)
+    {
+        std::vector<FormId>& given = packages[actor];
+        given.erase(std::remove(given.begin(), given.end(), package), given.end());
+        given.push_back(package);
+    }
+
+    void removeScriptPackage(ScriptPackages& packages, FormId actor)
+    {
+        const auto found = packages.find(actor);
+        if (found == packages.end())
+            return;
+        if (!found->second.empty())
+            found->second.pop_back();
+        if (found->second.empty())
+            packages.erase(found);
+    }
+
+    void resetScriptPackages(ScriptPackages& packages, FormId actor)
+    {
+        packages.erase(actor);
+    }
+
     int currentPackageNumber(int type)
     {
         // The table of the executable, by the type of the package

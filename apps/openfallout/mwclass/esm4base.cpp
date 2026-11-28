@@ -3,6 +3,7 @@
 #include <MyGUI_TextIterator.h>
 #include <MyGUI_UString.h>
 
+#include <components/debug/debuglog.hpp>
 #include <components/esm4/loadacti.hpp>
 #include <components/esm4/loadcont.hpp>
 #include <components/esm4/loaddoor.hpp>
@@ -10,7 +11,15 @@
 #include <components/esm4/loadmstt.hpp>
 #include <components/esm4/loadtact.hpp>
 #include <components/esm4/loadterm.hpp>
+#include <components/misc/resourcehelpers.hpp>
+#include <components/nif/extra.hpp>
+#include <components/nif/niffile.hpp>
+#include <components/resource/niffilemanager.hpp>
+#include <components/resource/resourcesystem.hpp>
 #include <components/sceneutil/positionattitudetransform.hpp>
+
+#include <map>
+#include <mutex>
 
 #include "../mwgui/tooltips.hpp"
 
@@ -20,12 +29,15 @@
 
 #include "../mwmechanics/actorutil.hpp"
 
+#include "../mwphysics/actor.hpp"
 #include "../mwphysics/physicssystem.hpp"
 
 #include "../mwscript/falloutscripts.hpp"
 
 #include "../mwworld/actiontalk.hpp"
 #include "../mwworld/ptr.hpp"
+
+#include "falloutplayer.hpp"
 
 namespace OFClass
 {
@@ -40,6 +52,69 @@ namespace OFClass
                 || type == ESM4::Furniture::sRecordId || type == ESM4::Container::sRecordId
                 || type == ESM4::MovableStatic::sRecordId;
         }
+    }
+
+    VFS::Path::NormalizedView ESM4Impl::skeletonModel(const OFWorld::ConstPtr& ptr)
+    {
+        if (dynamic_cast<const FalloutPlayer*>(&ptr.getClass()) != nullptr)
+            return ptr.get<ESM4::Npc>()->mBase->mModel.getNormalized();
+        return ptr.getClass().getModel(ptr);
+    }
+
+    std::optional<FalloutScript::CharacterBody::Bound> ESM4Impl::skeletonBound(const OFWorld::ConstPtr& ptr)
+    {
+        const VFS::Path::NormalizedView path = skeletonModel(ptr);
+        const std::string model(path.value());
+        if (model.empty())
+            return std::nullopt;
+        static std::mutex mutex;
+        static std::map<std::string, std::optional<FalloutScript::CharacterBody::Bound>> bounds;
+        {
+            const std::lock_guard lock(mutex);
+            if (const auto found = bounds.find(model); found != bounds.end())
+                return found->second;
+        }
+        std::optional<FalloutScript::CharacterBody::Bound> bound;
+        if (Resource::ResourceSystem* resources = OFBase::Environment::get().getResourceSystem())
+        {
+            try
+            {
+                const Nif::NIFFilePtr file
+                    = resources->getNifFileManager()->get(Misc::ResourceHelpers::correctMeshPath(path));
+                for (const auto& block : file->mRecords)
+                    if (const auto* found = dynamic_cast<const Nif::BSBound*>(block.get()))
+                    {
+                        bound = FalloutScript::CharacterBody::Bound{ { found->mCenter.x(), found->mCenter.y(),
+                                                                         found->mCenter.z() },
+                            { found->mExtents.x(), found->mExtents.y(), found->mExtents.z() } };
+                        break;
+                    }
+            }
+            catch (const std::exception& e)
+            {
+                Log(Debug::Warning) << "The skeleton " << model << " can not be read for its bound: " << e.what();
+            }
+        }
+        const std::lock_guard lock(mutex);
+        bounds.emplace(model, bound);
+        return bound;
+    }
+
+    void ESM4Impl::insertCharacterBody(const OFWorld::Ptr& ptr, OFPhysics::PhysicsSystem& physics)
+    {
+        OFPhysics::CharacterShape shape;
+        if (const auto bound = skeletonBound(ptr))
+        {
+            shape.mBound = *bound;
+            // The size of the race or of the creature's record (the scale of the reference is the physics' own)
+            const double scale = ptr.getCellRef().getScale();
+            if (OFScript::FalloutScripts* scripts = OFBase::Environment::get().getFalloutScripts();
+                scripts && scale > 0)
+                shape.mSize = static_cast<float>(scripts->sizeOf(ptr) / scale);
+        }
+        else
+            shape.mHasModel = false;
+        physics.addCharacter(ptr, shape);
     }
 
     void ESM4Impl::insertObjectRendering(

@@ -140,6 +140,12 @@ namespace OFMechanics
         }
     }
 
+    void ProcessLists::updateBodies(float duration, bool paused, const std::function<bool(const OFWorld::Ptr&)>& held)
+    {
+        for (auto& [key, actor] : mActors)
+            actor->updateBody(duration, paused, held(actor->getPtr()));
+    }
+
     std::size_t ProcessLists::count(ProcessLevel level) const
     {
         std::size_t result = (mPlayer != nullptr && mPlayer->getProcessLevel() == level) ? 1 : 0;

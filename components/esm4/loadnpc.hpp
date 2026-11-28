@@ -40,6 +40,8 @@
 #include "destruction.hpp"
 #include "inventory.hpp"
 
+#include "objectbounds.hpp"
+
 namespace ESM4
 {
     class Reader;
@@ -187,6 +189,7 @@ namespace ESM4
         bool mIsFO4 = false;
 
         std::string mEditorId;
+        ObjectBounds mBounds; // OBND
         std::string mFullName;
         ESM::Path mModel; // skeleton model (can be a marker in FO3/FONV)
 

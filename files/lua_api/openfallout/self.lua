@@ -25,7 +25,9 @@
 
 
 ---
--- Movement controls (only for actors)
+-- Movement controls (only for actors). They move the player always, and a character or a creature only while its AI is off
+-- (@{#Self.enableAI}): then `movement`, `sideMovement`, `run` and `yawChange` turn it and move it on its character body at the
+-- speed it walks or runs at; `pitchChange`, `sneak`, `jump` and `use` do nothing for it yet.
 -- @field [parent=#Self] #ActorControls controls
 
 ---
@@ -49,7 +51,8 @@
 -- @field [parent=#ActorControls] #ATTACK_TYPE use Activates the readied weapon/spell according to a provided value. For weapons, keeping this value modified will charge the attack until set to @{#ATTACK_TYPE.NoAttack}. If an @{#ATTACK_TYPE} not appropriate for a currently equipped weapon provided - an appropriate @{#ATTACK_TYPE} will be used instead.
 
 ---
--- Enables or disables standard AI (enabled by default).
+-- Enables or disables standard AI (enabled by default). A character or a creature whose AI is off follows no package, fights
+-- no one and turns to no speaker: its @{#Self.controls} move it.
 -- @function [parent=#Self] enableAI
 -- @param Self
 -- @param #boolean v

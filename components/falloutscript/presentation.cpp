@@ -12,6 +12,7 @@ namespace FalloutScript
         const std::lock_guard lock(mMutex);
         mImageSpaces.clear();
         mLooks.clear();
+        mFaces.clear();
     }
 
     void Presentation::applyImageSpace(FormId modifier, double seconds)
@@ -46,16 +47,24 @@ namespace FalloutScript
         }
     }
 
-    void Presentation::look(FormId actor, FormId target)
+    void Presentation::look(FormId actor, FormId target, bool faces)
     {
         const std::lock_guard lock(mMutex);
-        mLooks[actor] = target;
+        (faces ? mFaces : mLooks)[actor] = target;
     }
 
     void Presentation::stopLooking(FormId actor)
     {
         const std::lock_guard lock(mMutex);
         mLooks.erase(actor);
+        mFaces.erase(actor);
+    }
+
+    FormId Presentation::facing(FormId actor)
+    {
+        const std::lock_guard lock(mMutex);
+        const auto found = mFaces.find(actor);
+        return found == mFaces.end() ? 0 : found->second;
     }
 
     FormId Presentation::lookingAt(FormId actor)
@@ -119,7 +128,7 @@ namespace FalloutScript
         });
         interpreter.setHandler("Look", [&presentation](CallContext& call) {
             if (const FormId target = formArgument(call, 0); call.mReference != 0 && target != 0)
-                presentation.look(call.mReference, target);
+                presentation.look(call.mReference, target, intArgument(call, 1) != 0);
             return 0.0;
         });
         interpreter.setHandler("StopLook", [&presentation](CallContext& call) {

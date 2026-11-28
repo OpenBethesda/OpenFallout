@@ -305,4 +305,37 @@ namespace
 
         EXPECT_THAT(setup.mActors.mOrders, IsEmpty());
     }
+
+    TEST(FalloutScriptPackageCommandsTest, script_packages_stack_the_last_given_at_the_back)
+    {
+        FalloutScript::ScriptPackages packages;
+        FalloutScript::addScriptPackage(packages, guard, patrol);
+        FalloutScript::addScriptPackage(packages, guard, rest);
+        // a package given again goes to the back, once
+        FalloutScript::addScriptPackage(packages, guard, patrol);
+        EXPECT_THAT(packages[guard], ElementsAre(rest, patrol));
+        FalloutScript::removeScriptPackage(packages, guard);
+        EXPECT_THAT(packages[guard], ElementsAre(rest));
+        FalloutScript::removeScriptPackage(packages, guard);
+        EXPECT_EQ(packages.count(guard), 0u);
+        // nothing to remove: nothing happens
+        FalloutScript::removeScriptPackage(packages, otherGuard);
+        EXPECT_TRUE(packages.empty());
+    }
+
+    TEST(FalloutScriptPackageCommandsTest, reset_ai_ends_the_script_packages_of_that_character_only)
+    {
+        // FalloutNV.exe: ResetAI (0x5c9530) runs the reset branch of 0x8a6ce0, which stops the package that the
+        // character follows and ends it when the package list gives another (Cass's hire, INFO 0x15d054)
+        FalloutScript::ScriptPackages packages;
+        FalloutScript::addScriptPackage(packages, guard, patrol);
+        FalloutScript::addScriptPackage(packages, guard, rest);
+        FalloutScript::addScriptPackage(packages, otherGuard, patrol);
+        FalloutScript::resetScriptPackages(packages, guard);
+        EXPECT_EQ(packages.count(guard), 0u);
+        EXPECT_THAT(packages[otherGuard], ElementsAre(patrol));
+        // a character with none: nothing happens
+        FalloutScript::resetScriptPackages(packages, guard);
+        EXPECT_EQ(packages.count(guard), 0u);
+    }
 }

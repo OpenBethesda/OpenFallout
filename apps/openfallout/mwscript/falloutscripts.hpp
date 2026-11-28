@@ -53,6 +53,7 @@
 #include <components/falloutscript/equipment.hpp>
 #include <components/falloutscript/facecontrolfile.hpp>
 #include <components/falloutscript/facelook.hpp>
+#include <components/falloutscript/fightai.hpp>
 #include <components/falloutscript/footsteps.hpp>
 #include <components/falloutscript/formlists.hpp>
 #include <components/falloutscript/furniture.hpp>
@@ -71,6 +72,7 @@
 #include <components/falloutscript/messagecommands.hpp>
 #include <components/falloutscript/movement.hpp>
 #include <components/falloutscript/music.hpp>
+#include <components/falloutscript/navmeshsearch.hpp>
 #include <components/falloutscript/objectcommands.hpp>
 #include <components/falloutscript/objects.hpp>
 #include <components/falloutscript/objectstate.hpp>
@@ -922,6 +924,11 @@ namespace OFScript
         /// opened and the activation goes on; else the screen of the lock opens (or the player is told that only a key
         /// opens it) and the activation stops: true.
         bool lockStops(const OFWorld::Ptr& object, const OFWorld::Ptr& actor);
+        /// What a door on the meshes is to an actor's path search (NV 0x6A71A8 to 0x6A7299): closed when its reference
+        /// has the flag 0x100 (0x57B460) or the actor does not pass its lock (0x502450), costly when its base has the
+        /// flag Minimal Use (0x518000), else open
+        /// `door` is the reference of the mesh's door (its script number, `formOfReference`)
+        FalloutScript::NavMeshSearch::Door doorRule(const OFWorld::Ptr& actor, FalloutScript::FormId door);
         /// The lock the player has in front of it: what it is, how hard, and what the player has to open it
         struct LockScreen
         {
@@ -1607,11 +1614,24 @@ namespace OFScript
             bool mFlee = false; // the actor runs away: its health is below what its confidence allows
             bool mMelee = true; // the weapon it holds is a melee weapon or its hands
             double mEngage = 0; // how far from the target it attacks from
+            // Within how many degrees of where it faces a ranged weapon is fired (FightAI::withinFiringArc): the Max
+            // Targeting FOV of its combat style and the Aim Arc of the weapon in its hands (0 for no limit), and the
+            // share of the arc for a character that stands still (fCombatFiringArcStationaryTurnMult)
+            double mTargetingFov = 0;
+            double mAimArc = 0;
+            double mStationaryArcShare = FalloutScript::FightAI::stationaryFiringArcShare;
+            // How long a gunman goes on firing after it lost sight of its target, and how long after it was detected
+            // (fCombatLOSBufferTime and fCombatDetectionBufferTime, FightAI::keepsFiring)
+            double mLosBuffer = FalloutScript::FightAI::lineOfSightBuffer;
+            double mDetectionBuffer = FalloutScript::FightAI::detectionBuffer;
         };
         /// What the actor does in the fight it is in: the target is the one the actor fights, or empty when it fights
         /// no one, cannot fight (down, restrained, dead) or the target is gone (dead, down, disabled or not in a cell
         /// that is loaded), and the fight is stopped then.
         FightStance fightStance(const OFWorld::Ptr& actor);
+        /// The Max Targeting FOV (degrees) of the combat style the character fights by: the one a script gave it
+        /// (SetCombatStyle), else the one of its record (ZNAM, from the template it takes its AI data from); 0 for none
+        double targetingFov(const OFWorld::Ptr& actor);
         /// A character that is about to fight takes the weapon that does the most damage of those it can use (a
         /// character with no weapon and no melee weapon in its inventory fights with its hands), and draws it; with
         /// `say` the log tells what it took and what it has
@@ -1774,7 +1794,9 @@ namespace OFScript
         void wakeMind(FalloutScript::FormId actor) { evaluatePackage(actor); }
         /// The character attacks the target with the weapon it holds, as far as its skill allows it to hit. A
         /// weapon that has no ammunition left is put away and the character takes another.
-        FireResult attack(const OFWorld::Ptr& attacker, const OFWorld::Ptr& target);
+        /// `inSight` false: something is between them, and the shot misses the target (a gunman fires on for a while
+        /// after it loses sight of the target, FightAI::keepsFiring); the impact on what is between is not made
+        FireResult attack(const OFWorld::Ptr& attacker, const OFWorld::Ptr& target, bool inSight = true);
         /// UseWeapon: the character shoots at the target from the place, with the weapon the script names, which it
         /// need not carry and spends no round of. The order is a package that the games make at run time; it is kept
         /// for as long as the attacks are not made, in a cell that is loaded (it is not saved).
@@ -1819,6 +1841,12 @@ namespace OFScript
         /// Whether a script killed the character or creature (and none brought it back). Nothing else in the game kills
         /// yet.
         bool isDead(const OFWorld::Ptr& actor) const;
+        /// Whether the character or creature lies unconscious (an essential one whose health is gone)
+        bool isUnconscious(const OFWorld::Ptr& actor) const;
+        /// Whether a script's MoveTo put the character or creature somewhere since this was last asked (main thread)
+        bool takePlaced(const OFWorld::Ptr& actor);
+        /// Something else (a Lua teleport) put the character or creature somewhere, as a script's MoveTo does
+        void notePlaced(const OFWorld::Ptr& actor);
 
         /// A character or creature near the player heals by its heal rate for that many simulated seconds (the player
         /// heals in update())
@@ -1843,6 +1871,8 @@ namespace OFScript
         /// character is in a building) goes to first: the door of the cell of the actor that leads to the cell of the
         /// reference (or to the same worldspace), the nearest one to the actor. False when no door does.
         bool doorTowards(const OFWorld::Ptr& actor, FalloutScript::FormId reference, osg::Vec3f& position);
+        /// The open state of a door (FalloutScript::OpenState, as NV 0x47B250 gives it): 0 for what is not a door
+        int doorOpenState(const OFWorld::Ptr& door);
         /// The actor goes through a door to the reference: it is put at the place of the reference, in its cell (the
         /// cell may not be loaded; the character is there when it is)
         void goThrough(const OFWorld::Ptr& actor, FalloutScript::FormId reference);
@@ -2153,6 +2183,12 @@ namespace OFScript
         /// The size factor of the executables: the reference scale times the height of the race (or the scale of the
         /// record of a creature)
         double sizeOf(const OFWorld::Ptr& ptr);
+        /// Its life state is Unconscious (3, SetUnconscious, NV 0x8ACE10) or Restrained (5, SetRestrained, 0x8ACE50):
+        /// the path handler gives it no movement (NV 0x9E2AAF to 0x9E2ACD)
+        bool heldStill(const OFWorld::Ptr& actor) const;
+        /// Where what a script's Look told it to face is (NV process +0x2AC, its position each frame, 0x8EF49A to
+        /// 0x8EF4E3); none when it faces nothing or that is not in the world
+        std::optional<osg::Vec3f> facingPoint(const OFWorld::Ptr& actor);
         /// The height of a jump of the actor (rule C.J1: fJumpHeightMin times its size, twice that swimming)
         double jumpHeight(const OFWorld::Ptr& ptr, bool swimming);
         /// Whether the actor is a teammate of the player (a follower: the third test of the tier rule, A.T2)
@@ -3064,6 +3100,7 @@ namespace OFScript
         /// in the middle of a script), and those whose cell was not loaded at the time, which hold until it is
         std::map<FalloutScript::FormId, Move> mPendingMoves;
         std::map<FalloutScript::FormId, Move> mRelocations;
+        std::set<FalloutScript::FormId> mPlaced; // the characters and creatures MoveTo put somewhere (takePlaced)
         /// The scale scripts gave to objects that have not been given it yet (their cell was not loaded, or the world
         /// is changed at the start of the next frame): they get it when they can, and scripts see it from the call on,
         /// whichever thread they run on

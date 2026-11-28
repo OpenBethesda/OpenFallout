@@ -49,6 +49,9 @@ namespace FalloutScript
         /// exchange when two characters talk to each other
         FormId mSpeaker = 0;
         FormId mSpeakerBase = 0;
+        /// The response's speaker (ANAM): its voice type is the one the line is said with, when it has one
+        /// (0x616FA0 at 0x617049, FO3 0x56348B); it does not choose who says the line
+        FormId mVoiceBase = 0;
         std::uint8_t mNumber = 0; // the number in the name of the voice file
         std::uint32_t mEmotion = 0; // 0 neutral, 1 anger, 2 disgust, 3 fear, 4 sad, 5 happy, 6 surprise, 7 pained
         std::int32_t mEmotionValue = 0;

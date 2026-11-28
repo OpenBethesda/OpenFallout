@@ -17,9 +17,11 @@ namespace OFPhysics
         CollisionType_AnyPhysical = CollisionType_World | CollisionType_HeightMap | CollisionType_Actor
             | CollisionType_Door | CollisionType_Projectile | CollisionType_Water,
         CollisionType_CameraOnly = 1 << 6,
-        CollisionType_VisualOnly = 1 << 7
+        CollisionType_VisualOnly = 1 << 7,
+        /// The bodies of a character that is down, moved by its ragdoll (the layer BIPED of the executables): the
+        /// living, the projectiles and the lines of sight meet them, the camera does not (NV 0xC828F0)
+        CollisionType_Ragdoll = 1 << 8
     };
-
 }
 
 #endif
